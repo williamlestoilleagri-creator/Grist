@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Annuaire d'adresses · BAN</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+
+<style>
+  :root{
+    --bg: #F5F4F0;
+    --surface: #FFFFFF;
+    --ink: #1B1B1E;
+    --ink-soft: #65656B;
+    --ink-faint: #9A9A9F;
+    --border: #E2E0D8;
+    --primary: #000091;
+    --primary-soft: #E5E5FB;
+    --accent: #C9184A;
+    --accent-soft: #FBE3EA;
+    --success: #18753C;
+    --success-soft: #E2F3E8;
+    --warning: #B34000;
+    --warning-soft: #FBE9DD;
+    --radius-card: 10px;
+    --shadow: 0 1px 2px rgba(20,20,30,.06), 0 8px 24px -16px rgba(20,20,30,.25);
+    --font-display: 'Spectral', Georgia, serif;
+    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  }
+
+  *{ box-sizing: border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-body);
+    font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased;
+  }
+  button, input{ font-family:inherit; font-size:inherit; color:inherit; }
+  ::selection{ background:var(--primary-soft); }
+
+  .app{ display:flex; flex-direction:column; height:100vh; min-height:480px; }
+
+  /* ---------- header ---------- */
+  .app-header{
+    display:flex; align-items:baseline; justify-content:space-between; gap:12px;
+    padding:14px 18px; background:var(--primary); color:#fff; flex:0 0 auto;
+  }
+  .app-header h1{
+    font-family:var(--font-display); font-weight:600; font-size:18px; margin:0;
+    letter-spacing:.2px;
+  }
+  .app-header .sub{ font-size:11.5px; opacity:.78; margin-top:2px; }
+  .app-header .count{
+    font-family:var(--font-mono); font-size:12px; background:rgba(255,255,255,.14);
+    border-radius:999px; padding:5px 11px; white-space:nowrap; align-self:center;
+  }
+
+  /* ---------- layout ---------- */
+  .app-body{ display:flex; flex:1 1 auto; min-height:0; }
+  .sidebar{
+    width:360px; flex:0 0 360px; display:flex; flex-direction:column;
+    background:var(--surface); border-right:1px solid var(--border); min-height:0;
+  }
+  .map-wrap{ flex:1 1 auto; position:relative; min-width:0; background:#dfe6e2; }
+  #map{ position:absolute; inset:0; }
+
+  @media (max-width: 860px){
+    .app-body{ flex-direction:column; }
+    .sidebar{ width:100%; flex:0 0 auto; max-height:54%; border-right:none; border-bottom:1px solid var(--border); }
+    .map-wrap{ flex:1 1 280px; }
+  }
+
+  /* ---------- form ---------- */
+  .add-form{ padding:14px 16px 12px; border-bottom:1px solid var(--border); flex:0 0 auto; }
+  .add-form .label{
+    font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--ink-faint); margin:0 0 8px;
+  }
+  .field{ position:relative; margin-bottom:8px; }
+  .field input{
+    width:100%; padding:9px 10px; border:1px solid var(--border); border-radius:7px;
+    background:#FCFCFB; outline:none; transition:border-color .12s, background .12s;
+  }
+  .field input:focus{ border-color:var(--primary); background:#fff; }
+  .field-row{ display:flex; gap:8px; }
+  .field-row .field{ flex:1; margin-bottom:0; }
+
+  .suggestions{
+    position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:500;
+    background:#fff; border:1px solid var(--border); border-radius:8px; box-shadow:var(--shadow);
+    max-height:240px; overflow-y:auto; display:none;
+  }
+  .suggestions.open{ display:block; }
+  .suggestion{
+    padding:8px 11px; cursor:pointer; font-size:13px; border-bottom:1px solid #F0EFE9;
+    display:flex; flex-direction:column; gap:1px;
+  }
+  .suggestion:last-child{ border-bottom:none; }
+  .suggestion:hover, .suggestion.active{ background:var(--primary-soft); }
+  .suggestion .main{ font-weight:500; }
+  .suggestion .meta{ font-size:11px; color:var(--ink-soft); }
+
+  .add-row{ display:flex; align-items:center; gap:10px; margin-top:10px; }
+  .btn{
+    border:none; border-radius:7px; padding:9px 14px; font-weight:600; cursor:pointer;
+    transition:filter .12s, opacity .12s; white-space:nowrap;
+  }
+  .btn:disabled{ opacity:.55; cursor:default; }
+  .btn-primary{ background:var(--primary); color:#fff; }
+  .btn-primary:not(:disabled):hover{ filter:brightness(1.12); }
+  .btn-ghost{ background:transparent; color:var(--ink-soft); border:1px solid var(--border); }
+  .btn-ghost:not(:disabled):hover{ background:#F4F3EE; }
+  .hint{ font-size:11.5px; color:var(--ink-faint); flex:1; }
+
+  /* ---------- toast ---------- */
+  .toast{
+    font-size:12.5px; padding:8px 11px; border-radius:7px; margin-top:9px;
+    display:none; align-items:flex-start; gap:7px;
+  }
+  .toast.show{ display:flex; }
+  .toast.success{ background:var(--success-soft); color:var(--success); }
+  .toast.warning{ background:var(--warning-soft); color:var(--warning); }
+  .toast.error{ background:var(--accent-soft); color:var(--accent); }
+
+  /* ---------- list toolbar ---------- */
+  .list-toolbar{
+    display:flex; gap:8px; align-items:center; padding:11px 16px; border-bottom:1px solid var(--border);
+    flex:0 0 auto;
+  }
+  .list-toolbar input[type="search"]{
+    flex:1; padding:7px 10px; border:1px solid var(--border); border-radius:7px;
+    background:#FCFCFB; outline:none;
+  }
+  .list-toolbar input[type="search"]:focus{ border-color:var(--primary); background:#fff; }
+  .link-btn{
+    background:none; border:none; color:var(--primary); font-weight:600; font-size:12px;
+    cursor:pointer; padding:4px 2px; white-space:nowrap;
+  }
+  .link-btn:hover{ text-decoration:underline; }
+
+  /* ---------- list ---------- */
+  .list{ flex:1 1 auto; overflow-y:auto; padding:6px 10px 14px; }
+  .empty{
+    margin:30px 14px; text-align:center; color:var(--ink-faint); font-size:13px; line-height:1.6;
+  }
+  .row{
+    display:flex; gap:10px; align-items:flex-start; padding:9px 8px; border-radius:8px;
+    cursor:pointer; transition:background .1s;
+  }
+  .row:hover{ background:#F6F5F0; }
+  .row input[type="checkbox"]{ margin-top:3px; accent-color:var(--primary); flex:0 0 auto; }
+  .row .stripe{
+    width:3px; align-self:stretch; border-radius:2px; flex:0 0 auto; min-height:30px;
+  }
+  .row .body{ flex:1; min-width:0; }
+  .row .top{ display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+  .row .nom{ font-weight:600; font-size:13.5px; }
+  .row .badge{
+    font-size:10.5px; font-weight:600; padding:2px 7px; border-radius:999px; color:#fff;
+    letter-spacing:.02em;
+  }
+  .row .adr{
+    font-size:12px; color:var(--ink-soft); margin-top:2px; white-space:nowrap; overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .row .status{ font-size:11px; margin-top:2px; }
+  .row .status.warn{ color:var(--warning); }
+  .row .status.pending{ color:var(--ink-faint); }
+  .row .del{
+    flex:0 0 auto; border:none; background:none; color:var(--ink-faint); cursor:pointer;
+    font-size:15px; padding:2px 5px; border-radius:5px; line-height:1;
+  }
+  .row .del:hover{ background:var(--accent-soft); color:var(--accent); }
+
+  .sidebar-foot{
+    flex:0 0 auto; padding:9px 16px; border-top:1px solid var(--border);
+    font-size:10.5px; color:var(--ink-faint); line-height:1.5;
+  }
+  .sidebar-foot a{ color:var(--ink-faint); }
+
+  /* ---------- map control panel ---------- */
+  .map-panel{
+    background:rgba(255,255,255,.96); border-radius:9px; box-shadow:var(--shadow);
+    padding:11px 13px; font-size:12px; width:208px; backdrop-filter:blur(2px);
+  }
+  .map-panel .panel-title{
+    font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--ink-faint); margin-bottom:8px;
+  }
+  .map-panel .radius-row{ display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+  .map-panel input[type="range"]{ flex:1; accent-color:var(--primary); }
+  .map-panel .radius-value{
+    font-family:var(--font-mono); font-size:11.5px; font-weight:600; min-width:48px; text-align:right;
+  }
+  .map-panel .legend{ margin-top:10px; display:flex; flex-direction:column; gap:5px; max-height:140px; overflow-y:auto; }
+  .map-panel .legend-item{ display:flex; align-items:center; gap:7px; font-size:11.5px; color:var(--ink-soft); }
+  .map-panel .legend-dot{ width:9px; height:9px; border-radius:50%; flex:0 0 auto; }
+  .map-panel .legend-empty{ color:var(--ink-faint); font-size:11px; font-style:italic; }
+
+  .leaflet-popup-content{ font-family:var(--font-body); font-size:12.5px; min-width:160px; }
+  .leaflet-popup-content .pop-nom{ font-weight:700; margin-bottom:2px; }
+  .leaflet-popup-content .pop-badge{
+    display:inline-block; font-size:10px; font-weight:600; color:#fff; padding:1px 7px;
+    border-radius:999px; margin-bottom:5px;
+  }
+  .leaflet-popup-content .pop-adr{ color:var(--ink-soft); }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <header class="app-header">
+    <div>
+      <h1>Annuaire d'adresses</h1>
+      <div class="sub">Géocodage en direct via la Base Adresse Nationale</div>
+    </div>
+    <div class="count" id="record-count">0 adresse</div>
+  </header>
+
+  <div class="app-body">
+
+    <aside class="sidebar">
+
+      <form class="add-form" id="add-form">
+        <p class="label">Ajouter une adresse</p>
+
+        <div class="field">
+          <input type="text" id="address-input" placeholder="Tapez une adresse — ex. 10 rue de Rivoli, Paris" autocomplete="off">
+          <div class="suggestions" id="suggestions"></div>
+        </div>
+
+        <div class="field-row">
+          <div class="field"><input type="text" id="nom-input" placeholder="Nom"></div>
+          <div class="field">
+            <input type="text" id="type-input" placeholder="Type" list="type-list">
+            <datalist id="type-list"></datalist>
+          </div>
+        </div>
+
+        <div class="add-row">
+          <span class="hint" id="form-hint">Sélectionnez une suggestion ou saisissez l'adresse complète.</span>
+          <button type="submit" class="btn btn-primary" id="add-btn" disabled>Ajouter</button>
+        </div>
+
+        <div class="toast" id="toast"></div>
+      </form>
+
+      <div class="list-toolbar">
+        <input type="search" id="search-input" placeholder="Filtrer la liste…">
+        <button type="button" class="link-btn" id="toggle-all-btn">Tout désélect.</button>
+      </div>
+
+      <div class="list" id="list"></div>
+
+      <div class="sidebar-foot">
+        Données &amp; géocodage : Base Adresse Nationale (BAN) — IGN / Géoplateforme · Licence Ouverte Etalab 2.0
+      </div>
+    </aside>
+
+    <div class="map-wrap">
+      <div id="map"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ============================================================
+  // Constantes
+  // ============================================================
+  var GEOCODE_SEARCH_URL = 'https://data.geopf.fr/geocodage/search';
+  var GEOCODE_COMPLETION_URL = 'https://data.geopf.fr/geocodage/completion/';
+  var TYPE_PALETTE = ['#000091', '#C9184A', '#18753C', '#B34000', '#6E445A', '#007C7C', '#716043', '#3D5A80', '#9A6324', '#2B5797'];
+  var DEFAULT_RADIUS_M = 500;
+  var CACHE_PREFIX = 'ban-geocode-cache:';
+  var FRANCE_VIEW = { center: [46.6, 2.2], zoom: 6 };
+
+  // ============================================================
+  // Etat
+  // ============================================================
+  var state = {
+    records: [],            // [{id, Adresse, Nom, Type}]
+    geo: Object.create(null),     // address(lower) -> {lat, lon, label} | 'NOTFOUND'
+    selected: Object.create(null),// id -> bool
+    filter: '',
+    radius: DEFAULT_RADIUS_M,
+    colMap: null,            // mapping requested name -> real column id
+    pendingSuggestion: null  // {label, lat, lon} for the currently-filled address input
+  };
+
+  var typeColorCache = Object.create(null);
+  function colorForType(type) {
+    var key = (type || '').trim().toLowerCase() || '—';
+    if (!typeColorCache[key]) {
+      var n = Object.keys(typeColorCache).length;
+      typeColorCache[key] = TYPE_PALETTE[n % TYPE_PALETTE.length];
+    }
+    return typeColorCache[key];
+  }
+
+  function normalize(s) {
+    return (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  }
+
+  // ---- petit cache localStorage (best-effort, ne bloque jamais) ----
+  function cacheGet(addr) {
+    var key = addr.trim().toLowerCase();
+    if (state.geo[key]) return state.geo[key];
+    try {
+      var raw = localStorage.getItem(CACHE_PREFIX + key);
+      if (raw) {
+        var v = JSON.parse(raw);
+        state.geo[key] = v;
+        return v;
+      }
+    } catch (e) { /* stockage indisponible : on continue sans */ }
+    return null;
+  }
+  function cacheSet(addr, value) {
+    var key = addr.trim().toLowerCase();
+    state.geo[key] = value;
+    try { localStorage.setItem(CACHE_PREFIX + key, JSON.stringify(value)); } catch (e) { /* ignore */ }
+  }
+
+  // ============================================================
+  // Appels API BAN / Géoplateforme
+  // ============================================================
+  async function geocodeAddress(address) {
+    if (!address) return null;
+    var cached = cacheGet(address);
+    if (cached) return cached === 'NOTFOUND' ? null : cached;
+    try {
+      var url = GEOCODE_SEARCH_URL + '?q=' + encodeURIComponent(address) + '&index=address&limit=1';
+      var res = await fetch(url);
+      if (!res.ok) throw new Error('http-' + res.status);
+      var data = await res.json();
+      var feature = data && data.features && data.features[0];
+      if (!feature) { cacheSet(address, 'NOTFOUND'); return null; }
+      var coords = feature.geometry.coordinates;
+      var props = feature.properties || {};
+      var result = { lat: coords[1], lon: coords[0], label: props.label || address };
+      cacheSet(address, result);
+      return result;
+    } catch (e) {
+      return null; // pas mis en cache : on retentera plus tard
+    }
+  }
+
+  var debounceTimer = null;
+  function fetchSuggestionsDebounced(text, cb) {
+    clearTimeout(debounceTimer);
+    if (!text || text.trim().length < 3) { cb([]); return; }
+    debounceTimer = setTimeout(async function () {
+      try {
+        var url = GEOCODE_COMPLETION_URL + '?text=' + encodeURIComponent(text) +
+          '&type=StreetAddress&maximumResponses=7';
+        var res = await fetch(url);
+        if (!res.ok) { cb([]); return; }
+        var data = await res.json();
+        cb(data && data.status === 'OK' ? (data.results || []) : []);
+      } catch (e) { cb([]); }
+    }, 250);
+  }
+
+  // simple file d'attente avec concurrence limitée, pour ne pas dépasser
+  // les quotas de l'API quand on géocode beaucoup de lignes au chargement
+  async function runQueue(items, worker, concurrency) {
+    var i = 0;
+    async function next() {
+      if (i >= items.length) return;
+      var idx = i++;
+      await worker(items[idx]);
+      return next();
+    }
+    var n = Math.min(concurrency, items.length) || 0;
+    var runners = [];
+    for (var k = 0; k < n; k++) runners.push(next());
+    await Promise.all(runners);
+  }
+
+  // ============================================================
+  // Grist
+  // ============================================================
+  grist.ready({
+    requiredAccess: 'full',
+    columns: [
+      { name: 'Adresse', title: 'Adresse', type: 'Text' },
+      { name: 'Nom', title: 'Nom', type: 'Text' },
+      { name: 'Type', title: 'Type', type: 'Text' }
+    ]
+  });
+
+  grist.onRecords(function (records, mappings) {
+    state.colMap = mappings;
+    var mapped = grist.mapColumnNames(records, mappings) || records;
+    var prevSelected = state.selected;
+    state.selected = Object.create(null);
+    mapped.forEach(function (r) {
+      // conserve la sélection existante, sélectionne par défaut les nouvelles lignes
+      state.selected[r.id] = Object.prototype.hasOwnProperty.call(prevSelected, r.id) ? prevSelected[r.id] : true;
+    });
+    state.records = mapped;
+    document.getElementById('add-btn').disabled = !state.colMap;
+    refreshTypeList();
+    renderList();
+    geocodeMissingThenRenderMap();
+  });
+
+  function writeFields(fields) {
+    if (!state.colMap) return Promise.reject(new Error('table non prête'));
+    var out = {};
+    out[state.colMap.Adresse] = fields.Adresse;
+    out[state.colMap.Nom] = fields.Nom;
+    out[state.colMap.Type] = fields.Type;
+    return grist.selectedTable.create({ fields: out });
+  }
+
+  function deleteRecord(id) {
+    return grist.selectedTable.destroy([id]);
+  }
+
+  // ============================================================
+  // Carte Leaflet
+  // ============================================================
+  var map = L.map('map', { zoomControl: true }).setView(FRANCE_VIEW.center, FRANCE_VIEW.zoom);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  }).addTo(map);
+
+  var layerById = Object.create(null); // id -> {marker, zone}
+  var radiusInputEl, radiusValueEl, legendEl;
+
+  var MapPanel = L.Control.extend({
+    options: { position: 'topright' },
+    onAdd: function () {
+      var div = L.DomUtil.create('div', 'map-panel');
+      div.innerHTML =
+        '<div class="panel-title">Zone autour des adresses</div>' +
+        '<div class="radius-row">' +
+          '<input type="range" id="radius-range" min="50" max="3000" step="50" value="' + state.radius + '">' +
+          '<span class="radius-value" id="radius-value">' + state.radius + ' m</span>' +
+        '</div>' +
+        '<div class="legend" id="legend"></div>';
+      L.DomEvent.disableClickPropagation(div);
+      L.DomEvent.disableScrollPropagation(div);
+      return div;
+    }
+  });
+  map.addControl(new MapPanel());
+  radiusInputEl = document.getElementById('radius-range');
+  radiusValueEl = document.getElementById('radius-value');
+  legendEl = document.getElementById('legend');
+
+  radiusInputEl.addEventListener('input', function () {
+    state.radius = parseInt(radiusInputEl.value, 10);
+    radiusValueEl.textContent = state.radius + ' m';
+    Object.keys(layerById).forEach(function (id) {
+      var entry = layerById[id];
+      if (entry && entry.zone) entry.zone.setRadius(state.radius);
+    });
+  });
+
+  function renderLegend() {
+    var keys = Object.keys(typeColorCache);
+    if (!keys.length) {
+      legendEl.innerHTML = '<div class="legend-empty">Aucun type pour l\'instant</div>';
+      return;
+    }
+    legendEl.innerHTML = keys.map(function (k) {
+      var label = k === '—' ? 'Sans type' : k;
+      return '<div class="legend-item"><span class="legend-dot" style="background:' + typeColorCache[k] + '"></span>' +
+        escapeHtml(label) + '</div>';
+    }).join('');
+  }
+
+  function geocodeMissingThenRenderMap() {
+    var toGeocode = state.records.filter(function (r) {
+      return r.Adresse && !cacheGet(r.Adresse);
+    });
+    renderMap(); // affichage immédiat de ce qui est déjà connu
+    if (!toGeocode.length) return;
+    runQueue(toGeocode, function (r) { return geocodeAddress(r.Adresse); }, 4).then(function () {
+      renderList();
+      renderMap();
+    });
+  }
+
+  function renderMap() {
+    var bounds = [];
+    var visibleIds = Object.create(null);
+
+    state.records.forEach(function (r) {
+      visibleIds[r.id] = true;
+      var show = !!state.selected[r.id];
+      var geo = r.Adresse ? cacheGet(r.Adresse) : null;
+      var hasCoords = geo && geo !== 'NOTFOUND';
+      var entry = layerById[r.id];
+
+      if (!show || !hasCoords) {
+        if (entry) { map.removeLayer(entry.marker); map.removeLayer(entry.zone); delete layerById[r.id]; }
+        return;
+      }
+
+      var color = colorForType(r.Type);
+      var latlng = [geo.lat, geo.lon];
+
+      if (!entry) {
+        var marker = L.circleMarker(latlng, {
+          radius: 7, color: '#fff', weight: 2, fillColor: color, fillOpacity: 1
+        });
+        var zone = L.circle(latlng, {
+          radius: state.radius, color: color, weight: 1, fillColor: color, fillOpacity: .08, dashArray: '4 3'
+        });
+        marker.bindPopup(popupHtml(r, color, geo));
+        marker.addTo(map);
+        zone.addTo(map);
+        entry = layerById[r.id] = { marker: marker, zone: zone };
+      } else {
+        entry.marker.setLatLng(latlng);
+        entry.zone.setLatLng(latlng);
+        entry.marker.setStyle({ fillColor: color });
+        entry.zone.setStyle({ color: color, fillColor: color });
+        entry.marker.setPopupContent(popupHtml(r, color, geo));
+      }
+      bounds.push(latlng);
+    });
+
+    // nettoie les marqueurs de lignes supprimées
+    Object.keys(layerById).forEach(function (id) {
+      if (!visibleIds[id]) {
+        map.removeLayer(layerById[id].marker);
+        map.removeLayer(layerById[id].zone);
+        delete layerById[id];
+      }
+    });
+
+    if (bounds.length === 1) {
+      map.setView(bounds[0], Math.max(map.getZoom(), 14));
+    } else if (bounds.length > 1) {
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+    } else if (!bounds.length && map._isFirstEmptyView !== false) {
+      map.setView(FRANCE_VIEW.center, FRANCE_VIEW.zoom);
+    }
+    map._isFirstEmptyView = bounds.length > 0;
+
+    renderLegend();
+  }
+
+  function popupHtml(r, color, geo) {
+    return '<div class="pop-nom">' + escapeHtml(r.Nom || 'Sans nom') + '</div>' +
+      (r.Type ? '<span class="pop-badge" style="background:' + color + '">' + escapeHtml(r.Type) + '</span><br>' : '') +
+      '<div class="pop-adr">' + escapeHtml(geo.label || r.Adresse) + '</div>';
+  }
+
+  function focusRecord(r) {
+    var geo = r.Adresse ? cacheGet(r.Adresse) : null;
+    if (!geo || geo === 'NOTFOUND') return;
+    if (!state.selected[r.id]) {
+      state.selected[r.id] = true;
+      renderList();
+      renderMap();
+    }
+    map.setView([geo.lat, geo.lon], Math.max(map.getZoom(), 15));
+    var entry = layerById[r.id];
+    if (entry) entry.marker.openPopup();
+  }
+
+  // ============================================================
+  // Liste (panneau gauche)
+  // ============================================================
+  var listEl = document.getElementById('list');
+  var countEl = document.getElementById('record-count');
+  var toggleAllBtn = document.getElementById('toggle-all-btn');
+
+  function escapeHtml(s) {
+    return (s || '').toString()
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function renderList() {
+    var n = state.records.length;
+    countEl.textContent = n + (n === 1 ? ' adresse' : ' adresses');
+
+    var visible = state.records.filter(function (r) {
+      if (!state.filter) return true;
+      var hay = normalize(r.Nom) + ' ' + normalize(r.Type) + ' ' + normalize(r.Adresse);
+      return hay.indexOf(normalize(state.filter)) !== -1;
+    });
+
+    if (!state.records.length) {
+      listEl.innerHTML = '<div class="empty">Aucune adresse pour le moment.<br>Ajoutez-en une ci-dessus pour commencer.</div>';
+      return;
+    }
+    if (!visible.length) {
+      listEl.innerHTML = '<div class="empty">Aucun résultat pour « ' + escapeHtml(state.filter) + ' ».</div>';
+      return;
+    }
+
+    listEl.innerHTML = '';
+    visible.forEach(function (r) {
+      var geo = r.Adresse ? cacheGet(r.Adresse) : null;
+      var color = colorForType(r.Type);
+      var row = document.createElement('div');
+      row.className = 'row';
+
+      var statusHtml;
+      if (!r.Adresse) statusHtml = '<div class="status warn">Adresse manquante</div>';
+      else if (geo === 'NOTFOUND') statusHtml = '<div class="status warn">Introuvable sur la BAN</div>';
+      else if (!geo) statusHtml = '<div class="status pending">Localisation…</div>';
+      else statusHtml = '';
+
+      row.innerHTML =
+        '<input type="checkbox" ' + (state.selected[r.id] ? 'checked' : '') + '>' +
+        '<span class="stripe" style="background:' + color + '"></span>' +
+        '<div class="body">' +
+          '<div class="top"><span class="nom">' + escapeHtml(r.Nom || 'Sans nom') + '</span>' +
+          (r.Type ? '<span class="badge" style="background:' + color + '">' + escapeHtml(r.Type) + '</span>' : '') +
+          '</div>' +
+          '<div class="adr">' + escapeHtml(r.Adresse || '—') + '</div>' +
+          statusHtml +
+        '</div>' +
+        '<button type="button" class="del" title="Supprimer">×</button>';
+
+      var checkbox = row.querySelector('input[type="checkbox"]');
+      checkbox.addEventListener('click', function (e) { e.stopPropagation(); });
+      checkbox.addEventListener('change', function () {
+        state.selected[r.id] = checkbox.checked;
+        renderMap();
+      });
+
+      row.querySelector('.del').addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (confirm('Supprimer « ' + (r.Nom || r.Adresse) + ' » de la table ?')) {
+          deleteRecord(r.id).catch(function (err) { showToast('Suppression impossible : ' + err.message, 'error'); });
+        }
+      });
+
+      row.addEventListener('click', function () { focusRecord(r); });
+
+      listEl.appendChild(row);
+    });
+  }
+
+  document.getElementById('search-input').addEventListener('input', function (e) {
+    state.filter = e.target.value;
+    renderList();
+  });
+
+  toggleAllBtn.addEventListener('click', function () {
+    var anySelected = state.records.some(function (r) { return state.selected[r.id]; });
+    var next = !anySelected;
+    state.records.forEach(function (r) { state.selected[r.id] = next; });
+    toggleAllBtn.textContent = next ? 'Tout désélect.' : 'Tout sélect.';
+    renderList();
+    renderMap();
+  });
+
+  // ============================================================
+  // Datalist des types existants
+  // ============================================================
+  function refreshTypeList() {
+    var seen = Object.create(null);
+    var list = document.getElementById('type-list');
+    var html = '';
+    state.records.forEach(function (r) {
+      var t = (r.Type || '').trim();
+      if (t && !seen[t]) { seen[t] = true; html += '<option value="' + escapeHtml(t) + '">'; }
+    });
+    list.innerHTML = html;
+  }
+
+  // ============================================================
+  // Formulaire d'ajout + autocomplétion d'adresse
+  // ============================================================
+  var addressInput = document.getElementById('address-input');
+  var nomInput = document.getElementById('nom-input');
+  var typeInput = document.getElementById('type-input');
+  var suggestionsEl = document.getElementById('suggestions');
+  var addForm = document.getElementById('add-form');
+  var addBtn = document.getElementById('add-btn');
+  var formHint = document.getElementById('form-hint');
+  var toastEl = document.getElementById('toast');
+  var activeSuggestionIndex = -1;
+  var currentSuggestions = [];
+
+  function openSuggestions(list) {
+    currentSuggestions = list;
+    activeSuggestionIndex = -1;
+    if (!list.length) { suggestionsEl.classList.remove('open'); suggestionsEl.innerHTML = ''; return; }
+    suggestionsEl.innerHTML = list.map(function (r, i) {
+      var meta = [r.zipcode, r.city].filter(Boolean).join(' ');
+      return '<div class="suggestion" data-index="' + i + '">' +
+        '<span class="main">' + escapeHtml(r.fulltext || '') + '</span>' +
+        (meta && r.fulltext && r.fulltext.indexOf(meta) === -1 ? '<span class="meta">' + escapeHtml(meta) + '</span>' : '') +
+        '</div>';
+    }).join('');
+    suggestionsEl.classList.add('open');
+  }
+  function closeSuggestions() {
+    suggestionsEl.classList.remove('open');
+    suggestionsEl.innerHTML = '';
+    currentSuggestions = [];
+    activeSuggestionIndex = -1;
+  }
+  function pickSuggestion(r) {
+    addressInput.value = r.fulltext || '';
+    state.pendingSuggestion = { label: r.fulltext || '', lat: r.y, lon: r.x };
+    closeSuggestions();
+    nomInput.focus();
+  }
+
+  addressInput.addEventListener('input', function () {
+    state.pendingSuggestion = null;
+    fetchSuggestionsDebounced(addressInput.value, openSuggestions);
+  });
+  addressInput.addEventListener('keydown', function (e) {
+    if (!currentSuggestions.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      activeSuggestionIndex = Math.min(activeSuggestionIndex + 1, currentSuggestions.length - 1);
+      highlightSuggestion();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      activeSuggestionIndex = Math.max(activeSuggestionIndex - 1, 0);
+      highlightSuggestion();
+    } else if (e.key === 'Enter') {
+      if (activeSuggestionIndex >= 0) {
+        e.preventDefault();
+        pickSuggestion(currentSuggestions[activeSuggestionIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      closeSuggestions();
+    }
+  });
+  function highlightSuggestion() {
+    Array.prototype.forEach.call(suggestionsEl.children, function (el, i) {
+      el.classList.toggle('active', i === activeSuggestionIndex);
+    });
+  }
+  suggestionsEl.addEventListener('mousedown', function (e) {
+    var item = e.target.closest('.suggestion');
+    if (!item) return;
+    e.preventDefault();
+    pickSuggestion(currentSuggestions[parseInt(item.dataset.index, 10)]);
+  });
+  document.addEventListener('click', function (e) {
+    if (!addForm.contains(e.target)) closeSuggestions();
+  });
+
+  function showToast(message, kind) {
+    toastEl.textContent = message;
+    toastEl.className = 'toast show ' + kind;
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(function () { toastEl.classList.remove('show'); }, 4200);
+  }
+
+  addForm.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var addressRaw = addressInput.value.trim();
+    var nom = nomInput.value.trim();
+    var type = typeInput.value.trim();
+
+    if (!addressRaw || !nom) {
+      showToast('Adresse et nom sont obligatoires.', 'error');
+      return;
+    }
+
+    addBtn.disabled = true;
+    formHint.textContent = 'Géocodage en cours…';
+
+    try {
+      var geo = null;
+      if (state.pendingSuggestion && state.pendingSuggestion.label === addressRaw) {
+        geo = state.pendingSuggestion;
+        cacheSet(geo.label, geo);
+      } else {
+        geo = await geocodeAddress(addressRaw);
+      }
+      var finalAddress = geo ? geo.label : addressRaw;
+
+      await writeFields({ Adresse: finalAddress, Nom: nom, Type: type });
+
+      addressInput.value = '';
+      nomInput.value = '';
+      typeInput.value = '';
+      state.pendingSuggestion = null;
+      closeSuggestions();
+
+      showToast(
+        geo ? '« ' + finalAddress + ' » ajoutée et localisée.' : '« ' + finalAddress + ' » ajoutée, mais introuvable sur la carte.',
+        geo ? 'success' : 'warning'
+      );
+    } catch (err) {
+      showToast("Impossible d'ajouter cette adresse : " + (err && err.message ? err.message : err), 'error');
+    } finally {
+      addBtn.disabled = !state.colMap;
+      formHint.textContent = 'Sélectionnez une suggestion ou saisissez l\'adresse complète.';
+    }
+  });
+
+})();
+</script>
+
+</body>
+</html>
