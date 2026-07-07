@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Assistant Claude pour Grist</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<style>
+  :root {
+    --bg: #f7f6f2;
+    --panel: #ffffff;
+    --ink: #23281f;
+    --ink-soft: #6b7263;
+    --line: #e2e0d8;
+    --accent: #2f6f4f;      /* vert Grist-compatible */
+    --accent-soft: #e7f0ea;
+    --user-bubble: #2f6f4f;
+    --danger: #b3442f;
+    --radius: 10px;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: var(--sans);
+    font-size: 13.5px;
+    color: var(--ink);
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ---------- Barre d'état ---------- */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    flex: 0 0 auto;
+  }
+  header .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #c8c5ba;
+    flex: 0 0 auto;
+  }
+  header .dot.ok { background: var(--accent); }
+  header .title { font-weight: 600; font-size: 13px; }
+  header .ctx {
+    color: var(--ink-soft);
+    font-size: 11.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+  }
+  header button {
+    border: 1px solid var(--line);
+    background: transparent;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    cursor: pointer;
+  }
+  header button:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ---------- Panneau réglages ---------- */
+  #settings {
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    padding: 12px;
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    flex: 0 0 auto;
+  }
+  #settings.open { display: flex; }
+  #settings label { font-size: 11.5px; font-weight: 600; color: var(--ink-soft); display: block; margin-bottom: 3px; }
+  #settings input, #settings select {
+    width: 100%;
+    padding: 7px 9px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: var(--mono);
+    background: var(--bg);
+    color: var(--ink);
+  }
+  #settings input:focus, #settings select:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+  #settings .hint { font-size: 11px; color: var(--ink-soft); line-height: 1.4; }
+  #settings .row { display: flex; gap: 8px; }
+  #settings .row > div { flex: 1; }
+  #settings .actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .btn {
+    border: none;
+    border-radius: 6px;
+    padding: 7px 14px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn.primary { background: var(--accent); color: #fff; }
+  .btn.primary:hover { background: #285f43; }
+  .btn.ghost { background: transparent; color: var(--ink-soft); border: 1px solid var(--line); }
+
+  /* ---------- Zone de chat ---------- */
+  #chat {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 14px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .msg { max-width: 92%; line-height: 1.5; }
+  .msg.user {
+    align-self: flex-end;
+    background: var(--user-bubble);
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: var(--radius) var(--radius) 3px var(--radius);
+    white-space: pre-wrap;
+  }
+  .msg.assistant {
+    align-self: flex-start;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    padding: 9px 12px;
+    border-radius: var(--radius) var(--radius) var(--radius) 3px;
+  }
+  .msg.assistant p { margin: 0 0 8px; }
+  .msg.assistant p:last-child { margin-bottom: 0; }
+  .msg.assistant code {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 4px;
+  }
+  .msg.assistant pre {
+    background: #23281f;
+    color: #e9e7dd;
+    padding: 10px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 8px 0;
+  }
+  .msg.assistant pre code { background: none; border: none; color: inherit; padding: 0; }
+  .msg.assistant ul, .msg.assistant ol { margin: 4px 0 8px 18px; }
+  .msg.assistant table { border-collapse: collapse; margin: 8px 0; font-size: 12.5px; }
+  .msg.assistant th, .msg.assistant td { border: 1px solid var(--line); padding: 4px 8px; }
+  .msg.assistant th { background: var(--accent-soft); }
+  .msg.error {
+    align-self: stretch;
+    color: var(--danger);
+    background: #fbeeea;
+    border: 1px solid #eccfc6;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 12.5px;
+  }
+  .msg.system-note {
+    align-self: center;
+    color: var(--ink-soft);
+    font-size: 11.5px;
+    text-align: center;
+    max-width: 100%;
+  }
+  #empty {
+    margin: auto;
+    text-align: center;
+    color: var(--ink-soft);
+    padding: 20px;
+  }
+  #empty .logo { font-size: 26px; margin-bottom: 8px; }
+  #empty p { font-size: 12.5px; line-height: 1.6; max-width: 300px; margin: 0 auto; }
+  .suggestions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 12px; }
+  .suggestions button {
+    border: 1px solid var(--line);
+    background: var(--panel);
+    border-radius: 999px;
+    padding: 5px 11px;
+    font-size: 11.5px;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .suggestions button:hover { border-color: var(--accent); color: var(--accent); }
+
+  .typing {
+    align-self: flex-start;
+    color: var(--ink-soft);
+    font-size: 12px;
+    padding: 4px 2px;
+  }
+  .typing::after {
+    content: "…";
+    animation: pulse 1.2s infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: .3 } 50% { opacity: 1 } }
+  @media (prefers-reduced-motion: reduce) { .typing::after { animation: none; } }
+
+  /* ---------- Saisie ---------- */
+  footer {
+    flex: 0 0 auto;
+    padding: 10px;
+    background: var(--panel);
+    border-top: 1px solid var(--line);
+  }
+  .inputrow { display: flex; gap: 8px; align-items: flex-end; }
+  #prompt {
+    flex: 1;
+    resize: none;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-family: var(--sans);
+    font-size: 13.5px;
+    line-height: 1.4;
+    max-height: 120px;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  #prompt:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+  #send {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    width: 38px;
+    height: 36px;
+    font-size: 16px;
+    cursor: pointer;
+    flex: 0 0 auto;
+  }
+  #send:disabled { opacity: .45; cursor: default; }
+  .footmeta {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 5px;
+    font-size: 10.5px;
+    color: var(--ink-soft);
+  }
+  .footmeta label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="dot" id="statusDot" title="Statut de la connexion"></span>
+  <span class="title">Claude</span>
+  <span class="ctx" id="ctxInfo">En attente de Grist…</span>
+  <button id="clearBtn" title="Effacer la conversation">Effacer</button>
+  <button id="gearBtn" title="Réglages">⚙︎</button>
+</header>
+
+<div id="settings">
+  <div>
+    <label for="apiKey">Clé API Anthropic</label>
+    <input type="password" id="apiKey" placeholder="sk-ant-…" autocomplete="off">
+    <div class="hint">Obtiens une clé sur console.anthropic.com. Elle est stockée uniquement dans ton navigateur (localStorage) et envoyée directement à l'API Anthropic — jamais à Grist ni à un autre serveur.</div>
+  </div>
+  <div class="row">
+    <div>
+      <label for="model">Modèle</label>
+      <select id="model">
+        <option value="claude-sonnet-4-6">Claude Sonnet 4.6 (recommandé)</option>
+        <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (rapide/éco)</option>
+        <option value="claude-opus-4-8">Claude Opus 4.8 (puissant)</option>
+      </select>
+    </div>
+    <div>
+      <label for="maxRows">Lignes max envoyées</label>
+      <input type="number" id="maxRows" min="1" max="2000" value="200" style="font-family:var(--sans)">
+    </div>
+  </div>
+  <div class="actions">
+    <button class="btn ghost" id="closeSettings">Fermer</button>
+    <button class="btn primary" id="saveSettings">Enregistrer</button>
+  </div>
+</div>
+
+<div id="chat">
+  <div id="empty">
+    <div class="logo">✳︎</div>
+    <p><strong>Assistant Claude pour Grist.</strong><br>
+    Pose une question sur les données de la table liée à ce widget : analyse, synthèse, détection d'anomalies, rédaction…</p>
+    <div class="suggestions">
+      <button data-q="Fais-moi un résumé de cette table.">Résumer la table</button>
+      <button data-q="Y a-t-il des anomalies ou des valeurs suspectes dans ces données ?">Détecter des anomalies</button>
+      <button data-q="Quelles statistiques clés peux-tu tirer de ces données ?">Statistiques clés</button>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="inputrow">
+    <textarea id="prompt" rows="1" placeholder="Pose une question sur tes données…"></textarea>
+    <button id="send" title="Envoyer" disabled>➤</button>
+  </div>
+  <div class="footmeta">
+    <label><input type="checkbox" id="includeData" checked> Inclure les données de la table</label>
+    <span id="rowCount"></span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- État ----------
+  let tableData = null;        // { colonnes: [...], lignes: [...] }
+  let selectedRecord = null;
+  let history = [];            // [{role, content}]
+  let busy = false;
+
+  const $ = (id) => document.getElementById(id);
+  const chat = $("chat");
+  const promptEl = $("prompt");
+  const sendBtn = $("send");
+  const statusDot = $("statusDot");
+  const ctxInfo = $("ctxInfo");
+
+  const LS_KEY = "grist_claude_api_key";
+  const LS_MODEL = "grist_claude_model";
+  const LS_MAXROWS = "grist_claude_maxrows";
+
+  // ---------- Réglages ----------
+  function loadSettings() {
+    $("apiKey").value = localStorage.getItem(LS_KEY) || "";
+    $("model").value = localStorage.getItem(LS_MODEL) || "claude-sonnet-4-6";
+    $("maxRows").value = localStorage.getItem(LS_MAXROWS) || "200";
+    updateSendState();
+  }
+  function saveSettings() {
+    localStorage.setItem(LS_KEY, $("apiKey").value.trim());
+    localStorage.setItem(LS_MODEL, $("model").value);
+    localStorage.setItem(LS_MAXROWS, $("maxRows").value);
+    $("settings").classList.remove("open");
+    updateSendState();
+    if (!localStorage.getItem(LS_KEY)) {
+      addNote("Aucune clé API enregistrée : le widget ne pourra pas interroger Claude.");
+    }
+  }
+  $("gearBtn").onclick = () => $("settings").classList.toggle("open");
+  $("closeSettings").onclick = () => $("settings").classList.remove("open");
+  $("saveSettings").onclick = saveSettings;
+
+  function apiKey() { return (localStorage.getItem(LS_KEY) || "").trim(); }
+
+  function updateSendState() {
+    sendBtn.disabled = busy || !promptEl.value.trim();
+  }
+
+  // ---------- Connexion Grist ----------
+  function normalizeRecords(records) {
+    if (!records || !records.length) return { colonnes: [], lignes: [] };
+    const cols = Object.keys(records[0]).filter(c => c !== "id");
+    return { colonnes: cols, lignes: records };
+  }
+
+  if (typeof grist !== "undefined") {
+    grist.ready({ requiredAccess: "read table" });
+
+    grist.onRecords((records) => {
+      tableData = normalizeRecords(records || []);
+      statusDot.classList.add("ok");
+      const n = tableData.lignes.length;
+      ctxInfo.textContent = n
+        ? n + " ligne" + (n > 1 ? "s" : "") + " · " + tableData.colonnes.length + " colonnes"
+        : "Table vide";
+      $("rowCount").textContent = n ? n + " lignes visibles" : "";
+    });
+
+    grist.onRecord((record) => {
+      selectedRecord = record || null;
+    });
+  } else {
+    ctxInfo.textContent = "Hors de Grist (mode test)";
+  }
+
+  // ---------- Construction du contexte ----------
+  function truncate(str, max) {
+    return str.length > max ? str.slice(0, max) + "…[tronqué]" : str;
+  }
+
+  function buildSystemPrompt() {
+    let sys = "Tu es un assistant IA intégré dans un widget Grist (tableur/base de données collaboratif). " +
+      "Tu aides l'utilisateur à analyser et exploiter les données de la table liée au widget. " +
+      "Réponds en français, de façon concise et concrète. Utilise du Markdown simple (tableaux, listes) quand c'est utile. " +
+      "Si les données sont tronquées, précise que ton analyse porte sur un échantillon.";
+
+    if ($("includeData").checked && tableData && tableData.lignes.length) {
+      const maxRows = Math.max(1, parseInt($("maxRows").value || "200", 10));
+      const rows = tableData.lignes.slice(0, maxRows);
+      const payload = JSON.stringify({
+        colonnes: tableData.colonnes,
+        nombre_total_lignes: tableData.lignes.length,
+        lignes_incluses: rows.length,
+        lignes: rows
+      });
+      sys += "\n\nDonnées de la table (JSON) :\n" + truncate(payload, 150000);
+    }
+    if (selectedRecord) {
+      sys += "\n\nLigne actuellement sélectionnée par l'utilisateur :\n" +
+        truncate(JSON.stringify(selectedRecord), 5000);
+    }
+    return sys;
+  }
+
+  // ---------- Rendu Markdown minimal ----------
+  function escapeHtml(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function renderMarkdown(text) {
+    let src = escapeHtml(text);
+
+    // blocs de code
+    src = src.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
+      "<pre><code>" + code.replace(/\n$/, "") + "</code></pre>");
+
+    const lines = src.split("\n");
+    let html = "", inList = false, inTable = false, para = [];
+
+    const flushPara = () => {
+      if (para.length) { html += "<p>" + inline(para.join("<br>")) + "</p>"; para = []; }
+    };
+    const inline = (s) => s
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*([^*]+)\*/g, "<em>$1</em>");
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (line.startsWith("<pre>")) { flushPara(); html += line; continue; }
+
+      // tableaux Markdown
+      if (/^\|.*\|$/.test(line.trim())) {
+        flushPara();
+        if (!inTable) { html += "<table>"; inTable = true; }
+        if (/^\|[\s:|-]+\|$/.test(line.trim())) continue; // ligne de séparation
+        const cells = line.trim().slice(1, -1).split("|").map(c => inline(c.trim()));
+        const tag = (i + 1 < lines.length && /^\|[\s:|-]+\|$/.test((lines[i+1]||"").trim())) ? "th" : "td";
+        html += "<tr>" + cells.map(c => "<" + tag + ">" + c + "</" + tag + ">").join("") + "</tr>";
+        continue;
+      } else if (inTable) { html += "</table>"; inTable = false; }
+
+      // listes
+      const li = line.match(/^\s*[-*]\s+(.*)/) || line.match(/^\s*\d+\.\s+(.*)/);
+      if (li) {
+        flushPara();
+        if (!inList) { html += "<ul>"; inList = true; }
+        html += "<li>" + inline(li[1]) + "</li>";
+        continue;
+      } else if (inList) { html += "</ul>"; inList = false; }
+
+      // titres -> gras
+      const h = line.match(/^#{1,4}\s+(.*)/);
+      if (h) { flushPara(); html += "<p><strong>" + inline(h[1]) + "</strong></p>"; continue; }
+
+      if (line.trim() === "") { flushPara(); }
+      else { para.push(line); }
+    }
+    flushPara();
+    if (inList) html += "</ul>";
+    if (inTable) html += "</table>";
+    return html;
+  }
+
+  // ---------- Affichage messages ----------
+  function hideEmpty() {
+    const e = $("empty");
+    if (e) e.remove();
+  }
+  function addMsg(role, content) {
+    hideEmpty();
+    const div = document.createElement("div");
+    div.className = "msg " + role;
+    if (role === "assistant") div.innerHTML = renderMarkdown(content);
+    else div.textContent = content;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+    return div;
+  }
+  function addNote(text) {
+    hideEmpty();
+    const div = document.createElement("div");
+    div.className = "msg system-note";
+    div.textContent = text;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+  }
+  function addError(text) {
+    hideEmpty();
+    const div = document.createElement("div");
+    div.className = "msg error";
+    div.textContent = text;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  // ---------- Appel API Anthropic ----------
+  async function askClaude(userText) {
+    if (!apiKey()) {
+      $("settings").classList.add("open");
+      addError("Ajoute d'abord ta clé API Anthropic dans les réglages (⚙︎).");
+      return;
+    }
+    busy = true;
+    updateSendState();
+    addMsg("user", userText);
+    history.push({ role: "user", content: userText });
+
+    const typing = document.createElement("div");
+    typing.className = "typing";
+    typing.textContent = "Claude réfléchit";
+    chat.appendChild(typing);
+    chat.scrollTop = chat.scrollHeight;
+
+    try {
+      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": apiKey(),
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true"
+        },
+        body: JSON.stringify({
+          model: localStorage.getItem(LS_MODEL) || "claude-sonnet-4-6",
+          max_tokens: 2048,
+          system: buildSystemPrompt(),
+          messages: history.slice(-12) // limite l'historique envoyé
+        })
+      });
+
+      typing.remove();
+
+      if (!resp.ok) {
+        let detail = "";
+        try { detail = (await resp.json()).error?.message || ""; } catch (e) {}
+        if (resp.status === 401) throw new Error("Clé API invalide ou expirée. Vérifie-la dans les réglages.");
+        if (resp.status === 429) throw new Error("Limite de requêtes atteinte. Réessaie dans un instant.");
+        throw new Error("Erreur API (" + resp.status + "). " + detail);
+      }
+
+      const data = await resp.json();
+      const text = (data.content || [])
+        .map(b => b.type === "text" ? b.text : "")
+        .filter(Boolean)
+        .join("\n");
+
+      history.push({ role: "assistant", content: text });
+      addMsg("assistant", text || "(réponse vide)");
+    } catch (err) {
+      typing.remove();
+      addError(err.message || "Erreur inconnue lors de l'appel à l'API.");
+      history.pop(); // retire le message utilisateur non traité
+    } finally {
+      busy = false;
+      updateSendState();
+      promptEl.focus();
+    }
+  }
+
+  // ---------- Interactions ----------
+  function submit() {
+    const text = promptEl.value.trim();
+    if (!text || busy) return;
+    promptEl.value = "";
+    promptEl.style.height = "auto";
+    updateSendState();
+    askClaude(text);
+  }
+
+  sendBtn.onclick = submit;
+  promptEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
+  });
+  promptEl.addEventListener("input", () => {
+    promptEl.style.height = "auto";
+    promptEl.style.height = Math.min(promptEl.scrollHeight, 120) + "px";
+    updateSendState();
+  });
+
+  $("clearBtn").onclick = () => {
+    history = [];
+    chat.innerHTML = "";
+    addNote("Conversation effacée. Le contexte des données reste disponible.");
+  };
+
+  document.querySelectorAll(".suggestions button").forEach(btn => {
+    btn.onclick = () => { promptEl.value = btn.dataset.q; submit(); };
+  });
+
+  loadSettings();
+})();
+</script>
+</body>
+</html>
