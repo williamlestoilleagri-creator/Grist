@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Explorateur de graphiques</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<style>
+  :root{
+    --bg:#F7F6F2;
+    --panel:#FFFFFF;
+    --ink:#1B2A22;
+    --ink-soft:#5C6B61;
+    --ink-faint:#8A948B;
+    --line:#DDE3DC;
+    --accent:#2F6F4F;
+    --accent-soft:#E7F0EA;
+    --mustard:#B8791E;
+    --rust:#C1502F;
+    --focus:#1B6FD6;
+    --radius:10px;
+    --font-ui:'Inter', -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono:'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; margin:0; }
+  body{
+    font-family:var(--font-ui);
+    font-size:13.5px;
+    color:var(--ink);
+    background:var(--bg);
+    display:flex;
+    flex-direction:column;
+  }
+  .sr-only{
+    position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+    overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+  }
+  a, button, select, input, summary{ font-family:inherit; }
+  select, input[type="number"]{
+    width:100%;
+    padding:7px 9px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:var(--panel);
+    color:var(--ink);
+    font-size:13px;
+  }
+  select:focus-visible, input:focus-visible, button:focus-visible, summary:focus-visible{
+    outline:2.5px solid var(--focus);
+    outline-offset:2px;
+  }
+  button{
+    cursor:pointer;
+    border:1px solid var(--line);
+    background:var(--panel);
+    color:var(--ink);
+    border-radius:8px;
+    padding:7px 12px;
+    font-size:12.5px;
+    font-weight:600;
+  }
+  button:hover{ border-color:var(--accent); color:var(--accent); }
+  button.primary{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.primary:hover{ background:#255d41; color:#fff; }
+
+  header{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:10px 16px;
+    background:var(--panel);
+    border-bottom:1px solid var(--line);
+    flex:0 0 auto;
+  }
+  header .flourish{ font-family:'Caveat', cursive; font-size:20px; color:var(--mustard); }
+  header h1{ font-size:14.5px; font-weight:700; margin:0; }
+  header .sub{ font-size:11px; color:var(--ink-soft); }
+  header .spacer{ flex:1; }
+
+  .app-body{ display:flex; flex:1 1 auto; min-height:0; }
+
+  aside{
+    width:280px;
+    flex:0 0 280px;
+    background:var(--panel);
+    border-right:1px solid var(--line);
+    overflow-y:auto;
+    padding:14px;
+  }
+  fieldset{
+    border:none;
+    border-top:1px solid var(--line);
+    padding:10px 0 4px;
+    margin:0 0 6px;
+  }
+  fieldset:first-child{ border-top:none; padding-top:0; }
+  legend{
+    font-size:10.5px;
+    font-weight:700;
+    letter-spacing:0.6px;
+    text-transform:uppercase;
+    color:var(--ink-soft);
+    padding:0 0 6px;
+  }
+  .field{ margin-bottom:10px; }
+  .field label{
+    display:block;
+    font-size:11.5px;
+    font-weight:600;
+    color:var(--ink);
+    margin-bottom:4px;
+  }
+  .hint{ font-size:10.5px; color:var(--ink-faint); margin-top:3px; line-height:1.4; }
+  .refresh-row{ margin-top:4px; }
+  .refresh-row button{ width:100%; }
+
+  main{
+    flex:1 1 auto;
+    min-width:0;
+    display:flex;
+    flex-direction:column;
+    padding:16px 20px;
+    overflow-y:auto;
+  }
+  #chartTitle{
+    font-size:15px;
+    font-weight:700;
+    margin:0 0 2px;
+    color:var(--ink);
+  }
+  #chartSummary{
+    font-size:11.5px;
+    color:var(--ink-soft);
+    margin:0 0 12px;
+  }
+  .chart-wrap{
+    position:relative;
+    flex:1 1 auto;
+    min-height:320px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:14px;
+  }
+  .state-message{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    color:var(--ink-soft);
+    font-size:13px;
+    padding:20px;
+  }
+  .state-message.error{ color:var(--rust); }
+
+  details.data-table-wrap{
+    margin-top:14px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:2px 14px;
+  }
+  details.data-table-wrap summary{
+    cursor:pointer;
+    padding:10px 0;
+    font-size:12.5px;
+    font-weight:600;
+    color:var(--accent);
+  }
+  .table-scroll{ overflow-x:auto; padding-bottom:12px; }
+  table{ border-collapse:collapse; width:100%; font-size:12px; font-family:var(--font-mono); }
+  caption{ text-align:left; font-family:var(--font-ui); font-size:11.5px; color:var(--ink-soft); padding-bottom:6px; }
+  th, td{ border-bottom:1px solid var(--line); padding:6px 10px; text-align:right; white-space:nowrap; }
+  th[scope="row"]{ text-align:left; font-weight:600; font-family:var(--font-ui); }
+  thead th{ text-align:right; color:var(--ink-soft); font-weight:600; }
+  thead th:first-child{ text-align:left; }
+
+  @media (max-width: 760px){
+    .app-body{ flex-direction:column; }
+    aside{ width:100%; flex:0 0 auto; border-right:none; border-bottom:1px solid var(--line); max-height:46vh; }
+  }
+</style>
+</head>
+<body>
+  <header>
+    <span class="flourish" aria-hidden="true">✎</span>
+    <div>
+      <h1>Explorateur de graphiques</h1>
+      <div class="sub">Choisissez une table, des colonnes, un type de graphique</div>
+    </div>
+    <div class="spacer"></div>
+    <button type="button" id="refreshBtn" title="Recharger les données depuis le document">🔄 Actualiser</button>
+  </header>
+
+  <div class="app-body">
+    <aside aria-label="Réglages du graphique">
+      <fieldset>
+        <legend>Source</legend>
+        <div class="field">
+          <label for="tableSelect">Table</label>
+          <select id="tableSelect"></select>
+        </div>
+        <div class="field">
+          <label for="typeSelect">Type de graphique</label>
+          <select id="typeSelect">
+            <option value="bar">Barres</option>
+            <option value="bar-stacked">Barres empilées</option>
+            <option value="line">Lignes</option>
+            <option value="area">Aires</option>
+            <option value="pie">Camembert</option>
+            <option value="doughnut">Donut</option>
+            <option value="radar">Radar</option>
+          </select>
+          <div class="hint" id="typeHint"></div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Données</legend>
+        <div class="field">
+          <label for="xSelect">Catégorie (axe X)</label>
+          <select id="xSelect"></select>
+        </div>
+        <div class="field">
+          <label for="ySelect">Valeur (axe Y)</label>
+          <select id="ySelect"></select>
+        </div>
+        <div class="field">
+          <label for="aggSelect">Agrégation</label>
+          <select id="aggSelect">
+            <option value="sum">Somme</option>
+            <option value="avg">Moyenne</option>
+            <option value="count">Nombre de lignes</option>
+            <option value="min">Minimum</option>
+            <option value="max">Maximum</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="seriesSelect">Série (optionnel)</label>
+          <select id="seriesSelect"></select>
+          <div class="hint">Regroupe les barres/lignes par une seconde colonne (ex. Année).</div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Affichage</legend>
+        <div class="field">
+          <label for="sortSelect">Tri des catégories</label>
+          <select id="sortSelect">
+            <option value="value-desc">Valeur décroissante</option>
+            <option value="value-asc">Valeur croissante</option>
+            <option value="alpha">Alphabétique</option>
+            <option value="natural">Ordre d'apparition</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="limitInput">Nombre max. de catégories</label>
+          <input type="number" id="limitInput" min="3" max="100" value="20" />
+          <div class="hint">Au-delà, les catégories restantes sont regroupées dans « Autres ».</div>
+        </div>
+      </fieldset>
+
+      <div class="refresh-row">
+        <button type="button" class="primary" id="applyBtn">Générer le graphique</button>
+      </div>
+    </aside>
+
+    <main>
+      <h2 id="chartTitle">—</h2>
+      <p id="chartSummary" role="status" aria-live="polite"></p>
+
+      <div class="chart-wrap">
+        <canvas id="chartCanvas" role="img" aria-labelledby="chartTitle" aria-describedby="chartSummary"></canvas>
+        <div class="state-message" id="stateMessage" hidden></div>
+      </div>
+
+      <details class="data-table-wrap" id="dataTableDetails">
+        <summary>Voir les données du graphique (tableau accessible)</summary>
+        <div class="table-scroll" id="dataTableWrap"></div>
+      </details>
+    </main>
+  </div>
+
+<script>
+(function(){
+  'use strict';
+
+  const els = {
+    table: document.getElementById('tableSelect'),
+    type: document.getElementById('typeSelect'),
+    typeHint: document.getElementById('typeHint'),
+    x: document.getElementById('xSelect'),
+    y: document.getElementById('ySelect'),
+    agg: document.getElementById('aggSelect'),
+    series: document.getElementById('seriesSelect'),
+    sort: document.getElementById('sortSelect'),
+    limit: document.getElementById('limitInput'),
+    applyBtn: document.getElementById('applyBtn'),
+    refreshBtn: document.getElementById('refreshBtn'),
+    canvas: document.getElementById('chartCanvas'),
+    stateMessage: document.getElementById('stateMessage'),
+    chartTitle: document.getElementById('chartTitle'),
+    chartSummary: document.getElementById('chartSummary'),
+    dataTableWrap: document.getElementById('dataTableWrap'),
+  };
+
+  const PALETTE = ['#2F6F4F','#B8791E','#C1502F','#3B6FA0','#8756A3','#4C9A8E','#B0455E','#6B7D3D'];
+  function palette(i){ return PALETTE[i % PALETTE.length]; }
+  function withAlpha(hex, alpha){
+    const n = parseInt(hex.slice(1), 16);
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+  }
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+  }
+
+  let schema = { tableIds: [], columnsByTable: {}, colByRef: {} };
+  let dataCache = {};
+  let refResolverCache = {};
+  let chartInstance = null;
+  let loading = false;
+
+  async function getTableData(tableId){
+    if(!dataCache[tableId]){
+      dataCache[tableId] = await grist.docApi.fetchTable(tableId);
+    }
+    return dataCache[tableId];
+  }
+
+  function clearCaches(){ dataCache = {}; refResolverCache = {}; }
+
+  async function loadSchema(){
+    const [tablesMeta, colsMeta] = await Promise.all([
+      grist.docApi.fetchTable('_grist_Tables'),
+      grist.docApi.fetchTable('_grist_Tables_column'),
+    ]);
+
+    const tableRefToId = {};
+    const tableIds = [];
+    tablesMeta.id.forEach(function(ref, i){
+      const tid = tablesMeta.tableId[i];
+      if(!tid || tid.indexOf('_grist_') === 0) return;
+      tableRefToId[ref] = tid;
+      tableIds.push(tid);
+    });
+    tableIds.sort(function(a,b){ return a.localeCompare(b, 'fr'); });
+
+    const columnsByTable = {};
+    const colByRef = {};
+    colsMeta.id.forEach(function(ref, i){
+      const parentRef = colsMeta.parentId[i];
+      const tableId = tableRefToId[parentRef];
+      const colId = colsMeta.colId[i];
+      const entry = {
+        ref: ref,
+        tableId: tableId,
+        colId: colId,
+        label: colsMeta.label[i] || colId,
+        type: colsMeta.type[i] || 'Any',
+        visibleCol: colsMeta.visibleCol[i],
+        isFormula: colsMeta.isFormula[i],
+      };
+      colByRef[ref] = entry;
+      if(!tableId) return;
+      if(colId === 'manualSort' || colId.indexOf('gristHelper_') === 0) return;
+      (columnsByTable[tableId] = columnsByTable[tableId] || []).push(entry);
+    });
+
+    schema = { tableIds: tableIds, columnsByTable: columnsByTable, colByRef: colByRef };
+  }
+
+  function fillSelect(select, options){
+    select.innerHTML = options.map(function(o){
+      return '<option value="' + escapeHtml(o.value) + '">' + escapeHtml(o.label) + '</option>';
+    }).join('');
+  }
+
+  function isNumericType(type){ return type === 'Numeric' || type === 'Int'; }
+  function isDateType(type){ return type === 'Date' || (type || '').indexOf('DateTime') === 0; }
+  function refMatch(type){ return /^Ref(List)?:(.+)$/.exec(type || ''); }
+
+  function formatRawValue(v, type){
+    if(v === null || v === undefined) return '';
+    if(Array.isArray(v)){
+      if(v[0] === 'L') return v.slice(1).join(', ');
+      return v.join(', ');
+    }
+    if(type === 'Bool') return v ? 'Oui' : 'Non';
+    if(isDateType(type) && typeof v === 'number'){
+      const d = new Date(v * 1000);
+      return type === 'Date' ? d.toLocaleDateString('fr-FR') : d.toLocaleString('fr-FR');
+    }
+    return String(v);
+  }
+
+  async function getRefResolver(colMeta){
+    const m = refMatch(colMeta.type);
+    if(!m) return null;
+    if(refResolverCache[colMeta.ref]) return refResolverCache[colMeta.ref];
+    const isList = !!m[1];
+    const targetTableId = m[2];
+    let targetColId = null;
+    if(colMeta.visibleCol && schema.colByRef[colMeta.visibleCol]){
+      targetColId = schema.colByRef[colMeta.visibleCol].colId;
+    }
+    let targetData;
+    try{ targetData = await getTableData(targetTableId); }
+    catch(e){ return null; }
+    const targetType = targetColId ? ((schema.columnsByTable[targetTableId] || []).find(function(c){ return c.colId === targetColId; }) || {}).type : null;
+    const map = {};
+    targetData.id.forEach(function(rid, i){
+      const raw = targetColId ? targetData[targetColId][i] : rid;
+      map[rid] = formatRawValue(raw, targetType);
+    });
+    const resolver = { isList: isList, map: map };
+    refResolverCache[colMeta.ref] = resolver;
+    return resolver;
+  }
+
+  async function resolveColumnValues(tableId, colMeta){
+    const data = await getTableData(tableId);
+    const raw = data[colMeta.colId] || [];
+    const resolver = await getRefResolver(colMeta);
+    if(resolver){
+      return raw.map(function(v){
+        if(resolver.isList){
+          const ids = Array.isArray(v) && v[0] === 'L' ? v.slice(1) : (Array.isArray(v) ? v : []);
+          return ids.map(function(id){ return resolver.map[id] || ''; }).filter(Boolean).join(', ');
+        }
+        return v ? (resolver.map[v] || '') : '';
+      });
+    }
+    return raw.map(function(v){ return formatRawValue(v, colMeta.type); });
+  }
+
+  function numericColumnValues(data, colId){
+    return (data[colId] || []).map(function(v){
+      if(v === null || v === undefined || Array.isArray(v)) return NaN;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : NaN;
+    });
+  }
+
+  function populateColumnSelectors(tableId){
+    const cols = (schema.columnsByTable[tableId] || []).slice().sort(function(a,b){
+      return a.label.localeCompare(b.label, 'fr');
+    });
+    fillSelect(els.x, cols.map(function(c){ return { value: c.colId, label: c.label }; }));
+    fillSelect(els.y, [{ value: '__count__', label: '— Nombre de lignes —' }].concat(
+      cols.map(function(c){ return { value: c.colId, label: c.label }; })
+    ));
+    fillSelect(els.series, [{ value: '', label: '— Aucune —' }].concat(
+      cols.map(function(c){ return { value: c.colId, label: c.label }; })
+    ));
+
+    const preferredX = cols.find(function(c){ return /^(Text|Choice|ChoiceList|Ref|RefList|Bool)/.test(c.type); }) || cols[0];
+    if(preferredX) els.x.value = preferredX.colId;
+    const preferredY = cols.find(function(c){ return isNumericType(c.type); });
+    els.y.value = preferredY ? preferredY.colId : '__count__';
+    els.agg.value = preferredY ? 'sum' : 'count';
+  }
+
+  function saveConfig(){
+    if(typeof grist === 'undefined' || !grist.setOption) return;
+    grist.setOption('config', {
+      table: els.table.value, type: els.type.value, x: els.x.value, y: els.y.value,
+      agg: els.agg.value, series: els.series.value, sort: els.sort.value, limit: els.limit.value,
+    });
+  }
+
+  function showState(msg, isError){
+    els.stateMessage.textContent = msg;
+    els.stateMessage.hidden = false;
+    els.stateMessage.className = 'state-message' + (isError ? ' error' : '');
+    els.canvas.hidden = true;
+  }
+  function hideState(){
+    els.stateMessage.hidden = true;
+    els.canvas.hidden = false;
+  }
+
+  function chartTypeLabel(t){
+    return { bar:'Barres', 'bar-stacked':'Barres empilées', line:'Lignes', area:'Aires', pie:'Camembert', doughnut:'Donut', radar:'Radar' }[t] || t;
+  }
+
+  function renderChart(type, categories, datasets, isPieLike){
+    if(chartInstance){ chartInstance.destroy(); chartInstance = null; }
+    let realType = type;
+    let stacked = false;
+    if(type === 'bar-stacked'){ realType = 'bar'; stacked = true; }
+    if(type === 'area'){ realType = 'line'; }
+
+    const chartDatasets = datasets.map(function(d, i){
+      if(isPieLike){
+        return {
+          label: d.label, data: d.data,
+          backgroundColor: categories.map(function(_, ci){ return palette(ci); }),
+          borderColor: '#fff', borderWidth: 1,
+        };
+      }
+      return {
+        label: d.label, data: d.data,
+        backgroundColor: withAlpha(palette(i), type === 'line' ? 0.15 : 0.85),
+        borderColor: palette(i), borderWidth: 2,
+        fill: type === 'area',
+        tension: 0.3,
+      };
+    });
+
+    chartInstance = new Chart(els.canvas.getContext('2d'), {
+      type: realType,
+      data: { labels: categories, datasets: chartDatasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 350 },
+        plugins: {
+          legend: { display: datasets.length > 1 || isPieLike, labels: { color: '#1B2A22', font: { family: "'IBM Plex Mono', monospace", size: 11 } } },
+          tooltip: {
+            callbacks: {
+              label: function(ctx){
+                const v = ctx.parsed && typeof ctx.parsed === 'object' ? ctx.parsed.y : ctx.parsed;
+                return ctx.dataset.label + ': ' + Number(v).toLocaleString('fr-FR');
+              },
+            },
+          },
+        },
+        scales: (isPieLike || realType === 'radar') ? undefined : {
+          x: { stacked: stacked, ticks: { color: '#5C6B61', autoSkip: true, maxRotation: 45, minRotation: 0 }, grid: { display: false } },
+          y: { stacked: stacked, beginAtZero: true, ticks: { color: '#5C6B61' }, grid: { color: '#EDEBE3' } },
+        },
+      },
+    });
+  }
+
+  function renderDataTable(categories, seriesKeys, datasets){
+    let html = '<table><caption>Données affichées dans le graphique ci-dessus</caption><thead><tr><th scope="col">Catégorie</th>';
+    seriesKeys.forEach(function(sk){ html += '<th scope="col">' + escapeHtml(sk) + '</th>'; });
+    html += '</tr></thead><tbody>';
+    categories.forEach(function(cat, ci){
+      html += '<tr><th scope="row">' + escapeHtml(cat) + '</th>';
+      datasets.forEach(function(d){ html += '<td>' + Number(d.data[ci] || 0).toLocaleString('fr-FR') + '</td>'; });
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    els.dataTableWrap.innerHTML = html;
+  }
+
+  async function updateChart(){
+    if(loading) return;
+    loading = true;
+    els.applyBtn.disabled = true;
+    try{
+      const tableId = els.table.value;
+      if(!tableId){ showState('Choisissez une table pour commencer.', false); return; }
+
+      const cols = schema.columnsByTable[tableId] || [];
+      const xMeta = cols.find(function(c){ return c.colId === els.x.value; });
+      if(!xMeta){ showState('Choisissez une colonne pour l’axe X.', false); return; }
+      const seriesMeta = els.series.value ? cols.find(function(c){ return c.colId === els.series.value; }) : null;
+      const useCount = els.y.value === '__count__';
+      const yMeta = useCount ? null : cols.find(function(c){ return c.colId === els.y.value; });
+      if(!useCount && !yMeta){ showState('Choisissez une colonne pour l’axe Y.', false); return; }
+
+      const data = await getTableData(tableId);
+      const n = data.id.length;
+      if(n === 0){ showState('Cette table ne contient aucune ligne.', false); return; }
+
+      const xValues = await resolveColumnValues(tableId, xMeta);
+      const seriesValues = seriesMeta ? await resolveColumnValues(tableId, seriesMeta) : null;
+      const yValues = useCount ? null : numericColumnValues(data, yMeta.colId);
+      const agg = useCount ? 'count' : els.agg.value;
+
+      const groups = new Map();
+      for(let i = 0; i < n; i++){
+        const xKey = (xValues[i] === '' || xValues[i] == null) ? '(vide)' : String(xValues[i]);
+        const sKey = seriesValues ? ((seriesValues[i] === '' || seriesValues[i] == null) ? '(vide)' : String(seriesValues[i])) : 'Valeur';
+        if(!groups.has(xKey)) groups.set(xKey, new Map());
+        const sMap = groups.get(xKey);
+        if(!sMap.has(sKey)) sMap.set(sKey, []);
+        sMap.get(sKey).push(useCount ? 1 : yValues[i]);
+      }
+
+      function aggregate(arr){
+        if(useCount) return arr.length;
+        const nums = arr.filter(function(v){ return Number.isFinite(v); });
+        if(agg === 'count') return arr.length;
+        if(nums.length === 0) return 0;
+        if(agg === 'sum') return nums.reduce(function(a,b){ return a+b; }, 0);
+        if(agg === 'avg') return nums.reduce(function(a,b){ return a+b; }, 0) / nums.length;
+        if(agg === 'min') return Math.min.apply(null, nums);
+        if(agg === 'max') return Math.max.apply(null, nums);
+        return nums.reduce(function(a,b){ return a+b; }, 0);
+      }
+
+      let categories = Array.from(groups.keys());
+      const seriesKeys = seriesValues
+        ? Array.from(new Set(seriesValues.map(function(v){ return (v === '' || v == null) ? '(vide)' : String(v); }))).sort(function(a,b){ return a.localeCompare(b,'fr'); })
+        : ['Valeur'];
+
+      const catTotal = new Map();
+      categories.forEach(function(cat){
+        let t = 0;
+        groups.get(cat).forEach(function(arr){ t += aggregate(arr); });
+        catTotal.set(cat, t);
+      });
+
+      const sortMode = els.sort.value;
+      if(sortMode === 'value-desc') categories.sort(function(a,b){ return catTotal.get(b) - catTotal.get(a); });
+      else if(sortMode === 'value-asc') categories.sort(function(a,b){ return catTotal.get(a) - catTotal.get(b); });
+      else if(sortMode === 'alpha') categories.sort(function(a,b){ return a.localeCompare(b, 'fr'); });
+
+      const limit = Math.max(3, Math.min(100, parseInt(els.limit.value, 10) || 20));
+      if(categories.length > limit){
+        const kept = categories.slice(0, limit);
+        const rest = categories.slice(limit);
+        const folded = new Map();
+        seriesKeys.forEach(function(sk){ folded.set(sk, []); });
+        rest.forEach(function(cat){
+          const sMap = groups.get(cat);
+          seriesKeys.forEach(function(sk){
+            const arr = (sMap && sMap.get(sk)) || [];
+            folded.get(sk).push.apply(folded.get(sk), arr);
+          });
+        });
+        groups.set('Autres', folded);
+        categories = kept.concat(['Autres']);
+      }
+
+      const datasets = seriesKeys.map(function(sk){
+        return {
+          label: sk,
+          data: categories.map(function(cat){
+            const sMap = groups.get(cat);
+            const arr = (sMap && sMap.get(sk)) || [];
+            return arr.length ? aggregate(arr) : 0;
+          }),
+        };
+      });
+
+      const type = els.type.value;
+      const isPieLike = type === 'pie' || type === 'doughnut';
+      renderChart(type, categories, datasets, isPieLike);
+      renderDataTable(categories, seriesKeys, datasets);
+      hideState();
+
+      const yLabel = useCount ? 'nombre de lignes' : yMeta.label;
+      els.chartTitle.textContent = xMeta.label + ' — ' + yLabel + ' (' + tableId + ')';
+      const seriesText = seriesMeta ? ', réparti par ' + seriesMeta.label : '';
+      els.chartSummary.textContent = chartTypeLabel(type) + ' : ' + categories.length + ' catégorie' + (categories.length > 1 ? 's' : '') + seriesText + '.';
+
+      saveConfig();
+    } catch(err){
+      console.error(err);
+      showState('Erreur lors du chargement : ' + (err && err.message ? err.message : String(err)), true);
+    } finally{
+      loading = false;
+      els.applyBtn.disabled = false;
+    }
+  }
+
+  async function onTableChange(applySavedCfg){
+    populateColumnSelectors(els.table.value);
+    if(applySavedCfg) applySavedCfg();
+    await updateChart();
+  }
+
+  function buildSavedApplier(cfg, tableId){
+    return function(){
+      if(!cfg || cfg.table !== tableId) return;
+      if(cfg.type) els.type.value = cfg.type;
+      if(cfg.x && [...els.x.options].some(function(o){ return o.value === cfg.x; })) els.x.value = cfg.x;
+      if(cfg.y && [...els.y.options].some(function(o){ return o.value === cfg.y; })) els.y.value = cfg.y;
+      if(cfg.agg) els.agg.value = cfg.agg;
+      if(cfg.series !== undefined && [...els.series.options].some(function(o){ return o.value === cfg.series; })) els.series.value = cfg.series;
+      if(cfg.sort) els.sort.value = cfg.sort;
+      if(cfg.limit) els.limit.value = cfg.limit;
+    };
+  }
+
+  els.table.addEventListener('change', function(){ onTableChange(null); });
+  [els.type, els.x, els.y, els.agg, els.series, els.sort, els.limit].forEach(function(el){
+    el.addEventListener('change', updateChart);
+  });
+  els.applyBtn.addEventListener('click', updateChart);
+  els.refreshBtn.addEventListener('click', function(){ clearCaches(); updateChart(); });
+
+  async function init(){
+    if(typeof grist === 'undefined'){ runDemo(); return; }
+
+    grist.ready({ requiredAccess: 'full' });
+
+    let savedCfg = null;
+    grist.onOptions(async function(options){
+      savedCfg = (options && options.config) || null;
+      try{
+        showState('Chargement du schéma…', false);
+        await loadSchema();
+        if(schema.tableIds.length === 0){ showState('Aucune table trouvée dans ce document.', true); return; }
+        fillSelect(els.table, schema.tableIds.map(function(t){ return { value: t, label: t }; }));
+        const initialTable = (savedCfg && schema.tableIds.indexOf(savedCfg.table) !== -1) ? savedCfg.table : schema.tableIds[0];
+        els.table.value = initialTable;
+        await onTableChange(buildSavedApplier(savedCfg, initialTable));
+      } catch(err){
+        console.error(err);
+        showState('Impossible de lire le schéma du document (accès complet requis).', true);
+      }
+    });
+  }
+
+  function runDemo(){
+    schema = {
+      tableIds: ['DATA_Inscrits'],
+      columnsByTable: {
+        DATA_Inscrits: [
+          { ref: 1, tableId: 'DATA_Inscrits', colId: 'Commune_dep_nom', label: 'Département', type: 'Text' },
+          { ref: 2, tableId: 'DATA_Inscrits', colId: 'Nombre_de_couverts_sur_la_periode', label: 'Couverts', type: 'Numeric' },
+        ],
+      },
+      colByRef: {},
+    };
+    fillSelect(els.table, [{ value: 'DATA_Inscrits', label: 'DATA_Inscrits (démo)' }]);
+    populateColumnSelectors('DATA_Inscrits');
+    dataCache.DATA_Inscrits = {
+      id: [1,2,3,4,5],
+      Commune_dep_nom: ['Rhône','Rhône','Ain','Isère','Ain'],
+      Nombre_de_couverts_sur_la_periode: [120, 80, 45, 60, 30],
+    };
+    updateChart();
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
