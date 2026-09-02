@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Carte établissements inscrits</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<style>
+  :root{
+    --bg-deep:#122822;
+    --bg-panel:#1D3C33;
+    --chalk:#FFFDF7;
+    --chalk-dim:#D9E6DC;
+    --mustard:#F0B94D;
+    --rust:#E0674A;
+    --sage-line:#6E8F76;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;
+    padding:0;
+    min-height:100%;
+    background:transparent;
+    font-family:'IBM Plex Mono', monospace;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color-scheme:dark;
+  }
+  .stage{
+    width:100%;
+    min-height:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:clamp(8px, 3vw, 20px);
+  }
+  .card{
+    position:relative;
+    width:min(460px, 100%);
+    background:var(--bg-deep);
+    border-radius:clamp(14px, 3vw, 20px);
+    padding:clamp(18px, 5vw, 28px) clamp(16px, 5vw, 24px) clamp(14px, 4vw, 20px);
+    box-shadow:0 1px 0 rgba(255,253,247,0.08) inset, 0 18px 40px -18px rgba(0,0,0,0.7);
+    overflow:hidden;
+    isolation:isolate;
+  }
+  .chalk-noise{
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    opacity:0.05;
+    mix-blend-mode:screen;
+    z-index:0;
+  }
+  .eyebrow{
+    position:relative;
+    z-index:1;
+    font-family:'Caveat', cursive;
+    font-weight:700;
+    font-size:clamp(22px, 6.5vw, 28px);
+    color:var(--mustard);
+    letter-spacing:0.5px;
+    transform:rotate(-1deg);
+    margin-bottom:2px;
+  }
+  .filter-context{
+    position:relative;
+    z-index:1;
+    font-family:'IBM Plex Mono', monospace;
+    font-weight:500;
+    font-size:clamp(11px, 3vw, 12.5px);
+    letter-spacing:0.6px;
+    text-transform:uppercase;
+    color:var(--chalk-dim);
+    opacity:0.75;
+  }
+  .plate-wrap{
+    position:relative;
+    z-index:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    margin:clamp(6px, 2vw, 10px) auto 4px;
+  }
+  .plate{
+    width:min(260px, 68vw);
+    height:auto;
+    overflow:visible;
+  }
+  .plate-ring{
+    fill:none;
+    stroke:var(--chalk-dim);
+    stroke-width:2.8;
+    stroke-linecap:round;
+    stroke-dasharray:900;
+    stroke-dashoffset:900;
+    transition:stroke-dashoffset 1.6s cubic-bezier(.2,.7,.2,1);
+    filter:url(#chalkRough);
+  }
+  .plate-ring.drawn{ stroke-dashoffset:0; }
+  .utensil{
+    fill:none;
+    stroke:var(--chalk-dim);
+    stroke-width:2.6;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+    opacity:0;
+    transform-origin:center;
+    transition:opacity 0.9s ease 0.9s, transform 0.9s ease 0.9s;
+  }
+  .utensil.in{ opacity:0.95; }
+  .fork{ transform:translateX(-6px); }
+  .fork.in{ transform:translateX(0); }
+  .knife{ transform:translateX(6px); }
+  .knife.in{ transform:translateX(0); }
+  .number-wrap{
+    position:absolute;
+    top:50%;
+    left:50%;
+    transform:translate(-50%, -46%);
+    text-align:center;
+    z-index:2;
+  }
+  .number{
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:700;
+    font-size:clamp(52px, 16vw, 76px);
+    color:var(--chalk);
+    line-height:1;
+    font-variant-numeric:tabular-nums;
+    letter-spacing:-0.5px;
+    text-shadow:0 2px 12px rgba(0,0,0,0.35);
+  }
+  .label{
+    font-family:'IBM Plex Mono', monospace;
+    font-weight:500;
+    font-size:clamp(13px, 3.6vw, 15px);
+    letter-spacing:1.5px;
+    text-transform:uppercase;
+    color:var(--chalk-dim);
+    margin-top:6px;
+  }
+  .context{
+    position:relative;
+    z-index:1;
+    text-align:center;
+    font-size:clamp(14px, 3.8vw, 16px);
+    color:var(--chalk-dim);
+    margin-top:14px;
+    letter-spacing:0.2px;
+    line-height:1.4;
+  }
+  .context b{ color:var(--chalk); font-weight:700; }
+  .divider{
+    position:relative;
+    z-index:1;
+    height:1px;
+    background:var(--sage-line);
+    margin:16px 0 12px;
+    opacity:0.8;
+  }
+  .progress-row{
+    position:relative;
+    z-index:1;
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+  .progress-track{
+    flex:1;
+    height:clamp(9px, 2.4vw, 11px);
+    border-radius:6px;
+    background:rgba(255,253,247,0.12);
+    overflow:hidden;
+    position:relative;
+  }
+  .progress-fill{
+    height:100%;
+    width:0%;
+    border-radius:6px;
+    background:linear-gradient(90deg, var(--rust), var(--mustard));
+    transition:width 1.4s cubic-bezier(.2,.7,.2,1) 0.3s;
+  }
+  .progress-caption{
+    font-size:clamp(14px, 3.8vw, 16px);
+    color:var(--mustard);
+    font-weight:700;
+    min-width:52px;
+    text-align:right;
+    font-variant-numeric:tabular-nums;
+  }
+  .empty-state{
+    position:relative;
+    z-index:1;
+    text-align:center;
+    color:var(--chalk-dim);
+    font-size:clamp(13px, 3.6vw, 15px);
+    line-height:1.6;
+    padding:20px 6px;
+  }
+  @media (max-width: 260px){
+    .card{ padding:16px 14px 14px; }
+    .progress-caption{ min-width:auto; }
+  }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="card" id="card">
+      <svg class="chalk-noise" width="100%" height="100%">
+        <filter id="chalkTexture">
+          <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" result="noise"/>
+          <feColorMatrix in="noise" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.6 0"/>
+        </filter>
+        <rect width="100%" height="100%" filter="url(#chalkTexture)"/>
+      </svg>
+
+      <div class="eyebrow">✎ Défi Assiettes Vides</div>
+      <div class="filter-context" id="filterContext">toutes campagnes</div>
+
+      <div class="plate-wrap">
+        <svg class="plate" viewBox="0 0 300 300">
+          <defs>
+            <filter id="chalkRough">
+              <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" result="turb"/>
+              <feDisplacementMap in="SourceGraphic" in2="turb" scale="4"/>
+            </filter>
+          </defs>
+
+          <path class="plate-ring" id="plateRing"
+            d="M150,42 C205,38 262,80 266,144 C270,206 218,260 152,262 C92,264 36,214 33,150 C30,90 88,46 150,42 Z" />
+
+          <g class="utensil fork" id="fork" transform="translate(46,150)">
+            <line x1="0" y1="-58" x2="0" y2="58"/>
+            <line x1="-9" y1="-58" x2="-9" y2="-28"/>
+            <line x1="-9" y1="-28" x2="0" y2="-14"/>
+            <line x1="9" y1="-58" x2="9" y2="-28"/>
+            <line x1="9" y1="-28" x2="0" y2="-14"/>
+          </g>
+
+          <g class="utensil knife" id="knife" transform="translate(254,150)">
+            <line x1="0" y1="-58" x2="0" y2="58"/>
+            <path d="M -8,-58 C -8,-30 8,-30 0,-14"/>
+          </g>
+        </svg>
+
+        <div class="number-wrap">
+          <div class="number" id="numberValue">0</div>
+          <div class="label" id="labelText">établissements inscrits</div>
+        </div>
+      </div>
+
+      <div class="context" id="contextText">en attente de données…</div>
+
+      <div class="divider"></div>
+
+      <div class="progress-row">
+        <div class="progress-track">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <div class="progress-caption" id="progressCaption">—</div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const els = {
+    number: document.getElementById('numberValue'),
+    label: document.getElementById('labelText'),
+    context: document.getElementById('contextText'),
+    filterContext: document.getElementById('filterContext'),
+    ring: document.getElementById('plateRing'),
+    fork: document.getElementById('fork'),
+    knife: document.getElementById('knife'),
+    fill: document.getElementById('progressFill'),
+    caption: document.getElementById('progressCaption'),
+  };
+
+  function countUp(el, target, duration){
+    const start = 0;
+    const t0 = performance.now();
+    function step(now){
+      const p = Math.min(1, (now - t0) / duration);
+      const eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.round(start + (target - start) * eased).toLocaleString('fr-FR');
+      if(p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  function showEmpty(){
+    els.ring.classList.remove('drawn');
+    els.fork.classList.remove('in');
+    els.knife.classList.remove('in');
+    els.number.textContent = '–';
+    els.label.textContent = 'aucune donnée';
+    els.context.textContent = 'Aucun établissement inscrit pour cette sélection';
+    els.filterContext.textContent = 'aucune sélection';
+    els.fill.style.width = '0%';
+    els.caption.textContent = '—';
+  }
+
+  // Un enregistrement DATA_Inscrits est compté "participant" via sa formule A_participe,
+  // vraie dès qu'une réponse (DATA_Reponse) existe pour l'établissement.
+  function render(records){
+    if(!records || records.length === 0){ showEmpty(); return; }
+
+    const total = records.length;
+    const participants = records.filter(function(r){ return r.A_participe === true; }).length;
+
+    // CampagneREF_Campagne / AnneeREF_Annee reprennent tels quels les libellés
+    // affichés dans les widgets "Sélectionner la campagne" / "Sélectionner l'année".
+    const sample = records.find(function(r){ return r.CampagneREF_Campagne; }) || records[0];
+    const campagneLabel = sample.CampagneREF_Campagne || sample.Campagne || '';
+    const anneeLabel = sample.AnneeREF_Annee || sample.Annee || '';
+
+    if(campagneLabel || anneeLabel){
+      els.filterContext.textContent = [campagneLabel, anneeLabel].filter(Boolean).join(' · ');
+    } else {
+      els.filterContext.textContent = 'toutes campagnes';
+    }
+
+    els.ring.classList.add('drawn');
+    els.fork.classList.add('in');
+    els.knife.classList.add('in');
+
+    countUp(els.number, total, 1200);
+    els.label.textContent = total > 1 ? 'établissements inscrits' : 'établissement inscrit';
+
+    els.context.innerHTML = '<b>' + participants.toLocaleString('fr-FR') + '</b> sur ' + total.toLocaleString('fr-FR') + ' ont réalisé une pesée';
+
+    const pct = total > 0 ? Math.max(0, Math.min(100, (participants / total) * 100)) : 0;
+    requestAnimationFrame(function(){ els.fill.style.width = pct + '%'; });
+    els.caption.textContent = pct.toLocaleString('fr-FR', {maximumFractionDigits:1}) + '%';
+  }
+
+  function initGrist(){
+    if (typeof grist === 'undefined') { runDemo(); return; }
+
+    // Ce widget ne définit pas de mapping de colonnes : il attend d'être lié
+    // ("Select by") à la table DATA_Inscrits, elle-même filtrée en cascade par
+    // les widgets "Sélectionner l'année" puis "Sélectionner la campagne".
+    // grist.onRecords reçoit alors exactement les inscrits de la campagne
+    // sélectionnée dans l'année sélectionnée.
+    grist.ready({ requiredAccess: 'read table' });
+
+    grist.onRecords(function(records){ render(records); });
+  }
+
+  function runDemo(){
+    render([
+      { A_participe: true, CampagneREF_Campagne: 'Campagne 1', AnneeREF_Annee: 2025 },
+      { A_participe: true, CampagneREF_Campagne: 'Campagne 1', AnneeREF_Annee: 2025 },
+      { A_participe: false, CampagneREF_Campagne: 'Campagne 1', AnneeREF_Annee: 2025 },
+      { A_participe: true, CampagneREF_Campagne: 'Campagne 1', AnneeREF_Annee: 2025 },
+    ]);
+  }
+
+  initGrist();
+</script>
+</body>
+</html>
