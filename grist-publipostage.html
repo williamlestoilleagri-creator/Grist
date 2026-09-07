@@ -272,6 +272,14 @@ Votre établissement {{Etablissement}} …"></textarea>
   function normalize(s){
     return (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   }
+  function displayName(r){
+    if (r.Etablissement) return String(r.Etablissement);
+    var pn = [r.Prenom, r.Nom].filter(Boolean).join(' ').trim();
+    if (pn) return pn;
+    var email = getEmail(r, 'Email');
+    if (email) return email;
+    return 'Enregistrement #' + r.id;
+  }
   function escapeHtml(s){
     return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
@@ -482,7 +490,7 @@ Votre établissement {{Etablissement}} …"></textarea>
         row.innerHTML =
           '<input type="checkbox" ' + (state.selected[r.id] ? 'checked' : '') + (email ? '' : ' disabled') + '>' +
           '<div class="body">' +
-            '<div class="top"><span class="nom">' + escapeHtml(r.Etablissement || 'Sans nom') + '</span>' + tag + '</div>' +
+            '<div class="top"><span class="nom">' + escapeHtml(displayName(r)) + '</span>' + tag + '</div>' +
             '<div class="mail' + (email ? '' : ' bad') + '">' + (email ? escapeHtml(email) : 'Pas de mail') + '</div>' +
           '</div>';
 
@@ -557,7 +565,7 @@ Votre établissement {{Etablissement}} …"></textarea>
     var candidates = selectedValidRecords();
     var current = state.previewId;
     previewSelect.innerHTML = candidates.map(function (r) {
-      return '<option value="' + r.id + '">' + escapeHtml(r.Etablissement || ('#' + r.id)) + '</option>';
+      return '<option value="' + r.id + '">' + escapeHtml(displayName(r)) + '</option>';
     }).join('');
     if (!candidates.length) { previewSelect.innerHTML = '<option value="">—</option>'; state.previewId = null; return; }
     if (!current || !candidates.some(function (r) { return String(r.id) === String(current); })) {
@@ -742,7 +750,7 @@ Votre établissement {{Etablissement}} …"></textarea>
           '<span class="etab" style="font-size:14px">✉️ Envoi individuel — message personnalisé, un destinataire à la fois</span>' +
         '</div>' +
         '<div class="current-head">' +
-          '<span class="etab">' + escapeHtml(rec.Etablissement || ('#' + rec.id)) + '</span>' +
+          '<span class="etab">' + escapeHtml(displayName(rec)) + '</span>' +
           '<span class="to">À : ' + escapeHtml(mail.to) + (mail.cc ? ' · Copie : ' + escapeHtml(mail.cc) : '') + '</span>' +
         '</div>' +
         '<div class="preview-box">' +
