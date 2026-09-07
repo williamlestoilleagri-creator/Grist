@@ -638,6 +638,57 @@ Votre établissement {{Etablissement}} …"></textarea>
     renderAll();
   }
 
+  function groupEmailAddresses(queue) {
+    var addrs = [];
+    queue.forEach(function (rec) {
+      var e1 = getEmail(rec, 'Email'); if (e1) addrs.push(e1);
+      var e2 = getEmail(rec, 'EmailSecondaire'); if (e2) addrs.push(e2);
+    });
+    return addrs.filter(function (v, i, a) { return a.indexOf(v) === i; });
+  }
+
+  function openGroupedMail() {
+    var queue = currentQueue();
+    if (!queue.length) return;
+
+    var mergeUsed = /\{\{\s*[A-Za-z0-9_]+\s*\}\}/.test(subjectInput.value + bodyInput.value);
+    var addrs = groupEmailAddresses(queue);
+    var subject = subjectInput.value;
+    var body = bodyInput.value;
+    var url = 'mailto:?bcc=' + encodeURIComponent(addrs.join(',')) +
+      '&subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+
+    var msg =
+      (mergeUsed ? '⚠️ Votre modèle contient des balises {{…}} : elles ne seront PAS remplacées, le même texte partira à tout le monde.\n\n' : '') +
+      'Ouvrir un seul mail avec ' + addrs.length + ' adresse(s) en copie cachée (Cci), et marquer les ' + queue.length +
+      ' destinataire(s) comme envoyés ?' +
+      (url.length > 1800 ? '\n\n⚠️ Ce lien est long (' + url.length + ' caractères) : certains logiciels de messagerie peuvent le tronquer ou refuser de l\'ouvrir. En cas de souci, utilisez plutôt « Copier les adresses » et collez-les vous-même dans le champ Cci.' : '');
+
+    if (!window.confirm(msg)) return;
+
+    try {
+      var win = window.open(url, '_blank');
+      if (!win) window.location.href = url;
+    } catch (e) { /* ignore */ }
+
+    queue.forEach(function (rec) {
+      state.sentIds[rec.id] = true;
+      writeSuivi(rec);
+    });
+    renderAll();
+  }
+
+  function copyGroupedAddresses() {
+    var queue = currentQueue();
+    if (!queue.length) return;
+    var addrs = groupEmailAddresses(queue);
+    navigator.clipboard.writeText(addrs.join(', ')).then(function () {
+      showToast('success', addrs.length + ' adresse(s) copiée(s) — collez-les dans le champ Cci de votre messagerie.');
+    }).catch(function () {
+      showToast('error', 'Impossible de copier automatiquement — sélectionnez le texte manuellement.');
+    });
+  }
+
   function renderEnvoi() {
     var totalSelected = selectedValidRecords().length;
     var queue = currentQueue();
@@ -664,6 +715,7 @@ Votre établissement {{Etablissement}} …"></textarea>
     var mail = buildMailto(rec);
     var pct = Math.round((doneCount / totalSelected) * 100);
     var bodyLen = mail.body.length;
+    var mergeUsed = /\{\{\s*[A-Za-z0-9_]+\s*\}\}/.test(subjectInput.value + bodyInput.value);
 
     container.innerHTML =
       '<div class="progress-line">' +
@@ -672,6 +724,23 @@ Votre établissement {{Etablissement}} …"></textarea>
         '<button type="button" class="btn btn-ghost" id="btn-open-all">🚀 Ouvrir tous les mails restants (' + queue.length + ')</button>' +
       '</div>' +
       '<div class="send-card">' +
+        '<div class="current-head" style="margin-bottom:6px">' +
+          '<span class="etab" style="font-size:14px">📬 Envoi groupé — un seul message, même contenu pour tout le monde</span>' +
+        '</div>' +
+        '<div style="font-size:12px;color:var(--ink-soft);margin-bottom:10px">' +
+          'Ouvre une seule fenêtre de composition avec les ' + queue.length + ' destinataire(s) en copie cachée (Cci/Bcc), ' +
+          'pour que personne ne voie les adresses des autres. Marque tout le monde comme envoyé dès l\'ouverture.' +
+        '</div>' +
+        (mergeUsed ? '<div class="warn-banner">⚠️ Votre modèle contient des balises {{…}} : elles ne seront PAS remplacées ici, le même texte partira à tout le monde tel quel. Retirez-les du modèle si besoin, ou utilisez le mode individuel ci-dessous.</div>' : '') +
+        '<div class="actions-row">' +
+          '<button type="button" class="btn btn-primary" id="btn-open-grouped">📬 Ouvrir un mail groupé (Cci)</button>' +
+          '<button type="button" class="btn btn-ghost" id="btn-copy-addresses">📋 Copier les adresses</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="send-card">' +
+        '<div class="current-head" style="margin-bottom:6px">' +
+          '<span class="etab" style="font-size:14px">✉️ Envoi individuel — message personnalisé, un destinataire à la fois</span>' +
+        '</div>' +
         '<div class="current-head">' +
           '<span class="etab">' + escapeHtml(rec.Etablissement || ('#' + rec.id)) + '</span>' +
           '<span class="to">À : ' + escapeHtml(mail.to) + (mail.cc ? ' · Copie : ' + escapeHtml(mail.cc) : '') + '</span>' +
@@ -691,6 +760,8 @@ Votre établissement {{Etablissement}} …"></textarea>
       '</div>';
 
     $('btn-open-all').addEventListener('click', function () { openAllRemaining(); });
+    $('btn-open-grouped').addEventListener('click', function () { openGroupedMail(); });
+    $('btn-copy-addresses').addEventListener('click', function () { copyGroupedAddresses(); });
 
     $('btn-open-mail').addEventListener('click', function () {
       try {
