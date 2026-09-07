@@ -142,6 +142,7 @@
     </div>
     <div class="right">
       <span class="badge" id="sel-count">0 sélectionné</span>
+      <button type="button" class="icon-btn" id="restart-btn" title="Recommencer la campagne de publipostage">🔁 Recommencer</button>
       <button type="button" class="icon-btn" id="help-btn" title="Aide">?</button>
     </div>
   </header>
@@ -150,6 +151,7 @@
 
     <aside class="sidebar">
       <div class="sidebar-head">
+        <select id="campagne-select" style="width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:7px; background:#FCFCFB; margin-bottom:8px;"></select>
         <input type="search" id="search-input" placeholder="Filtrer (établissement, nom, mail…)">
         <div class="row">
           <label class="chk-only"><input type="checkbox" id="only-valid" checked> Avec mail uniquement</label>
@@ -245,6 +247,8 @@ Votre établissement {{Etablissement}} …"></textarea>
     skippedIds: Object.create(null),
     filter: '',
     onlyValid: true,
+    campagne: '',
+    campagneReady: false,
     template: { subject: '', body: '' },
     previewId: null,
     ready: false
@@ -262,6 +266,8 @@ Votre établissement {{Etablissement}} …"></textarea>
   var chipsEl = $('chips');
   var chipSearchEl = $('chip-search');
   var previewSelect = $('preview-select');
+  var campagneSelect = $('campagne-select');
+  var restartBtn = $('restart-btn');
 
   function normalize(s){
     return (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -299,6 +305,7 @@ Votre établissement {{Etablissement}} …"></textarea>
       });
 
       renderChips();
+      renderCampagneOptions();
       renderAll();
     });
 
@@ -390,10 +397,59 @@ Votre établissement {{Etablissement}} …"></textarea>
   }
 
   // ============================================================
+  // Campagne
+  // ============================================================
+  function matchesCampagne(r) {
+    return !state.campagne || r.Campagne === state.campagne;
+  }
+  function campaignRecords() {
+    return state.records.filter(matchesCampagne);
+  }
+  function renderCampagneOptions() {
+    if (state.columns.indexOf('Campagne') === -1) {
+      campagneSelect.innerHTML = '<option value="">(colonne Campagne absente)</option>';
+      campagneSelect.disabled = true;
+      state.campagne = '';
+      return;
+    }
+    campagneSelect.disabled = false;
+    var vals = Object.create(null);
+    state.records.forEach(function (r) { if (r.Campagne) vals[r.Campagne] = true; });
+    var list = Object.keys(vals).sort().reverse();
+    var prev = state.campagne;
+    campagneSelect.innerHTML = '<option value="">Toutes les campagnes</option>' +
+      list.map(function (c) { return '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>'; }).join('');
+    if (state.campagneReady && prev && list.indexOf(prev) !== -1) {
+      state.campagne = prev;
+    } else if (!state.campagneReady) {
+      state.campagne = list[0] || '';
+      state.campagneReady = true;
+    }
+    campagneSelect.value = state.campagne;
+  }
+  campagneSelect.addEventListener('change', function () {
+    state.campagne = campagneSelect.value;
+    renderAll();
+  });
+
+  function resetCampaign() {
+    if (!window.confirm(
+      "Recommencer la campagne de publipostage ?\n\n" +
+      "Le suivi de cette session (envoyés / ignorés) sera réinitialisé et tous les destinataires " +
+      "avec un mail valide de la campagne sélectionnée seront de nouveau cochés."
+    )) return;
+    state.sentIds = Object.create(null);
+    state.skippedIds = Object.create(null);
+    campaignRecords().forEach(function (r) { if (getEmail(r, 'Email')) state.selected[r.id] = true; });
+    renderAll();
+  }
+  restartBtn.addEventListener('click', resetCampaign);
+
+  // ============================================================
   // Liste des destinataires
   // ============================================================
   function visibleRecords() {
-    return state.records.filter(function (r) {
+    return campaignRecords().filter(function (r) {
       if (state.onlyValid && !getEmail(r, 'Email')) return false;
       if (!state.filter) return true;
       var hay = normalize([r.Etablissement, r.Nom, r.Prenom, getEmail(r, 'Email')].join(' '));
@@ -402,7 +458,7 @@ Votre établissement {{Etablissement}} …"></textarea>
   }
 
   function selectedValidRecords() {
-    return state.records.filter(function (r) { return state.selected[r.id] && getEmail(r, 'Email'); });
+    return campaignRecords().filter(function (r) { return state.selected[r.id] && getEmail(r, 'Email'); });
   }
 
   function renderList() {
@@ -441,11 +497,11 @@ Votre établissement {{Etablissement}} …"></textarea>
       });
     }
 
-    var nSel = Object.keys(state.selected).filter(function (id) { return state.selected[id]; }).length;
+    var nSel = campaignRecords().filter(function (r) { return state.selected[r.id]; }).length;
     var nSent = Object.keys(state.sentIds).length;
     var nSkip = Object.keys(state.skippedIds).length;
     selCountEl.textContent = nSel + ' sélectionné' + (nSel === 1 ? '' : 's');
-    sidebarFootEl.textContent = state.records.length + ' au total · ' + nSent + ' envoyé(s) cette session' +
+    sidebarFootEl.textContent = campaignRecords().length + ' dans la campagne · ' + nSent + ' envoyé(s) cette session' +
       (nSkip ? ' · ' + nSkip + ' ignoré(s)' : '');
   }
 
@@ -559,6 +615,29 @@ Votre établissement {{Etablissement}} …"></textarea>
     } catch (e) { /* ignore */ }
   }
 
+  function openAllRemaining() {
+    var queue = currentQueue();
+    if (!queue.length) return;
+    var ok = window.confirm(
+      'Ceci va ouvrir ' + queue.length + ' fenêtre(s) de composition (une par destinataire) dans votre logiciel ' +
+      'de messagerie, et marquera immédiatement chaque destinataire comme envoyé.\n\n' +
+      'Vous devrez cliquer sur « Envoyer » dans CHAQUE fenêtre ouverte — rien ne part tout seul. ' +
+      'Autorisez les fenêtres popup pour ce site si votre navigateur les bloque. ' +
+      'Pour de gros volumes, privilégiez des lots de 20 à 30 pour rester fiable.\n\nContinuer ?'
+    );
+    if (!ok) return;
+    queue.forEach(function (rec) {
+      var mail = buildMailto(rec);
+      try {
+        var win = window.open(mail.url, '_blank');
+        if (!win) window.location.href = mail.url;
+      } catch (e) { /* ignore */ }
+      state.sentIds[rec.id] = true;
+      writeSuivi(rec);
+    });
+    renderAll();
+  }
+
   function renderEnvoi() {
     var totalSelected = selectedValidRecords().length;
     var queue = currentQueue();
@@ -590,6 +669,7 @@ Votre établissement {{Etablissement}} …"></textarea>
       '<div class="progress-line">' +
         '<span>' + doneCount + ' / ' + totalSelected + '</span>' +
         '<div class="progress-bar"><div style="width:' + pct + '%"></div></div>' +
+        '<button type="button" class="btn btn-ghost" id="btn-open-all">🚀 Ouvrir tous les mails restants (' + queue.length + ')</button>' +
       '</div>' +
       '<div class="send-card">' +
         '<div class="current-head">' +
@@ -609,6 +689,8 @@ Votre établissement {{Etablissement}} …"></textarea>
         '</div>' +
         '<div class="toast" id="send-toast"></div>' +
       '</div>';
+
+    $('btn-open-all').addEventListener('click', function () { openAllRemaining(); });
 
     $('btn-open-mail').addEventListener('click', function () {
       try {
