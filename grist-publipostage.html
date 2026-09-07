@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Publipostage · Grist</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+
+<style>
+  :root{
+    --bg:#F5F4F0; --surface:#FFFFFF; --ink:#1B1B1E; --ink-soft:#65656B; --ink-faint:#9A9A9F;
+    --border:#E2E0D8; --primary:#000091; --primary-soft:#E5E5FB; --accent:#C9184A; --accent-soft:#FBE3EA;
+    --success:#18753C; --success-soft:#E2F3E8; --warning:#B34000; --warning-soft:#FBE9DD;
+    --shadow:0 1px 2px rgba(20,20,30,.06), 0 8px 24px -16px rgba(20,20,30,.25);
+    --font-display:'Spectral', Georgia, serif;
+    --font-body:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono:'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-body); font-size:13.5px; line-height:1.45; -webkit-font-smoothing:antialiased; }
+  button, input, textarea, select{ font-family:inherit; font-size:inherit; color:inherit; }
+  ::selection{ background:var(--primary-soft); }
+
+  .app{ display:flex; flex-direction:column; height:100vh; min-height:480px; }
+
+  .app-header{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 18px; background:var(--primary); color:#fff; flex:0 0 auto; }
+  .app-header h1{ font-family:var(--font-display); font-weight:600; font-size:17px; margin:0; letter-spacing:.2px; }
+  .app-header .sub{ font-size:11px; opacity:.78; margin-top:1px; }
+  .app-header .right{ display:flex; align-items:center; gap:8px; }
+  .badge{ font-family:var(--font-mono); font-size:11.5px; background:rgba(255,255,255,.14); border-radius:999px; padding:5px 11px; white-space:nowrap; }
+  .icon-btn{ border:1px solid rgba(255,255,255,.35); background:transparent; color:#fff; border-radius:7px; padding:5px 9px; cursor:pointer; font-size:12px; }
+  .icon-btn:hover{ background:rgba(255,255,255,.14); }
+
+  .app-body{ display:flex; flex:1 1 auto; min-height:0; }
+
+  /* ---------- sidebar (destinataires) ---------- */
+  .sidebar{ width:330px; flex:0 0 330px; display:flex; flex-direction:column; background:var(--surface); border-right:1px solid var(--border); min-height:0; }
+  .sidebar-head{ padding:12px 14px 10px; border-bottom:1px solid var(--border); flex:0 0 auto; }
+  .sidebar-head input[type="search"]{ width:100%; padding:7px 10px; border:1px solid var(--border); border-radius:7px; background:#FCFCFB; outline:none; margin-bottom:8px; }
+  .sidebar-head input[type="search"]:focus{ border-color:var(--primary); background:#fff; }
+  .sidebar-head .row{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .chk-only{ display:flex; align-items:center; gap:5px; font-size:11.5px; color:var(--ink-soft); }
+  .link-btns{ display:flex; gap:10px; }
+  .link-btn{ background:none; border:none; color:var(--primary); font-weight:600; font-size:11.5px; cursor:pointer; padding:2px; }
+  .link-btn:hover{ text-decoration:underline; }
+
+  .list{ flex:1 1 auto; overflow-y:auto; padding:4px 8px 12px; }
+  .empty{ margin:26px 12px; text-align:center; color:var(--ink-faint); font-size:12.5px; line-height:1.6; }
+  .row-r{ display:flex; gap:9px; align-items:flex-start; padding:8px 7px; border-radius:8px; }
+  .row-r:hover{ background:#F6F5F0; }
+  .row-r input[type="checkbox"]{ margin-top:3px; accent-color:var(--primary); flex:0 0 auto; }
+  .row-r .body{ flex:1; min-width:0; }
+  .row-r .top{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .row-r .nom{ font-weight:600; font-size:12.5px; }
+  .row-r .mail{ font-size:11px; color:var(--ink-soft); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .row-r .mail.bad{ color:var(--accent); }
+  .tag{ font-size:9.5px; font-weight:700; padding:1px 6px; border-radius:999px; text-transform:uppercase; letter-spacing:.03em; }
+  .tag.sent{ background:var(--success-soft); color:var(--success); }
+  .tag.skip{ background:var(--warning-soft); color:var(--warning); }
+  .tag.old{ background:var(--primary-soft); color:var(--primary); }
+
+  .sidebar-foot{ flex:0 0 auto; padding:9px 14px; border-top:1px solid var(--border); font-size:11px; color:var(--ink-soft); line-height:1.6; }
+
+  /* ---------- main ---------- */
+  .main{ flex:1 1 auto; display:flex; flex-direction:column; min-width:0; min-height:0; }
+  .tabs{ display:flex; gap:2px; padding:10px 18px 0; background:var(--surface); border-bottom:1px solid var(--border); flex:0 0 auto; }
+  .tab-btn{ border:none; background:transparent; padding:9px 14px; font-weight:600; font-size:12.5px; color:var(--ink-soft); cursor:pointer; border-radius:8px 8px 0 0; }
+  .tab-btn.active{ color:var(--primary); background:var(--primary-soft); }
+
+  .tab-panel{ flex:1 1 auto; overflow-y:auto; padding:16px 20px; display:none; }
+  .tab-panel.active{ display:block; }
+
+  .field-block{ margin-bottom:14px; }
+  .field-block label{ display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-faint); margin-bottom:6px; }
+  #subject-input{ width:100%; padding:9px 10px; border:1px solid var(--border); border-radius:7px; background:#FCFCFB; outline:none; }
+  #subject-input:focus{ border-color:var(--primary); background:#fff; }
+  #body-input{ width:100%; min-height:220px; padding:10px; border:1px solid var(--border); border-radius:7px; background:#FCFCFB; outline:none; resize:vertical; font-family:var(--font-mono); font-size:12.5px; line-height:1.55; }
+  #body-input:focus{ border-color:var(--primary); background:#fff; }
+
+  .chips-wrap{ margin-bottom:14px; }
+  .chips-wrap input[type="search"]{ width:100%; padding:6px 9px; border:1px solid var(--border); border-radius:7px; background:#FCFCFB; outline:none; margin-bottom:7px; font-size:12px; }
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; max-height:96px; overflow-y:auto; padding:2px; }
+  .chip{ font-family:var(--font-mono); font-size:11px; background:var(--primary-soft); color:var(--primary); border:none; border-radius:999px; padding:4px 9px; cursor:pointer; }
+  .chip:hover{ filter:brightness(1.08); }
+
+  .warn-banner{ font-size:12px; background:var(--warning-soft); color:var(--warning); border-radius:7px; padding:8px 11px; margin-bottom:14px; }
+
+  .preview-box{ border:1px solid var(--border); border-radius:9px; background:var(--surface); padding:0; overflow:hidden; }
+  .preview-box .ph{ background:#F6F5F0; padding:9px 13px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+  .preview-box .ph select{ padding:5px 8px; border:1px solid var(--border); border-radius:6px; background:#fff; max-width:280px; }
+  .preview-box .pb-meta{ padding:11px 15px 0; font-size:12px; color:var(--ink-soft); }
+  .preview-box .pb-meta b{ color:var(--ink); }
+  .preview-box .pb-subject{ padding:6px 15px 0; font-size:14px; font-weight:700; }
+  .preview-box .pb-body{ padding:12px 15px 15px; white-space:pre-wrap; font-size:13px; line-height:1.6; }
+
+  /* ---------- envoi ---------- */
+  .send-card{ border:1px solid var(--border); border-radius:10px; background:var(--surface); box-shadow:var(--shadow); padding:16px; margin-bottom:16px; }
+  .send-empty{ text-align:center; color:var(--ink-faint); padding:40px 20px; font-size:13px; line-height:1.7; }
+  .send-empty .big{ font-size:32px; margin-bottom:10px; }
+  .progress-line{ display:flex; align-items:center; gap:10px; margin-bottom:14px; font-size:12px; color:var(--ink-soft); }
+  .progress-bar{ flex:1; height:6px; background:#EFEEE8; border-radius:99px; overflow:hidden; }
+  .progress-bar > div{ height:100%; background:var(--primary); border-radius:99px; transition:width .2s; }
+  .current-head{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:8px; flex-wrap:wrap; }
+  .current-head .etab{ font-family:var(--font-display); font-weight:600; font-size:16px; }
+  .current-head .to{ font-family:var(--font-mono); font-size:12px; color:var(--ink-soft); }
+  .actions-row{ display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
+  .btn{ border:none; border-radius:7px; padding:9px 14px; font-weight:600; cursor:pointer; transition:filter .12s, opacity .12s; white-space:nowrap; font-size:12.5px; }
+  .btn:disabled{ opacity:.5; cursor:default; }
+  .btn-primary{ background:var(--primary); color:#fff; }
+  .btn-primary:not(:disabled):hover{ filter:brightness(1.12); }
+  .btn-success{ background:var(--success); color:#fff; }
+  .btn-success:not(:disabled):hover{ filter:brightness(1.12); }
+  .btn-ghost{ background:transparent; color:var(--ink-soft); border:1px solid var(--border); }
+  .btn-ghost:not(:disabled):hover{ background:#F4F3EE; }
+
+  .toast{ font-size:12px; padding:8px 11px; border-radius:7px; margin-top:11px; display:none; }
+  .toast.show{ display:block; }
+  .toast.success{ background:var(--success-soft); color:var(--success); }
+  .toast.error{ background:var(--accent-soft); color:var(--accent); }
+
+  .help{ font-size:12px; color:var(--ink-soft); line-height:1.7; background:var(--surface); border:1px solid var(--border); border-radius:9px; padding:13px 15px; margin-bottom:16px; }
+  .help b{ color:var(--ink); }
+  .help ol{ margin:6px 0 0 18px; padding:0; }
+  .help li{ margin-bottom:3px; }
+
+  .config-missing{ margin:40px auto; max-width:480px; text-align:center; color:var(--ink-soft); font-size:13px; line-height:1.7; }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <header class="app-header">
+    <div>
+      <h1>Publipostage</h1>
+      <div class="sub">Envoi de mails personnalisés — un destinataire à la fois</div>
+    </div>
+    <div class="right">
+      <span class="badge" id="sel-count">0 sélectionné</span>
+      <button type="button" class="icon-btn" id="help-btn" title="Aide">?</button>
+    </div>
+  </header>
+
+  <div class="app-body" id="app-body">
+
+    <aside class="sidebar">
+      <div class="sidebar-head">
+        <input type="search" id="search-input" placeholder="Filtrer (établissement, nom, mail…)">
+        <div class="row">
+          <label class="chk-only"><input type="checkbox" id="only-valid" checked> Avec mail uniquement</label>
+          <div class="link-btns">
+            <button type="button" class="link-btn" id="select-all-btn">Tout sélect.</button>
+            <button type="button" class="link-btn" id="select-none-btn">Aucun</button>
+          </div>
+        </div>
+      </div>
+      <div class="list" id="list"></div>
+      <div class="sidebar-foot" id="sidebar-foot"></div>
+    </aside>
+
+    <div class="main">
+      <div class="tabs">
+        <button type="button" class="tab-btn active" data-tab="modele">✍️ Modèle</button>
+        <button type="button" class="tab-btn" data-tab="envoi">📤 Envoi</button>
+      </div>
+
+      <div class="tab-panel active" id="tab-modele">
+        <div class="help" id="help-panel" style="display:none">
+          Ce widget n'envoie rien tout seul : il prépare un mail personnalisé pour chaque destinataire, puis ouvre
+          votre logiciel de messagerie habituel (Gmail, Outlook, Mail…) avec le message déjà rempli. Vous cliquez
+          vous-même sur « Envoyer » dans votre messagerie — rien ne part sans votre action.
+          <ol>
+            <li>Dans le panneau <b>Colonnes</b> de Grist (icône ⚙ à droite du widget), associez « Email destinataire »
+              à la colonne du mail principal (ex. <code>Adresse_mail_du_representant</code>), et si besoin
+              « Email secondaire » et « Suivi d'envoi » (une colonne pourra être créée pour dater les envois).</li>
+            <li>Rédigez votre modèle ci-dessous avec des balises comme <code>{{Etablissement}}</code>,
+              <code>{{Prenom}}</code>, <code>{{Nom}}</code> — cliquez sur une balise pour l'insérer.</li>
+            <li>Sélectionnez les destinataires dans la liste de gauche.</li>
+            <li>Onglet « Envoi » : ouvrez le mail suivant, puis marquez-le comme envoyé une fois validé dans votre
+              messagerie.</li>
+          </ol>
+        </div>
+
+        <div class="field-block">
+          <label for="subject-input">Objet</label>
+          <input type="text" id="subject-input" placeholder="Ex. {{Etablissement}} — vos résultats de pesée">
+        </div>
+
+        <div class="chips-wrap">
+          <input type="search" id="chip-search" placeholder="Rechercher une balise de fusion…">
+          <div class="chips" id="chips"></div>
+        </div>
+
+        <div class="field-block">
+          <label for="body-input">Corps du message</label>
+          <textarea id="body-input" placeholder="Bonjour {{Prenom}} {{Nom}},
+
+Votre établissement {{Etablissement}} …"></textarea>
+        </div>
+
+        <div id="unknown-tags-warn" class="warn-banner" style="display:none"></div>
+
+        <div class="field-block">
+          <label>Aperçu personnalisé</label>
+          <div class="preview-box">
+            <div class="ph">
+              <span style="font-size:11.5px;color:var(--ink-soft)">Aperçu pour :</span>
+              <select id="preview-select"></select>
+            </div>
+            <div class="pb-meta" id="pb-meta"></div>
+            <div class="pb-subject" id="pb-subject"></div>
+            <div class="pb-body" id="pb-body"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-envoi">
+        <div id="envoi-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="config-missing" id="config-missing" style="display:none"></div>
+
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ============================================================
+  // Etat
+  // ============================================================
+  var state = {
+    records: [],          // enregistrements bruts (toutes les colonnes)
+    colMap: null,         // {Email, EmailSecondaire, Suivi} -> id de colonne réel
+    columns: [],           // liste des colonnes disponibles pour la fusion
+    selected: Object.create(null),
+    sentIds: Object.create(null),
+    skippedIds: Object.create(null),
+    filter: '',
+    onlyValid: true,
+    template: { subject: '', body: '' },
+    previewId: null,
+    ready: false
+  };
+
+  var LS_KEY = 'grist-publipostage-template';
+  var lastFocusedField = null; // 'subject' | 'body'
+
+  function $(id){ return document.getElementById(id); }
+  var listEl = $('list');
+  var selCountEl = $('sel-count');
+  var sidebarFootEl = $('sidebar-foot');
+  var subjectInput = $('subject-input');
+  var bodyInput = $('body-input');
+  var chipsEl = $('chips');
+  var chipSearchEl = $('chip-search');
+  var previewSelect = $('preview-select');
+
+  function normalize(s){
+    return (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  }
+  function escapeHtml(s){
+    return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ============================================================
+  // Connexion Grist
+  // ============================================================
+  if (typeof grist !== 'undefined') {
+    grist.ready({
+      requiredAccess: 'full',
+      columns: [
+        { name: 'Email', title: 'Email destinataire', type: 'Text' },
+        { name: 'EmailSecondaire', title: 'Email secondaire (copie)', type: 'Text', optional: true },
+        { name: 'Suivi', title: "Suivi d'envoi (date)", type: 'DateTime', optional: true }
+      ]
+    });
+
+    grist.onRecords(function (records, mappings) {
+      state.colMap = mappings || {};
+      state.records = records || [];
+      state.columns = state.records.length
+        ? Object.keys(state.records[0]).filter(function (c) { return c !== 'id'; })
+        : [];
+
+      var prevSelected = state.selected;
+      state.records.forEach(function (r) {
+        if (Object.prototype.hasOwnProperty.call(prevSelected, r.id)) return;
+        var hasEmail = !!getEmail(r, 'Email');
+        var alreadySent = state.colMap.Suivi && !!r[state.colMap.Suivi];
+        state.selected[r.id] = hasEmail && !alreadySent;
+      });
+
+      renderChips();
+      renderAll();
+    });
+
+    if (grist.onOptions) {
+      grist.onOptions(function (options) {
+        if (options && (options.subject || options.body)) {
+          state.template.subject = options.subject || '';
+          state.template.body = options.body || '';
+        } else {
+          loadTemplateFromLocalStorage();
+        }
+        subjectInput.value = state.template.subject;
+        bodyInput.value = state.template.body;
+        renderAll();
+      });
+    } else {
+      loadTemplateFromLocalStorage();
+      subjectInput.value = state.template.subject;
+      bodyInput.value = state.template.body;
+    }
+  } else {
+    $('config-missing').style.display = 'block';
+    $('config-missing').textContent = "Ouvrez ce widget depuis une vue Grist liée à DATA_Inscrits pour charger les destinataires.";
+    $('app-body').style.display = 'none';
+  }
+
+  function loadTemplateFromLocalStorage() {
+    try {
+      var raw = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+      state.template.subject = raw.subject || '';
+      state.template.body = raw.body || '';
+    } catch (e) { /* ignore */ }
+  }
+
+  var saveTimer = null;
+  function saveTemplate() {
+    state.template.subject = subjectInput.value;
+    state.template.body = bodyInput.value;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      try {
+        if (typeof grist !== 'undefined' && grist.setOption) {
+          grist.setOption('subject', state.template.subject);
+          grist.setOption('body', state.template.body);
+        }
+      } catch (e) { /* ignore */ }
+      try { localStorage.setItem(LS_KEY, JSON.stringify(state.template)); } catch (e) { /* ignore */ }
+    }, 400);
+  }
+
+  function getEmail(rec, key) {
+    var col = state.colMap && state.colMap[key];
+    if (!col) return '';
+    var v = rec[col];
+    return (v === null || v === undefined) ? '' : String(v).trim();
+  }
+
+  function formatValue(col, val) {
+    if (val === null || val === undefined) return '';
+    if (Array.isArray(val)) {
+      var items = val.slice();
+      if (items[0] === 'L') items = items.slice(1);
+      return items.join(', ');
+    }
+    if (typeof val === 'boolean') return val ? 'Oui' : 'Non';
+    if (typeof val === 'number') {
+      if (/^(Cree_le|Date|Debut|Fin|Derniere)/i.test(col) && val > 1000000000 && val < 4000000000) {
+        try { return new Date(val * 1000).toLocaleDateString('fr-FR'); } catch (e) { /* ignore */ }
+      }
+      return String(val);
+    }
+    return String(val);
+  }
+
+  function mergeTemplate(text, rec) {
+    if (!rec) return text || '';
+    return (text || '').replace(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g, function (m, name) {
+      if (!Object.prototype.hasOwnProperty.call(rec, name)) return m;
+      return formatValue(name, rec[name]);
+    });
+  }
+
+  function unknownTags(text) {
+    var re = /\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g, m, out = [];
+    while ((m = re.exec(text || ''))) {
+      if (state.columns.indexOf(m[1]) === -1 && out.indexOf(m[1]) === -1) out.push(m[1]);
+    }
+    return out;
+  }
+
+  // ============================================================
+  // Liste des destinataires
+  // ============================================================
+  function visibleRecords() {
+    return state.records.filter(function (r) {
+      if (state.onlyValid && !getEmail(r, 'Email')) return false;
+      if (!state.filter) return true;
+      var hay = normalize([r.Etablissement, r.Nom, r.Prenom, getEmail(r, 'Email')].join(' '));
+      return hay.indexOf(normalize(state.filter)) !== -1;
+    });
+  }
+
+  function selectedValidRecords() {
+    return state.records.filter(function (r) { return state.selected[r.id] && getEmail(r, 'Email'); });
+  }
+
+  function renderList() {
+    var visible = visibleRecords();
+    if (!state.records.length) {
+      listEl.innerHTML = '<div class="empty">Aucun enregistrement visible.<br>Vérifiez le lien du widget vers DATA_Inscrits.</div>';
+    } else if (!visible.length) {
+      listEl.innerHTML = '<div class="empty">Aucun résultat pour ce filtre.</div>';
+    } else {
+      listEl.innerHTML = '';
+      visible.forEach(function (r) {
+        var email = getEmail(r, 'Email');
+        var row = document.createElement('div');
+        row.className = 'row-r';
+
+        var tag = '';
+        if (state.sentIds[r.id]) tag = '<span class="tag sent">Envoyé</span>';
+        else if (state.skippedIds[r.id]) tag = '<span class="tag skip">Ignoré</span>';
+        else if (state.colMap.Suivi && r[state.colMap.Suivi]) tag = '<span class="tag old">Déjà envoyé</span>';
+
+        row.innerHTML =
+          '<input type="checkbox" ' + (state.selected[r.id] ? 'checked' : '') + (email ? '' : ' disabled') + '>' +
+          '<div class="body">' +
+            '<div class="top"><span class="nom">' + escapeHtml(r.Etablissement || 'Sans nom') + '</span>' + tag + '</div>' +
+            '<div class="mail' + (email ? '' : ' bad') + '">' + (email ? escapeHtml(email) : 'Pas de mail') + '</div>' +
+          '</div>';
+
+        var checkbox = row.querySelector('input[type="checkbox"]');
+        checkbox.addEventListener('change', function () {
+          state.selected[r.id] = checkbox.checked;
+          if (checkbox.checked) { delete state.sentIds[r.id]; delete state.skippedIds[r.id]; }
+          renderAll();
+        });
+
+        listEl.appendChild(row);
+      });
+    }
+
+    var nSel = Object.keys(state.selected).filter(function (id) { return state.selected[id]; }).length;
+    var nSent = Object.keys(state.sentIds).length;
+    var nSkip = Object.keys(state.skippedIds).length;
+    selCountEl.textContent = nSel + ' sélectionné' + (nSel === 1 ? '' : 's');
+    sidebarFootEl.textContent = state.records.length + ' au total · ' + nSent + ' envoyé(s) cette session' +
+      (nSkip ? ' · ' + nSkip + ' ignoré(s)' : '');
+  }
+
+  $('search-input').addEventListener('input', function (e) { state.filter = e.target.value; renderList(); });
+  $('only-valid').addEventListener('change', function (e) { state.onlyValid = e.target.checked; renderList(); });
+  $('select-all-btn').addEventListener('click', function () {
+    visibleRecords().forEach(function (r) { if (getEmail(r, 'Email')) state.selected[r.id] = true; });
+    renderAll();
+  });
+  $('select-none-btn').addEventListener('click', function () {
+    visibleRecords().forEach(function (r) { state.selected[r.id] = false; });
+    renderAll();
+  });
+
+  // ============================================================
+  // Onglet Modèle : balises + aperçu
+  // ============================================================
+  function renderChips(filterText) {
+    var q = normalize(filterText || '');
+    var cols = state.columns.filter(function (c) { return !q || normalize(c).indexOf(q) !== -1; });
+    chipsEl.innerHTML = cols.map(function (c) {
+      return '<button type="button" class="chip" data-col="' + escapeHtml(c) + '">{{' + escapeHtml(c) + '}}</button>';
+    }).join('') || '<span style="font-size:11px;color:var(--ink-faint)">Aucune balise trouvée</span>';
+  }
+  chipSearchEl.addEventListener('input', function (e) { renderChips(e.target.value); });
+  chipsEl.addEventListener('click', function (e) {
+    var btn = e.target.closest('.chip');
+    if (!btn) return;
+    insertAtCursor(lastFocusedField === 'subject' ? subjectInput : bodyInput, '{{' + btn.dataset.col + '}}');
+  });
+  function insertAtCursor(el, text) {
+    el.focus();
+    var start = el.selectionStart || 0, end = el.selectionEnd || 0;
+    var val = el.value;
+    el.value = val.slice(0, start) + text + val.slice(end);
+    el.selectionStart = el.selectionEnd = start + text.length;
+    if (el === subjectInput) saveTemplate(); else saveTemplate();
+    renderAll();
+  }
+  subjectInput.addEventListener('focus', function () { lastFocusedField = 'subject'; });
+  bodyInput.addEventListener('focus', function () { lastFocusedField = 'body'; });
+  subjectInput.addEventListener('input', function () { saveTemplate(); renderPreviewAndWarnings(); });
+  bodyInput.addEventListener('input', function () { saveTemplate(); renderPreviewAndWarnings(); });
+
+  previewSelect.addEventListener('change', function () { state.previewId = previewSelect.value; renderPreviewAndWarnings(); });
+
+  $('help-btn').addEventListener('click', function () {
+    var p = $('help-panel');
+    p.style.display = p.style.display === 'none' ? 'block' : 'none';
+  });
+
+  function renderPreviewSelect() {
+    var candidates = selectedValidRecords();
+    var current = state.previewId;
+    previewSelect.innerHTML = candidates.map(function (r) {
+      return '<option value="' + r.id + '">' + escapeHtml(r.Etablissement || ('#' + r.id)) + '</option>';
+    }).join('');
+    if (!candidates.length) { previewSelect.innerHTML = '<option value="">—</option>'; state.previewId = null; return; }
+    if (!current || !candidates.some(function (r) { return String(r.id) === String(current); })) {
+      state.previewId = String(candidates[0].id);
+    }
+    previewSelect.value = state.previewId;
+  }
+
+  function renderPreviewAndWarnings() {
+    renderPreviewSelect();
+    var rec = state.records.find(function (r) { return String(r.id) === String(state.previewId); });
+    var subj = mergeTemplate(subjectInput.value, rec);
+    var body = mergeTemplate(bodyInput.value, rec);
+    $('pb-meta').innerHTML = rec
+      ? '<b>À :</b> ' + escapeHtml(getEmail(rec, 'Email')) + (getEmail(rec, 'EmailSecondaire') ? ' &nbsp;·&nbsp; <b>Copie :</b> ' + escapeHtml(getEmail(rec, 'EmailSecondaire')) : '')
+      : 'Aucun destinataire valide sélectionné pour l\'aperçu.';
+    $('pb-subject').textContent = subj;
+    $('pb-body').textContent = body;
+
+    var unknown = unknownTags(subjectInput.value + '\n' + bodyInput.value);
+    var warnEl = $('unknown-tags-warn');
+    if (unknown.length) {
+      warnEl.style.display = 'block';
+      warnEl.textContent = '⚠️ Balise(s) inconnue(s), non remplacée(s) : ' + unknown.map(function (t) { return '{{' + t + '}}'; }).join(', ');
+    } else {
+      warnEl.style.display = 'none';
+    }
+  }
+
+  // ============================================================
+  // Onglet Envoi
+  // ============================================================
+  function currentQueue() {
+    return selectedValidRecords().filter(function (r) { return !state.sentIds[r.id] && !state.skippedIds[r.id]; });
+  }
+
+  function buildMailto(rec) {
+    var to = getEmail(rec, 'Email');
+    var cc = getEmail(rec, 'EmailSecondaire');
+    var subject = mergeTemplate(subjectInput.value, rec);
+    var body = mergeTemplate(bodyInput.value, rec);
+    var params = [];
+    if (cc) params.push('cc=' + encodeURIComponent(cc));
+    params.push('subject=' + encodeURIComponent(subject));
+    params.push('body=' + encodeURIComponent(body));
+    return { url: 'mailto:' + encodeURIComponent(to) + '?' + params.join('&'), to: to, cc: cc, subject: subject, body: body };
+  }
+
+  function writeSuivi(rec) {
+    if (!state.colMap || !state.colMap.Suivi || typeof grist === 'undefined') return;
+    var fields = {};
+    fields[state.colMap.Suivi] = Math.floor(Date.now() / 1000);
+    try {
+      grist.selectedTable.update([{ id: rec.id, fields: fields }]).catch(function () {});
+    } catch (e) { /* ignore */ }
+  }
+
+  function renderEnvoi() {
+    var totalSelected = selectedValidRecords().length;
+    var queue = currentQueue();
+    var doneCount = totalSelected - queue.length;
+    var container = $('envoi-content');
+
+    if (!totalSelected) {
+      container.innerHTML =
+        '<div class="send-card"><div class="send-empty"><div class="big">📭</div>' +
+        'Sélectionnez au moins un destinataire avec une adresse mail dans la liste de gauche pour démarrer l\'envoi.' +
+        '</div></div>';
+      return;
+    }
+
+    if (!queue.length) {
+      container.innerHTML =
+        '<div class="send-card"><div class="send-empty"><div class="big">✅</div>' +
+        'Tous les destinataires sélectionnés ont été traités.<br>Sélectionnez d\'autres destinataires pour continuer.' +
+        '</div></div>';
+      return;
+    }
+
+    var rec = queue[0];
+    var mail = buildMailto(rec);
+    var pct = Math.round((doneCount / totalSelected) * 100);
+    var bodyLen = mail.body.length;
+
+    container.innerHTML =
+      '<div class="progress-line">' +
+        '<span>' + doneCount + ' / ' + totalSelected + '</span>' +
+        '<div class="progress-bar"><div style="width:' + pct + '%"></div></div>' +
+      '</div>' +
+      '<div class="send-card">' +
+        '<div class="current-head">' +
+          '<span class="etab">' + escapeHtml(rec.Etablissement || ('#' + rec.id)) + '</span>' +
+          '<span class="to">À : ' + escapeHtml(mail.to) + (mail.cc ? ' · Copie : ' + escapeHtml(mail.cc) : '') + '</span>' +
+        '</div>' +
+        '<div class="preview-box">' +
+          '<div class="pb-subject" style="padding-top:12px">' + escapeHtml(mail.subject) + '</div>' +
+          '<div class="pb-body">' + escapeHtml(mail.body) + '</div>' +
+        '</div>' +
+        (bodyLen > 1500 ? '<div class="warn-banner" style="margin-top:12px">⚠️ Ce message est long (' + bodyLen + ' caractères) : certains logiciels de messagerie tronquent les liens mailto trop longs. Utilisez plutôt « Copier le message » ci-dessous.</div>' : '') +
+        '<div class="actions-row">' +
+          '<button type="button" class="btn btn-primary" id="btn-open-mail">✉️ Ouvrir dans le client mail</button>' +
+          '<button type="button" class="btn btn-ghost" id="btn-copy">📋 Copier le message</button>' +
+          '<button type="button" class="btn btn-success" id="btn-mark-sent">✅ Marquer comme envoyé et passer au suivant</button>' +
+          '<button type="button" class="btn btn-ghost" id="btn-skip">⏭️ Passer sans envoyer</button>' +
+        '</div>' +
+        '<div class="toast" id="send-toast"></div>' +
+      '</div>';
+
+    $('btn-open-mail').addEventListener('click', function () {
+      try {
+        var win = window.open(mail.url, '_blank');
+        if (!win) window.location.href = mail.url;
+      } catch (e) { window.location.href = mail.url; }
+    });
+
+    $('btn-copy').addEventListener('click', function () {
+      var text = 'À : ' + mail.to + (mail.cc ? '\nCopie : ' + mail.cc : '') + '\nObjet : ' + mail.subject + '\n\n' + mail.body;
+      showToast('error', '');
+      navigator.clipboard.writeText(text).then(function () {
+        showToast('success', 'Message copié dans le presse-papiers.');
+      }).catch(function () {
+        showToast('error', 'Impossible de copier automatiquement — sélectionnez le texte manuellement.');
+      });
+    });
+
+    $('btn-mark-sent').addEventListener('click', function () {
+      state.sentIds[rec.id] = true;
+      writeSuivi(rec);
+      renderAll();
+    });
+
+    $('btn-skip').addEventListener('click', function () {
+      state.skippedIds[rec.id] = true;
+      renderAll();
+    });
+  }
+
+  function showToast(kind, msg) {
+    var t = $('send-toast');
+    if (!t) return;
+    if (!msg) { t.className = 'toast'; return; }
+    t.textContent = msg;
+    t.className = 'toast show ' + kind;
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(function () { t.classList.remove('show'); }, 3500);
+  }
+
+  // ============================================================
+  // Onglets
+  // ============================================================
+  document.querySelectorAll('.tab-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.remove('active'); });
+      document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
+      btn.classList.add('active');
+      $('tab-' + btn.dataset.tab).classList.add('active');
+      if (btn.dataset.tab === 'envoi') renderEnvoi();
+    });
+  });
+
+  // ============================================================
+  // Rendu global
+  // ============================================================
+  function renderAll() {
+    renderList();
+    renderPreviewAndWarnings();
+    if ($('tab-envoi').classList.contains('active')) renderEnvoi();
+  }
+
+  renderAll();
+})();
+</script>
+</body>
+</html>
