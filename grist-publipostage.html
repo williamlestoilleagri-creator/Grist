@@ -177,15 +177,19 @@
           votre logiciel de messagerie habituel (Gmail, Outlook, Mail…) avec le message déjà rempli. Vous cliquez
           vous-même sur « Envoyer » dans votre messagerie — rien ne part sans votre action.
           <ol>
-            <li>Dans le panneau <b>Colonnes</b> de Grist (icône ⚙ à droite du widget), associez « Email destinataire »
-              à la colonne du mail principal (ex. <code>Adresse_mail_du_representant</code>), et si besoin
-              « Email secondaire » et « Suivi d'envoi » (une colonne pourra être créée pour dater les envois).</li>
-            <li>Rédigez votre modèle ci-dessous avec des balises comme <code>{{Etablissement}}</code>,
+            <li>Ce widget est câblé sur les colonnes de <code>DATA_Inscrits</code> : email principal
+              (<code>Adresse_mail_du_representant</code>), email secondaire, nom d'établissement
+              (<code>Etablissement</code> ou <code>NomNormal</code>) et campagne. Aucune configuration Grist requise.</li>
+            <li>Si besoin, choisissez ci-dessous une colonne existante pour dater automatiquement les envois.</li>
+            <li>Rédigez votre modèle avec des balises comme <code>{{Etablissement}}</code>,
               <code>{{Prenom}}</code>, <code>{{Nom}}</code> — cliquez sur une balise pour l'insérer.</li>
-            <li>Sélectionnez les destinataires dans la liste de gauche.</li>
-            <li>Onglet « Envoi » : ouvrez le mail suivant, puis marquez-le comme envoyé une fois validé dans votre
-              messagerie.</li>
+            <li>Sélectionnez les destinataires dans la liste de gauche, puis onglet « Envoi ».</li>
           </ol>
+        </div>
+
+        <div class="field-block" style="display:flex;align-items:center;gap:10px;">
+          <label style="margin:0;white-space:nowrap;font-size:11px;">Suivi d'envoi (optionnel)</label>
+          <select id="suivi-select" style="flex:1;padding:6px 9px;border:1px solid var(--border);border-radius:7px;background:#FCFCFB;"></select>
         </div>
 
         <div class="field-block">
@@ -238,10 +242,15 @@ Votre établissement {{Etablissement}} …"></textarea>
   // ============================================================
   // Etat
   // ============================================================
+  // Colonnes fixes de la table DATA_Inscrits (identifiants techniques, pas les libellés affichés).
+  var EMAIL_COL = 'Adresse_mail_du_representant';
+  var EMAIL2_COL = 'Email_secondaire_optionnel_';
+
   var state = {
     records: [],          // enregistrements bruts (toutes les colonnes)
-    colMap: null,         // {Email, EmailSecondaire, Suivi} -> id de colonne réel
     columns: [],           // liste des colonnes disponibles pour la fusion
+    suiviCol: '',          // colonne (optionnelle) choisie pour dater les envois
+    suiviReady: false,
     selected: Object.create(null),
     sentIds: Object.create(null),
     skippedIds: Object.create(null),
@@ -268,12 +277,14 @@ Votre établissement {{Etablissement}} …"></textarea>
   var previewSelect = $('preview-select');
   var campagneSelect = $('campagne-select');
   var restartBtn = $('restart-btn');
+  var suiviSelect = $('suivi-select');
 
   function normalize(s){
     return (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   }
   function displayName(r){
     if (r.Etablissement) return String(r.Etablissement);
+    if (r.NomNormal) return String(r.NomNormal);
     var pn = [r.Prenom, r.Nom].filter(Boolean).join(' ').trim();
     if (pn) return pn;
     var email = getEmail(r, 'Email');
@@ -288,17 +299,13 @@ Votre établissement {{Etablissement}} …"></textarea>
   // Connexion Grist
   // ============================================================
   if (typeof grist !== 'undefined') {
-    grist.ready({
-      requiredAccess: 'full',
-      columns: [
-        { name: 'Email', title: 'Email destinataire', type: 'Text' },
-        { name: 'EmailSecondaire', title: 'Email secondaire (copie)', type: 'Text', optional: true },
-        { name: 'Suivi', title: "Suivi d'envoi (date)", type: 'DateTime', optional: true }
-      ]
-    });
+    // Widget dédié à DATA_Inscrits : on demande l'accès complet à la table,
+    // sans déclarer de "columns" mappées — Grist restreint sinon les
+    // enregistrements reçus aux seules colonnes mappées, ce qui empêchait
+    // de lire Etablissement, NomNormal, Campagne, etc.
+    grist.ready({ requiredAccess: 'full' });
 
-    grist.onRecords(function (records, mappings) {
-      state.colMap = mappings || {};
+    grist.onRecords(function (records) {
       state.records = records || [];
       state.columns = state.records.length
         ? Object.keys(state.records[0]).filter(function (c) { return c !== 'id'; })
@@ -308,12 +315,13 @@ Votre établissement {{Etablissement}} …"></textarea>
       state.records.forEach(function (r) {
         if (Object.prototype.hasOwnProperty.call(prevSelected, r.id)) return;
         var hasEmail = !!getEmail(r, 'Email');
-        var alreadySent = state.colMap.Suivi && !!r[state.colMap.Suivi];
+        var alreadySent = state.suiviCol && !!r[state.suiviCol];
         state.selected[r.id] = hasEmail && !alreadySent;
       });
 
       renderChips();
       renderCampagneOptions();
+      renderSuiviOptions();
       renderAll();
     });
 
@@ -324,6 +332,10 @@ Votre établissement {{Etablissement}} …"></textarea>
           state.template.body = options.body || '';
         } else {
           loadTemplateFromLocalStorage();
+        }
+        if (options && options.suiviCol) {
+          state.suiviCol = options.suiviCol;
+          state.suiviReady = true;
         }
         subjectInput.value = state.template.subject;
         bodyInput.value = state.template.body;
@@ -364,8 +376,29 @@ Votre établissement {{Etablissement}} …"></textarea>
     }, 400);
   }
 
+  function renderSuiviOptions() {
+    var prev = state.suiviCol;
+    suiviSelect.innerHTML = '<option value="">Aucun suivi</option>' +
+      state.columns.map(function (c) { return '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>'; }).join('');
+    if (prev && state.columns.indexOf(prev) !== -1) {
+      state.suiviCol = prev;
+    } else if (!state.suiviReady) {
+      state.suiviCol = '';
+    }
+    suiviSelect.value = state.suiviCol;
+  }
+  suiviSelect.addEventListener('change', function () {
+    state.suiviCol = suiviSelect.value;
+    state.suiviReady = true;
+    try {
+      if (typeof grist !== 'undefined' && grist.setOption) grist.setOption('suiviCol', state.suiviCol);
+    } catch (e) { /* ignore */ }
+    try { localStorage.setItem('grist-publipostage-suivicol', state.suiviCol); } catch (e) { /* ignore */ }
+    renderAll();
+  });
+
   function getEmail(rec, key) {
-    var col = state.colMap && state.colMap[key];
+    var col = key === 'Email' ? EMAIL_COL : key === 'EmailSecondaire' ? EMAIL2_COL : '';
     if (!col) return '';
     var v = rec[col];
     return (v === null || v === undefined) ? '' : String(v).trim();
@@ -485,7 +518,7 @@ Votre établissement {{Etablissement}} …"></textarea>
         var tag = '';
         if (state.sentIds[r.id]) tag = '<span class="tag sent">Envoyé</span>';
         else if (state.skippedIds[r.id]) tag = '<span class="tag skip">Ignoré</span>';
-        else if (state.colMap.Suivi && r[state.colMap.Suivi]) tag = '<span class="tag old">Déjà envoyé</span>';
+        else if (state.suiviCol && r[state.suiviCol]) tag = '<span class="tag old">Déjà envoyé</span>';
 
         row.innerHTML =
           '<input type="checkbox" ' + (state.selected[r.id] ? 'checked' : '') + (email ? '' : ' disabled') + '>' +
@@ -615,9 +648,13 @@ Votre établissement {{Etablissement}} …"></textarea>
   }
 
   function writeSuivi(rec) {
-    if (!state.colMap || !state.colMap.Suivi || typeof grist === 'undefined') return;
+    if (!state.suiviCol || typeof grist === 'undefined') return;
+    var sample = state.records.find(function (r) {
+      return r[state.suiviCol] !== null && r[state.suiviCol] !== undefined && r[state.suiviCol] !== '';
+    });
+    var isNumeric = sample && typeof sample[state.suiviCol] === 'number';
     var fields = {};
-    fields[state.colMap.Suivi] = Math.floor(Date.now() / 1000);
+    fields[state.suiviCol] = isNumeric ? Math.floor(Date.now() / 1000) : new Date().toLocaleString('fr-FR');
     try {
       grist.selectedTable.update([{ id: rec.id, fields: fields }]).catch(function () {});
     } catch (e) { /* ignore */ }
