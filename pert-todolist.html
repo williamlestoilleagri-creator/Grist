@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-scheme="light" data-fr-theme="light" data-fr-js="false">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PERT · ToDoList</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@600;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.15.2/dist/dsfr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.15.2/dist/utility/icons/icons.min.css">
+<script type="module" src="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.15.2/dist/dsfr.module.min.js"></script>
+<script type="text/javascript" nomodule src="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.15.2/dist/dsfr.nomodule.min.js"></script>
+
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+
+<style>
+  :root{
+    --kb-blue: var(--background-action-high-blue-france, #000091);
+    --kb-blue-text: var(--text-action-high-blue-france, #000091);
+    --kb-blue-soft: var(--background-contrast-blue-france, #f5f5fe);
+    --kb-grey-bg: var(--background-default-grey, #ffffff);
+    --kb-grey-alt: var(--background-alt-grey, #f6f6f6);
+    --kb-grey-contrast: var(--background-contrast-grey, #eeeeee);
+    --kb-hover-tint: var(--background-action-low-blue-france-hover, #e8edff);
+    --kb-border: var(--border-default-grey, #ddd);
+    --kb-title: var(--text-title-grey, #161616);
+    --kb-text: var(--text-default-grey, #3a3a3a);
+    --kb-mention: var(--text-mention-grey, #666666);
+    --kb-success: var(--text-default-success, #18753c);
+    --kb-error: var(--text-default-error, #ce0500);
+    --kb-warning: var(--text-default-warning, #b34000);
+    --kb-shadow: 0 6px 18px 0 rgba(0, 0, 18, .16);
+    --font-display: 'Spectral', Georgia, serif;
+    --node-w: 196px;
+    --node-h: 84px;
+    --col-gap: 64px;
+    --row-gap: 16px;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{ margin:0; background:var(--kb-grey-alt); color:var(--kb-text); font-family:Marianne, arial, sans-serif; font-size:13px; line-height:1.4; }
+  button, input, select, textarea{ font-family:inherit; }
+  p{ margin:0; }
+
+  .app{ display:flex; flex-direction:column; height:100vh; min-height:420px; }
+
+  .app-header{
+    display:flex; align-items:center; gap:12px; padding:10px 16px; background:var(--kb-grey-bg);
+    border-bottom:2px solid var(--kb-blue); flex:0 0 auto; flex-wrap:wrap;
+  }
+  .app-header__title{ font-family:var(--font-display); font-weight:700; font-size:16.5px; color:var(--kb-title); white-space:nowrap; }
+  .app-header__title small{ font-weight:600; color:var(--kb-mention); font-size:13px; }
+  .app-header__tools{ display:flex; align-items:center; gap:10px; flex:1; min-width:260px; flex-wrap:wrap; }
+  .fr-search-bar{ flex:1; min-width:150px; }
+
+  .filter-wrap{ position:relative; }
+  .filter-pop{
+    position:absolute; top:calc(100% + 6px); right:0; z-index:900; background:var(--kb-grey-bg);
+    border:1px solid var(--kb-border); box-shadow:var(--kb-shadow); width:236px;
+    max-height:340px; overflow-y:auto; padding:12px; display:none;
+  }
+  .filter-pop.open{ display:block; }
+  .filter-group{ margin-bottom:12px; }
+  .filter-group:last-child{ margin-bottom:0; }
+  .filter-group .ftitle{ font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--kb-mention); margin-bottom:7px; }
+  .fr-tags-group{ display:flex; flex-wrap:wrap; gap:6px; list-style:none; margin:0; padding:0; }
+  .filter-clear{ font-size:11px; color:var(--kb-blue-text); background:none; border:none; cursor:pointer; padding:4px 2px; text-decoration:underline; }
+
+  .legend{ display:flex; align-items:center; gap:14px; font-size:11px; color:var(--kb-mention); }
+  .legend .dot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:4px; vertical-align:-1px; }
+  .legend .dot.critical{ background:var(--kb-error); }
+  .legend .dot.normal{ background:var(--kb-blue); }
+
+  /* ---------- diagramme ---------- */
+  .pert-scroll{ flex:1 1 auto; overflow:auto; background:var(--kb-grey-bg); }
+  .pert-canvas{ position:relative; margin:24px; }
+  .pert-canvas svg{ position:absolute; top:0; left:0; overflow:visible; }
+
+  .node{
+    position:absolute; width:var(--node-w); min-height:var(--node-h); background:var(--kb-grey-bg);
+    border:1.5px solid var(--kb-border); border-radius:2px; padding:8px 10px; cursor:pointer; z-index:2;
+    box-shadow:0 1px 2px rgba(0,0,0,.08); transition:opacity .12s, box-shadow .12s;
+  }
+  .node:hover{ box-shadow:var(--kb-shadow); }
+  .node.critical{ border-color:var(--kb-error); border-width:2px; }
+  .node.dimmed{ opacity:.32; }
+  .node .n-title{ font-weight:700; font-size:12px; color:var(--kb-title); line-height:1.3; margin-bottom:5px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .node .n-meta{ display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
+  .node .n-dates{ font-size:10px; color:var(--kb-mention); margin-top:4px; }
+  .node .n-slack{ font-size:9.5px; color:var(--kb-mention); margin-top:2px; }
+  .node .n-slack.critical{ color:var(--kb-error); font-weight:700; }
+
+  .empty-msg{ margin:60px auto; text-align:center; color:var(--kb-mention); font-size:13px; line-height:1.7; max-width:420px; }
+  .info-banner{
+    padding:10px 16px; background:var(--kb-blue-soft); border-bottom:1px solid var(--kb-border);
+    font-size:12px; color:var(--kb-title); line-height:1.5;
+  }
+
+  /* ---------- tiroir ---------- */
+  .scrim{ position:fixed; inset:0; background:rgba(18,18,18,.4); z-index:1000; display:none; }
+  .scrim.open{ display:block; }
+  .drawer{ position:fixed; top:0; right:0; bottom:0; width:392px; max-width:94vw; background:var(--kb-grey-bg); z-index:1001; box-shadow:var(--kb-shadow); transform:translateX(100%); transition:transform .18s ease; display:flex; flex-direction:column; }
+  .drawer.open{ transform:translateX(0); }
+  .drawer-head{ display:flex; align-items:flex-start; gap:6px; padding:16px 16px 12px; border-bottom:1px solid var(--kb-border); flex:0 0 auto; }
+  .drawer-title{ flex:1; border:none; background:none; font-family:var(--font-display); font-weight:700; font-size:18px; color:var(--kb-title); resize:none; outline:none; line-height:1.3; padding:2px 0; }
+  .drawer-body{ flex:1 1 auto; overflow-y:auto; padding:4px 16px 16px; }
+  .field-block{ margin-bottom:18px; }
+  .field-block .flabel{ font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--kb-mention); margin-bottom:7px; }
+  .date-row{ display:flex; gap:10px; } .date-row > div{ flex:1; }
+  .attach-info{ font-size:12px; color:var(--kb-mention); }
+  .cpm-box{ display:flex; gap:14px; background:var(--kb-grey-alt); border:1px solid var(--kb-border); padding:9px 11px; font-size:11.5px; }
+  .cpm-box .cpm-item{ flex:1; } .cpm-box .cpm-label{ color:var(--kb-mention); font-size:10px; text-transform:uppercase; letter-spacing:.04em; }
+  .cpm-box .cpm-val{ font-weight:700; color:var(--kb-title); }
+  .drawer-foot{ flex:0 0 auto; padding:12px 16px; border-top:1px solid var(--kb-border); }
+  .foot-meta{ font-size:10.5px; color:var(--kb-mention); line-height:1.5; margin-bottom:10px; }
+  .foot-actions{ display:flex; gap:8px; } .foot-actions .fr-btn{ flex:1; justify-content:center; }
+  .btn-danger-text{ color:var(--kb-error) !important; }
+
+  .toast{ position:fixed; bottom:16px; left:50%; transform:translateX(-50%); z-index:1200; background:var(--kb-title); color:#fff; font-size:12.5px; padding:9px 15px; box-shadow:var(--kb-shadow); display:none; }
+  .toast.show{ display:block; }
+  .toast.error{ background:var(--kb-error); }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="app-header">
+    <p class="app-header__title">PERT <small>· ToDoList</small></p>
+    <div class="app-header__tools">
+      <div class="fr-search-bar" id="search-bar" role="search">
+        <label class="fr-label" for="search-input">Rechercher une action</label>
+        <input class="fr-input" type="search" id="search-input" placeholder="Rechercher (mise en évidence)…">
+        <button class="fr-btn" title="Rechercher">Rechercher</button>
+      </div>
+      <div class="legend">
+        <span><span class="dot critical"></span>Chemin critique</span>
+        <span><span class="dot normal"></span>Marge disponible</span>
+      </div>
+      <div class="filter-wrap">
+        <button type="button" class="fr-btn fr-btn--secondary fr-btn--sm fr-btn--icon-left fr-icon-filter-line" id="filter-btn">Filtres</button>
+        <div class="filter-pop" id="filter-pop"></div>
+      </div>
+      <button type="button" class="fr-btn fr-btn--sm fr-btn--icon-left fr-icon-add-line" id="add-btn" disabled>Nouvelle action</button>
+    </div>
+  </header>
+
+  <div class="pert-scroll" id="pert-scroll">
+    <div class="pert-canvas" id="pert-canvas"></div>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer-head">
+    <textarea class="drawer-title" id="d-title" rows="1" placeholder="Titre de l'action…"></textarea>
+    <button type="button" class="fr-btn fr-btn--tertiary-no-outline fr-btn--icon-left fr-icon-close-line" id="d-close" title="Fermer"><span class="fr-sr-only">Fermer</span></button>
+  </div>
+  <div class="drawer-body" id="drawer-body"></div>
+  <div class="drawer-foot">
+    <div class="foot-meta" id="d-meta"></div>
+    <div class="foot-actions">
+      <button type="button" class="fr-btn fr-btn--secondary fr-btn--sm fr-btn--icon-left fr-icon-external-link-line" id="d-open-grist">Voir dans Grist</button>
+      <button type="button" class="fr-btn fr-btn--secondary fr-btn--sm fr-btn--icon-left fr-icon-delete-line btn-danger-text" id="d-delete">Supprimer</button>
+    </div>
+  </div>
+</aside>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  'use strict';
+
+  var ACCENT_NAMES = [
+    'green-tilleul-verveine','green-bourgeon','green-emeraude','green-menthe','green-archipel',
+    'blue-ecume','blue-cumulus','purple-glycine','pink-macaron','pink-tuile',
+    'yellow-tournesol','yellow-moutarde','orange-terre-battue','brown-cafe-creme',
+    'brown-caramel','brown-opera','beige-gris-galet'
+  ];
+  var DAY = 86400;
+  var NODE_W = 196, NODE_H = 84, COL_GAP = 64, ROW_GAP = 16, MARGIN = 20;
+
+  var state = {
+    records: [], mappings: null, ready: false,
+    colMeta: { Status:null, Theme:null, Structure:null },
+    refLabels: { Assignee:null, Support:null },
+    filters: { search:'', theme:new Set(), structure:new Set(), assignee:new Set() },
+    openId: null
+  };
+
+  function $(id){ return document.getElementById(id); }
+  function escapeHtml(s){ return (s==null?'':s).toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function slug(s){ return (s==null?'':s).toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')||'x'; }
+  function decodeList(v){ if (v==null) return []; if (Array.isArray(v)) return v[0]==='L'?v.slice(1):v; return [v]; }
+  function pad2(n){ return n<10?'0'+n:''+n; }
+  function dateToInput(v){ if (v==null||v==='') return ''; var d=new Date(v*1000); return d.getUTCFullYear()+'-'+pad2(d.getUTCMonth()+1)+'-'+pad2(d.getUTCDate()); }
+  function inputToDate(s){ if (!s) return null; var p=s.split('-').map(Number); return Math.round(Date.UTC(p[0],p[1]-1,p[2])/1000); }
+  function formatDateFR(v){ if (v==null||v==='') return '—'; var d=new Date(v*1000); return pad2(d.getUTCDate())+'/'+pad2(d.getUTCMonth()+1)+'/'+d.getUTCFullYear(); }
+  function formatDateTime(v){ if (v==null||v==='') return '—'; try { return new Date(v*1000).toLocaleString('fr-FR',{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Paris'}); } catch(e){ return new Date(v*1000).toLocaleString('fr-FR'); } }
+  function debounce(fn, ms){ var t; return function(){ var a=arguments,c=this; clearTimeout(t); t=setTimeout(function(){ fn.apply(c,a); }, ms); }; }
+  function accentFor(value){ var str=(value||'').toString(); var h=0; for (var i=0;i<str.length;i++) h=(h*31+str.charCodeAt(i))>>>0; return ACCENT_NAMES[h % ACCENT_NAMES.length]; }
+  function showToast(msg, isError){
+    var t=$('toast'); t.textContent=msg; t.className='toast show'+(isError?' error':'');
+    clearTimeout(showToast._t); showToast._t=setTimeout(function(){ t.classList.remove('show'); }, 3600);
+  }
+
+  // ============================================================
+  // Grist
+  // ============================================================
+  grist.ready({
+    requiredAccess: 'full',
+    columns: [
+      { name:'Title', title:'Action', type:'Text' },
+      { name:'Status', title:'Statut', type:'Choice' },
+      { name:'Dependencies', title:'Dépendances (actions préalables)', type:'Ref,RefList', optional:true },
+      { name:'DateStart', title:'Date de début', type:'Date,DateTime', optional:true },
+      { name:'DateDue', title:'Date de fin', type:'Date,DateTime', optional:true },
+      { name:'Assignee', title:'Pilote action', type:'Ref,RefList', optional:true },
+      { name:'Support', title:'Appui action', type:'Ref,RefList', optional:true },
+      { name:'Theme', title:'Thème', type:'Choice,ChoiceList', optional:true },
+      { name:'Structure', title:'Structure ou service', type:'Choice,ChoiceList', optional:true },
+      { name:'Details', title:"Détails de l'action", type:'Text', optional:true },
+      { name:'Suites', title:'Suites données', type:'Text', optional:true },
+      { name:'Progress', title:'Progression', type:'Numeric,Int', optional:true },
+      { name:'Attachments', title:'Pièces jointes', type:'Attachments', optional:true },
+      { name:'LastUpdate', title:'Dernière mise à jour', type:'DateTime,Date', optional:true },
+      { name:'LastUpdateBy', title:'Dernière mise à jour par', type:'Text', optional:true }
+    ]
+  });
+
+  var lastMappingsJson = null;
+  grist.onRecords(function(records, mappings){
+    state.mappings = mappings || null;
+    state.ready = !!(mappings && mappings.Title && mappings.Status);
+    var mapped = (mappings && grist.mapColumnNames(records, mappings)) || [];
+    state.records = mapped;
+    $('add-btn').disabled = !state.ready;
+    if (state.ready) {
+      var mj = JSON.stringify(mappings);
+      if (mj !== lastMappingsJson) { lastMappingsJson = mj; resolveMeta(mappings).catch(function(e){ console.warn(e); }).then(renderAll); }
+    }
+    renderAll();
+    syncOpenDrawer();
+  });
+
+  async function resolveMeta(mappings){
+    var neededColIds = [];
+    ['Title','Status','Assignee','Support','Theme','Structure','Details','Suites','DateStart','DateDue','Progress','Dependencies'].forEach(function(k){ if (mappings[k]) neededColIds.push(mappings[k]); });
+    var columnsData = await grist.docApi.fetchTable('_grist_Tables_column');
+    var byParent = {};
+    for (var i=0;i<columnsData.id.length;i++){ var p=columnsData.parentId[i]; (byParent[p]=byParent[p]||[]).push(i); }
+    var matchedParent = null;
+    Object.keys(byParent).forEach(function(p){
+      if (matchedParent!=null) return;
+      var colSet={}; byParent[p].forEach(function(i){ colSet[columnsData.colId[i]]=true; });
+      if (neededColIds.every(function(c){ return colSet[c]; })) matchedParent=p;
+    });
+    if (matchedParent==null) return;
+    function findIdx(colId){ var idxs=byParent[matchedParent]||[]; for (var k=0;k<idxs.length;k++) if (columnsData.colId[idxs[k]]===colId) return idxs[k]; return -1; }
+    function metaFor(colId){ var idx=findIdx(colId); if (idx===-1) return null; var opts={}; try{ opts=JSON.parse(columnsData.widgetOptions[idx]||'{}'); }catch(e){} return { choices:opts.choices||[], choiceOptions:opts.choiceOptions||{} }; }
+    async function refLabelsFor(colId){
+      var idx=findIdx(colId); if (idx===-1) return null;
+      var m=/^Ref(?:List)?:(.+)$/.exec(columnsData.type[idx]||''); if (!m) return null;
+      var targetTableId=m[1]; var visibleColRef=columnsData.visibleCol[idx]; var displayColId=null;
+      if (visibleColRef){ var vIdx=columnsData.id.indexOf(visibleColRef); if (vIdx!==-1) displayColId=columnsData.colId[vIdx]; }
+      var targetData; try{ targetData=await grist.docApi.fetchTable(targetTableId); }catch(e){ return null; }
+      var labelCol=(displayColId && targetData[displayColId]) ? displayColId : ['Acteurs','Name','Nom','Label','Title'].filter(function(c){ return targetData[c]; })[0]||null;
+      var map={}; targetData.id.forEach(function(rid,i){ map[rid]=labelCol?String(targetData[labelCol][i]==null?('#'+rid):targetData[labelCol][i]):('#'+rid); });
+      return map;
+    }
+    state.colMeta.Status = metaFor(mappings.Status);
+    state.colMeta.Theme = mappings.Theme ? metaFor(mappings.Theme) : null;
+    state.colMeta.Structure = mappings.Structure ? metaFor(mappings.Structure) : null;
+    state.refLabels.Assignee = mappings.Assignee ? await refLabelsFor(mappings.Assignee) : null;
+    state.refLabels.Support = mappings.Support ? await refLabelsFor(mappings.Support) : null;
+  }
+  function assigneeLabel(id, key){ var m=state.refLabels[key]; return (m && m[id]) || ('#'+id); }
+
+  function updateRecord(id, fields){
+    return grist.selectedTable.update({ id:id, fields:fields }).catch(function(err){ showToast('Enregistrement impossible : '+(err&&err.message?err.message:err), true); throw err; });
+  }
+  function createRecord(fields){ return grist.selectedTable.create({ fields:fields }); }
+  function deleteRecord(id){ return grist.selectedTable.destroy([id]); }
+
+  // ============================================================
+  // Filtres (mise en évidence, ne modifie pas le graphe)
+  // ============================================================
+  function passesFilter(r){
+    var f=state.filters;
+    if (f.search){
+      var hay=[r.Title,r.Details,r.Suites].map(function(v){ return (v||'').toString().toLowerCase(); }).join(' ');
+      decodeList(r.Assignee).forEach(function(id){ hay+=' '+assigneeLabel(id,'Assignee').toLowerCase(); });
+      if (hay.indexOf(f.search.toLowerCase())===-1) return false;
+    }
+    if (f.theme.size){ var th=decodeList(r.Theme); if (!th.some(function(t){ return f.theme.has(t); })) return false; }
+    if (f.structure.size){ var st=decodeList(r.Structure); if (!st.some(function(t){ return f.structure.has(t); })) return false; }
+    if (f.assignee.size){ var as=decodeList(r.Assignee).map(String); if (!as.some(function(id){ return f.assignee.has(id); })) return false; }
+    return true;
+  }
+  function anyFilterActive(){
+    var f=state.filters; return !!(f.search||f.theme.size||f.structure.size||f.assignee.size);
+  }
+  function optionsFromRecords(getter){
+    var seen={}, out=[];
+    state.records.forEach(function(r){ decodeList(getter(r)).forEach(function(v){ if (v!=null && !seen[v]){ seen[v]=true; out.push(v); } }); });
+    return out;
+  }
+  var filterBtn=$('filter-btn'), filterPop=$('filter-pop');
+  filterBtn.addEventListener('click', function(){ filterPop.classList.toggle('open'); });
+  document.addEventListener('click', function(e){ if (!filterPop.contains(e.target) && e.target!==filterBtn) filterPop.classList.remove('open'); });
+  function renderFilterPop(){
+    var groups=[];
+    var themeOpts=(state.colMeta.Theme && state.colMeta.Theme.choices.length)?state.colMeta.Theme.choices:optionsFromRecords(function(r){ return r.Theme; });
+    if (state.mappings && state.mappings.Theme && themeOpts.length) groups.push(filterGroupHtml('Thème','theme',themeOpts,function(v){ return v; }));
+    var structOpts=(state.colMeta.Structure && state.colMeta.Structure.choices.length)?state.colMeta.Structure.choices:optionsFromRecords(function(r){ return r.Structure; });
+    if (state.mappings && state.mappings.Structure && structOpts.length) groups.push(filterGroupHtml('Structure / service','structure',structOpts,function(v){ return v; }));
+    if (state.mappings && state.mappings.Assignee){
+      var ids=optionsFromRecords(function(r){ return r.Assignee; });
+      if (ids.length) groups.push(filterGroupHtml('Pilote','assignee',ids,function(id){ return assigneeLabel(id,'Assignee'); }));
+    }
+    filterPop.innerHTML = groups.join('') + '<button type="button" class="filter-clear" id="filter-clear">Réinitialiser les filtres</button>';
+    ['theme','structure','assignee'].forEach(function(key){
+      filterPop.querySelectorAll('input[data-fkey="'+key+'"]').forEach(function(cb){
+        cb.checked = state.filters[key].has(cb.value);
+        cb.addEventListener('change', function(){ if (cb.checked) state.filters[key].add(cb.value); else state.filters[key].delete(cb.value); updateFilterBtnState(); renderAll(); });
+      });
+    });
+    var clearBtn=$('filter-clear');
+    if (clearBtn) clearBtn.addEventListener('click', function(){ state.filters.theme.clear(); state.filters.structure.clear(); state.filters.assignee.clear(); updateFilterBtnState(); renderAll(); });
+    updateFilterBtnState();
+  }
+  function filterGroupHtml(label, key, values, labelFn){
+    return '<div class="filter-group"><div class="ftitle">'+escapeHtml(label)+'</div><ul class="fr-tags-group">'+values.map(function(v,i){
+      var id='filt-'+key+'-'+slug(String(v))+'-'+i;
+      return '<li><input type="checkbox" class="fr-tag" id="'+id+'" data-fkey="'+key+'" value="'+escapeHtml(String(v))+'"><label class="fr-tag" for="'+id+'">'+escapeHtml(labelFn(v))+'</label></li>';
+    }).join('')+'</ul></div>';
+  }
+  function updateFilterBtnState(){
+    var active=state.filters.theme.size+state.filters.structure.size+state.filters.assignee.size;
+    filterBtn.classList.toggle('fr-btn--secondary', !active);
+    filterBtn.textContent = active ? 'Filtres ('+active+')' : 'Filtres';
+  }
+  $('search-input').addEventListener('input', function(e){ state.filters.search=e.target.value.trim(); renderAll(); });
+  $('search-bar').querySelector('button').addEventListener('click', function(e){ e.preventDefault(); });
+
+  // ============================================================
+  // Construction du graphe / calcul du chemin critique (CPM)
+  // ============================================================
+  function durationDays(r){
+    if (r.DateStart!=null && r.DateDue!=null) {
+      var d = Math.floor(r.DateDue/DAY) - Math.floor(r.DateStart/DAY) + 1;
+      return Math.max(1, d);
+    }
+    return 1;
+  }
+
+  function buildGraph(){
+    var hasDeps = !!state.mappings.Dependencies;
+    var nodes = state.records.map(function(r){ return { id:r.id, r:r, dur: durationDays(r) }; });
+    var byId = {}; nodes.forEach(function(n){ byId[n.id]=n; });
+    var preds = {};
+    nodes.forEach(function(n){ preds[n.id] = hasDeps ? decodeList(n.r.Dependencies).filter(function(p){ return byId[p]; }) : []; });
+
+    // rang (plus long chemin depuis les racines), avec garde anti-cycle
+    var rank = {};
+    function computeRank(id, visiting){
+      if (rank[id] != null) return rank[id];
+      if (visiting[id]) return rank[id] = 0;
+      visiting[id] = true;
+      var r = 0;
+      (preds[id]||[]).forEach(function(p){ r = Math.max(r, computeRank(p, visiting) + 1); });
+      delete visiting[id];
+      return rank[id] = r;
+    }
+    nodes.forEach(function(n){ computeRank(n.id, {}); });
+
+    var order = nodes.slice().sort(function(a,b){ return rank[a.id]-rank[b.id]; }).map(function(n){ return n.id; });
+
+    var succs = {}; nodes.forEach(function(n){ succs[n.id]=[]; });
+    nodes.forEach(function(n){ (preds[n.id]||[]).forEach(function(p){ if (succs[p]) succs[p].push(n.id); }); });
+
+    var ES={}, EF={};
+    order.forEach(function(id){
+      var ps = (preds[id]||[]);
+      ES[id] = ps.length ? Math.max.apply(null, ps.map(function(p){ return EF[p]!=null?EF[p]:0; })) : 0;
+      EF[id] = ES[id] + byId[id].dur;
+    });
+    var projectEnd = 0;
+    nodes.forEach(function(n){ if (EF[n.id] > projectEnd) projectEnd = EF[n.id]; });
+    var LF={}, LS={};
+    order.slice().reverse().forEach(function(id){
+      var ss = succs[id] || [];
+      LF[id] = ss.length ? Math.min.apply(null, ss.map(function(s){ return LS[s]!=null?LS[s]:projectEnd; })) : projectEnd;
+      LS[id] = LF[id] - byId[id].dur;
+    });
+    var critical = {};
+    nodes.forEach(function(n){ critical[n.id] = (LS[n.id] - ES[n.id]) <= 0; });
+
+    return { nodes:nodes, byId:byId, preds:preds, succs:succs, rank:rank, ES:ES, EF:EF, LS:LS, LF:LF, critical:critical, projectEnd:projectEnd, hasDeps:hasDeps };
+  }
+
+  // ============================================================
+  // Rendu
+  // ============================================================
+  var canvasEl = $('pert-canvas');
+  var graph = null;
+
+  function statusHex(status){
+    if (state.colMeta.Status && state.colMeta.Status.choiceOptions && state.colMeta.Status.choiceOptions[status] && state.colMeta.Status.choiceOptions[status].fillColor)
+      return state.colMeta.Status.choiceOptions[status].fillColor;
+    var ACCENT_HEX = {
+      'green-tilleul-verveine':'#66673d','green-bourgeon':'#447049','green-emeraude':'#297254',
+      'green-menthe':'#1e8b7d','green-archipel':'#036b6c','blue-ecume':'#0063cb','blue-cumulus':'#417dc4',
+      'purple-glycine':'#a558a0','pink-macaron':'#e18b76','pink-tuile':'#c8553d','yellow-tournesol':'#716043',
+      'yellow-moutarde':'#c3992a','orange-terre-battue':'#b34000','brown-cafe-creme':'#845d38',
+      'brown-caramel':'#845d1f','brown-opera':'#7b4d24','beige-gris-galet':'#78746a'
+    };
+    return ACCENT_HEX[accentFor(status)];
+  }
+
+  function renderAll(){
+    if (!state.mappings) { canvasEl.innerHTML = '<div class="empty-msg">Connexion à Grist en cours…</div>'; return; }
+    if (!state.ready) {
+      canvasEl.innerHTML = '<div class="empty-msg">Configurez le widget : associez au minimum <strong>Action</strong> et <strong>Statut</strong> depuis le panneau de réglage (icône ⚙️ / puzzle).</div>';
+      renderFilterPop();
+      return;
+    }
+    renderFilterPop();
+
+    var existingBanner = document.getElementById('info-banner');
+    if (existingBanner) existingBanner.remove();
+    var scrollWrap = $('pert-scroll');
+
+    graph = buildGraph();
+
+    if (!graph.hasDeps) {
+      var b = document.createElement('div');
+      b.id = 'info-banner'; b.className = 'info-banner';
+      b.innerHTML = 'Aucune colonne de dépendances associée : les actions sont affichées sans liaisons ni chemin critique. ' +
+        'Pour activer le vrai diagramme PERT, créez dans Grist une colonne <strong>Référence liste</strong> vers la table <strong>ToDoList</strong> elle-même (ex. « Dépendances »), puis associez-la à ce widget (icône ⚙️ / puzzle).';
+      scrollWrap.parentNode.insertBefore(b, scrollWrap);
+    }
+
+    var filterActive = anyFilterActive();
+    var matchSet = {};
+    if (filterActive) state.records.forEach(function(r){ if (passesFilter(r)) matchSet[r.id] = true; });
+
+    // organise par rang, tri par ES puis titre
+    var byRank = {};
+    graph.nodes.forEach(function(n){ (byRank[graph.rank[n.id]] = byRank[graph.rank[n.id]] || []).push(n); });
+    var maxRank = 0;
+    Object.keys(byRank).forEach(function(r){ maxRank = Math.max(maxRank, parseInt(r,10)); byRank[r].sort(function(a,b){ return (graph.ES[a.id]-graph.ES[b.id]) || (a.r.Title||'').localeCompare(b.r.Title||''); }); });
+
+    var maxRowsInRank = 1;
+    Object.keys(byRank).forEach(function(r){ maxRowsInRank = Math.max(maxRowsInRank, byRank[r].length); });
+
+    var canvasW = MARGIN*2 + (maxRank+1)*NODE_W + maxRank*COL_GAP;
+    var canvasH = MARGIN*2 + maxRowsInRank*NODE_H + (maxRowsInRank-1)*ROW_GAP;
+
+    var pos = {};
+    Object.keys(byRank).forEach(function(rk){
+      var list = byRank[rk];
+      var totalH = list.length*NODE_H + (list.length-1)*ROW_GAP;
+      var startY = MARGIN + (canvasH - MARGIN*2 - totalH)/2;
+      list.forEach(function(n, idx){
+        pos[n.id] = {
+          x: MARGIN + parseInt(rk,10) * (NODE_W + COL_GAP),
+          y: startY + idx * (NODE_H + ROW_GAP)
+        };
+      });
+    });
+
+    var svg = '<svg width="'+canvasW+'" height="'+canvasH+'"><defs>' +
+      '<marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#9a9a9f"></path></marker>' +
+      '<marker id="arrow-critical" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="var(--kb-error)"></path></marker>' +
+      '</defs>';
+    graph.nodes.forEach(function(n){
+      (graph.preds[n.id]||[]).forEach(function(pId){
+        if (!pos[pId] || !pos[n.id]) return;
+        var p1 = pos[pId], p2 = pos[n.id];
+        var x1 = p1.x + NODE_W, y1 = p1.y + NODE_H/2;
+        var x2 = p2.x, y2 = p2.y + NODE_H/2;
+        var midX = (x1+x2)/2;
+        var isCritical = graph.critical[pId] && graph.critical[n.id];
+        svg += '<path d="M'+x1+','+y1+' C'+midX+','+y1+' '+midX+','+y2+' '+x2+','+y2+'" fill="none" stroke="'+(isCritical?'var(--kb-error)':'#c7c5bd')+'" stroke-width="'+(isCritical?2:1.4)+'" marker-end="url(#'+(isCritical?'arrow-critical':'arrow')+')"></path>';
+      });
+    });
+    svg += '</svg>';
+
+    var nodesHtml = '';
+    graph.nodes.forEach(function(n){
+      var p = pos[n.id]; if (!p) return;
+      var r = n.r;
+      var color = statusHex(r.Status);
+      var isCritical = graph.critical[n.id];
+      var dimmed = filterActive && !matchSet[n.id];
+      var slack = graph.LS[n.id] - graph.ES[n.id];
+      nodesHtml += '<div class="node'+(isCritical?' critical':'')+(dimmed?' dimmed':'')+'" data-id="'+n.id+'" style="left:'+p.x+'px;top:'+p.y+'px">' +
+        '<div class="n-title">'+escapeHtml(r.Title||'(Sans titre)')+'</div>' +
+        '<div class="n-meta"><p class="fr-badge fr-badge--sm fr-badge--no-icon" style="background:'+color+';color:#fff">'+escapeHtml(r.Status||'')+'</p></div>' +
+        (graph.hasDeps ? '<div class="n-slack'+(isCritical?' critical':'')+'">'+(isCritical?'Chemin critique':'Marge : '+slack+' j')+'</div>' : '') +
+        (r.DateStart!=null||r.DateDue!=null ? '<div class="n-dates">'+formatDateFR(r.DateStart)+' → '+formatDateFR(r.DateDue)+'</div>' : '') +
+        '</div>';
+    });
+
+    canvasEl.style.width = canvasW+'px';
+    canvasEl.style.height = canvasH+'px';
+    canvasEl.innerHTML = svg + nodesHtml;
+
+    canvasEl.querySelectorAll('.node').forEach(function(el){
+      el.addEventListener('click', function(){ openDrawer(parseInt(el.dataset.id,10)); });
+    });
+  }
+
+  // ============================================================
+  // Ajout rapide
+  // ============================================================
+  $('add-btn').addEventListener('click', async function(){
+    if (!state.ready) return;
+    var m = state.mappings;
+    var fields = {}; fields[m.Title]='Nouvelle action'; fields[m.Status]=(state.colMeta.Status&&state.colMeta.Status.choices[0])||'À faire';
+    try {
+      var res = await createRecord(fields);
+      var newId = res && (res.id || (Array.isArray(res)&&res[0]&&res[0].id));
+      if (newId) setTimeout(function(){ openDrawer(newId); }, 150);
+    } catch(err){ showToast('Création impossible : '+(err&&err.message?err.message:err), true); }
+  });
+
+  // ============================================================
+  // Tiroir
+  // ============================================================
+  var scrim=$('scrim'), drawer=$('drawer'), drawerBody=$('drawer-body'), dTitle=$('d-title');
+  function currentRecord(){ return state.records.find(function(r){ return r.id===state.openId; }) || null; }
+  function openDrawer(id){ state.openId=id; scrim.classList.add('open'); drawer.classList.add('open'); renderDrawer(); }
+  function closeDrawer(){ state.openId=null; scrim.classList.remove('open'); drawer.classList.remove('open'); }
+  scrim.addEventListener('click', closeDrawer);
+  $('d-close').addEventListener('click', closeDrawer);
+  document.addEventListener('keydown', function(e){ if (e.key==='Escape' && state.openId!=null) closeDrawer(); });
+  function syncOpenDrawer(){ if (state.openId==null) return; if (!currentRecord()) { closeDrawer(); return; } renderDrawer(); }
+
+  var saveTitleDebounced = debounce(function(id, value){ var f={}; f[state.mappings.Title]=value; updateRecord(id,f); }, 500);
+  var saveTextDebounced = debounce(function(id, field, value){ var f={}; f[field]=value; updateRecord(id,f); }, 500);
+
+  function badgeAppearance(value, meta){
+    if (meta && meta.choiceOptions && meta.choiceOptions[value]) {
+      var o = meta.choiceOptions[value];
+      if (o.fillColor || o.textColor) return { cls:'fr-badge--no-icon', style:'background:'+(o.fillColor||'#eee')+';color:'+(o.textColor||'#3a3a3a') };
+    }
+    return { cls:'fr-badge--no-icon fr-badge--'+accentFor(value), style:'' };
+  }
+  function fieldTagToggle(label, key, choices, selectedValues, meta, labelFn){
+    var selSet={}; selectedValues.forEach(function(v){ selSet[v]=true; });
+    return '<div class="field-block"><div class="flabel">'+escapeHtml(label)+'</div><ul class="fr-tags-group">'+choices.map(function(v,i){
+      var on=!!selSet[v]; var id='d-'+key+'-'+slug(String(v))+'-'+i;
+      var a = meta ? badgeAppearance(v, meta) : {cls:'',style:''};
+      var style = on && a.style ? ' style="'+a.style+'"' : '';
+      return '<li><input type="checkbox" class="fr-tag" id="'+id+'" data-fkey="'+key+'" value="'+escapeHtml(String(v))+'"'+(on?' checked':'')+'><label class="fr-tag" for="'+id+'"'+style+'>'+escapeHtml(labelFn(v))+'</label></li>';
+    }).join('')+'</ul></div>';
+  }
+  function bindTagToggle(key, onChange){
+    var els = drawerBody.querySelectorAll('input[data-fkey="'+key+'"]');
+    if (!els.length) return;
+    els.forEach(function(el){ el.addEventListener('change', function(){
+      var values=[]; drawerBody.querySelectorAll('input[data-fkey="'+key+'"]:checked').forEach(function(x){ values.push(x.value); });
+      onChange(values);
+    }); });
+  }
+  function autoGrow(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,160)+'px'; }
+
+  function renderDrawer(){
+    var r = currentRecord(); if (!r) return;
+    var m = state.mappings;
+    if (document.activeElement !== dTitle) dTitle.value = r.Title || '';
+    dTitle.oninput = function(){ autoGrow(dTitle); saveTitleDebounced(r.id, dTitle.value); };
+    autoGrow(dTitle);
+
+    var statusChoices = (state.colMeta.Status && state.colMeta.Status.choices.length) ? state.colMeta.Status.choices : optionsFromRecords(function(x){ return x.Status; });
+    if (!statusChoices.length) statusChoices = [r.Status || 'À faire'];
+
+    var html = '';
+
+    if (graph && graph.hasDeps && graph.byId[r.id]) {
+      html += '<div class="field-block"><div class="flabel">Analyse du chemin critique (CPM)</div><div class="cpm-box">' +
+        '<div class="cpm-item"><div class="cpm-label">Début au plus tôt</div><div class="cpm-val">J+'+graph.ES[r.id]+'</div></div>' +
+        '<div class="cpm-item"><div class="cpm-label">Fin au plus tôt</div><div class="cpm-val">J+'+graph.EF[r.id]+'</div></div>' +
+        '<div class="cpm-item"><div class="cpm-label">Marge</div><div class="cpm-val">'+(graph.critical[r.id]?'Critique':(graph.LS[r.id]-graph.ES[r.id])+' j')+'</div></div>' +
+        '</div></div>';
+    }
+
+    html += '<div class="field-block fr-select-group"><label class="fr-label" for="f-status">Statut</label><select class="fr-select" id="f-status">'+
+      statusChoices.map(function(s){ return '<option value="'+escapeHtml(s)+'"'+(s===r.Status?' selected':'')+'>'+escapeHtml(s)+'</option>'; }).join('')+'</select></div>';
+
+    if (m.Dependencies) {
+      var otherRecords = state.records.filter(function(x){ return x.id !== r.id; });
+      var depIds = decodeList(r.Dependencies).map(String);
+      html += '<div class="field-block"><div class="flabel">Dépendances (actions à réaliser avant)</div><ul class="fr-tags-group">'+
+        otherRecords.map(function(x, i){
+          var on = depIds.indexOf(String(x.id)) !== -1;
+          var id = 'd-deps-'+i;
+          return '<li><input type="checkbox" class="fr-tag" id="'+id+'" data-fkey="deps" value="'+x.id+'"'+(on?' checked':'')+'><label class="fr-tag" for="'+id+'">'+escapeHtml(x.Title||('#'+x.id))+'</label></li>';
+        }).join('') + (otherRecords.length ? '' : '<li style="color:var(--kb-mention);font-size:11.5px">Aucune autre action.</li>') +
+        '</ul></div>';
+    }
+
+    if (m.Theme) html += fieldTagToggle('Thème','theme',(state.colMeta.Theme&&state.colMeta.Theme.choices.length)?state.colMeta.Theme.choices:optionsFromRecords(function(x){return x.Theme;}), decodeList(r.Theme), state.colMeta.Theme, function(v){return v;});
+    if (m.Structure) html += fieldTagToggle('Structure / service','structure',(state.colMeta.Structure&&state.colMeta.Structure.choices.length)?state.colMeta.Structure.choices:optionsFromRecords(function(x){return x.Structure;}), decodeList(r.Structure), state.colMeta.Structure, function(v){return v;});
+    if (m.Assignee && state.refLabels.Assignee) html += fieldTagToggle("Pilote de l'action",'assignee', Object.keys(state.refLabels.Assignee), decodeList(r.Assignee).map(String), null, function(id){ return assigneeLabel(id,'Assignee'); });
+    if (m.Support && state.refLabels.Support) html += fieldTagToggle('Appui action','support', Object.keys(state.refLabels.Support), decodeList(r.Support).map(String), null, function(id){ return assigneeLabel(id,'Support'); });
+
+    if (m.DateStart || m.DateDue) {
+      html += '<div class="field-block"><div class="date-row">';
+      if (m.DateStart) html += '<div class="fr-input-group"><label class="fr-label" for="f-date-start">Début</label><input class="fr-input" type="date" id="f-date-start" value="'+dateToInput(r.DateStart)+'"></div>';
+      if (m.DateDue) html += '<div class="fr-input-group"><label class="fr-label" for="f-date-due">Échéance</label><input class="fr-input" type="date" id="f-date-due" value="'+dateToInput(r.DateDue)+'"></div>';
+      html += '</div></div>';
+    }
+
+    if (m.Progress) {
+      var pct = Math.max(0, Math.min(100, Number(r.Progress)||0));
+      html += '<div class="field-block fr-range-group"><label class="fr-label" for="f-progress">Progression — <span id="f-progress-num">'+Math.round(pct)+'%</span></label><div class="fr-range"><input type="range" id="f-progress" min="0" max="100" step="5" value="'+pct+'"></div></div>';
+    }
+    if (m.Details) html += '<div class="field-block fr-input-group"><label class="fr-label" for="f-details">Détails de l\'action</label><textarea class="fr-input" id="f-details" rows="3">'+escapeHtml(r.Details)+'</textarea></div>';
+    if (m.Suites) html += '<div class="field-block fr-input-group"><label class="fr-label" for="f-suites">Suites données</label><textarea class="fr-input" id="f-suites" rows="3">'+escapeHtml(r.Suites)+'</textarea></div>';
+    if (m.Attachments) {
+      var n = decodeList(r.Attachments).length;
+      html += '<div class="field-block"><div class="flabel">Pièces jointes</div><div class="attach-info">'+(n?n+(n>1?' pièces jointes':' pièce jointe')+' — à gérer depuis la table Grist':'Aucune pièce jointe')+'</div></div>';
+    }
+
+    drawerBody.innerHTML = html;
+
+    $('f-status').addEventListener('change', function(){ var f={}; f[m.Status]=this.value; updateRecord(r.id,f); });
+    if (m.Dependencies) bindTagToggle('deps', function(v){ var f={}; f[m.Dependencies]=['L'].concat(v.map(Number)); updateRecord(r.id,f); });
+    bindTagToggle('theme', function(v){ var f={}; f[m.Theme]=['L'].concat(v); updateRecord(r.id,f); });
+    bindTagToggle('structure', function(v){ var f={}; f[m.Structure]=['L'].concat(v); updateRecord(r.id,f); });
+    bindTagToggle('assignee', function(v){ var f={}; f[m.Assignee]=['L'].concat(v.map(Number)); updateRecord(r.id,f); });
+    bindTagToggle('support', function(v){ var f={}; f[m.Support]=['L'].concat(v.map(Number)); updateRecord(r.id,f); });
+    var dsEl=$('f-date-start'); if (dsEl) dsEl.addEventListener('change', function(){ var f={}; f[m.DateStart]=inputToDate(this.value); updateRecord(r.id,f); });
+    var ddEl=$('f-date-due'); if (ddEl) ddEl.addEventListener('change', function(){ var f={}; f[m.DateDue]=inputToDate(this.value); updateRecord(r.id,f); });
+    var progEl=$('f-progress');
+    if (progEl){ var progNum=$('f-progress-num'); progEl.addEventListener('input', function(){ progNum.textContent=this.value+'%'; }); progEl.addEventListener('change', function(){ var f={}; f[m.Progress]=Number(this.value); updateRecord(r.id,f); }); }
+    var detEl=$('f-details'); if (detEl) detEl.addEventListener('input', function(){ saveTextDebounced(r.id, m.Details, this.value); });
+    var suiEl=$('f-suites'); if (suiEl) suiEl.addEventListener('input', function(){ saveTextDebounced(r.id, m.Suites, this.value); });
+
+    var metaBits=[];
+    if (m.LastUpdate) metaBits.push('Mise à jour : '+formatDateTime(r.LastUpdate));
+    if (m.LastUpdateBy && r.LastUpdateBy) metaBits.push('par '+escapeHtml(r.LastUpdateBy));
+    $('d-meta').textContent = metaBits.join(' — ');
+
+    $('d-open-grist').onclick = function(){ grist.setCursorPos({ rowId:r.id }).catch(function(){}); };
+    $('d-delete').onclick = function(){
+      if (!confirm('Supprimer « '+(r.Title||'cette action')+' » ? Cette action est irréversible.')) return;
+      deleteRecord(r.id).then(closeDrawer).catch(function(err){ showToast('Suppression impossible : '+(err&&err.message?err.message:err), true); });
+    };
+  }
+
+})();
+</script>
+
+</body>
+</html>
