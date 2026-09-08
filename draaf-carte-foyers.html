@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRAAF · Carte des foyers FCO/MHE</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<style>
+  :root{
+    --bg:#F5F4F0; --surface:#FFFFFF; --ink:#1B1B1E; --ink-soft:#65656B; --ink-faint:#9A9A9F;
+    --border:#E2E0D8; --primary:#000091; --primary-soft:#E5E5FB;
+    --fco3:#0B5ED7; --fco8:#B34000; --mhe:#C9184A;
+    --radius:10px; --shadow:0 1px 2px rgba(20,20,30,.06), 0 8px 24px -16px rgba(20,20,30,.25);
+    --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:13px;}
+  .app{display:flex;flex-direction:column;height:100vh;}
+  header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border);flex:0 0 auto;}
+  header h1{font-size:14.5px;margin:0;flex:1 1 auto;min-width:200px;}
+  .nav-btn{border:1px solid var(--border);background:#fff;border-radius:7px;padding:6px 10px;cursor:pointer;font-size:13px;}
+  .nav-btn:hover{background:var(--primary-soft);}
+  .week-label{font-family:var(--mono);font-size:12px;background:var(--primary-soft);color:var(--primary);padding:6px 10px;border-radius:7px;white-space:nowrap;}
+  .toggle{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-soft);}
+  #map{flex:1 1 auto;}
+  .legend-panel{
+    background:rgba(255,255,255,.96);border-radius:9px;box-shadow:var(--shadow);padding:10px 12px;font-size:12px;min-width:170px;
+  }
+  .legend-panel .title{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin-bottom:6px;}
+  .legend-row{display:flex;align-items:center;gap:7px;margin-bottom:4px;}
+  .legend-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;}
+  .foyer-marker{display:flex;flex-direction:column;align-items:center;gap:2px;transform:translate(-50%,-100%);white-space:nowrap;}
+  .foyer-marker .commune{background:#fff;border-radius:6px;padding:2px 6px;font-size:10.5px;font-weight:600;box-shadow:var(--shadow);}
+  .foyer-marker .badges{display:flex;gap:2px;}
+  .foyer-marker .badge{color:#fff;font-size:10px;font-weight:700;border-radius:4px;padding:1px 4px;box-shadow:var(--shadow);}
+  .leaflet-popup-content{font-family:var(--font);font-size:12.5px;}
+  .leaflet-popup-content .pc-commune{font-weight:700;margin-bottom:4px;}
+  .leaflet-popup-content .pc-row{display:flex;justify-content:space-between;gap:10px;}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Foyers déclarés par commune et sérotype</h1>
+    <button class="nav-btn" id="prevWeek">←</button>
+    <span class="week-label" id="weekLabel">—</span>
+    <button class="nav-btn" id="nextWeek">→</button>
+    <button class="nav-btn" id="thisWeek">Aujourd'hui</button>
+    <label class="toggle"><input type="checkbox" id="cumulToggle"> Cumul depuis le début de campagne</label>
+  </header>
+  <div id="map"></div>
+</div>
+
+<script>
+(function(){
+'use strict';
+var $ = function(id){ return document.getElementById(id); };
+function esc(s){ return (s==null?'':s.toString()).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function normalize(s){ return (s||'').toString().normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); }
+function isPositive(v){ return /posit/i.test(normalize(v)); }
+function isErrorCell(v){ return Array.isArray(v) && v[0] === 'E'; }
+function safe(v){ return isErrorCell(v) ? null : v; }
+
+function decodeGristDate(v){
+  if (v == null) return null;
+  if (typeof v === 'number') return new Date(v * 86400000);
+  if (Array.isArray(v)){
+    if (v[0] === 'd') return new Date(v[1] * 86400000);
+    if (v[0] === 'D') return new Date(v[1] * 1000);
+  }
+  return null;
+}
+function isoWeekInfo(d){
+  var date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  var dayNum = (date.getUTCDay() + 6) % 7;
+  date.setUTCDate(date.getUTCDate() - dayNum + 3);
+  var firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+  var week = 1 + Math.round(((date - firstThursday) / 86400000 - 3 + (firstThursday.getUTCDay() + 6) % 7) / 7);
+  return { year: date.getUTCFullYear(), week: week };
+}
+function weekStart(year, week){
+  var jan4 = new Date(Date.UTC(year, 0, 4));
+  var dayNum = (jan4.getUTCDay() + 6) % 7;
+  var week1Mon = new Date(jan4); week1Mon.setUTCDate(jan4.getUTCDate() - dayNum);
+  var d = new Date(week1Mon); d.setUTCDate(week1Mon.getUTCDate() + (week - 1) * 7);
+  return d;
+}
+function weekEnd(year, week){
+  var s = weekStart(year, week);
+  var e = new Date(s); e.setUTCDate(s.getUTCDate() + 6);
+  return e;
+}
+function fmtShort(d){ return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }); }
+function campagneStart(d){
+  var y = d.getFullYear();
+  var startYear = (d.getMonth() >= 5) ? y : y - 1;
+  return new Date(Date.UTC(startYear, 5, 1));
+}
+
+var SEROTYPE_HEX = { FCO3: '#0B5ED7', FCO8: '#B34000', MHE: '#C9184A' };
+
+var state = { year: null, week: null, cumul: false };
+var foyerRecords = []; // {commune, dept, lat, lon, date, serotypes:{FCO3,FCO8,MHE}, dossier_number}
+
+grist.ready({ requiredAccess: 'read table' });
+grist.onRecords(function(){ loadData().then(render); });
+
+async function loadData(){
+  var champs = await grist.docApi.fetchTable('Demarche_150091_champs');
+  var dossiers = await grist.docApi.fetchTable('Demarche_150091_dossiers');
+  var prelev = await grist.docApi.fetchTable('Demarche_150091_repetable_prelevement_realise');
+  var communes = await grist.docApi.fetchTable('Liste_Communes');
+
+  var communeById = {};
+  for (var c = 0; c < communes.id.length; c++){
+    communeById[communes.id[c]] = {
+      libelle: communes.LIBELLE[c], dep: communes.DEP[c],
+      lat: communes.latitude[c], lon: communes.longitude[c]
+    };
+  }
+
+  var communeRefByDossier = {};
+  for (var i = 0; i < champs.dossier_number.length; i++){
+    communeRefByDossier[champs.dossier_number[i]] = champs.Commune_de_l_elevage2[i];
+  }
+
+  var serotypesByDossier = {};
+  for (var p = 0; p < prelev.dossier_number.length; p++){
+    var dn = prelev.dossier_number[p];
+    var s = serotypesByDossier[dn] || (serotypesByDossier[dn] = { FCO3: false, FCO8: false, MHE: false });
+    if (isPositive(prelev.Resultat_FCO3[p])) s.FCO3 = true;
+    if (isPositive(prelev.Resultat_FCO8[p])) s.FCO8 = true;
+    if (isPositive(prelev.Resultat_MHE[p])) s.MHE = true;
+  }
+
+  var out = [];
+  for (var j = 0; j < dossiers.id.length; j++){
+    var dossNum = dossiers.dossier_number[j];
+    var sero = serotypesByDossier[dossNum];
+    if (!sero || !(sero.FCO3 || sero.FCO8 || sero.MHE)) continue;
+    var date = decodeGristDate(safe(dossiers.Date_de_la_suspicion[j]));
+    if (!date) continue;
+    var communeRef = communeRefByDossier[dossNum];
+    var commune = communeRef ? communeById[communeRef] : null;
+    if (!commune || !commune.lat || !commune.lon) continue;
+    out.push({
+      dossier_number: dossNum, date: date,
+      commune: commune.libelle, dept: commune.dep,
+      lat: Number(commune.lat), lon: Number(commune.lon),
+      serotypes: sero
+    });
+  }
+  foyerRecords = out;
+  return out;
+}
+
+// ---- Carte ----
+var map = L.map('map', { zoomControl: true }).setView([46.6, 2.2], 6);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19, attribution: '&copy; OpenStreetMap'
+}).addTo(map);
+
+var LegendControl = L.Control.extend({
+  options: { position: 'topright' },
+  onAdd: function(){
+    var div = L.DomUtil.create('div', 'legend-panel');
+    div.id = 'legendPanel';
+    L.DomEvent.disableClickPropagation(div);
+    return div;
+  }
+});
+map.addControl(new LegendControl());
+
+var markersLayer = L.layerGroup().addTo(map);
+
+function render(records){
+  if (!state.year){
+    var now = isoWeekInfo(new Date());
+    state.year = now.year; state.week = now.week;
+  }
+  state.cumul = $('cumulToggle').checked;
+
+  var wStart = weekStart(state.year, state.week);
+  var wEnd = weekEnd(state.year, state.week);
+  $('weekLabel').textContent = (state.cumul ? 'Cumul jusqu\'au ' : 'Semaine ' + state.week + '/' + state.year + '  ') +
+    (state.cumul ? fmtShort(wEnd) : '(' + fmtShort(wStart) + ' – ' + fmtShort(wEnd) + ')');
+
+  var periodStart = state.cumul ? campagneStart(wEnd) : wStart;
+  var filtered = records.filter(function(r){ return r.date >= periodStart && r.date <= wEnd; });
+
+  var byCommune = {};
+  filtered.forEach(function(r){
+    var key = r.commune + '|' + r.lat + '|' + r.lon;
+    var entry = byCommune[key] || (byCommune[key] = {
+      commune: r.commune, dept: r.dept, lat: r.lat, lon: r.lon,
+      counts: { FCO3: 0, FCO8: 0, MHE: 0 }, dossiers: []
+    });
+    if (r.serotypes.FCO3) entry.counts.FCO3++;
+    if (r.serotypes.FCO8) entry.counts.FCO8++;
+    if (r.serotypes.MHE) entry.counts.MHE++;
+    entry.dossiers.push(r.dossier_number);
+  });
+
+  markersLayer.clearLayers();
+  var totals = { FCO3: 0, FCO8: 0, MHE: 0 };
+  var bounds = [];
+
+  Object.keys(byCommune).forEach(function(k){
+    var e = byCommune[k];
+    totals.FCO3 += e.counts.FCO3; totals.FCO8 += e.counts.FCO8; totals.MHE += e.counts.MHE;
+    bounds.push([e.lat, e.lon]);
+
+    var badges = Object.keys(e.counts).filter(function(s){ return e.counts[s] > 0; }).map(function(s){
+      return '<span class="badge" style="background:' + SEROTYPE_HEX[s] + '">' + s + ' ' + e.counts[s] + '</span>';
+    }).join('');
+
+    var icon = L.divIcon({
+      className: '', html:
+        '<div class="foyer-marker"><div class="commune">' + esc(e.commune) + '</div><div class="badges">' + badges + '</div></div>',
+      iconSize: [0, 0]
+    });
+    var marker = L.marker([e.lat, e.lon], { icon: icon });
+    marker.bindPopup(
+      '<div class="pc-commune">' + esc(e.commune) + ' (' + esc(e.dept) + ')</div>' +
+      Object.keys(e.counts).map(function(s){
+        return '<div class="pc-row"><span>' + s + '</span><strong>' + e.counts[s] + '</strong></div>';
+      }).join('') +
+      '<div class="pc-row" style="margin-top:4px;color:#65656B;">Dossiers : ' + esc(e.dossiers.join(', ')) + '</div>'
+    );
+    markersLayer.addLayer(marker);
+  });
+
+  $('legendPanel').innerHTML =
+    '<div class="title">Foyers ' + (state.cumul ? '(cumul)' : '(semaine)') + '</div>' +
+    ['FCO3', 'FCO8', 'MHE'].map(function(s){
+      return '<div class="legend-row"><span class="legend-dot" style="background:' + SEROTYPE_HEX[s] + '"></span>' + s + ' : <strong style="margin-left:auto">' + totals[s] + '</strong></div>';
+    }).join('') +
+    '<div class="legend-row" style="margin-top:4px;border-top:1px solid #E2E0D8;padding-top:6px;">Communes touchées : <strong style="margin-left:auto">' + Object.keys(byCommune).length + '</strong></div>';
+
+  if (bounds.length === 1) map.setView(bounds[0], Math.max(map.getZoom(), 11));
+  else if (bounds.length > 1) map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
+}
+
+$('prevWeek').addEventListener('click', function(){
+  var d = weekStart(state.year, state.week); d.setUTCDate(d.getUTCDate() - 7);
+  var wi = isoWeekInfo(d); state.year = wi.year; state.week = wi.week;
+  render(foyerRecords);
+});
+$('nextWeek').addEventListener('click', function(){
+  var d = weekStart(state.year, state.week); d.setUTCDate(d.getUTCDate() + 7);
+  var wi = isoWeekInfo(d); state.year = wi.year; state.week = wi.week;
+  render(foyerRecords);
+});
+$('thisWeek').addEventListener('click', function(){
+  var now = isoWeekInfo(new Date()); state.year = now.year; state.week = now.week;
+  render(foyerRecords);
+});
+$('cumulToggle').addEventListener('change', function(){ render(foyerRecords); });
+
+loadData().then(render);
+
+})();
+</script>
+</body>
+</html>

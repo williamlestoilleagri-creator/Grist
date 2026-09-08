@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DDPP · Instruction d'une suspicion FCO/MHE</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<style>
+  :root{
+    --bg:#F5F4F0; --surface:#FFFFFF; --ink:#1B1B1E; --ink-soft:#65656B; --ink-faint:#9A9A9F;
+    --border:#E2E0D8; --primary:#000091; --primary-soft:#E5E5FB; --accent:#C9184A; --accent-soft:#FBE3EA;
+    --success:#18753C; --success-soft:#E2F3E8; --warning:#B34000; --warning-soft:#FBE9DD;
+    --radius:10px; --shadow:0 1px 2px rgba(20,20,30,.06), 0 8px 24px -16px rgba(20,20,30,.25);
+    --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:13.5px;line-height:1.45;}
+  .app{max-width:920px;margin:0 auto;padding:14px 16px 40px;}
+  .empty{margin:60px auto;max-width:360px;text-align:center;color:var(--ink-faint);}
+  h1{font-size:17px;margin:0;}
+  .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:14px;}
+  .sub{color:var(--ink-soft);font-size:12px;margin-top:3px;}
+  .badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;white-space:nowrap;}
+  .badge.instruction{background:var(--primary-soft);color:var(--primary);}
+  .badge.refuse{background:var(--accent-soft);color:var(--accent);}
+  .badge.accepte{background:var(--success-soft);color:var(--success);}
+  .badge.paiement{background:#FFF3CD;color:#8A6D00;}
+  .badge.paye{background:var(--success);color:#fff;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;box-shadow:var(--shadow);}
+  .card h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-faint);margin:0 0 10px;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px 16px;}
+  .field-ro{font-size:13px;}
+  .field-ro .lbl{font-size:10.5px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.04em;}
+  .field-ro .val{font-weight:500;}
+  .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px;}
+  .chip{background:var(--primary-soft);color:var(--primary);font-size:11.5px;padding:3px 9px;border-radius:999px;}
+  .check-row{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12.5px;}
+  .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
+  .dot.ok{background:var(--success);} .dot.ko{background:var(--accent);}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  th,td{padding:6px 8px;border-bottom:1px solid var(--border);text-align:left;vertical-align:middle;}
+  th{font-size:10.5px;text-transform:uppercase;color:var(--ink-faint);letter-spacing:.03em;}
+  select,input[type="date"],input[type="text"],input[type="email"]{
+    font-family:inherit;font-size:12.5px;padding:5px 7px;border:1px solid var(--border);border-radius:6px;background:#FCFCFB;
+  }
+  .counts{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+  .count-pill{font-size:11.5px;padding:4px 10px;border-radius:999px;background:var(--bg);border:1px solid var(--border);}
+  .count-pill.over{background:var(--accent-soft);color:var(--accent);border-color:transparent;}
+  .foyer-list{margin:6px 0 0;padding-left:18px;font-size:12px;color:var(--ink-soft);}
+  .decision{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;}
+  .decision .field{display:flex;flex-direction:column;gap:4px;}
+  .decision label{font-size:11px;font-weight:600;color:var(--ink-soft);}
+  .btn{border:none;border-radius:7px;padding:8px 13px;font-weight:600;cursor:pointer;font-size:12.5px;}
+  .btn-primary{background:var(--primary);color:#fff;}
+  .btn-primary:hover{filter:brightness(1.12);}
+  .btn-ghost{background:transparent;color:var(--ink-soft);border:1px solid var(--border);}
+  .btn-ghost:hover{background:#F4F3EE;}
+  .row-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+  .amount{font-size:22px;font-weight:700;color:var(--primary);}
+  .amount .cur{font-size:13px;font-weight:500;color:var(--ink-soft);}
+  .warn-map{background:var(--warning-soft);color:var(--warning);border-radius:8px;padding:8px 10px;font-size:12px;margin-bottom:12px;}
+  .toast{font-size:12px;padding:7px 10px;border-radius:7px;margin-top:8px;display:none;}
+  .toast.show{display:block;}
+  .toast.success{background:var(--success-soft);color:var(--success);}
+  .toast.error{background:var(--accent-soft);color:var(--accent);}
+  .gear{background:none;border:none;cursor:pointer;font-size:14px;color:var(--ink-faint);}
+  .settings-panel{display:none;margin-top:8px;padding:10px;border:1px dashed var(--border);border-radius:8px;}
+  .settings-panel.open{display:block;}
+  .settings-panel .dept-row{display:flex;gap:6px;margin-bottom:6px;}
+  .settings-panel .dept-row input{flex:1;}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <div class="empty" id="empty">Sélectionnez un dossier dans la table « Demarche_150091_dossiers » pour l'instruire.</div>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+var LAB_MAP_KEY = 'ddpp_lab_email_by_dept';
+var $ = function(id){ return document.getElementById(id); };
+
+function normalize(s){ return (s||'').toString().normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); }
+function isPositive(v){ return /posit/i.test(normalize(v)); }
+function esc(s){ return (s==null?'':s.toString()).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function choiceListToArray(v){
+  if (Array.isArray(v)){ return v[0]==='L' ? v.slice(1) : v; }
+  if (typeof v === 'string') return v.split(',').map(function(s){return s.trim();}).filter(Boolean);
+  return [];
+}
+
+// Grist encodes Date as integer days-since-epoch, DateTime as ['D', seconds, tz] or a float.
+function decodeGristDate(v){
+  if (v == null) return null;
+  if (typeof v === 'number') return new Date(v * 86400000);
+  if (Array.isArray(v)){
+    if (v[0] === 'd') return new Date(v[1] * 86400000);
+    if (v[0] === 'D') return new Date(v[1] * 1000);
+  }
+  return null;
+}
+function fmtDate(d){
+  if (!d) return '—';
+  return d.toLocaleDateString('fr-FR');
+}
+function isErrorCell(v){ return Array.isArray(v) && v[0] === 'E'; }
+function safe(v){ return isErrorCell(v) ? null : v; }
+
+// campagne FCO/MHE : du 1er juin de l'année N au 31 mai de l'année N+1
+function campagneLabel(d){
+  if (!d) return '—';
+  var y = d.getFullYear();
+  var start = (d.getMonth() >= 5) ? y : y - 1; // getMonth() 5 = juin
+  return start + '-' + (start + 1);
+}
+
+var mappedCols = null;
+var currentRec = null;
+var app = $('app');
+
+grist.ready({
+  requiredAccess: 'full',
+  columns: [
+    { name: 'PriseEnCharge', title: 'Prise en charge financière (Oui/Non) — colonne à créer ou associer', type: 'Text', optional: true },
+    { name: 'NumeroMemoire', title: 'N° de mémoire (peut être associée à N_Memoire)', type: 'Text', optional: true },
+    { name: 'DossierPaye', title: 'Dossier payé (case à cocher) — colonne à créer', type: 'Bool', optional: true },
+    { name: 'Foyer90jForce', title: 'Forcer le statut "foyer <90j" (surcharge manuelle)', type: 'Bool', optional: true }
+  ]
+});
+
+grist.onOptions(function(options, interaction){
+  // no-op: réservé pour d'éventuelles options futures
+});
+
+grist.onRecord(function(record, mappings){
+  mappedCols = mappings;
+  currentRec = record;
+  render(record);
+});
+
+function writeMapped(fields){
+  if (!mappedCols) return Promise.reject(new Error('Colonnes non associées dans la configuration du widget.'));
+  var out = {};
+  Object.keys(fields).forEach(function(k){
+    if (mappedCols[k]) out[mappedCols[k]] = fields[k];
+  });
+  if (!Object.keys(out).length) return Promise.reject(new Error('Aucune colonne associée pour ce champ.'));
+  return grist.docApi.applyUserActions([[ 'UpdateRecord', 'Demarche_150091_dossiers', currentRec.id, out ]]);
+}
+
+function readMapped(record, key){
+  if (!mappedCols || !mappedCols[key]) return undefined;
+  return record[mappedCols[key]];
+}
+
+function labMap(){
+  try { return JSON.parse(localStorage.getItem(LAB_MAP_KEY) || '{}'); } catch(e){ return {}; }
+}
+function saveLabMap(map){ try { localStorage.setItem(LAB_MAP_KEY, JSON.stringify(map)); } catch(e){} }
+
+async function getColumnChoices(tableId, colId){
+  try {
+    var tables = await grist.docApi.fetchTable('_grist_Tables');
+    var idx = tables.tableId.indexOf(tableId);
+    if (idx === -1) return [];
+    var tableRef = tables.id[idx];
+    var cols = await grist.docApi.fetchTable('_grist_Tables_column');
+    for (var i = 0; i < cols.id.length; i++){
+      if (cols.parentId[i] === tableRef && cols.colId[i] === colId){
+        try {
+          var opts = JSON.parse(cols.widgetOptions[i] || '{}');
+          return opts.choices || [];
+        } catch(e){ return []; }
+      }
+    }
+  } catch(e){ /* ignore */ }
+  return [];
+}
+
+async function render(rec){
+  if (!rec){
+    app.innerHTML = '<div class="empty">Sélectionnez un dossier à instruire.</div>';
+    return;
+  }
+
+  var champs = await fetchRow('Demarche_150091_champs', 'dossier_number', rec.dossier_number);
+  var prelevements = await fetchRows('Demarche_150091_repetable_prelevement_realise', 'dossier_number', rec.dossier_number);
+  var demandeur = await fetchRow('Demarche_150091_demandeurs', 'dossier_number', rec.dossier_number);
+
+  var signes = choiceListToArray(safe(rec.Signes_cliniques_constates));
+  var nbSignes = signes.length;
+  var motifs = choiceListToArray(safe(rec.Motif_de_signalement));
+
+  var countsBySpecies = {};
+  prelevements.forEach(function(p){
+    var esp = p.espece_animale_prelevee || 'Non renseigné';
+    countsBySpecies[esp] = (countsBySpecies[esp] || 0) + 1;
+  });
+
+  var foyerInfo = await computeFoyer90j(rec, prelevements);
+  var foyerForced = readMapped(rec, 'Foyer90jForce');
+  var foyerRetenu = (typeof foyerForced === 'boolean') ? foyerForced : foyerInfo.isFoyer;
+
+  var priseEnCharge = (readMapped(rec, 'PriseEnCharge') || '').toString();
+  var numeroMemoire = readMapped(rec, 'NumeroMemoire') || '';
+  var dossierPaye = !!readMapped(rec, 'DossierPaye');
+
+  var etat = 'En instruction';
+  var badgeClass = 'instruction';
+  if (priseEnCharge.toLowerCase() === 'non'){ etat = 'Refusé'; badgeClass = 'refuse'; }
+  else if (priseEnCharge.toLowerCase() === 'oui'){
+    etat = 'Accepté'; badgeClass = 'accepte';
+    if (numeroMemoire){ etat = 'Mis en paiement'; badgeClass = 'paiement'; }
+    if (dossierPaye){ etat = 'Payé'; badgeClass = 'paye'; }
+  }
+
+  var montant = safe(rec.Formule_adaptable);
+  if (montant == null) montant = safe(rec.Formule_test);
+
+  var unmappedWarning = (!mappedCols || !mappedCols.PriseEnCharge || !mappedCols.DossierPaye)
+    ? '<div class="warn-map">Certaines colonnes de décision ne sont pas encore associées : ouvrez la configuration du widget (icône ⚙ du panneau) pour les relier ou en créer de nouvelles (« Prise en charge financière », « Dossier payé », « N° de mémoire »).</div>'
+    : '';
+
+  app.innerHTML =
+    '<div class="top">' +
+      '<div><h1>Dossier ' + esc(rec.dossier_number) + '</h1>' +
+        '<div class="sub">Campagne ' + esc(campagneLabel(decodeGristDate(safe(rec.Date_de_la_suspicion)))) + ' · Déposé le ' + fmtDate(decodeGristDate(safe(rec.date_depot))) + '</div></div>' +
+      '<span class="badge ' + badgeClass + '">' + etat + '</span>' +
+    '</div>' +
+    unmappedWarning +
+
+    '<div class="card"><h2>Vétérinaire &amp; élevage</h2><div class="grid">' +
+      fieldRo('Vétérinaire', (esc(rec.Prenom_veterinaire)+' '+esc(rec.Nom_veterinaire)).trim() || '—') +
+      fieldRo('N° ordre', rec.N_ordre_veterinaire) +
+      fieldRo('Téléphone', rec.Tel_veterinaire) +
+      fieldRo('Email', rec.Mail_veterinaire) +
+      fieldRo('Cabinet', rec.Clinique_veterinaire) +
+      fieldRo('Élevage', rec.Nom_elevage) +
+      fieldRo('N° élevage', rec.N_elevage) +
+      fieldRo('Commune', rec.Commune) +
+      fieldRo('Département', rec.Departement) +
+    '</div></div>' +
+
+    '<div class="card"><h2>Signalement</h2>' +
+      '<div class="grid">' +
+        fieldRo('Date de la suspicion', fmtDate(decodeGristDate(safe(rec.Date_de_la_suspicion)))) +
+        fieldRo('Date de prélèvement', fmtDate(decodeGristDate(safe(rec.Date_prelevement)))) +
+        fieldRo('Laboratoire', rec.Laboratoire) +
+      '</div>' +
+      '<div class="field-ro" style="margin-top:8px"><div class="lbl">Motif de signalement</div><div class="chips">' +
+        (motifs.length ? motifs.map(function(m){return '<span class="chip">'+esc(m)+'</span>';}).join('') : '<span class="val">—</span>') +
+      '</div></div>' +
+      '<div class="field-ro" style="margin-top:8px"><div class="lbl">Signes cliniques constatés</div><div class="chips">' +
+        (signes.length ? signes.map(function(m){return '<span class="chip">'+esc(m)+'</span>';}).join('') : '<span class="val">—</span>') +
+      '</div></div>' +
+      '<div class="check-row"><span class="dot ' + (nbSignes >= 2 ? 'ok' : 'ko') + '"></span>' +
+        'Critère « au moins 2 signes cliniques » : <strong>' + nbSignes + ' signe(s)</strong> — ' + (nbSignes >= 2 ? 'rempli' : 'non rempli') + '</div>' +
+    '</div>' +
+
+    '<div class="card"><h2>Prélèvements réalisés (' + prelevements.length + ')</h2>' +
+      renderCounts(countsBySpecies) +
+      renderPrelevementsTable(prelevements) +
+    '</div>' +
+
+    '<div class="card"><h2>Antériorité — foyer dans les 90 jours précédents</h2>' +
+      '<div class="check-row"><span class="dot ' + (foyerRetenu ? 'ko' : 'ok') + '"></span>' +
+      (foyerInfo.matches.length
+        ? 'Calcul automatique : élevage déjà déclaré foyer ' + foyerInfo.matches.length + ' fois dans les 90 jours précédents.'
+        : 'Calcul automatique : aucun foyer antérieur détecté dans les 90 jours précédents pour cet élevage.') +
+      '</div>' +
+      (foyerInfo.matches.length ? '<ul class="foyer-list">' + foyerInfo.matches.map(function(m){
+        return '<li>Dossier ' + esc(m.dossier_number) + ' — suspicion du ' + fmtDate(m.date) + '</li>';
+      }).join('') + '</ul>' : '') +
+      '<label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;">' +
+        '<input type="checkbox" id="foyerOverride" ' + (typeof foyerForced === 'boolean' ? 'checked' : '') + '> ' +
+        'Forcer manuellement le statut « foyer &lt;90j » (si le calcul automatique est incorrect)' +
+      '</label>' +
+    '</div>' +
+
+    '<div class="card"><h2>Décision DDPP</h2>' +
+      '<div class="amount">' + (montant != null ? Number(montant).toFixed(2) : '—') + '<span class="cur"> € (estimation Grist)</span></div>' +
+      '<div class="decision" style="margin-top:10px;">' +
+        '<div class="field"><label>Prise en charge financière</label>' +
+          '<select id="priseEnCharge">' +
+            '<option value="">À décider</option>' +
+            '<option value="Oui" ' + (priseEnCharge==='Oui'?'selected':'') + '>Oui</option>' +
+            '<option value="Non" ' + (priseEnCharge==='Non'?'selected':'') + '>Non</option>' +
+          '</select></div>' +
+        '<div class="field"><label>N° de mémoire</label><input type="text" id="numeroMemoire" value="' + esc(numeroMemoire) + '"></div>' +
+        '<div class="field"><label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="dossierPaye" ' + (dossierPaye?'checked':'') + '> Dossier payé</label></div>' +
+        '<button class="btn btn-primary" id="saveDecision">Enregistrer la décision</button>' +
+      '</div>' +
+      '<div class="row-actions">' +
+        '<button class="btn btn-ghost" id="mailVet">✉ Générer l\'email au vétérinaire</button>' +
+        '<button class="btn btn-ghost" id="mailLab">✉ Générer l\'email au laboratoire</button>' +
+        '<button class="btn btn-ghost gear" id="toggleLabSettings" title="Configurer les adresses des laboratoires">⚙ Adresses labos</button>' +
+      '</div>' +
+      '<div class="settings-panel" id="labSettings">' +
+        '<div class="lbl" style="font-size:11px;color:var(--ink-faint);margin-bottom:6px;">Adresse mail du laboratoire par département (stockée localement dans ce navigateur)</div>' +
+        '<div class="dept-row"><input type="text" id="labDeptInput" placeholder="Département (ex. 75)" value="' + esc(rec.Departement||'') + '" style="max-width:120px"><input type="email" id="labEmailInput" placeholder="labo@example.fr" value="' + esc(labMap()[rec.Departement]||'') + '"><button class="btn btn-ghost" id="saveLabEmail">Enregistrer</button></div>' +
+      '</div>' +
+      '<div class="toast" id="toast"></div>' +
+    '</div>';
+
+  bindEvents(rec, demandeur, etat, montant, prelevements);
+}
+
+function fieldRo(label, value){
+  return '<div class="field-ro"><div class="lbl">' + esc(label) + '</div><div class="val">' + (value != null && value !== '' ? esc(value) : '—') + '</div></div>';
+}
+
+function renderCounts(counts){
+  var html = '<div class="counts">';
+  Object.keys(counts).forEach(function(k){
+    var over = counts[k] > 3;
+    html += '<span class="count-pill ' + (over?'over':'') + '">' + esc(k) + ' : ' + counts[k] + (over ? ' (> 3)' : '') + '</span>';
+  });
+  html += '</div>';
+  return html || '';
+}
+
+function renderPrelevementsTable(prelevements){
+  if (!prelevements.length) return '<p style="color:var(--ink-faint);font-size:12.5px;">Aucun prélèvement enregistré.</p>';
+  var rows = prelevements.map(function(p, i){
+    return '<tr data-id="' + p.id + '">' +
+      '<td>' + esc(p.espece_animale_prelevee) + '</td>' +
+      '<td>' + esc(p.numero_d_identification_de_l_animal_preleve) + '</td>' +
+      '<td>' + esc(p.type_de_prelevement) + '</td>' +
+      '<td><select class="res-fco3">' + resultOptions(p.Resultat_FCO3) + '</select></td>' +
+      '<td><select class="res-fco8">' + resultOptions(p.Resultat_FCO8) + '</select></td>' +
+      '<td><select class="res-mhe">' + resultOptions(p.Resultat_MHE) + '</select></td>' +
+      '<td><input type="date" class="res-date" value="' + toDateInputValue(decodeGristDate(safe(p.Date_resultat))) + '"></td>' +
+      '<td><button class="btn btn-ghost save-prelev" style="padding:4px 8px;font-size:11px;">Enregistrer</button></td>' +
+    '</tr>';
+  }).join('');
+  return '<table><thead><tr><th>Espèce</th><th>N° animal</th><th>Type</th><th>Résultat FCO3</th><th>Résultat FCO8</th><th>Résultat MHE</th><th>Date résultat</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+
+function resultOptions(current){
+  var opts = ['', 'Positif', 'Négatif', 'Non conforme', 'En attente'];
+  return opts.map(function(o){
+    return '<option value="' + esc(o) + '" ' + ((current||'')===o?'selected':'') + '>' + (o||'—') + '</option>';
+  }).join('');
+}
+
+function toDateInputValue(d){
+  if (!d) return '';
+  var pad = function(n){ return (n<10?'0':'')+n; };
+  return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+}
+
+async function fetchRows(tableId, filterCol, filterVal){
+  var t = await grist.docApi.fetchTable(tableId);
+  var out = [];
+  for (var i = 0; i < t.id.length; i++){
+    if (t[filterCol][i] === filterVal){
+      var row = { id: t.id[i] };
+      Object.keys(t).forEach(function(c){ row[c] = t[c][i]; });
+      out.push(row);
+    }
+  }
+  return out;
+}
+async function fetchRow(tableId, filterCol, filterVal){
+  var rows = await fetchRows(tableId, filterCol, filterVal);
+  return rows[0] || null;
+}
+
+async function computeFoyer90j(rec, ownPrelevements){
+  var suspicionDate = decodeGristDate(safe(rec.Date_de_la_suspicion));
+  if (!suspicionDate || !rec.N_elevage) return { isFoyer:false, matches:[] };
+  var windowStart = new Date(suspicionDate.getTime());
+  windowStart.setDate(windowStart.getDate() - 90);
+
+  var dossiers = await grist.docApi.fetchTable('Demarche_150091_dossiers');
+  var prelev = await grist.docApi.fetchTable('Demarche_150091_repetable_prelevement_realise');
+
+  var positiveByDossier = {};
+  for (var i = 0; i < prelev.dossier_number.length; i++){
+    var pos = isPositive(prelev.Resultat_FCO3[i]) || isPositive(prelev.Resultat_FCO8[i]) || isPositive(prelev.Resultat_MHE[i]);
+    if (pos) positiveByDossier[prelev.dossier_number[i]] = true;
+  }
+
+  var matches = [];
+  for (var j = 0; j < dossiers.id.length; j++){
+    var dn = dossiers.dossier_number[j];
+    if (dn === rec.dossier_number) continue;
+    if (dossiers.N_elevage[j] !== rec.N_elevage) continue;
+    if (!positiveByDossier[dn]) continue;
+    var d = decodeGristDate(safe(dossiers.Date_de_la_suspicion[j]));
+    if (!d) continue;
+    if (d >= windowStart && d < suspicionDate){
+      matches.push({ dossier_number: dn, date: d });
+    }
+  }
+  return { isFoyer: matches.length > 0, matches: matches };
+}
+
+function showToast(msg, kind){
+  var t = $('toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.className = 'toast show ' + kind;
+  setTimeout(function(){ t.classList.remove('show'); }, 4000);
+}
+
+function bindEvents(rec, demandeur, etat, montant, prelevements){
+  var foyerOverride = $('foyerOverride');
+  if (foyerOverride){
+    foyerOverride.addEventListener('change', function(){
+      writeMapped({ Foyer90jForce: foyerOverride.checked })
+        .catch(function(e){ showToast(e.message, 'error'); });
+    });
+  }
+
+  $('saveDecision').addEventListener('click', function(){
+    var fields = {
+      PriseEnCharge: $('priseEnCharge').value,
+      NumeroMemoire: $('numeroMemoire').value,
+      DossierPaye: $('dossierPaye').checked
+    };
+    writeMapped(fields).then(function(){
+      showToast('Décision enregistrée.', 'success');
+    }).catch(function(e){ showToast('Erreur : ' + e.message, 'error'); });
+  });
+
+  document.querySelectorAll('.save-prelev').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var tr = btn.closest('tr');
+      var id = parseInt(tr.getAttribute('data-id'), 10);
+      var dateVal = tr.querySelector('.res-date').value;
+      var fields = {
+        Resultat_FCO3: tr.querySelector('.res-fco3').value,
+        Resultat_FCO8: tr.querySelector('.res-fco8').value,
+        Resultat_MHE: tr.querySelector('.res-mhe').value,
+        Date_resultat: dateVal ? Math.floor(new Date(dateVal + 'T00:00:00Z').getTime() / 86400000) : null
+      };
+      grist.docApi.applyUserActions([[ 'UpdateRecord', 'Demarche_150091_repetable_prelevement_realise', id, fields ]])
+        .then(function(){ showToast('Résultat enregistré.', 'success'); render(currentRec); })
+        .catch(function(e){ showToast('Erreur : ' + e.message, 'error'); });
+    });
+  });
+
+  $('mailVet').addEventListener('click', function(){
+    var priseEnCharge = (readMapped(rec, 'PriseEnCharge') || '').toString();
+    var to = (demandeur && demandeur.email) || rec.Mail_veterinaire || '';
+    var decisionTxt = priseEnCharge === 'Oui' ? 'acceptée' : (priseEnCharge === 'Non' ? 'refusée' : 'en cours d\'instruction');
+    var subject = 'Décision relative à votre déclaration de suspicion FCO/MHE — dossier ' + rec.dossier_number;
+    var body = 'Bonjour,\n\nConcernant le dossier ' + rec.dossier_number + ' (élevage ' + (rec.Nom_elevage||'') + ', ' + (rec.Commune||'') + '),\n' +
+      'la prise en charge financière de la suspicion est ' + decisionTxt + '.\n\nCordialement,\nLa DDPP';
+    window.location.href = 'mailto:' + encodeURIComponent(to) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+  });
+
+  $('mailLab').addEventListener('click', function(){
+    var map = labMap();
+    var to = map[rec.Departement] || '';
+    if (!to){
+      showToast('Aucune adresse enregistrée pour le département ' + (rec.Departement||'?') + '. Utilisez ⚙ Adresses labos.', 'error');
+      $('labSettings').classList.add('open');
+      return;
+    }
+    var priseEnCharge = (readMapped(rec, 'PriseEnCharge') || '').toString();
+    var decisionTxt = priseEnCharge === 'Oui' ? 'PREND EN CHARGE' : (priseEnCharge === 'Non' ? 'NE PREND PAS EN CHARGE' : 'N\'A PAS ENCORE STATUÉ SUR');
+    var subject = 'Décision de prise en charge — dossier ' + rec.dossier_number;
+    var body = 'Bonjour,\n\nLa DDPP ' + decisionTxt + ' financièrement le dossier ' + rec.dossier_number +
+      ' (élevage ' + (rec.Nom_elevage||'') + ', ' + (rec.Commune||'') + ').\n\nCordialement,\nLa DDPP';
+    window.location.href = 'mailto:' + encodeURIComponent(to) + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+  });
+
+  $('toggleLabSettings').addEventListener('click', function(){
+    $('labSettings').classList.toggle('open');
+  });
+  $('saveLabEmail').addEventListener('click', function(){
+    var dept = $('labDeptInput').value.trim();
+    var email = $('labEmailInput').value.trim();
+    if (!dept || !email) return;
+    var map = labMap();
+    map[dept] = email;
+    saveLabMap(map);
+    showToast('Adresse enregistrée pour le département ' + dept + '.', 'success');
+  });
+}
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DDPP · Tableau de bord par département</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<style>
+  :root{
+    --bg:#F5F4F0; --surface:#FFFFFF; --ink:#1B1B1E; --ink-soft:#65656B; --ink-faint:#9A9A9F;
+    --border:#E2E0D8; --primary:#000091; --primary-soft:#E5E5FB; --accent:#C9184A; --accent-soft:#FBE3EA;
+    --success:#18753C; --success-soft:#E2F3E8; --warning:#B34000; --warning-soft:#FBE9DD;
+    --radius:10px; --shadow:0 1px 2px rgba(20,20,30,.06), 0 8px 24px -16px rgba(20,20,30,.25);
+    --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:13px;line-height:1.45;}
+  .app{padding:14px 16px 30px;}
+  h1{font-size:16px;margin:0;}
+  .sub{color:var(--ink-soft);font-size:11.5px;margin-top:2px;}
+  .warn-map{background:var(--warning-soft);color:var(--warning);border-radius:8px;padding:8px 10px;font-size:12px;margin:12px 0;}
+  .toolbar{display:flex;gap:10px;align-items:center;margin:14px 0;}
+  .toolbar select{font-family:inherit;font-size:12.5px;padding:6px 8px;border:1px solid var(--border);border-radius:7px;background:#fff;}
+  .toolbar label{font-size:10.5px;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;margin-right:4px;}
+  table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;font-size:12.5px;}
+  th,td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;}
+  th:first-child,td:first-child{text-align:left;}
+  th{background:#FAFAF7;font-size:10.2px;text-transform:uppercase;letter-spacing:.02em;color:var(--ink-faint);}
+  tbody tr:hover{background:#FAFAF7;}
+  tbody tr:last-child td{border-bottom:none;}
+  .totrow{font-weight:700;background:#FAFAF7;}
+  .amount{font-variant-numeric:tabular-nums;}
+  .empty{margin:60px auto;max-width:340px;text-align:center;color:var(--ink-faint);}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:16px;}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow);}
+  .kpi .lbl{font-size:10.5px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.04em;}
+  .kpi .val{font-size:22px;font-weight:700;color:var(--primary);}
+  .kpi.money .val{color:var(--success);}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>Tableau de bord DDPP — synthèse par département</h1>
+  <div class="sub">Suspicions, foyers, prise en charge financière et montants — calculés à partir du tableau des dossiers.</div>
+  <div class="warn-map" id="warnMap" style="display:none;"></div>
+
+  <div class="toolbar">
+    <label>Campagne</label><select id="campagneFilter"><option value="">Toutes</option></select>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+  <div id="tableWrap"></div>
+</div>
+
+<script>
+(function(){
+'use strict';
+var $ = function(id){ return document.getElementById(id); };
+function esc(s){ return (s==null?'':s.toString()).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function normalize(s){ return (s||'').toString().normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); }
+function isPositive(v){ return /posit/i.test(normalize(v)); }
+function isErrorCell(v){ return Array.isArray(v) && v[0] === 'E'; }
+function safe(v){ return isErrorCell(v) ? null : v; }
+function decodeGristDate(v){
+  if (v == null) return null;
+  if (typeof v === 'number') return new Date(v * 86400000);
+  if (Array.isArray(v)){
+    if (v[0] === 'd') return new Date(v[1] * 86400000);
+    if (v[0] === 'D') return new Date(v[1] * 1000);
+  }
+  return null;
+}
+function campagneLabel(d){
+  if (!d) return '—';
+  var y = d.getFullYear();
+  var start = (d.getMonth() >= 5) ? y : y - 1;
+  return start + '-' + (start + 1);
+}
+function fmtEUR(n){
+  return n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+}
+
+var mappings = null;
+var lastRecords = [];
+
+grist.ready({
+  requiredAccess: 'full',
+  columns: [
+    { name: 'PriseEnCharge', title: 'Prise en charge financière (Oui/Non) — même colonne que le widget d\'instruction', type: 'Text', optional: true },
+    { name: 'NumeroMemoire', title: 'N° de mémoire', type: 'Text', optional: true },
+    { name: 'DossierPaye', title: 'Dossier payé', type: 'Bool', optional: true }
+  ]
+});
+
+grist.onRecords(function(records, recMappings){
+  mappings = recMappings;
+  lastRecords = records;
+  computeAndRender();
+});
+
+async function computeAndRender(){
+  var warn = $('warnMap');
+  if (!mappings || !mappings.PriseEnCharge || !mappings.DossierPaye){
+    warn.style.display = 'block';
+    warn.textContent = 'Certaines colonnes de décision ne sont pas associées : ouvrez la configuration du widget (⚙) pour les relier aux mêmes colonnes que le widget « Instruction DDPP ».';
+  } else {
+    warn.style.display = 'none';
+  }
+
+  var prelev = await grist.docApi.fetchTable('Demarche_150091_repetable_prelevement_realise');
+  var positiveByDossier = {};
+  for (var i = 0; i < prelev.dossier_number.length; i++){
+    if (isPositive(prelev.Resultat_FCO3[i]) || isPositive(prelev.Resultat_FCO8[i]) || isPositive(prelev.Resultat_MHE[i])){
+      positiveByDossier[prelev.dossier_number[i]] = true;
+    }
+  }
+
+  var rows = lastRecords.map(function(r){
+    var date = decodeGristDate(safe(r.Date_de_la_suspicion));
+    var priseEnCharge = mappings.PriseEnCharge ? (r[mappings.PriseEnCharge] || '') : '';
+    var numeroMemoire = mappings.NumeroMemoire ? (r[mappings.NumeroMemoire] || '') : '';
+    var dossierPaye = mappings.DossierPaye ? !!r[mappings.DossierPaye] : false;
+    var montant = safe(r.Formule_adaptable);
+    if (montant == null) montant = safe(r.Formule_test);
+    return {
+      dept: safe(r.Departement) || 'Non renseigné',
+      campagne: campagneLabel(date),
+      isFoyer: !!positiveByDossier[r.dossier_number],
+      priseEnCharge: priseEnCharge.toString().toLowerCase(),
+      accepte: priseEnCharge.toString().toLowerCase() === 'oui',
+      hasMemoire: !!numeroMemoire,
+      paye: dossierPaye,
+      montant: typeof montant === 'number' ? montant : 0
+    };
+  });
+
+  var campagnes = {};
+  rows.forEach(function(r){ campagnes[r.campagne] = true; });
+  var sel = $('campagneFilter');
+  var current = sel.value;
+  sel.innerHTML = '<option value="">Toutes</option>' + Object.keys(campagnes).sort().reverse().map(function(c){
+    return '<option value="' + esc(c) + '">' + esc(c) + '</option>';
+  }).join('');
+  sel.value = current;
+  var campagneFilter = sel.value;
+
+  var filtered = rows.filter(function(r){ return !campagneFilter || r.campagne === campagneFilter; });
+
+  var byDept = {};
+  filtered.forEach(function(r){
+    var d = byDept[r.dept] || (byDept[r.dept] = {
+      total: 0, foyers: 0, priseEnCharge: 0, payees: 0, aPayer: 0, montantPaye: 0
+    });
+    d.total++;
+    if (r.isFoyer) d.foyers++;
+    if (r.accepte) d.priseEnCharge++;
+    if (r.paye) { d.payees++; d.montantPaye += r.montant; }
+    else if (r.accepte) { d.aPayer++; }
+  });
+
+  var depts = Object.keys(byDept).sort();
+  var totals = { total: 0, foyers: 0, priseEnCharge: 0, payees: 0, aPayer: 0, montantPaye: 0 };
+  depts.forEach(function(d){
+    var v = byDept[d];
+    totals.total += v.total; totals.foyers += v.foyers; totals.priseEnCharge += v.priseEnCharge;
+    totals.payees += v.payees; totals.aPayer += v.aPayer; totals.montantPaye += v.montantPaye;
+  });
+
+  $('kpis').innerHTML =
+    kpi('Suspicions totales', totals.total) +
+    kpi('Foyers', totals.foyers) +
+    kpi('Prises en charge', totals.priseEnCharge) +
+    kpi('Payées', totals.payees) +
+    kpi('À payer', totals.aPayer) +
+    kpi('Montant total payé', fmtEUR(totals.montantPaye), true);
+
+  if (!depts.length){
+    $('tableWrap').innerHTML = '<div class="empty">Aucun dossier pour cette période.</div>';
+    return;
+  }
+
+  var rowsHtml = depts.map(function(d){
+    var v = byDept[d];
+    return '<tr>' +
+      '<td>' + esc(d) + '</td>' +
+      '<td>' + v.total + '</td>' +
+      '<td>' + v.foyers + '</td>' +
+      '<td>' + v.priseEnCharge + '</td>' +
+      '<td>' + v.payees + '</td>' +
+      '<td>' + v.aPayer + '</td>' +
+      '<td class="amount">' + fmtEUR(v.montantPaye) + '</td>' +
+    '</tr>';
+  }).join('');
+
+  $('tableWrap').innerHTML =
+    '<table><thead><tr><th>Département</th><th>Suspicions totales</th><th>Foyers</th><th>Prise en charge</th><th>Payées</th><th>À payer</th><th>Montant total payé</th></tr></thead>' +
+    '<tbody>' + rowsHtml +
+    '<tr class="totrow"><td>Total</td><td>' + totals.total + '</td><td>' + totals.foyers + '</td><td>' + totals.priseEnCharge + '</td><td>' + totals.payees + '</td><td>' + totals.aPayer + '</td><td class="amount">' + fmtEUR(totals.montantPaye) + '</td></tr>' +
+    '</tbody></table>';
+}
+
+function kpi(label, val, isMoney){
+  return '<div class="kpi' + (isMoney?' money':'') + '"><div class="lbl">' + esc(label) + '</div><div class="val">' + val + '</div></div>';
+}
+
+$('campagneFilter').addEventListener('change', computeAndRender);
+
+})();
+</script>
+</body>
+</html>

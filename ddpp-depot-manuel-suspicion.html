@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DDPP · Déclarer une suspicion reçue hors DN</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<style>
+  :root{
+    --bg:#F5F4F0; --surface:#FFFFFF; --ink:#1B1B1E; --ink-soft:#65656B; --ink-faint:#9A9A9F;
+    --border:#E2E0D8; --primary:#000091; --primary-soft:#E5E5FB; --accent:#C9184A; --accent-soft:#FBE3EA;
+    --success:#18753C; --success-soft:#E2F3E8;
+    --radius:10px; --shadow:0 1px 2px rgba(20,20,30,.06), 0 8px 24px -16px rgba(20,20,30,.25);
+    --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:13.5px;line-height:1.45;}
+  .app{max-width:760px;margin:0 auto;padding:16px 16px 40px;}
+  h1{font-size:17px;margin:0 0 2px;}
+  .sub{color:var(--ink-soft);font-size:12px;margin-bottom:16px;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;box-shadow:var(--shadow);}
+  .card h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-faint);margin:0 0 10px;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;}
+  .field{display:flex;flex-direction:column;gap:4px;}
+  .field.span2{grid-column:span 2;}
+  label{font-size:11px;font-weight:600;color:var(--ink-soft);}
+  input[type="text"],input[type="tel"],input[type="email"],input[type="date"],input[type="number"],select,textarea{
+    font-family:inherit;font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:7px;background:#FCFCFB;outline:none;
+  }
+  input:focus,select:focus,textarea:focus{border-color:var(--primary);background:#fff;}
+  textarea{resize:vertical;min-height:56px;}
+  .choice-list{display:flex;flex-wrap:wrap;gap:6px;}
+  .choice-list label{display:flex;align-items:center;gap:5px;font-weight:400;font-size:12.5px;color:var(--ink);
+    background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:5px 10px;cursor:pointer;}
+  .choice-list input{margin:0;}
+  .required::after{content:' *';color:var(--accent);}
+  .actions{display:flex;justify-content:flex-end;gap:10px;margin-top:6px;}
+  .btn{border:none;border-radius:7px;padding:9px 16px;font-weight:600;cursor:pointer;font-size:13px;}
+  .btn-primary{background:var(--primary);color:#fff;}
+  .btn-primary:disabled{opacity:.5;cursor:default;}
+  .btn-primary:not(:disabled):hover{filter:brightness(1.12);}
+  .btn-ghost{background:transparent;color:var(--ink-soft);border:1px solid var(--border);}
+  .toast{font-size:12.5px;padding:9px 12px;border-radius:7px;margin-top:8px;display:none;}
+  .toast.show{display:block;}
+  .toast.success{background:var(--success-soft);color:var(--success);}
+  .toast.error{background:var(--accent-soft);color:var(--accent);}
+  .hint{font-size:11px;color:var(--ink-faint);margin-top:2px;}
+  .banner{background:var(--primary-soft);color:var(--primary);border-radius:8px;padding:10px 12px;font-size:12px;margin-bottom:14px;}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>Déclaration d'une suspicion reçue hors Démarches Simplifiées</h1>
+  <div class="sub">À utiliser uniquement lorsque le vétérinaire a transmis sa déclaration par un autre canal (papier, mail). Le dossier créé rejoint le tableau des suspicions au même titre qu'un dépôt DN.</div>
+  <div class="banner">Numéro de dossier généré automatiquement au format <code>MANUEL-AAAAMMJJ-XXXX</code> pour ne jamais entrer en collision avec un numéro Démarches Simplifiées.</div>
+
+  <form id="form">
+    <div class="card">
+      <h2>Vétérinaire déclarant</h2>
+      <div class="grid">
+        <div class="field"><label>Civilité</label>
+          <select id="civilite"><option value="Madame">Madame</option><option value="Monsieur">Monsieur</option></select></div>
+        <div class="field"><label class="required">Nom</label><input type="text" id="nom" required></div>
+        <div class="field"><label class="required">Prénom</label><input type="text" id="prenom" required></div>
+        <div class="field"><label>Email</label><input type="email" id="email"></div>
+        <div class="field"><label>Téléphone</label><input type="tel" id="tel"></div>
+        <div class="field"><label>N° ordinal du vétérinaire</label><input type="text" id="ordre"></div>
+        <div class="field span2"><label>Cabinet vétérinaire</label><input type="text" id="cabinet"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Élevage</h2>
+      <div class="grid">
+        <div class="field span2"><label class="required">Nom / raison sociale de l'élevage</label><input type="text" id="elevageNom" required></div>
+        <div class="field"><label>N° de l'élevage</label><input type="number" id="elevageNum"></div>
+        <div class="field"><label>Département</label><input type="text" id="dept" placeholder="ex. 63" maxlength="3"></div>
+        <div class="field span2"><label class="required">Commune</label><input type="text" id="commune" required></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Signalement</h2>
+      <div class="grid">
+        <div class="field"><label class="required">Date de la suspicion</label><input type="date" id="dateSuspicion" required></div>
+        <div class="field"><label>Date du/des prélèvement(s)</label><input type="date" id="datePrelevement"></div>
+        <div class="field"><label>Laboratoire destinataire</label><select id="laboratoire"></select></div>
+      </div>
+      <div class="field" style="margin-top:10px;">
+        <label>Motif de signalement</label>
+        <div class="choice-list" id="motifList"></div>
+      </div>
+      <div class="field" style="margin-top:10px;">
+        <label>Signes cliniques constatés</label>
+        <div class="choice-list" id="signesList"></div>
+      </div>
+      <div class="field" style="margin-top:10px;">
+        <label>Précisez les autres signes cliniques constatés</label>
+        <textarea id="autresSignes"></textarea>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Commentaire libre (facultatif)</h2>
+      <textarea id="commentaire" placeholder="Toute information utile transmise par courrier/mail…"></textarea>
+      <div class="hint">Ce commentaire est stocké dans la colonne « Commentaire » du dossier.</div>
+    </div>
+
+    <div class="actions">
+      <button type="button" class="btn btn-ghost" id="resetBtn">Réinitialiser</button>
+      <button type="submit" class="btn btn-primary" id="submitBtn">Créer le dossier</button>
+    </div>
+    <div class="toast" id="toast"></div>
+  </form>
+</div>
+
+<script>
+(function(){
+'use strict';
+var $ = function(id){ return document.getElementById(id); };
+function esc(s){ return (s==null?'':s.toString()).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+grist.ready({ requiredAccess: 'full' });
+
+async function getColumnChoices(tableId, colId){
+  try {
+    var tables = await grist.docApi.fetchTable('_grist_Tables');
+    var idx = tables.tableId.indexOf(tableId);
+    if (idx === -1) return [];
+    var tableRef = tables.id[idx];
+    var cols = await grist.docApi.fetchTable('_grist_Tables_column');
+    for (var i = 0; i < cols.id.length; i++){
+      if (cols.parentId[i] === tableRef && cols.colId[i] === colId){
+        try {
+          var opts = JSON.parse(cols.widgetOptions[i] || '{}');
+          return opts.choices || [];
+        } catch(e){ return []; }
+      }
+    }
+  } catch(e){ /* ignore */ }
+  return [];
+}
+
+var FALLBACK_MOTIFS = ['Signes cliniques évocateurs FCO', 'Signes cliniques évocateurs MHE', 'Mortalité inexpliquée', 'Autre'];
+var FALLBACK_SIGNES = ['Hyperthermie', 'Œdème de la face/tête', 'Ulcérations buccales', 'Boiteries', 'Avortements', 'Mortalité', 'Autres'];
+var FALLBACK_LABOS = [];
+
+function renderChoiceList(container, choices, name){
+  container.innerHTML = choices.map(function(c, i){
+    return '<label><input type="checkbox" name="' + name + '" value="' + esc(c) + '"> ' + esc(c) + '</label>';
+  }).join('');
+}
+function getCheckedValues(container){
+  return Array.prototype.map.call(container.querySelectorAll('input:checked'), function(el){ return el.value; });
+}
+
+async function initChoices(){
+  var motifs = await getColumnChoices('Demarche_150091_champs', 'motif_de_signalement');
+  var signes = await getColumnChoices('Demarche_150091_champs', 'signes_cliniques_constates');
+  var labos = await getColumnChoices('Demarche_150091_champs', 'laboratoire_destinataire_des_prelevements');
+  renderChoiceList($('motifList'), motifs.length ? motifs : FALLBACK_MOTIFS, 'motif');
+  renderChoiceList($('signesList'), signes.length ? signes : FALLBACK_SIGNES, 'signes');
+  var laboSel = $('laboratoire');
+  var laboOptions = labos.length ? labos : FALLBACK_LABOS;
+  laboSel.innerHTML = '<option value="">—</option>' + laboOptions.map(function(l){
+    return '<option value="' + esc(l) + '">' + esc(l) + '</option>';
+  }).join('');
+}
+initChoices();
+
+function genDossierNumber(){
+  var d = new Date();
+  var pad = function(n){ return (n<10?'0':'')+n; };
+  var stamp = d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate());
+  var rand = Math.floor(1000 + Math.random()*9000);
+  return 'MANUEL-' + stamp + '-' + rand;
+}
+function toGristDate(inputVal){
+  return inputVal ? Math.floor(new Date(inputVal + 'T00:00:00Z').getTime() / 86400000) : null;
+}
+function choiceListValue(arr){
+  return ['L'].concat(arr);
+}
+
+function showToast(msg, kind){
+  var t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + kind;
+  setTimeout(function(){ t.classList.remove('show'); }, 5000);
+}
+
+$('resetBtn').addEventListener('click', function(){ $('form').reset(); });
+
+$('form').addEventListener('submit', async function(e){
+  e.preventDefault();
+  var submitBtn = $('submitBtn');
+  submitBtn.disabled = true;
+
+  try {
+    var dossierNumber = genDossierNumber();
+    var nowDays = Math.floor(Date.now() / 86400000);
+
+    var dossierFields = {
+      dossier_number: dossierNumber,
+      state: 'en_instruction',
+      date_depot: Math.floor(Date.now() / 1000),
+      Commentaire: $('commentaire').value.trim() || null
+    };
+
+    var champsFields = {
+      dossier_number: dossierNumber,
+      numero_ordinal_du_veterinaire: $('ordre').value.trim(),
+      numero_de_telephone_du_veterinaire: $('tel').value.trim(),
+      adresse_mail_du_veterinaire: $('email').value.trim(),
+      nom_du_cabinet_veterinaire: $('cabinet').value.trim(),
+      nom_raison_sociale_de_l_elevage: $('elevageNom').value.trim(),
+      numero_de_l_elevage: $('elevageNum').value ? parseInt($('elevageNum').value, 10) : null,
+      commune_de_l_elevage: $('commune').value.trim(),
+      commune_de_l_elevage_departement: $('dept').value.trim(),
+      date_de_la_suspicion: toGristDate($('dateSuspicion').value),
+      date_du_ou_des_prelevement_s: toGristDate($('datePrelevement').value),
+      laboratoire_destinataire_des_prelevements: $('laboratoire').value,
+      motif_de_signalement: choiceListValue(getCheckedValues($('motifList'))),
+      signes_cliniques_constates: choiceListValue(getCheckedValues($('signesList'))),
+      precisez_les_autres_signes_cliniques_constates: $('autresSignes').value.trim()
+    };
+
+    var demandeurFields = {
+      dossier_number: dossierNumber,
+      type: 'personne_physique',
+      civilite: $('civilite').value,
+      nom: $('nom').value.trim(),
+      prenom: $('prenom').value.trim(),
+      email: $('email').value.trim(),
+      usager_email: $('email').value.trim(),
+      connection_usager: 'saisie_manuelle_DDPP'
+    };
+
+    await grist.docApi.applyUserActions([
+      [ 'AddRecord', 'Demarche_150091_dossiers', null, dossierFields ],
+      [ 'AddRecord', 'Demarche_150091_champs', null, champsFields ],
+      [ 'AddRecord', 'Demarche_150091_demandeurs', null, demandeurFields ]
+    ]);
+
+    showToast('Dossier ' + dossierNumber + ' créé et ajouté au tableau des suspicions.', 'success');
+    $('form').reset();
+    initChoices();
+  } catch(err){
+    showToast('Erreur lors de la création du dossier : ' + (err && err.message ? err.message : err), 'error');
+  } finally {
+    submitBtn.disabled = false;
+  }
+});
+
+})();
+</script>
+</body>
+</html>

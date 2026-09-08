@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRAAF · Synthèse hebdomadaire FCO/MHE</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<style>
+  :root{
+    --bg:#F5F4F0; --surface:#FFFFFF; --ink:#1B1B1E; --ink-soft:#65656B; --ink-faint:#9A9A9F;
+    --border:#E2E0D8; --primary:#000091; --primary-soft:#E5E5FB; --accent:#C9184A; --accent-soft:#FBE3EA;
+    --success:#18753C; --success-soft:#E2F3E8;
+    --radius:10px; --shadow:0 1px 2px rgba(20,20,30,.06), 0 8px 24px -16px rgba(20,20,30,.25);
+    --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:13px;line-height:1.45;}
+  .app{padding:14px 16px 30px;}
+  h1{font-size:16px;margin:0;}
+  .sub{color:var(--ink-soft);font-size:11.5px;}
+  .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0 16px;}
+  .toolbar .field{display:flex;flex-direction:column;gap:3px;}
+  .toolbar label{font-size:10.5px;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;}
+  select,input[type="date"]{font-family:inherit;font-size:12.5px;padding:6px 8px;border:1px solid var(--border);border-radius:7px;background:#fff;}
+  .nav-btn{border:1px solid var(--border);background:#fff;border-radius:7px;padding:6px 10px;cursor:pointer;font-size:13px;}
+  .nav-btn:hover{background:var(--primary-soft);}
+  .week-label{font-family:var(--mono);font-size:12.5px;background:var(--primary-soft);color:var(--primary);padding:6px 12px;border-radius:7px;}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px;}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow);}
+  .kpi .lbl{font-size:10.5px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.04em;}
+  .kpi .val{font-size:24px;font-weight:700;color:var(--primary);}
+  .kpi.foyer .val{color:var(--accent);}
+  table{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;font-size:12.5px;}
+  th,td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;}
+  th:first-child,td:first-child{text-align:left;}
+  th{background:#FAFAF7;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--ink-faint);cursor:pointer;user-select:none;}
+  tbody tr:hover{background:#FAFAF7;}
+  tbody tr:last-child td{border-bottom:none;}
+  .bar-wrap{display:flex;align-items:center;gap:6px;justify-content:flex-end;}
+  .bar{height:6px;border-radius:3px;background:var(--primary);}
+  .bar.new{background:var(--accent);}
+  .totrow{font-weight:700;background:#FAFAF7;}
+  .empty{margin:60px auto;max-width:340px;text-align:center;color:var(--ink-faint);}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>Synthèse hebdomadaire des suspicions et foyers FCO/MHE</h1>
+  <div class="sub">Semaine par semaine, département par département — d'après les dossiers du tableau lié.</div>
+
+  <div class="toolbar">
+    <div class="field"><label>Semaine</label>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="nav-btn" id="prevWeek">←</button>
+        <span class="week-label" id="weekLabel">—</span>
+        <button class="nav-btn" id="nextWeek">→</button>
+        <button class="nav-btn" id="thisWeek">Aujourd'hui</button>
+      </div>
+    </div>
+    <div class="field"><label>Campagne</label><select id="campagneFilter"><option value="">Toutes</option></select></div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+  <div id="tableWrap"></div>
+</div>
+
+<script>
+(function(){
+'use strict';
+var $ = function(id){ return document.getElementById(id); };
+function esc(s){ return (s==null?'':s.toString()).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function normalize(s){ return (s||'').toString().normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); }
+function isPositive(v){ return /posit/i.test(normalize(v)); }
+function isErrorCell(v){ return Array.isArray(v) && v[0] === 'E'; }
+function safe(v){ return isErrorCell(v) ? null : v; }
+
+function decodeGristDate(v){
+  if (v == null) return null;
+  if (typeof v === 'number') return new Date(v * 86400000);
+  if (Array.isArray(v)){
+    if (v[0] === 'd') return new Date(v[1] * 86400000);
+    if (v[0] === 'D') return new Date(v[1] * 1000);
+  }
+  return null;
+}
+
+function isoWeekInfo(d){
+  var date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  var dayNum = (date.getUTCDay() + 6) % 7;
+  date.setUTCDate(date.getUTCDate() - dayNum + 3);
+  var firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+  var week = 1 + Math.round(((date - firstThursday) / 86400000 - 3 + (firstThursday.getUTCDay() + 6) % 7) / 7);
+  return { year: date.getUTCFullYear(), week: week };
+}
+function weekStart(year, week){
+  var jan4 = new Date(Date.UTC(year, 0, 4));
+  var dayNum = (jan4.getUTCDay() + 6) % 7;
+  var week1Mon = new Date(jan4); week1Mon.setUTCDate(jan4.getUTCDate() - dayNum);
+  var d = new Date(week1Mon); d.setUTCDate(week1Mon.getUTCDate() + (week - 1) * 7);
+  return d;
+}
+function weekEnd(year, week){
+  var s = weekStart(year, week);
+  var e = new Date(s); e.setUTCDate(s.getUTCDate() + 6);
+  return e;
+}
+function fmtShort(d){
+  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+}
+function campagneLabel(d){
+  if (!d) return '—';
+  var y = d.getFullYear();
+  var start = (d.getMonth() >= 5) ? y : y - 1;
+  return start + '-' + (start + 1);
+}
+
+var state = { year: null, week: null, campagne: '' };
+var allRows = null; // cached dossiers with derived fields
+
+grist.ready({ requiredAccess: 'read table' });
+
+grist.onRecords(function(){
+  // Le tableau lié déclenche un rafraîchissement ; on relit tout via docApi pour avoir
+  // les résultats de labo (autre table) nécessaires au calcul des foyers.
+  loadData().then(render);
+});
+
+async function loadData(){
+  var dossiers = await grist.docApi.fetchTable('Demarche_150091_dossiers');
+  var prelev = await grist.docApi.fetchTable('Demarche_150091_repetable_prelevement_realise');
+
+  var positiveByDossier = {};
+  for (var i = 0; i < prelev.dossier_number.length; i++){
+    if (isPositive(prelev.Resultat_FCO3[i]) || isPositive(prelev.Resultat_FCO8[i]) || isPositive(prelev.Resultat_MHE[i])){
+      positiveByDossier[prelev.dossier_number[i]] = true;
+    }
+  }
+
+  var rows = [];
+  for (var j = 0; j < dossiers.id.length; j++){
+    var date = decodeGristDate(safe(dossiers.Date_de_la_suspicion[j]));
+    if (!date) continue;
+    var dept = safe(dossiers.Departement[j]) || 'Non renseigné';
+    rows.push({
+      dossier_number: dossiers.dossier_number[j],
+      date: date,
+      dept: dept,
+      isFoyer: !!positiveByDossier[dossiers.dossier_number[j]],
+      campagne: campagneLabel(date)
+    });
+  }
+  allRows = rows;
+  return rows;
+}
+
+function populateCampagnes(rows){
+  var sel = $('campagneFilter');
+  var current = sel.value;
+  var set = {};
+  rows.forEach(function(r){ set[r.campagne] = true; });
+  var options = Object.keys(set).sort().reverse();
+  sel.innerHTML = '<option value="">Toutes</option>' + options.map(function(c){
+    return '<option value="' + esc(c) + '">' + esc(c) + '</option>';
+  }).join('');
+  sel.value = current;
+}
+
+function render(rows){
+  if (!state.year){
+    var now = isoWeekInfo(new Date());
+    state.year = now.year; state.week = now.week;
+  }
+  populateCampagnes(rows);
+  state.campagne = $('campagneFilter').value;
+
+  var wStart = weekStart(state.year, state.week);
+  var wEnd = weekEnd(state.year, state.week);
+  $('weekLabel').textContent = 'Semaine ' + state.week + ' / ' + state.year + '  (' + fmtShort(wStart) + ' – ' + fmtShort(wEnd) + ')';
+
+  var filtered = rows.filter(function(r){ return !state.campagne || r.campagne === state.campagne; });
+
+  var byDept = {};
+  filtered.forEach(function(r){
+    if (r.date > wEnd) return; // n'existe pas encore à cette semaine
+    var d = byDept[r.dept] || (byDept[r.dept] = { total: 0, nouvelles: 0, foyerTotal: 0, foyerNouveaux: 0 });
+    d.total++;
+    if (r.date >= wStart && r.date <= wEnd) d.nouvelles++;
+    if (r.isFoyer){
+      d.foyerTotal++;
+      if (r.date >= wStart && r.date <= wEnd) d.foyerNouveaux++;
+    }
+  });
+
+  var depts = Object.keys(byDept).sort();
+  var totals = { total: 0, nouvelles: 0, foyerTotal: 0, foyerNouveaux: 0 };
+  depts.forEach(function(d){
+    totals.total += byDept[d].total;
+    totals.nouvelles += byDept[d].nouvelles;
+    totals.foyerTotal += byDept[d].foyerTotal;
+    totals.foyerNouveaux += byDept[d].foyerNouveaux;
+  });
+
+  $('kpis').innerHTML =
+    kpi('Suspicions totales', totals.total, false) +
+    kpi('Nouvelles suspicions (semaine)', totals.nouvelles, false) +
+    kpi('Foyers totaux', totals.foyerTotal, true) +
+    kpi('Nouveaux foyers (semaine)', totals.foyerNouveaux, true);
+
+  var maxTotal = Math.max.apply(null, depts.map(function(d){ return byDept[d].total; }).concat([1]));
+
+  if (!depts.length){
+    $('tableWrap').innerHTML = '<div class="empty">Aucune suspicion enregistrée pour cette période.</div>';
+    return;
+  }
+
+  var rowsHtml = depts.map(function(d){
+    var v = byDept[d];
+    return '<tr>' +
+      '<td>' + esc(d) + '</td>' +
+      '<td>' + barCell(v.total, maxTotal, false) + '</td>' +
+      '<td>' + v.nouvelles + '</td>' +
+      '<td>' + barCell(v.foyerTotal, maxTotal, true) + '</td>' +
+      '<td>' + v.foyerNouveaux + '</td>' +
+    '</tr>';
+  }).join('');
+
+  $('tableWrap').innerHTML =
+    '<table><thead><tr><th>Département</th><th>Suspicions totales</th><th>Nouvelles suspicions</th><th>Foyers totaux</th><th>Nouveaux foyers</th></tr></thead>' +
+    '<tbody>' + rowsHtml +
+    '<tr class="totrow"><td>Total</td><td>' + totals.total + '</td><td>' + totals.nouvelles + '</td><td>' + totals.foyerTotal + '</td><td>' + totals.foyerNouveaux + '</td></tr>' +
+    '</tbody></table>';
+}
+
+function kpi(label, val, isFoyer){
+  return '<div class="kpi' + (isFoyer?' foyer':'') + '"><div class="lbl">' + esc(label) + '</div><div class="val">' + val + '</div></div>';
+}
+function barCell(val, max, isFoyer){
+  var pct = Math.round((val / max) * 100);
+  return '<div class="bar-wrap"><span>' + val + '</span><span class="bar' + (isFoyer?' new':'') + '" style="width:' + Math.max(pct, 4) + 'px"></span></div>';
+}
+
+$('prevWeek').addEventListener('click', function(){
+  var d = weekStart(state.year, state.week); d.setUTCDate(d.getUTCDate() - 7);
+  var wi = isoWeekInfo(d); state.year = wi.year; state.week = wi.week;
+  render(allRows || []);
+});
+$('nextWeek').addEventListener('click', function(){
+  var d = weekStart(state.year, state.week); d.setUTCDate(d.getUTCDate() + 7);
+  var wi = isoWeekInfo(d); state.year = wi.year; state.week = wi.week;
+  render(allRows || []);
+});
+$('thisWeek').addEventListener('click', function(){
+  var now = isoWeekInfo(new Date()); state.year = now.year; state.week = now.week;
+  render(allRows || []);
+});
+$('campagneFilter').addEventListener('change', function(){ render(allRows || []); });
+
+loadData().then(render);
+
+})();
+</script>
+</body>
+</html>
