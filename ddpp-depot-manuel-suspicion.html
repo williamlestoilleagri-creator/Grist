@@ -101,12 +101,6 @@
       </div>
     </div>
 
-    <div class="card">
-      <h2>Commentaire libre (facultatif)</h2>
-      <textarea id="commentaire" placeholder="Toute information utile transmise par courrier/mail…"></textarea>
-      <div class="hint">Ce commentaire est stocké dans la colonne « Commentaire » du dossier.</div>
-    </div>
-
     <div class="actions">
       <button type="button" class="btn btn-ghost" id="resetBtn">Réinitialiser</button>
       <button type="submit" class="btn btn-primary" id="submitBtn">Créer le dossier</button>
@@ -199,13 +193,14 @@ $('form').addEventListener('submit', async function(e){
 
   try {
     var dossierNumber = genDossierNumber();
-    var nowDays = Math.floor(Date.now() / 86400000);
 
+    // Commentaire et N_Memoire sont des colonnes formule dans le schéma d'origine
+    // (pas de colonne de données associée) : on n'y écrit pas depuis l'API tant
+    // qu'elles n'ont pas été converties en colonnes de données dans Grist.
     var dossierFields = {
       dossier_number: dossierNumber,
       state: 'en_instruction',
-      date_depot: Math.floor(Date.now() / 1000),
-      Commentaire: $('commentaire').value.trim() || null
+      date_depot: Math.floor(Date.now() / 1000)
     };
 
     var champsFields = {
@@ -247,7 +242,9 @@ $('form').addEventListener('submit', async function(e){
     $('form').reset();
     initChoices();
   } catch(err){
-    showToast('Erreur lors de la création du dossier : ' + (err && err.message ? err.message : err), 'error');
+    console.error('Échec de création du dossier', err);
+    var detail = (err && err.message) ? err.message : (err && err.details) ? JSON.stringify(err.details) : String(err);
+    showToast('Erreur lors de la création du dossier : ' + detail, 'error');
   } finally {
     submitBtn.disabled = false;
   }
