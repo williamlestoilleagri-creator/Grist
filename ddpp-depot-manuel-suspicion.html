@@ -16,24 +16,28 @@
   *{box-sizing:border-box;}
   html,body{height:100%;margin:0;}
   body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:13.5px;line-height:1.45;}
-  .app{max-width:760px;margin:0 auto;padding:16px 16px 40px;}
+  .app{max-width:900px;margin:0 auto;padding:16px 16px 40px;}
   h1{font-size:17px;margin:0 0 2px;}
   .sub{color:var(--ink-soft);font-size:12px;margin-bottom:16px;}
   .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;box-shadow:var(--shadow);}
   .card h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-faint);margin:0 0 10px;}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;}
+  .card h3{font-size:11.5px;font-weight:700;color:var(--primary);margin:14px 0 8px;padding-top:10px;border-top:1px dashed var(--border);}
+  .card h3:first-of-type{border-top:none;padding-top:0;margin-top:0;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;}
   .field{display:flex;flex-direction:column;gap:4px;}
   .field.span2{grid-column:span 2;}
+  .field.checkbox{flex-direction:row;align-items:center;gap:7px;}
   label{font-size:11px;font-weight:600;color:var(--ink-soft);}
+  .field.checkbox label{font-size:12.5px;font-weight:500;color:var(--ink);}
   input[type="text"],input[type="tel"],input[type="email"],input[type="date"],input[type="number"],select,textarea{
-    font-family:inherit;font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:7px;background:#FCFCFB;outline:none;
+    font-family:inherit;font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:7px;background:#FCFCFB;outline:none;width:100%;
   }
   input:focus,select:focus,textarea:focus{border-color:var(--primary);background:#fff;}
   textarea{resize:vertical;min-height:56px;}
   .choice-list{display:flex;flex-wrap:wrap;gap:6px;}
   .choice-list label{display:flex;align-items:center;gap:5px;font-weight:400;font-size:12.5px;color:var(--ink);
     background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:5px 10px;cursor:pointer;}
-  .choice-list input{margin:0;}
+  .choice-list input{width:auto;margin:0;}
   .required::after{content:' *';color:var(--accent);}
   .actions{display:flex;justify-content:flex-end;gap:10px;margin-top:6px;}
   .btn{border:none;border-radius:7px;padding:9px 16px;font-weight:600;cursor:pointer;font-size:13px;}
@@ -41,51 +45,108 @@
   .btn-primary:disabled{opacity:.5;cursor:default;}
   .btn-primary:not(:disabled):hover{filter:brightness(1.12);}
   .btn-ghost{background:transparent;color:var(--ink-soft);border:1px solid var(--border);}
+  .btn-small{padding:5px 10px;font-size:11.5px;}
   .toast{font-size:12.5px;padding:9px 12px;border-radius:7px;margin-top:8px;display:none;}
   .toast.show{display:block;}
   .toast.success{background:var(--success-soft);color:var(--success);}
   .toast.error{background:var(--accent-soft);color:var(--accent);}
   .hint{font-size:11px;color:var(--ink-faint);margin-top:2px;}
   .banner{background:var(--primary-soft);color:var(--primary);border-radius:8px;padding:10px 12px;font-size:12px;margin-bottom:14px;}
+  .commune-field{position:relative;}
+  .commune-picked{font-size:12px;color:var(--success);margin-top:3px;}
+  .commune-suggestions{
+    position:absolute;left:0;right:0;top:calc(100% + 3px);z-index:50;background:#fff;border:1px solid var(--border);
+    border-radius:8px;box-shadow:var(--shadow);max-height:220px;overflow-y:auto;display:none;
+  }
+  .commune-suggestions.open{display:block;}
+  .commune-suggestion{padding:7px 10px;font-size:12.5px;cursor:pointer;border-bottom:1px solid #F0EFE9;}
+  .commune-suggestion:last-child{border-bottom:none;}
+  .commune-suggestion:hover{background:var(--primary-soft);}
+  .prelevements{display:flex;flex-direction:column;gap:10px;}
+  .prelevement-row{border:1px solid var(--border);border-radius:8px;padding:10px;background:var(--bg);}
+  .prelevement-row .grid{margin-bottom:6px;}
+  .prelevement-row .row-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+  .prelevement-row .row-head span{font-size:11.5px;font-weight:700;color:var(--ink-soft);}
 </style>
 </head>
 <body>
 <div class="app">
   <h1>Déclaration d'une suspicion reçue hors Démarches Simplifiées</h1>
-  <div class="sub">À utiliser uniquement lorsque le vétérinaire a transmis sa déclaration par un autre canal (papier, mail). Le dossier créé rejoint le tableau des suspicions au même titre qu'un dépôt DN.</div>
+  <div class="sub">À utiliser uniquement lorsque le vétérinaire a transmis sa déclaration par un autre canal (papier, mail). Reproduit les mêmes champs que le formulaire DN synchronisé (dossier, vétérinaire, élevage, suspicion, prélèvements).</div>
   <div class="banner">Numéro de dossier généré automatiquement au format <code>MANUEL-AAAAMMJJ-XXXX</code> pour ne jamais entrer en collision avec un numéro Démarches Simplifiées.</div>
 
   <form id="form">
     <div class="card">
-      <h2>Vétérinaire déclarant</h2>
+      <h2>Identité du demandeur (personne qui a transmis le formulaire papier)</h2>
       <div class="grid">
         <div class="field"><label>Civilité</label>
           <select id="civilite"><option value="Madame">Madame</option><option value="Monsieur">Monsieur</option></select></div>
         <div class="field"><label class="required">Nom</label><input type="text" id="nom" required></div>
         <div class="field"><label class="required">Prénom</label><input type="text" id="prenom" required></div>
         <div class="field"><label>Email</label><input type="email" id="email"></div>
-        <div class="field"><label>Téléphone</label><input type="tel" id="tel"></div>
-        <div class="field"><label>N° ordinal du vétérinaire</label><input type="text" id="ordre"></div>
-        <div class="field span2"><label>Cabinet vétérinaire</label><input type="text" id="cabinet"></div>
       </div>
     </div>
 
     <div class="card">
-      <h2>Élevage</h2>
+      <h2>Informations relatives au vétérinaire déclarant la suspicion</h2>
       <div class="grid">
-        <div class="field span2"><label class="required">Nom / raison sociale de l'élevage</label><input type="text" id="elevageNom" required></div>
-        <div class="field"><label>N° de l'élevage</label><input type="number" id="elevageNum"></div>
-        <div class="field"><label>Département</label><input type="text" id="dept" placeholder="ex. 63" maxlength="3"></div>
-        <div class="field span2"><label class="required">Commune</label><input type="text" id="commune" required></div>
+        <div class="field"><label>Numéro ordinal du vétérinaire</label><input type="text" id="ordre"></div>
+        <div class="field"><label>Nom du cabinet vétérinaire</label><input type="text" id="cabinet"></div>
+        <div class="field"><label>Adresse mail du vétérinaire</label><input type="email" id="vetEmail"></div>
+        <div class="field"><label>Numéro de téléphone du vétérinaire</label><input type="tel" id="tel"></div>
+        <div class="field"><label>Numéro ordinal de votre DPE</label><input type="text" id="dpe"></div>
+        <div class="field checkbox"><input type="checkbox" id="vetSanitaire"><label for="vetSanitaire">Êtes-vous le vétérinaire sanitaire de l'élevage suspect ?</label></div>
+        <div class="field"><label>Distance aller/retour entre l'élevage et le cabinet (km)</label><input type="number" step="0.1" id="distance"></div>
+        <div class="field"><label>Puissance fiscale du véhicule utilisé pour le déplacement</label><input type="number" step="1" id="cv"></div>
       </div>
     </div>
 
     <div class="card">
-      <h2>Signalement</h2>
+      <h2>Informations relatives à l'élevage suspect</h2>
+      <div class="grid">
+        <div class="field span2"><label class="required">Nom/raison sociale de l'élevage</label><input type="text" id="elevageNom" required></div>
+        <div class="field"><label>Numéro de l'élevage</label><input type="number" id="elevageNum"></div>
+      </div>
+      <div class="grid" style="margin-top:10px;">
+        <div class="field span2 commune-field">
+          <label class="required">Commune de l'élevage</label>
+          <input type="text" id="communeSearch" placeholder="Tapez le nom de la commune…" autocomplete="off" required>
+          <div class="commune-suggestions" id="communeSuggestions"></div>
+          <div class="commune-picked" id="communePicked"></div>
+        </div>
+        <div class="field"><label>Code postal (facultatif)</label><input type="text" id="codePostal"></div>
+      </div>
+
+      <h3>Vaccination FCO3</h3>
+      <div class="grid">
+        <div class="field"><label>Élevage vacciné contre la FCO 3 ?</label><select id="fco3Statut"></select></div>
+        <div class="field"><label>Nom du vaccin</label><input type="text" id="fco3Nom"></div>
+        <div class="field"><label>Date de la primo-vaccination</label><input type="date" id="fco3Primo"></div>
+        <div class="field"><label>Date du rappel</label><input type="date" id="fco3Rappel"></div>
+      </div>
+
+      <h3>Vaccination FCO8</h3>
+      <div class="grid">
+        <div class="field"><label>Élevage vacciné contre la FCO 8 ?</label><select id="fco8Statut"></select></div>
+        <div class="field"><label>Nom du vaccin</label><input type="text" id="fco8Nom"></div>
+        <div class="field"><label>Date de la primo-vaccination</label><input type="date" id="fco8Primo"></div>
+        <div class="field"><label>Date du rappel</label><input type="date" id="fco8Rappel"></div>
+      </div>
+
+      <h3>Vaccination MHE</h3>
+      <div class="grid">
+        <div class="field"><label>Élevage vacciné contre la MHE ?</label><select id="mheStatut"></select></div>
+        <div class="field"><label>Nom du vaccin</label><input type="text" id="mheNom"></div>
+        <div class="field"><label>Date de la primo-vaccination</label><input type="date" id="mhePrimo"></div>
+        <div class="field"><label>Date du rappel</label><input type="date" id="mheRappel"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Informations relatives à la suspicion</h2>
       <div class="grid">
         <div class="field"><label class="required">Date de la suspicion</label><input type="date" id="dateSuspicion" required></div>
-        <div class="field"><label>Date du/des prélèvement(s)</label><input type="date" id="datePrelevement"></div>
-        <div class="field"><label>Laboratoire destinataire</label><select id="laboratoire"></select></div>
+        <div class="field"><label>Date de la visite</label><input type="date" id="dateVisite"></div>
       </div>
       <div class="field" style="margin-top:10px;">
         <label>Motif de signalement</label>
@@ -98,6 +159,20 @@
       <div class="field" style="margin-top:10px;">
         <label>Précisez les autres signes cliniques constatés</label>
         <textarea id="autresSignes"></textarea>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Informations relatives aux prélèvements</h2>
+      <div class="grid">
+        <div class="field"><label>Date du ou des prélèvement(s)</label><input type="date" id="datePrelevement"></div>
+        <div class="field"><label>Laboratoire destinataire des prélèvements</label><select id="laboratoire"></select></div>
+        <div class="field"><label>Numéro ordinal de votre DPA</label><input type="text" id="dpa"></div>
+        <div class="field"><label>Nombre de kilomètres parcourus aller/retour</label><input type="number" step="0.1" id="km"></div>
+      </div>
+      <div class="prelevements" id="prelevements" style="margin-top:12px;"></div>
+      <div class="actions" style="justify-content:flex-start;margin-top:10px;">
+        <button type="button" class="btn btn-ghost btn-small" id="addPrelevement">+ Ajouter un prélèvement</button>
       </div>
     </div>
 
@@ -114,22 +189,28 @@
 'use strict';
 var $ = function(id){ return document.getElementById(id); };
 function esc(s){ return (s==null?'':s.toString()).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function normalize(s){ return (s||'').toString().normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); }
 
 grist.ready({ requiredAccess: 'full' });
 
+// ---------- métadonnées (choix des colonnes Choice / ChoiceList) ----------
+var metaCache = null;
+async function loadMeta(){
+  if (metaCache) return metaCache;
+  var tables = await grist.docApi.fetchTable('_grist_Tables');
+  var cols = await grist.docApi.fetchTable('_grist_Tables_column');
+  metaCache = { tables: tables, cols: cols };
+  return metaCache;
+}
 async function getColumnChoices(tableId, colId){
   try {
-    var tables = await grist.docApi.fetchTable('_grist_Tables');
-    var idx = tables.tableId.indexOf(tableId);
+    var meta = await loadMeta();
+    var idx = meta.tables.tableId.indexOf(tableId);
     if (idx === -1) return [];
-    var tableRef = tables.id[idx];
-    var cols = await grist.docApi.fetchTable('_grist_Tables_column');
-    for (var i = 0; i < cols.id.length; i++){
-      if (cols.parentId[i] === tableRef && cols.colId[i] === colId){
-        try {
-          var opts = JSON.parse(cols.widgetOptions[i] || '{}');
-          return opts.choices || [];
-        } catch(e){ return []; }
+    var tableRef = meta.tables.id[idx];
+    for (var i = 0; i < meta.cols.id.length; i++){
+      if (meta.cols.parentId[i] === tableRef && meta.cols.colId[i] === colId){
+        try { return JSON.parse(meta.cols.widgetOptions[i] || '{}').choices || []; } catch(e){ return []; }
       }
     }
   } catch(e){ /* ignore */ }
@@ -138,30 +219,161 @@ async function getColumnChoices(tableId, colId){
 
 var FALLBACK_MOTIFS = ['Signes cliniques évocateurs FCO', 'Signes cliniques évocateurs MHE', 'Mortalité inexpliquée', 'Autre'];
 var FALLBACK_SIGNES = ['Hyperthermie', 'Œdème de la face/tête', 'Ulcérations buccales', 'Boiteries', 'Avortements', 'Mortalité', 'Autres'];
-var FALLBACK_LABOS = [];
+var FALLBACK_VACCIN_STATUT = ['Oui', 'Non'];
+var FALLBACK_ESPECES = ['Bovins', 'Ovins', 'Caprins', 'Cervidés'];
+var FALLBACK_TYPES_PRELEVEMENT = ['Sang (tube EDTA)', 'Rate'];
+var VACCIN_ANIMAL_OPTIONS = ['Oui', 'Non', 'Inconnu'];
 
 function renderChoiceList(container, choices, name){
-  container.innerHTML = choices.map(function(c, i){
-    return '<label><input type="checkbox" name="' + name + '" value="' + esc(c) + '"> ' + esc(c) + '</label>';
+  container.innerHTML = choices.map(function(c){
+    return '<label><input type="checkbox" name="' + esc(name) + '" value="' + esc(c) + '"> ' + esc(c) + '</label>';
   }).join('');
 }
 function getCheckedValues(container){
   return Array.prototype.map.call(container.querySelectorAll('input:checked'), function(el){ return el.value; });
+}
+function fillSelect(sel, choices, includeEmpty){
+  sel.innerHTML = (includeEmpty !== false ? '<option value="">—</option>' : '') + choices.map(function(c){
+    return '<option value="' + esc(c) + '">' + esc(c) + '</option>';
+  }).join('');
 }
 
 async function initChoices(){
   var motifs = await getColumnChoices('Demarche_150091_champs', 'motif_de_signalement');
   var signes = await getColumnChoices('Demarche_150091_champs', 'signes_cliniques_constates');
   var labos = await getColumnChoices('Demarche_150091_champs', 'laboratoire_destinataire_des_prelevements');
+  var fco3 = await getColumnChoices('Demarche_150091_champs', 'elevage_vaccine_contre_la_fco_3');
+  var fco8 = await getColumnChoices('Demarche_150091_champs', 'elevage_vaccine_contre_la_fco_8');
+  var mhe = await getColumnChoices('Demarche_150091_champs', 'elevage_vaccine_contre_la_mhe');
+
   renderChoiceList($('motifList'), motifs.length ? motifs : FALLBACK_MOTIFS, 'motif');
   renderChoiceList($('signesList'), signes.length ? signes : FALLBACK_SIGNES, 'signes');
-  var laboSel = $('laboratoire');
-  var laboOptions = labos.length ? labos : FALLBACK_LABOS;
-  laboSel.innerHTML = '<option value="">—</option>' + laboOptions.map(function(l){
-    return '<option value="' + esc(l) + '">' + esc(l) + '</option>';
+  fillSelect($('laboratoire'), labos, true);
+  fillSelect($('fco3Statut'), fco3.length ? fco3 : FALLBACK_VACCIN_STATUT, true);
+  fillSelect($('fco8Statut'), fco8.length ? fco8 : FALLBACK_VACCIN_STATUT, true);
+  fillSelect($('mheStatut'), mhe.length ? mhe : FALLBACK_VACCIN_STATUT, true);
+
+  especeChoices = await getColumnChoices('Demarche_150091_repetable_prelevement_realise', 'espece_animale_prelevee');
+  if (!especeChoices.length) especeChoices = FALLBACK_ESPECES;
+  typePrelevementChoices = await getColumnChoices('Demarche_150091_repetable_prelevement_realise', 'type_de_prelevement');
+  if (!typePrelevementChoices.length) typePrelevementChoices = FALLBACK_TYPES_PRELEVEMENT;
+
+  renderPrelevements();
+}
+
+// ---------- recherche de commune (table Liste_Communes) ----------
+var communes = [];
+var selectedCommune = null;
+async function loadCommunes(){
+  var t = await grist.docApi.fetchTable('Liste_Communes');
+  var out = [];
+  for (var i = 0; i < t.id.length; i++){
+    out.push({ id: t.id[i], libelle: t.LIBELLE[i], dep: t.DEP[i], insee: t.insee_com[i] });
+  }
+  communes = out;
+}
+var communeSearchInput = $('communeSearch');
+var communeSuggestionsEl = $('communeSuggestions');
+var communePickedEl = $('communePicked');
+var communeDebounce = null;
+communeSearchInput.addEventListener('input', function(){
+  selectedCommune = null;
+  communePickedEl.textContent = '';
+  var q = normalize(communeSearchInput.value);
+  clearTimeout(communeDebounce);
+  if (q.length < 2){ closeCommuneSuggestions(); return; }
+  communeDebounce = setTimeout(function(){
+    var matches = [];
+    for (var i = 0; i < communes.length && matches.length < 8; i++){
+      var c = communes[i];
+      if (normalize(c.libelle).indexOf(q) !== -1){ matches.push(c); }
+    }
+    openCommuneSuggestions(matches);
+  }, 120);
+});
+function openCommuneSuggestions(list){
+  if (!list.length){ closeCommuneSuggestions(); return; }
+  communeSuggestionsEl.innerHTML = list.map(function(c, i){
+    return '<div class="commune-suggestion" data-idx="' + i + '">' + esc(c.libelle) + ' (' + esc(c.dep) + ')</div>';
+  }).join('');
+  communeSuggestionsEl.classList.add('open');
+  communeSuggestionsEl._matches = list;
+}
+function closeCommuneSuggestions(){
+  communeSuggestionsEl.classList.remove('open');
+  communeSuggestionsEl.innerHTML = '';
+}
+communeSuggestionsEl.addEventListener('mousedown', function(e){
+  var item = e.target.closest('.commune-suggestion');
+  if (!item) return;
+  e.preventDefault();
+  var c = communeSuggestionsEl._matches[parseInt(item.getAttribute('data-idx'), 10)];
+  selectedCommune = c;
+  communeSearchInput.value = c.libelle + ' (' + c.dep + ')';
+  communePickedEl.textContent = '✓ Commune associée (référence Liste_Communes #' + c.id + ', code INSEE ' + c.insee + ')';
+  closeCommuneSuggestions();
+});
+document.addEventListener('click', function(e){
+  if (!e.target.closest('.commune-field')) closeCommuneSuggestions();
+});
+
+// ---------- prélèvements répétables ----------
+var especeChoices = FALLBACK_ESPECES;
+var typePrelevementChoices = FALLBACK_TYPES_PRELEVEMENT;
+var prelevementRows = [{}];
+
+function renderPrelevements(){
+  var container = $('prelevements');
+  container.innerHTML = prelevementRows.map(function(row, i){
+    return '<div class="prelevement-row" data-idx="' + i + '">' +
+      '<div class="row-head"><span>Prélèvement ' + (i + 1) + '</span>' +
+        (prelevementRows.length > 1 ? '<button type="button" class="btn btn-ghost btn-small remove-prelevement">Retirer</button>' : '') +
+      '</div>' +
+      '<div class="grid">' +
+        '<div class="field"><label>Espèce animale prélevée</label><select class="p-espece">' + selectOptionsHtml(especeChoices, row.espece) + '</select></div>' +
+        '<div class="field"><label>N° d\'identification de l\'animal</label><input type="text" class="p-numAnimal" value="' + esc(row.numAnimal||'') + '"></div>' +
+        '<div class="field"><label>Type de prélèvement</label><select class="p-type">' + selectOptionsHtml(typePrelevementChoices, row.type) + '</select></div>' +
+        '<div class="field"><label>N° du prélèvement</label><input type="text" class="p-numPrelevement" value="' + esc(row.numPrelevement||'') + '"></div>' +
+        '<div class="field"><label>Animal vacciné contre la FCO ?</label><select class="p-vaccinFco">' + selectOptionsHtml(VACCIN_ANIMAL_OPTIONS, row.vaccinFco) + '</select></div>' +
+        '<div class="field"><label>Animal vacciné contre la MHE ?</label><select class="p-vaccinMhe">' + selectOptionsHtml(VACCIN_ANIMAL_OPTIONS, row.vaccinMhe) + '</select></div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  container.querySelectorAll('.remove-prelevement').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var idx = parseInt(btn.closest('.prelevement-row').getAttribute('data-idx'), 10);
+      collectPrelevements();
+      prelevementRows.splice(idx, 1);
+      renderPrelevements();
+    });
+  });
+}
+function selectOptionsHtml(choices, current){
+  return '<option value="">—</option>' + choices.map(function(c){
+    return '<option value="' + esc(c) + '" ' + (c === current ? 'selected' : '') + '>' + esc(c) + '</option>';
   }).join('');
 }
-initChoices();
+function collectPrelevements(){
+  var rows = Array.prototype.slice.call(document.querySelectorAll('.prelevement-row'));
+  prelevementRows = rows.map(function(row){
+    return {
+      espece: row.querySelector('.p-espece').value,
+      numAnimal: row.querySelector('.p-numAnimal').value.trim(),
+      type: row.querySelector('.p-type').value,
+      numPrelevement: row.querySelector('.p-numPrelevement').value.trim(),
+      vaccinFco: row.querySelector('.p-vaccinFco').value,
+      vaccinMhe: row.querySelector('.p-vaccinMhe').value
+    };
+  });
+}
+$('addPrelevement').addEventListener('click', function(){
+  collectPrelevements();
+  prelevementRows.push({});
+  renderPrelevements();
+});
+
+Promise.all([initChoices(), loadCommunes()]);
 
 function genDossierNumber(){
   var d = new Date();
@@ -181,15 +393,28 @@ function showToast(msg, kind){
   var t = $('toast');
   t.textContent = msg;
   t.className = 'toast show ' + kind;
-  setTimeout(function(){ t.classList.remove('show'); }, 5000);
+  setTimeout(function(){ t.classList.remove('show'); }, 6000);
 }
 
-$('resetBtn').addEventListener('click', function(){ $('form').reset(); });
+$('resetBtn').addEventListener('click', function(){
+  $('form').reset();
+  selectedCommune = null;
+  communePickedEl.textContent = '';
+  prelevementRows = [{}];
+  renderPrelevements();
+});
 
 $('form').addEventListener('submit', async function(e){
   e.preventDefault();
   var submitBtn = $('submitBtn');
+
+  if (!selectedCommune){
+    showToast('Veuillez sélectionner une commune dans la liste de suggestions.', 'error');
+    return;
+  }
+
   submitBtn.disabled = true;
+  collectPrelevements();
 
   try {
     var dossierNumber = genDossierNumber();
@@ -207,18 +432,42 @@ $('form').addEventListener('submit', async function(e){
       dossier_number: dossierNumber,
       numero_ordinal_du_veterinaire: $('ordre').value.trim(),
       numero_de_telephone_du_veterinaire: $('tel').value.trim(),
-      adresse_mail_du_veterinaire: $('email').value.trim(),
+      adresse_mail_du_veterinaire: $('vetEmail').value.trim(),
       nom_du_cabinet_veterinaire: $('cabinet').value.trim(),
+      numero_ordinal_de_votre_dpe: $('dpe').value.trim(),
+      etes_vous_le_veterinaire_sanitaire_de_l_elevage_suspect: $('vetSanitaire').checked,
+      distance_aller_retour_entre_l_elevage_et_le_cabinet: $('distance').value ? parseFloat($('distance').value) : null,
+      puissance_fiscale_du_vehicule_utilise_pour_le_deplacement: $('cv').value ? parseInt($('cv').value, 10) : null,
       nom_raison_sociale_de_l_elevage: $('elevageNom').value.trim(),
       numero_de_l_elevage: $('elevageNum').value ? parseInt($('elevageNum').value, 10) : null,
-      commune_de_l_elevage: $('commune').value.trim(),
-      commune_de_l_elevage_departement: $('dept').value.trim(),
+      commune_de_l_elevage: selectedCommune.libelle + ' (' + selectedCommune.dep + ')',
+      commune_de_l_elevage_nom: selectedCommune.libelle,
+      commune_de_l_elevage_code_postal: $('codePostal').value.trim(),
+      commune_de_l_elevage_departement: selectedCommune.dep,
+      commune_de_l_elevage_code_insee: String(selectedCommune.insee),
+      commune_de_l_elevage_code_departement: selectedCommune.dep,
+      Commune_de_l_elevage2: selectedCommune.id,
+      elevage_vaccine_contre_la_fco_3: $('fco3Statut').value,
+      nom_du_vaccin_contre_la_fco_3: $('fco3Nom').value.trim(),
+      date_de_la_primo_vaccination_fco_3: toGristDate($('fco3Primo').value),
+      date_du_rappel_fco_3: toGristDate($('fco3Rappel').value),
+      elevage_vaccine_contre_la_fco_8: $('fco8Statut').value,
+      nom_du_vaccin_contre_la_fco_8: $('fco8Nom').value.trim(),
+      date_de_la_primo_vaccination_fco_8: toGristDate($('fco8Primo').value),
+      date_du_rappel_fco_8: toGristDate($('fco8Rappel').value),
+      elevage_vaccine_contre_la_mhe: $('mheStatut').value,
+      nom_du_vaccin_contre_la_mhe: $('mheNom').value.trim(),
+      date_de_la_primo_vaccination_mhe: toGristDate($('mhePrimo').value),
+      date_du_rappel_mhe: toGristDate($('mheRappel').value),
       date_de_la_suspicion: toGristDate($('dateSuspicion').value),
-      date_du_ou_des_prelevement_s: toGristDate($('datePrelevement').value),
-      laboratoire_destinataire_des_prelevements: $('laboratoire').value,
+      date_de_la_visite: toGristDate($('dateVisite').value),
       motif_de_signalement: choiceListValue(getCheckedValues($('motifList'))),
       signes_cliniques_constates: choiceListValue(getCheckedValues($('signesList'))),
-      precisez_les_autres_signes_cliniques_constates: $('autresSignes').value.trim()
+      precisez_les_autres_signes_cliniques_constates: $('autresSignes').value.trim(),
+      date_du_ou_des_prelevement_s: toGristDate($('datePrelevement').value),
+      laboratoire_destinataire_des_prelevements: $('laboratoire').value,
+      numero_ordinal_de_votre_dpa: $('dpa').value.trim(),
+      nombre_de_kilometres_parcourus_aller_retour: $('km').value ? parseFloat($('km').value) : null
     };
 
     var demandeurFields = {
@@ -232,15 +481,34 @@ $('form').addEventListener('submit', async function(e){
       connection_usager: 'saisie_manuelle_DDPP'
     };
 
-    await grist.docApi.applyUserActions([
+    var actions = [
       [ 'AddRecord', 'Demarche_150091_dossiers', null, dossierFields ],
       [ 'AddRecord', 'Demarche_150091_champs', null, champsFields ],
       [ 'AddRecord', 'Demarche_150091_demandeurs', null, demandeurFields ]
-    ]);
+    ];
 
-    showToast('Dossier ' + dossierNumber + ' créé et ajouté au tableau des suspicions.', 'success');
+    prelevementRows.forEach(function(row){
+      var hasData = row.espece || row.numAnimal || row.type || row.numPrelevement;
+      if (!hasData) return;
+      actions.push([ 'AddRecord', 'Demarche_150091_repetable_prelevement_realise', null, {
+        dossier_number: dossierNumber,
+        espece_animale_prelevee: row.espece || '',
+        numero_d_identification_de_l_animal_preleve: row.numAnimal || '',
+        type_de_prelevement: row.type || '',
+        numero_du_prelevement: row.numPrelevement || '',
+        animal_vaccine_contre_la_fco: row.vaccinFco || '',
+        animal_vaccine_contre_la_mhe: row.vaccinMhe || ''
+      } ]);
+    });
+
+    await grist.docApi.applyUserActions(actions);
+
+    showToast('Dossier ' + dossierNumber + ' créé (' + (actions.length - 3) + ' prélèvement(s)) et ajouté au tableau des suspicions.', 'success');
     $('form').reset();
-    initChoices();
+    selectedCommune = null;
+    communePickedEl.textContent = '';
+    prelevementRows = [{}];
+    renderPrelevements();
   } catch(err){
     console.error('Échec de création du dossier', err);
     var detail = (err && err.message) ? err.message : (err && err.details) ? JSON.stringify(err.details) : String(err);
