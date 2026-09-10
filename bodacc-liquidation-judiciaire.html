@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-scheme="system">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vérification BODACC — Liquidation judiciaire</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.13.1/dist/dsfr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.13.1/dist/utility/icons/icons.min.css">
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+
+<style>
+  /* Ajustements pour un rendu correct dans le panneau étroit d'un widget Grist,
+     sans dénaturer les composants DSFR (on ne redéfinit que la mise en page). */
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--background-default-grey, #fff); }
+  .wrap { padding: 1rem 1rem 2rem; max-width: 720px; margin: 0 auto; }
+  .fr-header__body-row, .fr-header__brand-top { display: none; } /* on n'utilise pas le header complet */
+
+  .mini-header {
+    background: var(--background-action-high-blue-france, #000091);
+    color: #fff;
+    padding: 0.9rem 1rem;
+  }
+  .mini-header h1 { font-size: 1.1rem; margin: 0; line-height: 1.3; }
+  .mini-header p { font-size: 0.8rem; margin: 0.15rem 0 0; opacity: .85; }
+
+  .card {
+    border: 1px solid var(--border-default-grey, #ddd);
+    border-radius: 6px;
+    padding: 1rem;
+    margin-top: 1rem;
+    background: var(--background-default-grey, #fff);
+  }
+  .card h2 { font-size: 0.95rem; margin: 0 0 0.75rem; display:flex; align-items:center; gap:.4rem; }
+  .siret-line { font-family: monospace; font-size: 1.05rem; letter-spacing: .03em; }
+  .siret-line .siren { color: var(--text-mention-grey, #666); }
+  .muted { color: var(--text-mention-grey, #666); font-size: 0.82rem; }
+  .row-gap { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+  .row-between { display: flex; gap: .5rem; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  .stack { display: flex; flex-direction: column; gap: .6rem; }
+
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; background: #ccc; }
+  .status-dot.ok { background: #18753C; }
+
+  table.fr-table td, table.fr-table th { font-size: 0.82rem; }
+  .raw-json { font-family: monospace; font-size: 0.72rem; white-space: pre-wrap; word-break: break-word;
+    background: var(--background-alt-grey, #f6f6f6); padding: .6rem; border-radius: 4px; max-height: 240px; overflow: auto; }
+
+  .progress-bar { height: 6px; background: var(--background-alt-grey, #eee); border-radius: 3px; overflow: hidden; }
+  .progress-bar > div { height: 100%; background: var(--background-action-high-blue-france, #000091); transition: width .2s; }
+
+  .fr-badge { white-space: nowrap; }
+  footer.app-footer { margin-top: 1.5rem; padding-top: .75rem; border-top: 1px solid var(--border-default-grey, #ddd); }
+  footer.app-footer p { font-size: 0.72rem; color: var(--text-mention-grey, #666); line-height: 1.5; }
+
+  .config-warning { margin-top: 1rem; }
+</style>
+</head>
+<body>
+
+<div class="mini-header">
+  <h1>Vérification BODACC — Liquidation judiciaire</h1>
+  <p>Contrôle automatique du statut d'une entreprise (SIRET) via les annonces légales BODACC</p>
+</div>
+
+<div class="wrap">
+
+  <!-- Etat de la connexion Grist -->
+  <div class="row-gap muted" style="margin-top:.75rem;">
+    <span class="status-dot" id="gristDot"></span>
+    <span id="gristState">En attente de Grist…</span>
+  </div>
+
+  <!-- Avertissement de configuration si la colonne SIRET n'est pas mappée -->
+  <div class="fr-alert fr-alert--warning fr-alert--sm config-warning" id="configWarning" hidden>
+    <p>Sélectionne d'abord une table puis, dans le panneau « Colonnes » du widget, associe la
+      <strong>Colonne SIRET</strong> à la colonne de ta table qui contient le SIRET (14 chiffres).</p>
+  </div>
+
+  <!-- Résultat pour la ligne sélectionnée -->
+  <div class="card" id="selCard">
+    <h2><span class="fr-icon-file-text-line" aria-hidden="true"></span> Ligne sélectionnée</h2>
+    <div class="stack" id="selBody">
+      <p class="muted">Sélectionne une ligne dans la table pour lancer la vérification.</p>
+    </div>
+  </div>
+
+  <!-- Vérification par lot -->
+  <div class="card">
+    <h2><span class="fr-icon-list-check-2" aria-hidden="true"></span> Vérification de toute la table</h2>
+    <div class="stack">
+      <p class="muted">Contrôle chaque ligne visible et écrit le résultat dans les colonnes optionnelles
+        mappées (statut, blocage, date, détail). Les résultats sont mis en cache 24&nbsp;h par SIREN.</p>
+      <div class="row-between">
+        <button class="fr-btn fr-btn--secondary fr-btn--sm" id="checkAllBtn">Vérifier toutes les lignes</button>
+        <label class="fr-toggle fr-toggle--label-left" style="margin:0;">
+          <input type="checkbox" id="autoWriteToggle" class="fr-toggle__input" checked>
+          <label class="fr-toggle__label" for="autoWriteToggle">Écriture auto. des résultats</label>
+        </label>
+      </div>
+      <div class="progress-bar" id="progressBar" hidden><div style="width:0%"></div></div>
+      <p class="muted" id="progressText"></p>
+    </div>
+  </div>
+
+  <!-- Test manuel, sans passer par la table -->
+  <details class="card" id="manualTestDetails">
+    <summary style="cursor:pointer;font-weight:600;font-size:.9rem;">Tester un SIRET manuellement</summary>
+    <div class="stack" style="margin-top:.75rem;">
+      <div class="fr-input-group" style="margin:0;">
+        <label class="fr-label" for="manualSiret">SIRET (14 chiffres)</label>
+        <input class="fr-input" type="text" id="manualSiret" inputmode="numeric" placeholder="Ex. 55208131766018" maxlength="14">
+      </div>
+      <button class="fr-btn fr-btn--sm" id="manualCheckBtn">Vérifier</button>
+      <div id="manualResult"></div>
+    </div>
+  </details>
+
+  <!-- Aide : comment réellement bloquer le dépôt -->
+  <details class="card">
+    <summary style="cursor:pointer;font-weight:600;font-size:.9rem;">
+      Comment bloquer réellement le dépôt d'un dossier (Règles d'accès Grist)
+    </summary>
+    <div class="stack" style="margin-top:.75rem;font-size:.85rem;line-height:1.6;">
+      <p>Ce widget ne peut pas, à lui seul, empêcher l'enregistrement d'une ligne : c'est un panneau
+        d'affichage. Pour un blocage réel, il écrit un statut dans deux colonnes de ta table (à créer et
+        mapper ci-dessus dans le panneau « Colonnes » du widget), que tu combines ensuite avec une
+        <strong>Règle d'accès</strong> Grist :</p>
+      <ol style="margin:0;padding-left:1.2rem;">
+        <li>Crée dans ta table deux colonnes : une colonne <em>Texte</em> (ex. <code>Statut_BODACC</code>)
+          et une colonne <em>Bascule/Oui-Non</em> (ex. <code>Bloque_Depot</code>).</li>
+        <li>Dans le panneau « Colonnes » de ce widget, mappe <strong>Statut BODACC</strong> et
+          <strong>Blocage liquidation</strong> sur ces deux colonnes.</li>
+        <li>Ouvre <strong>Règles d'accès</strong> (icône dans le menu de gauche du document, ou
+          Paramètres du document).</li>
+        <li>Ajoute une règle sur cette table : condition <code>newRec.Bloque_Depot</code>,
+          action <strong>Refuser</strong> pour les permissions <em>Créer</em> et <em>Modifier</em>.</li>
+        <li>Ajoute si besoin une règle « Autoriser » au-dessus pour un rôle « Admin/Dérogation »,
+          afin de garder une porte de sortie manuelle et tracée.</li>
+        <li>Teste avec un SIRET réellement en liquidation avant la mise en production.</li>
+      </ol>
+      <p class="muted">Important : BODACC ne couvre que les annonces judiciaires publiées — il peut y
+        avoir un décalage de quelques jours, et certaines procédures très récentes peuvent ne pas encore
+        apparaître. Ce contrôle est une aide à la décision, pas une preuve juridique absolue ; garde une
+        vérification humaine possible.</p>
+    </div>
+  </details>
+
+  <footer class="app-footer">
+    <p>
+      Source des données : Bulletin officiel des annonces civiles et commerciales (BODACC),
+      jeu de données « annonces-commerciales », diffusé par la DILA sous
+      <a href="https://www.etalab.gouv.fr/licence-ouverte-open-licence/" target="_blank" rel="noopener">Licence Ouverte / Open Licence Etalab 2.0</a>.
+      Widget non affilié à la DILA ni à bodacc.fr.
+    </p>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ============================================================
+  // Constantes
+  // ============================================================
+  var BODACC_API = 'https://bodacc-datadila.opendatasoft.com/api/records/1.0/search/';
+  var BODACC_DATASET = 'annonces-commerciales';
+  var BODACC_EXPLORE_URL = 'https://www.bodacc.fr/explore/dataset/annonces-commerciales/?sort=-dateparution&q=';
+  var CACHE_PREFIX = 'bodacc-siren-cache:';
+  var CACHE_TTL_MS = 24 * 3600 * 1000;
+
+  var RE_LIQUIDATION = /liquidation\s+judiciaire/i;
+  var RE_CLOTURE = /(cl[oô]ture)[^.]{0,60}(liquidation|insuffisance d.actif|extinction du passif)/i;
+  var RE_REDRESSEMENT = /redressement\s+judiciaire/i;
+  var RE_RADIATION = /radiation/i;
+  var RE_SAUVEGARDE = /sauvegarde/i;
+
+  // ============================================================
+  // État
+  // ============================================================
+  var state = {
+    colMap: null,          // mapping Grist -> id réel des colonnes
+    records: [],           // toutes les lignes visibles (mappées)
+    selectedId: null,
+    checking: false
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ============================================================
+  // Cache localStorage (best-effort)
+  // ============================================================
+  function cacheGet(siren) {
+    try {
+      var raw = localStorage.getItem(CACHE_PREFIX + siren);
+      if (!raw) return null;
+      var v = JSON.parse(raw);
+      if (!v || (Date.now() - v.t) > CACHE_TTL_MS) return null;
+      return v.data;
+    } catch (e) { return null; }
+  }
+  function cacheSet(siren, data) {
+    try { localStorage.setItem(CACHE_PREFIX + siren, JSON.stringify({ t: Date.now(), data: data })); }
+    catch (e) { /* stockage indisponible : tant pis */ }
+  }
+
+  // ============================================================
+  // SIRET / SIREN
+  // ============================================================
+  function cleanDigits(s) { return (s || '').toString().replace(/[^0-9]/g, ''); }
+
+  function luhnValid(numStr) {
+    var sum = 0;
+    var digits = numStr.split('').reverse().map(Number);
+    for (var i = 0; i < digits.length; i++) {
+      var d = digits[i];
+      if (i % 2 === 1) { d *= 2; if (d > 9) d -= 9; }
+      sum += d;
+    }
+    return sum % 10 === 0;
+  }
+
+  function formatSiret(siret) {
+    return siret.slice(0, 3) + ' ' + siret.slice(3, 6) + ' ' + siret.slice(6, 9) + ' ' + siret.slice(9);
+  }
+
+  // ============================================================
+  // Appel API BODACC + analyse
+  // ============================================================
+  function recordConcernsSiren(record, siren) {
+    var f = record && record.fields;
+    if (!f) return false;
+    var reg = f.registre;
+    if (Array.isArray(reg)) return reg.indexOf(siren) !== -1;
+    if (typeof reg === 'string') return reg.split(/[,;\s]+/).indexOf(siren) !== -1;
+    return false;
+  }
+
+  function parseJugement(f) {
+    var j = f.jugement;
+    if (!j) return null;
+    if (typeof j === 'string') {
+      try { return JSON.parse(j); } catch (e) { return { nature: j }; }
+    }
+    return j;
+  }
+
+  function tagRecord(record) {
+    var f = record.fields || {};
+    var jugement = parseJugement(f);
+    var haystack = JSON.stringify(f);
+
+    if (RE_CLOTURE.test(haystack)) return 'liquidation_cloture';
+    if (RE_LIQUIDATION.test(haystack)) return 'liquidation_ouverture';
+    if (RE_REDRESSEMENT.test(haystack)) return 'redressement';
+    if (RE_SAUVEGARDE.test(haystack)) return 'sauvegarde';
+    if (RE_RADIATION.test(haystack)) return 'radiation';
+    return 'autre';
+  }
+
+  function recordSummary(record) {
+    var f = record.fields || {};
+    var jugement = parseJugement(f);
+    return {
+      date: f.dateparution || (jugement && jugement.date) || '',
+      nature: (jugement && (jugement.nature || jugement.famillejugement)) || f.familleavis_lib || f.typeavis_lib || '',
+      tribunal: f.tribunal || '',
+      departement: f.numerodepartement || '',
+      commercant: f.commercant || '',
+      tag: tagRecord(record),
+      raw: f
+    };
+  }
+
+  // Détermine le statut final à partir des annonces triées chronologiquement.
+  function computeStatus(summaries) {
+    var sorted = summaries.slice().sort(function (a, b) {
+      return (a.date || '').localeCompare(b.date || '');
+    });
+
+    var lastRelevant = null; // dernière annonce liquidation (ouverture ou clôture)
+    var lastRedressement = null;
+    var lastRadiation = null;
+
+    sorted.forEach(function (s) {
+      if (s.tag === 'liquidation_ouverture' || s.tag === 'liquidation_cloture') lastRelevant = s;
+      if (s.tag === 'redressement') lastRedressement = s;
+      if (s.tag === 'radiation') lastRadiation = s;
+    });
+
+    if (lastRelevant) {
+      return {
+        code: lastRelevant.tag === 'liquidation_cloture' ? 'CLOTUREE' : 'EN_COURS',
+        label: lastRelevant.tag === 'liquidation_cloture'
+          ? 'Liquidation judiciaire (clôturée)'
+          : 'Liquidation judiciaire en cours',
+        bloque: true,
+        detail: lastRelevant
+      };
+    }
+    if (lastRedressement) {
+      return { code: 'REDRESSEMENT', label: 'Redressement judiciaire (sans liquidation détectée)', bloque: false, detail: lastRedressement };
+    }
+    if (lastRadiation) {
+      return { code: 'RADIEE', label: 'Radiation détectée (à vérifier)', bloque: false, detail: lastRadiation };
+    }
+    return { code: 'AUCUNE', label: 'Aucune procédure collective détectée dans BODACC', bloque: false, detail: null };
+  }
+
+  async function checkSiren(siren) {
+    var cached = cacheGet(siren);
+    if (cached) return cached;
+
+    var url = BODACC_API + '?dataset=' + BODACC_DATASET +
+      '&rows=100&sort=-dateparution&q=' + encodeURIComponent('registre:"' + siren + '"');
+
+    var res = await fetch(url);
+    if (!res.ok) throw new Error('Erreur BODACC (HTTP ' + res.status + ')');
+    var data = await res.json();
+    var records = (data.records || []).filter(function (r) { return recordConcernsSiren(r, siren); });
+    var summaries = records.map(recordSummary);
+    var status = computeStatus(summaries);
+
+    var result = { siren: siren, status: status, summaries: summaries, checkedAt: Date.now() };
+    cacheSet(siren, result);
+    return result;
+  }
+
+  async function checkSiret(siretRaw) {
+    var siret = cleanDigits(siretRaw);
+    if (!siret) return { state: 'empty' };
+    if (siret.length !== 14) return { state: 'invalid', siret: siret };
+    var validKey = luhnValid(siret);
+    var siren = siret.slice(0, 9);
+    var bodacc = await checkSiren(siren);
+    return { state: 'ok', siret: siret, siren: siren, validKey: validKey, bodacc: bodacc };
+  }
+
+  // ============================================================
+  // Rendu
+  // ============================================================
+  function escapeHtml(s) {
+    return (s || '').toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function badgeClassFor(code) {
+    if (code === 'EN_COURS' || code === 'CLOTUREE') return 'fr-badge--error';
+    if (code === 'REDRESSEMENT' || code === 'RADIEE') return 'fr-badge--warning';
+    if (code === 'AUCUNE') return 'fr-badge--success';
+    return 'fr-badge--info';
+  }
+  function alertClassFor(code) {
+    if (code === 'EN_COURS' || code === 'CLOTUREE') return 'fr-alert--error';
+    if (code === 'REDRESSEMENT' || code === 'RADIEE') return 'fr-alert--warning';
+    if (code === 'AUCUNE') return 'fr-alert--success';
+    return 'fr-alert--info';
+  }
+
+  function renderTable(summaries) {
+    if (!summaries.length) return '';
+    var rows = summaries.slice().sort(function (a, b) { return (b.date || '').localeCompare(a.date || ''); })
+      .map(function (s) {
+        return '<tr>' +
+          '<td>' + escapeHtml(s.date) + '</td>' +
+          '<td>' + escapeHtml(s.nature || '—') + '</td>' +
+          '<td>' + escapeHtml(s.tribunal || '—') + '</td>' +
+          '<td>' + escapeHtml(s.departement || '—') + '</td>' +
+          '</tr>';
+      }).join('');
+    return '<div class="fr-table fr-table--sm" style="margin-top:.5rem;">' +
+      '<table><thead><tr><th>Date</th><th>Nature</th><th>Tribunal</th><th>Dép.</th></tr></thead>' +
+      '<tbody>' + rows + '</tbody></table></div>';
+  }
+
+  function renderResultHtml(result) {
+    if (result.state === 'empty') {
+      return '<p class="muted">Aucun SIRET dans cette ligne.</p>';
+    }
+    if (result.state === 'invalid') {
+      return '<div class="fr-alert fr-alert--warning fr-alert--sm"><p>Valeur « ' +
+        escapeHtml(result.siret) + ' » invalide : un SIRET doit comporter 14 chiffres.</p></div>';
+    }
+
+    var b = result.bodacc;
+    var status = b.status;
+    var html = '';
+    html += '<div class="siret-line">' + formatSiret(result.siret) +
+      ' <span class="siren">(SIREN ' + result.siren + ')</span></div>';
+    if (!result.validKey) {
+      html += '<p class="muted" style="margin:.2rem 0 0;">Clé de contrôle SIRET suspecte — vérifie la saisie (la vérification BODACC a quand même été effectuée).</p>';
+    }
+    html += '<span class="fr-badge ' + badgeClassFor(status.code) + '" style="margin-top:.5rem;">' +
+      escapeHtml(status.label) + '</span>';
+
+    html += '<div class="fr-alert ' + alertClassFor(status.code) + ' fr-alert--sm" style="margin-top:.6rem;">';
+    if (status.code === 'EN_COURS' || status.code === 'CLOTUREE') {
+      html += '<p><strong>Dépôt à bloquer.</strong> Une procédure de liquidation judiciaire a été publiée au BODACC pour cette entreprise' +
+        (status.detail && status.detail.date ? ' (dernière annonce pertinente : ' + escapeHtml(status.detail.date) + ')' : '') + '.</p>';
+    } else if (status.code === 'REDRESSEMENT') {
+      html += '<p>Une procédure de redressement judiciaire est en cours, sans liquidation détectée à ce stade. À surveiller.</p>';
+    } else if (status.code === 'RADIEE') {
+      html += '<p>Une radiation a été détectée sans procédure de liquidation identifiée clairement. À vérifier manuellement.</p>';
+    } else {
+      html += '<p>Aucune procédure collective trouvée dans les annonces BODACC pour ce SIREN.</p>';
+    }
+    html += '</div>';
+
+    html += renderTable(b.summaries);
+
+    html += '<p class="muted" style="margin-top:.5rem;">' +
+      '<a href="' + BODACC_EXPLORE_URL + encodeURIComponent(result.siren) + '" target="_blank" rel="noopener">Voir sur bodacc.fr</a>' +
+      ' · vérifié ' + (b.checkedAt ? 'il y a ' + Math.max(0, Math.round((Date.now() - b.checkedAt) / 60000)) + ' min' : 'maintenant') +
+      '</p>';
+
+    if (b.summaries.length) {
+      html += '<details style="margin-top:.4rem;"><summary class="muted" style="cursor:pointer;">Données brutes</summary>' +
+        '<div class="raw-json">' + escapeHtml(JSON.stringify(b.summaries.map(function (s) { return s.raw; }), null, 2)) + '</div></details>';
+    }
+    return html;
+  }
+
+  // ============================================================
+  // Grist : configuration des colonnes
+  // ============================================================
+  // On protège tout le câblage Grist : si grist-plugin-api.js n'a pas pu se
+  // charger (réseau, bloqueur…), le widget reste fonctionnel en mode test
+  // manuel plutôt que de planter entièrement dès le chargement du script.
+  if (typeof grist !== 'undefined') {
+    grist.ready({
+      requiredAccess: 'full',
+      columns: [
+        { name: 'Siret', title: 'Colonne SIRET', type: 'Text' },
+        { name: 'StatutBodacc', title: 'Statut BODACC (texte) — optionnel', type: 'Text', optional: true },
+        { name: 'BloqueDepot', title: 'Blocage liquidation (Oui/Non) — optionnel', type: 'Bool', optional: true },
+        { name: 'DateVerifBodacc', title: 'Date de vérification — optionnel', type: 'DateTime', optional: true },
+        { name: 'DetailBodacc', title: 'Détail de la procédure — optionnel', type: 'Text', optional: true }
+      ]
+    });
+
+    grist.onRecords(function (records, mappings) {
+      state.colMap = mappings;
+      var hasSiret = mappings && mappings.Siret;
+      $('configWarning').hidden = !!hasSiret;
+      var mapped = (hasSiret && grist.mapColumnNames(records, mappings)) || [];
+      state.records = mapped;
+      $('gristDot').classList.add('ok');
+      $('gristState').textContent = hasSiret
+        ? mapped.length + ' ligne' + (mapped.length > 1 ? 's' : '') + ' · colonne SIRET connectée'
+        : 'Table connectée — colonne SIRET non mappée';
+    });
+
+    grist.onRecord(function (record, mappings) {
+      if (!mappings || !mappings.Siret) { state.selectedId = null; return; }
+      var mapped = grist.mapColumnNames([record], mappings)[0];
+      state.selectedId = mapped.id;
+      renderSelection(mapped);
+    });
+  } else {
+    $('gristState').textContent = 'Hors de Grist (mode test) — utilise le test manuel ci-dessous.';
+    $('configWarning').hidden = true;
+  }
+
+  function writeBack(recordId, siretResult) {
+    if (!$('autoWriteToggle').checked) return Promise.resolve();
+    if (!state.colMap) return Promise.resolve();
+    var fields = {};
+    var wroteSomething = false;
+
+    if (state.colMap.StatutBodacc) {
+      fields[state.colMap.StatutBodacc] =
+        siretResult.state === 'ok' ? siretResult.bodacc.status.label :
+        siretResult.state === 'invalid' ? 'SIRET invalide' : '';
+      wroteSomething = true;
+    }
+    if (state.colMap.BloqueDepot) {
+      fields[state.colMap.BloqueDepot] = siretResult.state === 'ok' ? !!siretResult.bodacc.status.bloque : false;
+      wroteSomething = true;
+    }
+    if (state.colMap.DateVerifBodacc) {
+      fields[state.colMap.DateVerifBodacc] = Math.floor(Date.now() / 1000);
+      wroteSomething = true;
+    }
+    if (state.colMap.DetailBodacc && siretResult.state === 'ok') {
+      var d = siretResult.bodacc.status.detail;
+      fields[state.colMap.DetailBodacc] = d ? (d.nature + ' — ' + d.date + (d.tribunal ? ' (' + d.tribunal + ')' : '')) : '';
+      wroteSomething = true;
+    }
+    if (!wroteSomething) return Promise.resolve();
+    return grist.selectedTable.update({ id: recordId, fields: fields });
+  }
+
+  // ============================================================
+  // Rendu de la ligne sélectionnée
+  // ============================================================
+  async function renderSelection(record) {
+    var body = $('selBody');
+    if (!record || !record.Siret) {
+      body.innerHTML = '<p class="muted">Aucun SIRET dans la ligne sélectionnée.</p>';
+      return;
+    }
+    body.innerHTML = '<p class="muted">Vérification en cours…</p>';
+    try {
+      var result = await checkSiret(record.Siret);
+      body.innerHTML = renderResultHtml(result);
+      if (result.state === 'ok') writeBack(record.id, result).catch(function (e) { console.error(e); });
+    } catch (err) {
+      body.innerHTML = '<div class="fr-alert fr-alert--error fr-alert--sm"><p>Erreur lors de l\'appel à l\'API BODACC : ' +
+        escapeHtml(err.message || String(err)) + '</p></div>';
+    }
+  }
+
+  // ============================================================
+  // Vérification par lot
+  // ============================================================
+  async function runQueue(items, worker, concurrency) {
+    var i = 0;
+    async function next() {
+      if (i >= items.length) return;
+      var idx = i++;
+      await worker(items[idx]);
+      return next();
+    }
+    var n = Math.min(concurrency, items.length) || 0;
+    var runners = [];
+    for (var k = 0; k < n; k++) runners.push(next());
+    await Promise.all(runners);
+  }
+
+  $('checkAllBtn').addEventListener('click', async function () {
+    if (state.checking) return;
+    if (!state.records.length) return;
+    state.checking = true;
+    $('checkAllBtn').disabled = true;
+    var bar = $('progressBar');
+    var barFill = bar.querySelector('div');
+    var text = $('progressText');
+    bar.hidden = false;
+    var done = 0;
+    var total = state.records.length;
+    var errors = 0;
+
+    await runQueue(state.records, async function (rec) {
+      try {
+        var result = await checkSiret(rec.Siret);
+        if (result.state === 'ok') await writeBack(rec.id, result);
+        else if (result.state === 'invalid') await writeBack(rec.id, result);
+      } catch (e) {
+        errors++;
+      }
+      done++;
+      var pct = Math.round((done / total) * 100);
+      barFill.style.width = pct + '%';
+      text.textContent = done + ' / ' + total + ' lignes vérifiées' + (errors ? ' (' + errors + ' erreurs)' : '');
+    }, 3);
+
+    state.checking = false;
+    $('checkAllBtn').disabled = false;
+    setTimeout(function () { bar.hidden = true; }, 1500);
+  });
+
+  // ============================================================
+  // Test manuel
+  // ============================================================
+  $('manualCheckBtn').addEventListener('click', async function () {
+    var val = $('manualSiret').value;
+    var out = $('manualResult');
+    out.innerHTML = '<p class="muted">Vérification en cours…</p>';
+    try {
+      var result = await checkSiret(val);
+      out.innerHTML = renderResultHtml(result);
+    } catch (err) {
+      out.innerHTML = '<div class="fr-alert fr-alert--error fr-alert--sm"><p>' + escapeHtml(err.message || String(err)) + '</p></div>';
+    }
+  });
+  $('manualSiret').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); $('manualCheckBtn').click(); }
+  });
+})();
+</script>
+</body>
+</html>
