@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Carte des dossiers</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body { font-family: Arial, sans-serif; background: #f5f7fb; color: #1f2937; }
+
+    .app { display: flex; flex-direction: column; height: 100%; }
+
+    .app-header {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 12px 16px; background: #fff; border-bottom: 1px solid #e5e7eb; flex: 0 0 auto;
+    }
+    .app-header h1 { font-size: 16px; font-weight: 700; margin: 0; color: #111827; }
+    .app-header .sub { font-size: 11.5px; color: #6b7280; margin-top: 2px; }
+    .app-header .count {
+      font-size: 12px; font-weight: 700; color: #2563eb; background: #eff6ff;
+      border-radius: 999px; padding: 5px 12px; white-space: nowrap;
+    }
+
+    .app-body { display: flex; flex: 1 1 auto; min-height: 0; }
+
+    /* ---------- Barre latérale ---------- */
+    .sidebar {
+      width: 340px; flex: 0 0 340px; display: flex; flex-direction: column;
+      background: #fff; border-right: 1px solid #e5e7eb; min-height: 0;
+    }
+    .sidebar-top { padding: 12px 14px; border-bottom: 1px solid #e5e7eb; flex: 0 0 auto; }
+    .search-input {
+      width: 100%; padding: 9px 12px; border: 1px solid #d1d5db; border-radius: 12px;
+      font-size: 13.5px; outline: none; background: #fcfcfd; margin-bottom: 8px;
+    }
+    .search-input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12); background: #fff; }
+
+    .chip-row { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+    .chip {
+      border: 1px solid #d1d5db; background: #fff; color: #374151;
+      border-radius: 999px; padding: 4px 9px; font-size: 11.5px; font-weight: 700;
+      cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px;
+    }
+    .chip:hover { border-color: #93c5fd; }
+    .chip.active { color: #fff; border-color: transparent; }
+    .chip .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+
+    .meta { font-size: 11.5px; color: #6b7280; margin-top: 2px; }
+
+    .list { flex: 1 1 auto; overflow-y: auto; padding: 6px 8px 12px; }
+    .list-empty { margin: 24px 12px; text-align: center; color: #9ca3af; font-size: 12.5px; }
+
+    .row {
+      display: flex; gap: 8px; align-items: flex-start; padding: 8px; border-radius: 10px;
+      cursor: pointer; transition: background 0.1s;
+    }
+    .row:hover { background: #f8faff; }
+    .row.active { background: #eff6ff; }
+    .row .dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; margin-top: 4px; }
+    .row .body { flex: 1; min-width: 0; }
+    .row .nom { font-weight: 600; font-size: 13px; color: #111827; }
+    .row .adr {
+      font-size: 11.5px; color: #6b7280; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .row .state-lbl { font-size: 11px; margin-top: 2px; font-weight: 600; }
+
+    .no-geo-section { border-top: 1px solid #e5e7eb; padding: 8px 12px 4px; }
+    .no-geo-title { font-size: 11px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+    .no-geo-item { font-size: 12px; color: #6b7280; padding: 3px 0; cursor: pointer; }
+    .no-geo-item:hover { color: #2563eb; }
+
+    .sidebar-foot {
+      flex: 0 0 auto; padding: 8px 14px; border-top: 1px solid #e5e7eb;
+      font-size: 10px; color: #9ca3af; line-height: 1.5;
+    }
+
+    .map-wrap { flex: 1 1 auto; position: relative; min-width: 0; background: #dfe6e2; }
+    #map { position: absolute; inset: 0; }
+
+    @media (max-width: 860px) {
+      .app-body { flex-direction: column; }
+      .sidebar { width: 100%; flex: 0 0 auto; max-height: 50%; border-right: none; border-bottom: 1px solid #e5e7eb; }
+      .map-wrap { flex: 1 1 280px; }
+    }
+
+    /* ---------- Panneau légende sur la carte ---------- */
+    .map-panel {
+      background: rgba(255,255,255,0.97); border-radius: 12px; box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+      padding: 10px 12px; font-size: 12px; min-width: 170px;
+    }
+    .map-panel .panel-title { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #9ca3af; margin-bottom: 6px; }
+    .map-panel .legend-item { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: #374151; padding: 2px 0; }
+    .map-panel .legend-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+
+    .leaflet-popup-content { font-family: Arial, sans-serif; font-size: 12.5px; min-width: 180px; }
+    .leaflet-popup-content .pop-nom { font-weight: 700; margin-bottom: 3px; color: #111827; }
+    .leaflet-popup-content .pop-badge {
+      display: inline-block; font-size: 10.5px; font-weight: 700; padding: 2px 8px;
+      border-radius: 999px; margin-bottom: 5px;
+    }
+    .leaflet-popup-content .pop-adr { color: #6b7280; margin-bottom: 6px; }
+    .leaflet-popup-content .pop-btn {
+      display: inline-block; font-size: 12px; font-weight: 700; color: #2563eb; background: #eff6ff;
+      border: 1px solid #bfdbfe; border-radius: 8px; padding: 5px 9px; cursor: pointer;
+    }
+    .leaflet-popup-content .pop-btn:hover { background: #dbeafe; }
+
+    /* ---------- Fiche détail (partagée avec les autres widgets de ce Grist) ---------- */
+    .back-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #fff; border: 1px solid #d1d5db; border-radius: 10px;
+      padding: 8px 12px; font-size: 14px; cursor: pointer; margin: 14px 0 0 16px;
+    }
+    .back-btn:hover { border-color: #93c5fd; }
+    #ficheView { overflow-y: auto; height: 100%; }
+    .fiche-inner { max-width: 780px; margin: 0 auto; padding: 0 16px 24px; }
+    .fiche-header { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+    .fiche-header .title { font-size: 20px; font-weight: 700; margin-bottom: 4px; color: #111827; }
+    .fiche-header .sub { font-size: 13px; color: #6b7280; margin-bottom: 8px; }
+    .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .tag { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
+    .tag-flag { color: #4338ca; background: #eef2ff; border: 1px solid #c7d2fe; }
+    .tag-warn { color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; }
+    .section { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; margin-bottom: 12px; overflow: hidden; }
+    .section-header { padding: 12px 14px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; font-weight: 700; font-size: 14px; color: #111827; }
+    .section-body { padding: 10px 14px; }
+    .field { display: flex; gap: 6px; font-size: 13px; line-height: 1.5; padding: 4px 0; border-bottom: 1px dashed #eef0f3; }
+    .field:last-child { border-bottom: none; }
+    .field-label { color: #6b7280; min-width: 42%; flex-shrink: 0; }
+    .field-value { color: #1f2937; font-weight: 500; word-break: break-word; }
+    .section-empty { font-size: 13px; color: #9ca3af; font-style: italic; padding: 6px 0; }
+  </style>
+</head>
+<body>
+  <div class="app" id="mapListView">
+    <header class="app-header">
+      <div>
+        <h1>🗺️ Carte des dossiers</h1>
+        <div class="sub">Démarche 155804 — géocodage en direct (Base Adresse Nationale)</div>
+      </div>
+      <div class="count" id="record-count">0 dossier</div>
+    </header>
+
+    <div class="app-body">
+      <aside class="sidebar">
+        <div class="sidebar-top">
+          <input type="text" id="searchInput" class="search-input" placeholder="Rechercher un nom, un SIRET, une commune...">
+          <div class="chip-row" id="categoryChips"></div>
+          <div class="chip-row">
+            <button type="button" class="chip" id="hideDeletedChip">Masquer supprimés</button>
+            <button type="button" class="chip" id="geocodeBtn">↻ Géocoder</button>
+          </div>
+          <div class="meta" id="meta">Chargement...</div>
+        </div>
+        <div class="list" id="list"></div>
+        <div class="sidebar-foot">
+          Géocodage : Base Adresse Nationale (BAN) via la Géoplateforme IGN · Fond de carte : OpenStreetMap
+        </div>
+      </aside>
+
+      <div class="map-wrap">
+        <div id="map"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="ficheView" style="display:none;">
+    <button class="back-btn" id="backBtn">&larr; Retour à la carte</button>
+    <div class="fiche-inner" id="ficheContent"></div>
+  </div>
+
+  <script>
+    // ================= Constantes =================
+    const DOSSIERS_TABLE = "Demarche_155804_dossiers";
+    const DEMANDEURS_TABLE = "Demarche_155804_demandeurs";
+    const GEOCODE_SEARCH_URL = "https://data.geopf.fr/geocodage/search";
+    const CACHE_PREFIX = "ban-geocode-cache:";
+    const FRANCE_VIEW = { center: [46.6, 2.2], zoom: 6 };
+
+    const CATEGORY_META = {
+      instruction: { label: "En instruction", color: "#1d4ed8" },
+      construction: { label: "Brouillon", color: "#6b7280" },
+      accepte: { label: "Accepté", color: "#15803d" },
+      refuse: { label: "Refusé", color: "#b91c1c" },
+      sans_suite: { label: "Sans suite", color: "#b45309" },
+      autre: { label: "Autre", color: "#6d28d9" },
+      inconnu: { label: "Inconnu", color: "#6b7280" }
+    };
+
+    function stateCategory(rawState) {
+      const n = stripAccents(String(rawState || "")).toLowerCase();
+      if (!rawState) return "inconnu";
+      if (/construction/.test(n)) return "construction";
+      if (/instruction/.test(n)) return "instruction";
+      if (/accept/.test(n)) return "accepte";
+      if (/refus/.test(n)) return "refuse";
+      if (/sans.?suite/.test(n)) return "sans_suite";
+      return "autre";
+    }
+    function categoryLabel(cat, rawState) {
+      if (cat === "autre" && rawState) return String(rawState);
+      return (CATEGORY_META[cat] || CATEGORY_META.autre).label;
+    }
+    function categoryColor(cat) { return (CATEGORY_META[cat] || CATEGORY_META.autre).color; }
+
+    // ================= Utilitaires =================
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+    function stripAccents(str) { return String(str ?? "").normalize("NFD").replace(/[̀-ͯ]/g, ""); }
+    function normalize(value) { return stripAccents(String(value ?? "")).toLowerCase().trim(); }
+    function fieldValueToText(val) {
+      if (Array.isArray(val) && val[0] === "L") return val.slice(1).join(", ");
+      if (Array.isArray(val)) return val.join(", ");
+      if (typeof val === "boolean") return val ? "Oui" : "Non";
+      return String(val ?? "");
+    }
+    function formatIsoDateShort(value) {
+      if (!value) return "—";
+      const d = new Date(value);
+      if (isNaN(d.getTime())) return String(value);
+      return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
+    }
+
+    const FIELD_LABELS = {
+      dossier_number: "N° de dossier", state: "État du dossier", date_depot: "Date de dépôt",
+      date_derniere_modification: "Dernière modification", date_traitement: "Date de traitement",
+      motivation: "Motivation", suivi_par: "Suivi par", type: "Type de déclarant",
+      usager_email: "Email du déclarant", siret: "SIRET", siren: "SIREN",
+      raison_sociale: "Raison sociale", nom_commercial: "Nom commercial", forme_juridique: "Forme juridique",
+      street_address: "Adresse", ville: "Commune", code_postal: "Code postal",
+      departement: "Département", region: "Région",
+      Liquidation: "Liquidation judiciaire", AREA: "Bénéficiaire AREA",
+      Pacage_Report: "N° PACAGE", Est_un_GAEC: "GAEC", Surface_legume: "Surface légumes"
+    };
+    function labelFor(col) { return FIELD_LABELS[col] || String(col).replace(/_/g, " ").replace(/^./, c => c.toUpperCase()); }
+
+    // ================= Accès Grist =================
+    async function fetchTableRaw(tableId) { return await grist.docApi.fetchTable(tableId); }
+    function columnsFromRaw(raw) { return Object.keys(raw).filter(c => c !== "id" && !c.startsWith("gristHelper")); }
+    function rowsFromRaw(raw, cols) {
+      const ids = raw.id || [];
+      return ids.map((id, i) => {
+        const row = { id };
+        cols.forEach(c => (row[c] = raw[c][i]));
+        return row;
+      });
+    }
+
+    // ================= État global =================
+    let allDossiers = [];
+    let dataLoaded = false;
+    let activeCategories = new Set(); // catégories actuellement affichées sur la carte/liste
+    let hideDeleted = true;
+    let selectedKey = null;
+
+    const searchInput = document.getElementById("searchInput");
+    const metaEl = document.getElementById("meta");
+    const recordCountEl = document.getElementById("record-count");
+    const listEl = document.getElementById("list");
+    const categoryChipsEl = document.getElementById("categoryChips");
+    const hideDeletedChip = document.getElementById("hideDeletedChip");
+    const geocodeBtn = document.getElementById("geocodeBtn");
+    const mapListView = document.getElementById("mapListView");
+    const ficheView = document.getElementById("ficheView");
+    const ficheContent = document.getElementById("ficheContent");
+    const backBtn = document.getElementById("backBtn");
+
+    async function loadEverything() {
+      metaEl.textContent = "Chargement des dossiers...";
+      const [dossiersRaw, demandeursRaw] = await Promise.all([
+        fetchTableRaw(DOSSIERS_TABLE),
+        fetchTableRaw(DEMANDEURS_TABLE)
+      ]);
+      const dossiersCols = columnsFromRaw(dossiersRaw);
+      const dossiersRows = rowsFromRaw(dossiersRaw, dossiersCols);
+      const demandeursCols = columnsFromRaw(demandeursRaw);
+      const demandeursRows = rowsFromRaw(demandeursRaw, demandeursCols);
+
+      const dossiersByNumber = new Map();
+      dossiersRows.forEach(d => {
+        const key = String(d.dossier_number || "").trim();
+        if (key) dossiersByNumber.set(key, d);
+      });
+
+      allDossiers = demandeursRows.map(demandeur => {
+        const key = String(demandeur.dossier_number || "").trim();
+        const dossier = dossiersByNumber.get(key) || null;
+        const nom = demandeur.nom_commercial || demandeur.raison_sociale || "";
+        const addressParts = [demandeur.street_address, demandeur.code_postal, demandeur.ville].filter(Boolean);
+        return {
+          key: "D:" + demandeur.id,
+          demandeurId: demandeur.id,
+          dossier_number: demandeur.dossier_number,
+          nom,
+          siret: demandeur.siret,
+          ville: demandeur.ville,
+          code_postal: demandeur.code_postal,
+          addressText: addressParts.join(", "),
+          state: dossier ? dossier.state : null,
+          cat: stateCategory(dossier ? dossier.state : null),
+          supprime: dossier ? !!dossier.dossiers_supprimes_DN : false,
+          geo: null, // rempli par le géocodage : {lat, lon} | 'NOTFOUND' | null (pas encore tenté)
+          demandeur,
+          dossier
+        };
+      });
+
+      activeCategories = new Set(allDossiers.map(d => d.cat));
+      dataLoaded = true;
+    }
+
+    // ================= Géocodage (Base Adresse Nationale / Géoplateforme) =================
+    function cacheGet(addr) {
+      const key = addr.trim().toLowerCase();
+      try {
+        const raw = localStorage.getItem(CACHE_PREFIX + key);
+        return raw ? JSON.parse(raw) : null;
+      } catch (e) { return null; }
+    }
+    function cacheSet(addr, value) {
+      const key = addr.trim().toLowerCase();
+      try { localStorage.setItem(CACHE_PREFIX + key, JSON.stringify(value)); } catch (e) { /* stockage indisponible : on continue sans */ }
+    }
+
+    async function geocodeAddress(address) {
+      if (!address) return null;
+      const cached = cacheGet(address);
+      if (cached) return cached === "NOTFOUND" ? null : cached;
+      try {
+        const url = GEOCODE_SEARCH_URL + "?q=" + encodeURIComponent(address) + "&index=address&limit=1";
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("http-" + res.status);
+        const data = await res.json();
+        const feature = data && data.features && data.features[0];
+        if (!feature) { cacheSet(address, "NOTFOUND"); return null; }
+        const coords = feature.geometry.coordinates;
+        const result = { lat: coords[1], lon: coords[0] };
+        cacheSet(address, result);
+        return result;
+      } catch (e) {
+        return null; // pas mis en cache : on retentera plus tard
+      }
+    }
+
+    async function runQueue(items, worker, concurrency) {
+      let i = 0;
+      async function next() {
+        if (i >= items.length) return;
+        const idx = i++;
+        await worker(items[idx]);
+        return next();
+      }
+      const n = Math.min(concurrency, items.length) || 0;
+      const runners = [];
+      for (let k = 0; k < n; k++) runners.push(next());
+      await Promise.all(runners);
+    }
+
+    async function geocodeAll() {
+      const toGeocode = allDossiers.filter(d => d.geo === null && d.addressText);
+      allDossiers.filter(d => !d.addressText).forEach(d => (d.geo = "NO_ADDRESS"));
+      if (!toGeocode.length) return;
+      metaEl.textContent = `Géocodage de ${toGeocode.length} adresse(s)...`;
+      let done = 0;
+      await runQueue(toGeocode, async (d) => {
+        const geo = await geocodeAddress(d.addressText);
+        d.geo = geo || "NOTFOUND";
+        done++;
+        if (done % 10 === 0) { renderList(); renderMarkers(); }
+      }, 4);
+      renderAll();
+    }
+
+    // ================= Carte Leaflet =================
+    const map = L.map("map", { zoomControl: true }).setView(FRANCE_VIEW.center, FRANCE_VIEW.zoom);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(map);
+
+    const markersLayer = L.layerGroup().addTo(map);
+    const markerByKey = Object.create(null);
+
+    const LegendControl = L.Control.extend({
+      options: { position: "topright" },
+      onAdd: function () {
+        const div = L.DomUtil.create("div", "map-panel");
+        div.id = "legendPanel";
+        L.DomEvent.disableClickPropagation(div);
+        L.DomEvent.disableScrollPropagation(div);
+        return div;
+      }
+    });
+    map.addControl(new LegendControl());
+
+    function renderLegend() {
+      const panel = document.getElementById("legendPanel");
+      if (!panel) return;
+      const counts = {};
+      allDossiers.forEach(d => { if (!hideDeleted || !d.supprime) counts[d.cat] = (counts[d.cat] || 0) + 1; });
+      const items = Object.keys(counts).map(cat => `
+        <div class="legend-item">
+          <span class="legend-dot" style="background:${categoryColor(cat)}"></span>
+          <span>${escapeHtml(categoryLabel(cat))} (${counts[cat]})</span>
+        </div>
+      `).join("");
+      panel.innerHTML = `<div class="panel-title">Dossiers géolocalisés</div>${items || '<div class="legend-item">Aucun dossier</div>'}`;
+    }
+
+    function renderMarkers() {
+      markersLayer.clearLayers();
+      Object.keys(markerByKey).forEach(k => delete markerByKey[k]);
+      getFiltered().forEach(d => {
+        if (!d.geo || d.geo === "NOTFOUND" || d.geo === "NO_ADDRESS") return;
+        const color = categoryColor(d.cat);
+        const marker = L.circleMarker([d.geo.lat, d.geo.lon], {
+          radius: 7, color: "#fff", weight: 2, fillColor: color, fillOpacity: 0.9
+        });
+        marker.bindPopup(popupHtml(d));
+        marker.on("popupopen", () => {
+          const btn = document.querySelector(".pop-btn[data-key='" + cssEscape(d.key) + "']");
+          if (btn) btn.addEventListener("click", () => openFiche(d.key));
+        });
+        marker.addTo(markersLayer);
+        markerByKey[d.key] = marker;
+      });
+      renderLegend();
+    }
+
+    function cssEscape(s) { return String(s).replace(/'/g, "\\'"); }
+
+    function popupHtml(d) {
+      return `
+        <div class="pop-nom">${escapeHtml(d.nom || "Dossier " + (d.dossier_number || ""))}</div>
+        <span class="pop-badge" style="background:${categoryColor(d.cat)}20;color:${categoryColor(d.cat)}">${escapeHtml(categoryLabel(d.cat, d.state))}</span>
+        <div class="pop-adr">${escapeHtml(d.addressText || "Adresse inconnue")}</div>
+        <button type="button" class="pop-btn" data-key="${escapeHtml(d.key)}">Voir la fiche complète →</button>
+      `;
+    }
+
+    // ================= Filtrage / liste =================
+    function renderCategoryChips() {
+      const catsPresent = [...new Set(allDossiers.map(d => d.cat))];
+      categoryChipsEl.innerHTML = catsPresent.map(cat => {
+        const active = activeCategories.has(cat);
+        return `
+          <button type="button" class="chip ${active ? "active" : ""}" data-cat="${cat}" style="${active ? `background:${categoryColor(cat)};border-color:${categoryColor(cat)}` : ""}">
+            <span class="dot" style="background:${active ? "#fff" : categoryColor(cat)}"></span>
+            ${escapeHtml(categoryLabel(cat))}
+          </button>
+        `;
+      }).join("");
+      categoryChipsEl.querySelectorAll(".chip").forEach(chip => {
+        chip.addEventListener("click", () => {
+          const cat = chip.dataset.cat;
+          if (activeCategories.has(cat)) activeCategories.delete(cat);
+          else activeCategories.add(cat);
+          renderAll();
+        });
+      });
+    }
+
+    function getFiltered() {
+      const q = normalize(searchInput.value.trim());
+      return allDossiers.filter(d => {
+        if (hideDeleted && d.supprime) return false;
+        if (!activeCategories.has(d.cat)) return false;
+        if (!q) return true;
+        const hay = normalize([d.nom, d.siret, d.ville, d.code_postal, d.dossier_number].join(" "));
+        return hay.includes(q);
+      });
+    }
+
+    function renderList() {
+      const filtered = getFiltered();
+      const geocoded = filtered.filter(d => d.geo && d.geo !== "NOTFOUND" && d.geo !== "NO_ADDRESS");
+      const notGeocodable = filtered.filter(d => d.geo === "NOTFOUND" || d.geo === "NO_ADDRESS");
+      const pending = filtered.filter(d => d.geo === null);
+
+      recordCountEl.textContent = `${filtered.length} dossier(s)`;
+      metaEl.textContent = pending.length
+        ? `${geocoded.length} localisés, ${pending.length} en cours de géocodage...`
+        : `${geocoded.length} localisé(s) sur la carte, ${notGeocodable.length} sans adresse exploitable.`;
+
+      if (!filtered.length) {
+        listEl.innerHTML = `<div class="list-empty">Aucun dossier ne correspond à ces critères</div>`;
+        return;
+      }
+
+      const rowsHtml = geocoded.map(d => rowHtml(d)).join("");
+      const noGeoHtml = notGeocodable.length
+        ? `<div class="no-geo-section">
+             <div class="no-geo-title">Non géolocalisés (${notGeocodable.length})</div>
+             ${notGeocodable.map(d => `<div class="no-geo-item" data-key="${escapeHtml(d.key)}">${escapeHtml(d.nom || d.dossier_number || "Sans nom")}</div>`).join("")}
+           </div>`
+        : "";
+
+      listEl.innerHTML = rowsHtml + noGeoHtml;
+
+      listEl.querySelectorAll(".row").forEach(row => {
+        row.addEventListener("click", () => focusDossier(row.dataset.key));
+      });
+      listEl.querySelectorAll(".no-geo-item").forEach(item => {
+        item.addEventListener("click", () => openFiche(item.dataset.key));
+      });
+    }
+
+    function rowHtml(d) {
+      return `
+        <div class="row ${selectedKey === d.key ? "active" : ""}" data-key="${escapeHtml(d.key)}">
+          <span class="dot" style="background:${categoryColor(d.cat)}"></span>
+          <div class="body">
+            <div class="nom">${escapeHtml(d.nom || "Sans nom")}</div>
+            <div class="adr">${escapeHtml(d.addressText || "—")}</div>
+            <div class="state-lbl" style="color:${categoryColor(d.cat)}">${escapeHtml(categoryLabel(d.cat, d.state))}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function focusDossier(key) {
+      const d = allDossiers.find(x => x.key === key);
+      selectedKey = key;
+      renderList();
+      const marker = markerByKey[key];
+      if (marker && d && d.geo && d.geo.lat) {
+        map.setView([d.geo.lat, d.geo.lon], Math.max(map.getZoom(), 13));
+        marker.openPopup();
+      } else {
+        openFiche(key);
+      }
+    }
+
+    function renderAll() {
+      if (!dataLoaded) return;
+      renderCategoryChips();
+      renderList();
+      renderMarkers();
+    }
+
+    searchInput.addEventListener("input", renderAll);
+    hideDeletedChip.addEventListener("click", () => {
+      hideDeleted = !hideDeleted;
+      hideDeletedChip.classList.toggle("active", hideDeleted);
+      if (hideDeleted) { hideDeletedChip.style.background = "#2563eb"; hideDeletedChip.style.color = "#fff"; hideDeletedChip.style.borderColor = "#2563eb"; }
+      else { hideDeletedChip.style.background = ""; hideDeletedChip.style.color = ""; hideDeletedChip.style.borderColor = ""; }
+      renderAll();
+    });
+    hideDeletedChip.classList.add("active");
+    hideDeletedChip.style.background = "#2563eb"; hideDeletedChip.style.color = "#fff"; hideDeletedChip.style.borderColor = "#2563eb";
+
+    geocodeBtn.addEventListener("click", async () => {
+      geocodeBtn.disabled = true;
+      geocodeBtn.textContent = "Géocodage...";
+      try {
+        await loadEverything();
+        // force un nouveau géocodage des adresses non trouvées la dernière fois
+        allDossiers.forEach(d => { if (d.geo === "NOTFOUND") d.geo = null; });
+        renderAll();
+        await geocodeAll();
+      } finally {
+        geocodeBtn.disabled = false;
+        geocodeBtn.textContent = "↻ Géocoder";
+      }
+    });
+
+    // ================= Fiche détail =================
+    function renderFieldRow(key, rawValue) {
+      const val = fieldValueToText(rawValue);
+      if (val === "" || val === "null" || val === "undefined") return "";
+      return `<div class="field"><span class="field-label">${escapeHtml(labelFor(key))}</span><span class="field-value">${escapeHtml(val)}</span></div>`;
+    }
+    function renderSection(title, row, keys) {
+      const body = keys.map(k => renderFieldRow(k, row[k])).filter(Boolean).join("");
+      return `<div class="section"><div class="section-header">${escapeHtml(title)}</div><div class="section-body">${body || '<div class="section-empty">Aucune donnée</div>'}</div></div>`;
+    }
+
+    function openFiche(key) {
+      const d = allDossiers.find(x => x.key === key);
+      if (!d) return;
+      try { grist.setCursorPos({ tableId: DEMANDEURS_TABLE, rowId: d.demandeurId }); } catch (e) { /* facultatif */ }
+
+      mapListView.style.display = "none";
+      ficheView.style.display = "block";
+
+      const header = `
+        <div class="fiche-header">
+          <div class="title">${escapeHtml(d.nom || "Dossier " + (d.dossier_number || ""))}</div>
+          <div class="sub">Dossier n° ${escapeHtml(d.dossier_number || "—")} · SIRET ${escapeHtml(d.siret || "—")}</div>
+          <div class="badges">
+            <span class="tag" style="background:${categoryColor(d.cat)}20;color:${categoryColor(d.cat)}">${escapeHtml(categoryLabel(d.cat, d.state))}</span>
+            ${d.demandeur.Est_un_GAEC ? `<span class="tag tag-flag">GAEC</span>` : ""}
+            ${d.demandeur.AREA ? `<span class="tag tag-flag">Bénéficiaire AREA</span>` : ""}
+            ${d.demandeur.Liquidation ? `<span class="tag tag-warn">⚠ Liquidation judiciaire</span>` : ""}
+            ${d.geo === "NOTFOUND" || d.geo === "NO_ADDRESS" ? `<span class="tag tag-warn">Non géolocalisé</span>` : ""}
+          </div>
+        </div>
+      `;
+
+      const dossierKeys = ["state", "date_depot", "date_derniere_modification", "date_traitement", "suivi_par", "motivation"];
+      const demandeurKeys = ["type", "usager_email", "siret", "siren", "raison_sociale", "nom_commercial", "forme_juridique", "street_address", "code_postal", "ville", "departement", "region"];
+      const computedKeys = ["Pacage_Report", "Surface_legume", "Est_un_GAEC", "AREA", "Liquidation"];
+
+      ficheContent.innerHTML = `
+        ${header}
+        ${d.dossier ? renderSection("Instruction du dossier", d.dossier, dossierKeys) : `<div class="section"><div class="section-header">Instruction du dossier</div><div class="section-body"><div class="section-empty">Aucun dossier "${escapeHtml(DOSSIERS_TABLE)}" ne correspond à ce n° de dossier.</div></div></div>`}
+        ${renderSection("Déclarant", d.demandeur, demandeurKeys)}
+        ${renderSection("Recoupements (formules)", d.demandeur, computedKeys)}
+      `;
+    }
+
+    backBtn.addEventListener("click", () => {
+      ficheView.style.display = "none";
+      mapListView.style.display = "flex";
+      map.invalidateSize();
+    });
+
+    // ================= Initialisation =================
+    grist.ready({ requiredAccess: "full" });
+
+    (async function init() {
+      try {
+        await loadEverything();
+        renderAll();
+        await geocodeAll();
+      } catch (err) {
+        console.error("Erreur chargement initial :", err);
+        metaEl.textContent = "Erreur lors du chargement.";
+        listEl.innerHTML = `<div class="list-empty">Échec du chargement (${escapeHtml(err.message || err)}).<br>Vérifie que les tables "${escapeHtml(DOSSIERS_TABLE)}" et "${escapeHtml(DEMANDEURS_TABLE)}" existent et que le widget a l'accès complet.</div>`;
+      }
+    })();
+  </script>
+</body>
+</html>
