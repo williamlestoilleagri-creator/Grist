@@ -38,6 +38,11 @@
       border-bottom: 3px solid var(--accent);
       padding-bottom: 0.5rem;
       color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .75rem;
+      flex-wrap: wrap;
     }
     .grid-container { display: grid; gap: 1rem; }
     .one-column  { grid-template-columns: 1fr; }
@@ -49,6 +54,15 @@
     }
     .item .label { font-weight: bold; margin-bottom: 0.25rem; display: block; }
     .item .value { display: block; }
+
+    /* --- Sélecteur d'année par bloc --- */
+    .year-picker { display: inline-flex; align-items: center; font-weight: normal; font-size: .85rem; }
+    .year-picker select {
+      font-size: .85rem; padding: .25rem .5rem; border-radius: .3rem;
+      border: 1px solid var(--border-plain-grey); background: #fff; color: var(--text-default-grey);
+    }
+    .print-only-inline { display: none; }
+    @media print { .print-only-inline { display: inline; font-size: 9px !important; font-weight: 600; color: #555; } }
 
     /* --- Chips façon bouton gris --- */
     .chip-list { display: flex; flex-wrap: wrap; gap: .5rem .5rem; }
@@ -303,7 +317,7 @@
       </div>
       <div class="settings-section">
         <p class="settings-heading">Blocs affichés &amp; ordre</p>
-        <p class="settings-hint">Glissez-déposez pour réordonner, décochez pour masquer un bloc.</p>
+        <p class="settings-hint">Glissez-déposez pour réordonner, décochez pour masquer un bloc. Les blocs marqués 📅 ont leur propre sélecteur d'année, indépendant des autres blocs.</p>
         <ul id="block-list" class="block-list"></ul>
       </div>
     </div>
@@ -324,7 +338,9 @@
     // Utilitaires
     // ============================================================
     const nf = new Intl.NumberFormat('fr-FR');
+    const nfEuro = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     function fmtNum(n) { return nf.format(Math.round(n)); }
+    function fmtEuro(n) { return nfEuro.format(n) + ' €'; }
     function safeNum(v) {
       const n = typeof v === 'number' ? v : parseFloat(v);
       return Number.isFinite(n) ? n : null;
@@ -375,13 +391,8 @@
       );
     }
 
-    function block(id, title, bodyHtml) {
-      if (!bodyHtml) return '';
-      return '<section class="section" data-block="' + id + '"><h2 class="title">' + escapeHtml(title) + '</h2>' + bodyHtml + '</section>';
-    }
-
     // ============================================================
-    // Parsers des champs texte structurés (formules Grist)
+    // Parsers des champs texte structurés (blocs non datés)
     // ============================================================
     function parseOrganigramme(text) {
       const lines = (text || '').split(/\r?\n/);
@@ -402,32 +413,6 @@
       return groups;
     }
 
-    function parseExamens(text) {
-      const lines = (text || '').split(/\r?\n/).map(function (s) { return s.trim(); });
-      const groups = [];
-      let current = null;
-      lines.forEach(function (line) {
-        if (!line) return;
-        if (line.indexOf(':') === -1) {
-          current = { title: line, rows: [] };
-          groups.push(current);
-        } else {
-          if (!current) { current = { title: '', rows: [] }; groups.push(current); }
-          const idx = line.lastIndexOf(':');
-          current.rows.push({ label: line.slice(0, idx).trim(), value: line.slice(idx + 1).trim() });
-        }
-      });
-      return groups.filter(function (g) { return g.rows.length || (g.title && g.title !== 'Informations non disponibles'); });
-    }
-
-    function parseFinanceLines(text) {
-      return splitLines(text).map(function (line) {
-        const idx = line.lastIndexOf(':');
-        if (idx < 0) return { label: line, value: '' };
-        return { label: line.slice(0, idx).trim(), value: line.slice(idx + 1).trim() };
-      });
-    }
-
     function parseHistorique(text) {
       return splitLines(text).map(function (line) {
         const m = line.match(/^(.*?)\s*-\s*(\d{4})\s*:\s*(.*)$/);
@@ -436,35 +421,13 @@
       }).sort(function (a, b) { return (b.year || '').localeCompare(a.year || ''); });
     }
 
-    function parseEffectifs(text) {
-      const blocks = (text || '').split(/\n\s*\n/).map(function (b) { return b.trim(); }).filter(Boolean);
-      return blocks.map(function (b) {
-        const lines = b.split(/\r?\n/).map(function (s) { return s.trim(); }).filter(Boolean);
-        const title = lines[0] || '';
-        const rows = lines.slice(1).map(function (line) {
-          const idx = line.lastIndexOf(':');
-          if (idx < 0) return { label: line, value: 0 };
-          const label = line.slice(0, idx).trim();
-          const m = line.slice(idx + 1).match(/-?\d+([.,]\d+)?/);
-          return { label: label, value: m ? parseFloat(m[0].replace(',', '.')) : 0 };
-        });
-        return { title: title, rows: rows };
-      });
-    }
-
-    function pctFromRatio(ratio) {
-      const r = safeNum(ratio);
-      if (r === null) return null;
-      return ((r - 1) * 100).toFixed(2) + '%';
-    }
     function formatPct(v) {
-      if (v === null || v === undefined || v === '') return 'Information non disponible';
-      const s = String(v);
-      return (s.indexOf('%') !== -1 || s.toLowerCase().indexOf('disponible') !== -1) ? s : s + '%';
+      if (v === null || v === undefined || !Number.isFinite(v)) return 'Information non disponible';
+      return (v > 0 ? '+' : '') + v.toFixed(2).replace('.', ',') + ' %';
     }
 
     // ============================================================
-    // Blocs de la fiche
+    // Blocs non datés (une seule vue, pas de sélecteur d'année)
     // ============================================================
     function renderIdentite(record, ctx) {
       const site = ctx.displaySite;
@@ -525,80 +488,10 @@
       }).join('') + '</div>';
     }
 
-    function renderEffectifs(record) {
-      const total = safeNum(record.TotalEffectif);
-      const infos = record.Informations_sur_les_effectifs;
-      const parsed = parseEffectifs(record.Resume_Effectif);
-      let html = '';
-
-      if (total !== null) {
-        html += '<div class="grid-container one-column fr-mb-2w"><div class="item">' +
-          '<span class="label">Effectif total ' + escapeHtml(record.AnneeEncoursTexte || '') + '</span>' +
-          '<span class="value">' + fmtNum(total) + ' élèves</span></div></div>';
-      }
-      if (infos && infos.trim() && infos.trim() !== 'Informations non disponibles') {
-        html += '<div class="fr-mb-2w">' + splitLines(infos).map(function (l) { return '<div>' + escapeHtml(l) + '</div>'; }).join('') + '</div>';
-      }
-      if (parsed.length) {
-        const rows = [];
-        parsed.forEach(function (b) { b.rows.forEach(function (r) { rows.push({ site: b.title, label: r.label, value: r.value }); }); });
-        if (rows.length) {
-          const tableRows = rows.map(function (r) {
-            return '<tr><td>' + escapeHtml(r.site) + '</td><td>' + escapeHtml(r.label) + '</td><td class="fr-text--right">' + fmtNum(r.value) + '</td></tr>';
-          }).join('');
-          const chartItems = rows.slice(0, 8);
-          html += '<div class="eff-row">' +
-            '<div class="fr-table"><table><thead><tr><th>Site</th><th>Filière</th><th class="fr-text--right">Effectif</th></tr></thead><tbody>' + tableRows + '</tbody></table></div>' +
-            '<div class="eff-chart">' + barChartSVG(chartItems) + '</div></div>';
-        }
-      }
-      return html;
-    }
-
-    function renderEvolution(record) {
-      const anneeNum = parseInt(record.AnneeEncoursTexte, 10);
-      const labelFor = function (offset) { return Number.isFinite(anneeNum) ? String(anneeNum - offset) : ('N-' + offset); };
-      const vals = [
-        { label: labelFor(3), value: safeNum(record.TotalEffectif_N_3) },
-        { label: labelFor(2), value: safeNum(record.TotalEffectif_N_2) },
-        { label: labelFor(1), value: safeNum(record.TotalEffectif_N_1) },
-        { label: Number.isFinite(anneeNum) ? String(anneeNum) : 'N', value: safeNum(record.TotalEffectif) }
-      ];
-      if (!vals.some(function (v) { return v.value !== null; })) return '';
-
-      const variations = [
-        { period: vals[0].label + ' → ' + vals[1].label, pct: record.EffecitfN_2vN_3 },
-        { period: vals[1].label + ' → ' + vals[2].label, pct: record.EffecitfN_1vN_2 },
-        { period: vals[2].label + ' → ' + vals[3].label, pct: pctFromRatio(record.TotalEffectif_N_1_2) }
-      ];
-      const rows = vals.map(function (v) {
-        return '<tr><td>' + escapeHtml(v.label) + '</td><td class="fr-text--right">' + (v.value !== null ? fmtNum(v.value) : '—') + '</td></tr>';
-      }).join('');
-      const varRows = variations.map(function (v) {
-        return '<tr><td>' + escapeHtml(v.period) + '</td><td class="fr-text--right">' + escapeHtml(formatPct(v.pct)) + '</td></tr>';
-      }).join('');
-
-      return '<div class="evo-row"><div class="evo-table">' +
-        '<table><thead><tr><th>Année</th><th class="fr-text--right">Effectif</th></tr></thead><tbody>' + rows + '</tbody></table>' +
-        '<table class="fr-mt-2w"><thead><tr><th>Évolution</th><th class="fr-text--right">Variation</th></tr></thead><tbody>' + varRows + '</tbody></table>' +
-        '</div><div class="evo-chart">' + barChartSVG(vals) + '</div></div>';
-    }
-
     function renderFormations(record) {
       const list = splitLines(record.Carte_de_formation);
       if (!list.length) return '';
       return '<div class="chip-list">' + list.map(function (x) { return '<span class="chip">' + escapeHtml(x) + '</span>'; }).join('') + '</div>';
-    }
-
-    function renderExamens(record) {
-      const groups = parseExamens(record.Reussite_aux_examens);
-      if (!groups.length) return '';
-      return '<div class="org-sites">' + groups.map(function (g) {
-        const rows = g.rows.map(function (r) {
-          return '<div class="org-row"><span class="org-name">' + escapeHtml(r.label) + '</span><span class="chip">' + escapeHtml(r.value) + '</span></div>';
-        }).join('');
-        return '<div class="org-site">' + (g.title ? '<p class="org-site-title">' + escapeHtml(g.title) + '</p>' : '') + '<div class="org-list">' + rows + '</div></div>';
-      }).join('') + '</div>';
     }
 
     function renderSites(record) {
@@ -663,41 +556,187 @@
       return '<div class="grid-container two-columns">' + parts.join('') + '</div>';
     }
 
-    function renderFinances(record) {
-      const indicators = [
-        ['Résultat de fonctionnement', record.RESULTAT_DE_FONCTIONNEMENT],
-        ['Fonds de roulement net', record.FOND_DE_ROULEMENT_NET],
-        ['Variation du fonds de roulement brut', record.VARIATION_DU_FONDS_DE_ROULEMENT_BRUT],
-        ["Capacité d'autofinancement", record.CAPACITE_D_AUTOFINANCEMENT]
-      ];
-      const rows = [];
-      indicators.forEach(function (pair) {
-        const label = pair[0], text = pair[1];
-        if (!text || text === 'Non concerné') return;
-        parseFinanceLines(text).forEach(function (l) { rows.push({ indicateur: label, centre: l.label, montant: l.value }); });
+    // ============================================================
+    // Blocs datés : chaque encart charge ses propres données brutes
+    // et recalcule pour l'année choisie, indépendamment des autres blocs.
+    // ============================================================
+    const RAW_TABLE_CACHE = {};
+    function fetchRawTable(tableName) {
+      if (!RAW_TABLE_CACHE[tableName]) {
+        RAW_TABLE_CACHE[tableName] = (window.grist && grist.docApi)
+          ? grist.docApi.fetchTable(tableName).then(function (data) {
+              const rows = [];
+              const n = (data.id || []).length;
+              for (let i = 0; i < n; i++) {
+                const row = {};
+                for (const col in data) row[col] = data[col][i];
+                rows.push(row);
+              }
+              return rows;
+            }).catch(function (e) { console.warn('Impossible de charger ' + tableName, e); return []; })
+          : Promise.resolve([]);
+      }
+      return RAW_TABLE_CACHE[tableName];
+    }
+    function fetchYearsList() {
+      return fetchRawTable('TR_Annee').then(function (rows) {
+        return rows.map(function (r) { return r.Annee; }).filter(Boolean)
+          .filter(function (v, i, arr) { return arr.indexOf(v) === i; })
+          .sort(function (a, b) { return parseInt(b, 10) - parseInt(a, 10); });
       });
-      if (!rows.length) return '';
-      const tableRows = rows.map(function (r) {
-        return '<tr><td>' + escapeHtml(r.indicateur) + '</td><td>' + escapeHtml(r.centre) + '</td><td class="fr-text--right">' + escapeHtml(r.montant) + '</td></tr>';
-      }).join('');
-      const yearNote = record.AnneeFinances ? '<p class="fr-mb-2w">Exercice de référence : <strong>' + escapeHtml(record.AnneeFinances) + '</strong></p>' : '';
-      return yearNote + '<div class="finance-table"><div class="fr-table"><table><thead><tr><th>Indicateur</th><th>Centre</th><th class="fr-text--right">Montant</th></tr></thead><tbody>' + tableRows + '</tbody></table></div></div>';
+    }
+    function siteCodesForNiveau1(niveau1Code) {
+      const set = new Set();
+      sitesById.forEach(function (s) { if (s.UAI_NIVEAU1 === niveau1Code) set.add(s.Code_DGER); });
+      return set;
     }
 
+    function computeEffectifsForYear(record, ctx, year) {
+      return fetchRawTable('TT_Effectifs2').then(function (rows) {
+        const niveau1Code = ctx.niveau1Site && ctx.niveau1Site.Code_DGER;
+        if (!niveau1Code || !year) return null;
+        const codes = siteCodesForNiveau1(niveau1Code);
+        const filtered = rows.filter(function (r) { return codes.has(r.CodeDGERTexte) && String(r.Annee_scolaire_Annee) === String(year); });
+        if (!filtered.length) return null;
+        let total = 0;
+        const grouped = new Map();
+        filtered.forEach(function (r) {
+          const v = safeNum(r.Eleves_presents) || 0;
+          total += v;
+          const site = sitesByCode.get(r.CodeDGERTexte);
+          const siteLabel = (site && site.Libelle_administratif) || r.CodeDGERTexte;
+          const key = siteLabel + '' + (r.Filiere || '—');
+          grouped.set(key, (grouped.get(key) || 0) + v);
+        });
+        const rowsOut = Array.from(grouped.entries()).map(function (e) {
+          const parts = e[0].split('');
+          return { site: parts[0], label: parts[1], value: e[1] };
+        }).sort(function (a, b) { return a.site.localeCompare(b.site) || b.value - a.value; });
+        return { total: total, rows: rowsOut };
+      });
+    }
+    function renderEffectifsBody(data) {
+      if (!data) return '<p class="fr-mb-0">Aucune donnée disponible pour l’année sélectionnée.</p>';
+      const tableRows = data.rows.map(function (r) {
+        return '<tr><td>' + escapeHtml(r.site) + '</td><td>' + escapeHtml(r.label) + '</td><td class="fr-text--right">' + fmtNum(r.value) + '</td></tr>';
+      }).join('');
+      const chartItems = data.rows.slice(0, 8);
+      return '<div class="grid-container one-column fr-mb-2w"><div class="item"><span class="label">Effectif total</span><span class="value">' + fmtNum(data.total) + ' élèves</span></div></div>' +
+        '<div class="eff-row"><div class="fr-table"><table><thead><tr><th>Site</th><th>Filière</th><th class="fr-text--right">Effectif</th></tr></thead><tbody>' + tableRows + '</tbody></table></div>' +
+        '<div class="eff-chart">' + barChartSVG(chartItems) + '</div></div>';
+    }
+
+    function computeVariations(totals) {
+      const out = [];
+      for (let i = 1; i < totals.length; i++) {
+        const prev = totals[i - 1].value, cur = totals[i].value;
+        out.push({ period: totals[i - 1].label + ' → ' + totals[i].label, pct: prev ? ((cur / prev) - 1) * 100 : null });
+      }
+      return out;
+    }
+    function computeEvolutionForYear(record, ctx, yearN) {
+      return fetchRawTable('TT_Effectifs2').then(function (rows) {
+        const niveau1Code = ctx.niveau1Site && ctx.niveau1Site.Code_DGER;
+        const n = parseInt(yearN, 10);
+        if (!niveau1Code || !Number.isFinite(n)) return null;
+        const codes = siteCodesForNiveau1(niveau1Code);
+        const totals = [3, 2, 1, 0].map(function (offset) {
+          const y = String(n - offset);
+          const sum = rows.filter(function (r) { return codes.has(r.CodeDGERTexte) && String(r.Annee_scolaire_Annee) === y; })
+            .reduce(function (s, r) { return s + (safeNum(r.Eleves_presents) || 0); }, 0);
+          return { label: y, value: sum };
+        });
+        if (!totals.some(function (t) { return t.value > 0; })) return null;
+        return { totals: totals, variations: computeVariations(totals) };
+      });
+    }
+    function renderEvolutionBody(data) {
+      if (!data) return '<p class="fr-mb-0">Aucune donnée disponible pour cette période.</p>';
+      const rows = data.totals.map(function (v) {
+        return '<tr><td>' + escapeHtml(v.label) + '</td><td class="fr-text--right">' + fmtNum(v.value) + '</td></tr>';
+      }).join('');
+      const varRows = data.variations.map(function (v) {
+        return '<tr><td>' + escapeHtml(v.period) + '</td><td class="fr-text--right">' + escapeHtml(formatPct(v.pct)) + '</td></tr>';
+      }).join('');
+      return '<div class="evo-row"><div class="evo-table">' +
+        '<table><thead><tr><th>Année</th><th class="fr-text--right">Effectif</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+        '<table class="fr-mt-2w"><thead><tr><th>Évolution</th><th class="fr-text--right">Variation</th></tr></thead><tbody>' + varRows + '</tbody></table>' +
+        '</div><div class="evo-chart">' + barChartSVG(data.totals) + '</div></div>';
+    }
+
+    function computeExamensForYear(record, ctx, year) {
+      return fetchRawTable('TR_Reussite_Examens').then(function (rows) {
+        const niveau1Code = ctx.niveau1Site && ctx.niveau1Site.Code_DGER;
+        if (!niveau1Code || !year) return null;
+        const codes = siteCodesForNiveau1(niveau1Code);
+        const filtered = rows.filter(function (r) {
+          return codes.has(r.CodeDGERTexte) && String(r.Annee_Scolaire_Annee) === String(year) && r.Tauxdereussite;
+        });
+        if (!filtered.length) return null;
+        const groups = new Map();
+        filtered.forEach(function (r) {
+          const label = r.UAI_Elem_DGER_Code__Libelle_public || r.UAI_Elem_Lib_principal_ || r.CodeDGERTexte;
+          if (!groups.has(label)) groups.set(label, []);
+          groups.get(label).push(String(r.Tauxdereussite));
+        });
+        return Array.from(groups.entries()).map(function (e) { return { title: e[0], lines: e[1] }; });
+      });
+    }
+    function renderExamensBody(groups) {
+      if (!groups || !groups.length) return '<p class="fr-mb-0">Aucune donnée disponible pour l’année sélectionnée.</p>';
+      return '<div class="org-sites">' + groups.map(function (g) {
+        const rows = g.lines.map(function (line) {
+          const idx = line.lastIndexOf(':');
+          const label = idx >= 0 ? line.slice(0, idx).trim() : line;
+          const value = idx >= 0 ? line.slice(idx + 1).trim() : '';
+          return '<div class="org-row"><span class="org-name">' + escapeHtml(label) + '</span>' + (value ? '<span class="chip">' + escapeHtml(value) + '</span>' : '') + '</div>';
+        }).join('');
+        return '<div class="org-site"><p class="org-site-title">' + escapeHtml(g.title) + '</p><div class="org-list">' + rows + '</div></div>';
+      }).join('') + '</div>';
+    }
+
+    function computeFinancesForYear(record, ctx, year) {
+      return Promise.all([fetchRawTable('TT_Donnees_financiere_centre'), fetchRawTable('TR_Type_de_centre')]).then(function (results) {
+        const rows = results[0], centres = results[1];
+        const centreById = new Map(centres.map(function (c) { return [c.id, c.Centre]; }));
+        const niveau1Code = ctx.niveau1Site && ctx.niveau1Site.Code_DGER;
+        if (!niveau1Code || !year) return null;
+        const labels = ['Résultat de fonctionnement', 'FOND DE ROULEMENT NET', 'Variation du fonds de roulement BRUT', "CAPACITE D'AUTOFINANCEMENT"];
+        const filtered = rows.filter(function (r) {
+          return r.Code_DGER_Code_DGER === niveau1Code && String(r.AnneeTexte) === String(year) && labels.indexOf(r.Ligne_libelle) !== -1;
+        });
+        const out = filtered.map(function (r) {
+          const montant = safeNum(r.Montant_annuel_realise);
+          return { indicateur: r.Ligne_libelle, centre: centreById.get(r.Centre_libelle) || ('Centre ' + r.Centre_code), montant: montant };
+        }).filter(function (r) { return r.montant !== null && Math.abs(r.montant) >= 0.005; });
+        return out.length ? out : null;
+      });
+    }
+    function renderFinancesBody(rows) {
+      if (!rows) return '<p class="fr-mb-0">Aucune donnée disponible pour l’année sélectionnée.</p>';
+      const tableRows = rows.map(function (r) {
+        return '<tr><td>' + escapeHtml(r.indicateur) + '</td><td>' + escapeHtml(r.centre) + '</td><td class="fr-text--right">' + escapeHtml(fmtEuro(r.montant)) + '</td></tr>';
+      }).join('');
+      return '<div class="finance-table"><div class="fr-table"><table><thead><tr><th>Indicateur</th><th>Centre</th><th class="fr-text--right">Montant</th></tr></thead><tbody>' + tableRows + '</tbody></table></div></div>';
+    }
+
+    // ============================================================
+    // Registre des blocs
+    // ============================================================
     const BLOCKS = [
-      { id: 'identite', title: 'Identité de l’établissement', render: renderIdentite },
-      { id: 'organigramme', title: 'Organigramme', render: renderOrganigramme },
-      { id: 'effectifs', title: 'Effectifs', render: renderEffectifs },
-      { id: 'evolution', title: 'Évolution des effectifs', render: renderEvolution },
-      { id: 'formations', title: 'Carte des formations', render: renderFormations },
-      { id: 'examens', title: 'Réussite aux examens', render: renderExamens },
-      { id: 'sites', title: 'Sites de l’établissement', render: renderSites },
-      { id: 'classement', title: 'Classement & typologie', render: renderClassement },
-      { id: 'partenaires', title: 'Partenaires significatifs', render: renderPartenaires },
-      { id: 'projets', title: 'Projets en cours', render: renderProjets },
-      { id: 'historique', title: 'Historique de l’établissement', render: renderHistorique },
-      { id: 'personnel', title: 'Ressources humaines', render: renderPersonnel },
-      { id: 'finances', title: 'Situation financière', render: renderFinances }
+      { id: 'identite', title: 'Identité de l’établissement', yearScoped: false, getContent: function (record, ctx) { return renderIdentite(record, ctx); } },
+      { id: 'organigramme', title: 'Organigramme', yearScoped: false, getContent: function (record) { return renderOrganigramme(record); } },
+      { id: 'effectifs', title: 'Effectifs', yearScoped: true, getContent: function (record, ctx, year) { return computeEffectifsForYear(record, ctx, year).then(renderEffectifsBody); } },
+      { id: 'evolution', title: 'Évolution des effectifs', yearScoped: true, getContent: function (record, ctx, year) { return computeEvolutionForYear(record, ctx, year).then(renderEvolutionBody); } },
+      { id: 'formations', title: 'Carte des formations', yearScoped: false, getContent: function (record) { return renderFormations(record); } },
+      { id: 'examens', title: 'Réussite aux examens', yearScoped: true, getContent: function (record, ctx, year) { return computeExamensForYear(record, ctx, year).then(renderExamensBody); } },
+      { id: 'sites', title: 'Sites de l’établissement', yearScoped: false, getContent: function (record) { return renderSites(record); } },
+      { id: 'classement', title: 'Classement & typologie', yearScoped: false, getContent: function (record) { return renderClassement(record); } },
+      { id: 'partenaires', title: 'Partenaires significatifs', yearScoped: false, getContent: function (record) { return renderPartenaires(record); } },
+      { id: 'projets', title: 'Projets en cours', yearScoped: false, getContent: function (record) { return renderProjets(record); } },
+      { id: 'historique', title: 'Historique de l’établissement', yearScoped: false, getContent: function (record) { return renderHistorique(record); } },
+      { id: 'personnel', title: 'Ressources humaines', yearScoped: false, getContent: function (record) { return renderPersonnel(record); } },
+      { id: 'finances', title: 'Situation financière', yearScoped: true, getContent: function (record, ctx, year) { return computeFinancesForYear(record, ctx, year).then(renderFinancesBody); } }
     ];
     const ACCENTS = [
       { id: 'bleu', label: 'Bleu Marianne', color: '#000091' },
@@ -713,10 +752,11 @@
     ];
 
     // ============================================================
-    // Préférences (ordre, visibilité, thème) — persistées via grist.setOption
+    // Préférences (ordre, visibilité, année par bloc, thème)
+    // persistées via grist.setOption / grist.onOptions
     // ============================================================
     function defaultPrefs() {
-      return { order: BLOCKS.map(function (b) { return b.id; }), hidden: {}, theme: { accent: 'bleu', scheme: 'system' } };
+      return { order: BLOCKS.map(function (b) { return b.id; }), hidden: {}, years: {}, theme: { accent: 'bleu', scheme: 'system' } };
     }
     function mergeDefaults(saved) {
       const d = defaultPrefs();
@@ -724,6 +764,7 @@
       return {
         order: Array.isArray(saved.order) ? saved.order : d.order,
         hidden: (saved.hidden && typeof saved.hidden === 'object') ? saved.hidden : d.hidden,
+        years: (saved.years && typeof saved.years === 'object') ? saved.years : d.years,
         theme: Object.assign({}, d.theme, saved.theme || {})
       };
     }
@@ -737,6 +778,7 @@
     let prefs = defaultPrefs();
     let currentRecord = null;
     let sitesById = new Map();
+    let sitesByCode = new Map();
 
     function savePrefs() {
       if (window.grist && grist.setOption) grist.setOption('fichePrefs', prefs);
@@ -749,17 +791,19 @@
     }
 
     // ============================================================
-    // Chargement des sites (pour l'adresse / contact / etc.)
+    // Chargement des sites (adresse / contact / rattachement niveau 1)
     // ============================================================
     function loadSitesTable() {
       if (!window.grist || !grist.docApi) return Promise.resolve();
       return grist.docApi.fetchTable('TT_Sites_de_formation').then(function (data) {
         sitesById = new Map();
+        sitesByCode = new Map();
         const n = (data.id || []).length;
         for (let i = 0; i < n; i++) {
           const row = {};
           for (const col in data) row[col] = data[col][i];
           sitesById.set(data.id[i], row);
+          if (row.Code_DGER) sitesByCode.set(row.Code_DGER, row);
         }
       }).catch(function (e) { console.warn('Impossible de charger TT_Sites_de_formation', e); });
     }
@@ -790,7 +834,26 @@
       el.textContent = 'Fiche établissement générée le ' + dateStr + (code ? ' — Code DGER ' + code : '');
     }
 
-    function renderAll() {
+    function renderYearPicker(blockId, years, selected) {
+      if (!years.length) return '';
+      const opts = years.map(function (y) {
+        return '<option value="' + escapeHtml(y) + '"' + (String(y) === String(selected) ? ' selected' : '') + '>' + escapeHtml(y) + '</option>';
+      }).join('');
+      return '<label class="year-picker no-print" title="Choisir l’année affichée pour ce bloc"><span class="fr-sr-only">Année</span>' +
+        '<select data-year-for="' + blockId + '">' + opts + '</select></label>' +
+        '<span class="year-label print-only-inline">Année : ' + escapeHtml(selected) + '</span>';
+    }
+    function wireYearPickers() {
+      Array.prototype.forEach.call(document.querySelectorAll('select[data-year-for]'), function (sel) {
+        sel.addEventListener('change', function () {
+          prefs.years[sel.getAttribute('data-year-for')] = sel.value;
+          savePrefs();
+          renderAll();
+        });
+      });
+    }
+
+    async function renderAll() {
       const appEl = document.getElementById('app');
       const record = currentRecord;
       if (!record) {
@@ -803,19 +866,23 @@
       };
       renderHeaderTitles(record, ctx);
 
-      const rendered = {};
-      BLOCKS.forEach(function (b) { rendered[b.id] = b.render(record, ctx); });
+      const scrollY = window.scrollY;
+      const order = getOrder().filter(function (id) { return !prefs.hidden[id]; });
+      const yearsList = await fetchYearsList();
+      const defaultYear = record.AnneeEncoursTexte || yearsList[0] || '';
 
-      const html = getOrder()
-        .filter(function (id) { return !prefs.hidden[id]; })
-        .map(function (id) {
-          const b = BLOCKS.filter(function (x) { return x.id === id; })[0];
-          return block(id, b.title, rendered[id]);
-        })
-        .filter(Boolean)
-        .join('');
+      const sections = await Promise.all(order.map(async function (id) {
+        const b = BLOCKS.filter(function (x) { return x.id === id; })[0];
+        const year = b.yearScoped ? (prefs.years[id] || defaultYear) : null;
+        const body = await b.getContent(record, ctx, year);
+        if (!body) return '';
+        const picker = b.yearScoped ? renderYearPicker(id, yearsList, year) : '';
+        return '<section class="section" data-block="' + id + '"><h2 class="title"><span>' + escapeHtml(b.title) + '</span>' + picker + '</h2>' + body + '</section>';
+      }));
 
-      appEl.innerHTML = html || '<p>Aucune information disponible pour les blocs sélectionnés.</p>';
+      appEl.innerHTML = sections.filter(Boolean).join('') || '<p>Aucune information disponible pour les blocs sélectionnés.</p>';
+      window.scrollTo(0, scrollY);
+      wireYearPickers();
       renderPrintFooter(record);
     }
 
@@ -849,9 +916,10 @@
       listEl.innerHTML = order.map(function (id) {
         const b = BLOCKS.filter(function (x) { return x.id === id; })[0];
         const hidden = !!prefs.hidden[id];
+        const yearBadge = b.yearScoped ? ' 📅' : '';
         return '<li draggable="true" data-id="' + id + '" class="block-row' + (hidden ? ' is-hidden' : '') + '">' +
           '<span class="drag-handle" aria-hidden="true">⠿</span>' +
-          '<label class="block-toggle"><input type="checkbox" ' + (hidden ? '' : 'checked') + ' data-toggle="' + id + '"><span>' + escapeHtml(b.title) + '</span></label>' +
+          '<label class="block-toggle"><input type="checkbox" ' + (hidden ? '' : 'checked') + ' data-toggle="' + id + '"><span>' + escapeHtml(b.title) + yearBadge + '</span></label>' +
           '</li>';
       }).join('');
 
