@@ -76,7 +76,7 @@
     .table-pill {
       display: inline-block; font-size: 11px; font-weight: 700; color: #4338ca;
       background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 999px;
-      padding: 2px 9px; margin-bottom: 8px;
+      padding: 2px 9px; margin-bottom: 8px; margin-right: 4px;
     }
 
     .title { font-size: 20px; font-weight: 700; margin-bottom: 8px; color: #111827; }
@@ -145,11 +145,6 @@
     }
     .fiche-header .title { margin-bottom: 4px; }
     .fiche-header .sub { font-size: 13px; color: #6b7280; margin-bottom: 8px; }
-
-    .fiche-loading {
-      background: #fff; border: 1px dashed #d1d5db; border-radius: 14px;
-      padding: 24px; text-align: center; color: #6b7280;
-    }
 
     .section {
       background: #fff; border: 1px solid #e5e7eb; border-radius: 14px;
@@ -257,7 +252,6 @@
       border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
     }
     .form-field textarea { resize: vertical; min-height: 60px; }
-    .form-hint { font-size: 10.5px; color: #9ca3af; }
 
     .form-actions { display: flex; gap: 8px; margin-top: 4px; }
     .form-submit-btn {
@@ -287,7 +281,7 @@
           id="searchInput"
           class="search-input"
           type="text"
-          placeholder="Rechercher un code PACAGE, un SIRET, une adresse, un téléphone, un type d'aide..."
+          placeholder="Tapez un code PACAGE, un SIRET, une adresse, un téléphone, un type d'aide..."
         />
         <div class="filter-chips" id="filterChips"></div>
         <div class="toolbar">
@@ -326,28 +320,87 @@
       return String(str ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "");
     }
     function normCol(col) { return stripAccents(col).toLowerCase(); }
+    function normalizeCode(v) { return stripAccents(String(v ?? "")).toLowerCase().replace(/[^a-z0-9]/g, ""); }
 
     function classifyColumn(col) {
       const n = normCol(col);
       const cats = [];
       if (/pacage/.test(n)) cats.push("pacage");
       if (/siret/.test(n)) cats.push("siret");
-      const isMailLike = /mail|courriel|email|site|url/.test(n);
+      // "adresse electronique" / "adresse mail" doivent rester dans les emails, pas dans l'adresse postale
+      const isMailLike = /mail|courriel|email|electronique|site|url/.test(n);
       if (!isMailLike && /adresse|^commune$|code.?postal|codepostal/.test(n)) cats.push("adresse");
       if (/telephone|mobile|portable|gsm|(^|_)tel(_|$)/.test(n)) cats.push("telephone");
       if (/dispositif|typeaide|type.*aide|aide.*type|nature.*aide|nature.*dispositif/.test(n)) cats.push("typeAide");
       return cats;
     }
 
+    // ================= Libellés normalisés =================
+    // Table de correspondance pour les noms de colonnes propres et courts (comparaison
+    // insensible à la casse/accents). Pour les colonnes "longues" issues d'exports de
+    // Démarches Simplifiées (question entière transformée en nom de colonne), on applique
+    // un nettoyage automatique plutôt qu'une entrée dédiée.
+    const FIELD_LABELS_NORM = {
+      pacage: "N° PACAGE",
+      siret: "N° SIRET",
+      n_siret: "N° SIRET",
+      adresse: "Adresse",
+      code_postal: "Code postal",
+      commune: "Commune",
+      telephone: "Téléphone",
+      telephone_fixe: "Téléphone fixe",
+      telephone_mobile: "Téléphone mobile",
+      telephone_portable: "Téléphone portable",
+      mobile: "Mobile",
+      portable_1: "Téléphone (associé 1)",
+      portable_2: "Téléphone (associé 2)",
+      pacage_enfant: "N° PACAGE (rattaché)",
+      pacage_report: "N° PACAGE (reporté)",
+      nom: "Nom",
+      nom_ou_raison_sociale: "Nom / Raison sociale",
+      raison_sociale: "Raison sociale",
+      statut: "Statut",
+      date: "Date"
+    };
+
+    function humanizeSlug(col) {
+      let s = String(col).replace(/_/g, " ").trim();
+      if (s.length <= 32) {
+        return s.charAt(0).toUpperCase() + s.slice(1);
+      }
+      // Colonne longue : probablement une question Démarches Simplifiées convertie en slug.
+      s = stripAccents(s).toLowerCase();
+      s = s.replace(/\b(indiquez le|indiquez|precisez ici votre|precisez votre|precisez ici|merci de indiquer|veuillez indiquer|saisissez|renseignez)\b/g, " ");
+      s = s.split(/,| ainsi que | le cas echeant/)[0];
+      s = s.replace(/\s+/g, " ").trim();
+      if (s.length > 48) s = s.slice(0, 48).trim() + "…";
+      return s.charAt(0).toUpperCase() + s.slice(1);
+    }
+
+    function labelFor(col) {
+      const key = normCol(col).replace(/\s+/g, "_");
+      if (FIELD_LABELS_NORM[key]) return FIELD_LABELS_NORM[key];
+      return humanizeSlug(col);
+    }
+
+    const TABLE_LABELS = {};
+    function tableLabelFor(tableId) {
+      if (TABLE_LABELS[tableId]) return TABLE_LABELS[tableId];
+      if (/^Demarche_/i.test(tableId)) return "Démarche " + tableId.replace(/^Demarche_/i, "").replace(/_/g, " ");
+      return tableId.replace(/^DATA_/i, "").replace(/_/g, " ");
+    }
+
     // ================= État global =================
-    let allTables = [];      // [{ tableId, columns, rows, catCols: {pacage:[...], ...}, hasAnyCriteria }]
+    let allTables = [];      // [{ tableId, columns, rows, catCols, hasAnyCriteria, primaryCol:{pacage,siret} }]
+    let pacageToSiret = new Map();
+    let siretToPacage = new Map();
     let suiviTableId = null;
     let suiviColumns = [];
     let suiviRows = [];
-    let suiviFieldMap = { tableRef: null, recordRef: null, commentaire: null, statut: null, date: null, auteur: null };
+    let suiviFieldMap = { commentaire: null, statut: null, date: null, auteur: null, identifiant: null };
     let dataLoaded = false;
     let activeFilter = "all";  // "all" ou une clé de CRITERIA
-    let currentOpenKey = null;
+    let currentIdentity = null;
 
     const searchInput = document.getElementById("searchInput");
     const metaEl = document.getElementById("meta");
@@ -380,12 +433,6 @@
       if (Array.isArray(val)) return val.join(", ");
       if (typeof val === "boolean") return val ? "Oui" : "Non";
       return String(val ?? "");
-    }
-
-    function humanizeKey(key) {
-      const spaced = String(key).replace(/_/g, " ").trim();
-      if (!spaced) return key;
-      return spaced.charAt(0).toUpperCase() + spaced.slice(1);
     }
 
     function formatDateTime(value) {
@@ -433,21 +480,26 @@
       return n.includes("suivi") && n.includes("dossier");
     }
 
-    // Reconnaît, parmi les colonnes de la table "Suivi de dossier", celles qui servent à
-    // rattacher une annotation à un enregistrement source, ainsi que le commentaire/statut/etc.
+    // Choisit, parmi les colonnes reconnues comme PACAGE (ou SIRET) d'une table, celle qui sert
+    // d'identifiant principal de la ligne (ex. "Pacage" plutôt que "Pacage_enfant"/"Pacage_Report",
+    // qui désignent un dossier différent de celui de la ligne elle-même).
+    function choosePrimaryCol(cols, key) {
+      if (!cols.length) return null;
+      const exact = cols.find(c => normCol(c) === key);
+      if (exact) return exact;
+      return cols.slice().sort((a, b) => a.length - b.length)[0];
+    }
+
     function classifySuiviColumns(cols) {
-      const map = { tableRef: null, recordRef: null, commentaire: null, statut: null, date: null, auteur: null };
+      const map = { commentaire: null, statut: null, date: null, auteur: null, identifiant: null };
       cols.forEach(col => {
         const n = normCol(col);
-        if (!map.tableRef && /(table|source).*(source|table)|^table$|nom.*table/.test(n)) map.tableRef = col;
-        if (!map.recordRef && /(id|ref).*(ligne|enregistrement|record|source)|(ligne|enregistrement).*id/.test(n)) map.recordRef = col;
         if (!map.statut && /statut|^etat$|status/.test(n)) map.statut = col;
         if (!map.date && /^date|date.*creation|cree.*le/.test(n)) map.date = col;
         if (!map.auteur && /auteur|utilisateur|redacteur|redige.*par|cree.*par|agent/.test(n)) map.auteur = col;
+        if (!map.identifiant && /pacage|siret|code.*dossier|identifiant|reference/.test(n)) map.identifiant = col;
         if (!map.commentaire && /commentaire|annotation|note|description|observation|detail/.test(n)) map.commentaire = col;
       });
-      // Repli : si aucune colonne de commentaire reconnue, on prend la première colonne texte
-      // restante (hors celles déjà affectées) pour ne pas bloquer la fonctionnalité.
       if (!map.commentaire) {
         const used = new Set(Object.values(map).filter(Boolean));
         const fallback = cols.find(c => !used.has(c));
@@ -456,8 +508,7 @@
       return map;
     }
 
-    function recordTag(tableId, rowId) { return `[REF:${tableId}:${rowId}]`; }
-    function stripTag(text, tag) { return (text || "").replace(tag, "").trim(); }
+    function dossierTag(identityKey) { return `[DOSSIER:${identityKey}]`; }
 
     async function loadEverything() {
       metaEl.textContent = "Chargement des tables du document...";
@@ -477,11 +528,17 @@
           const catCols = { pacage: [], siret: [], adresse: [], telephone: [], typeAide: [] };
           columns.forEach(col => classifyColumn(col).forEach(cat => catCols[cat].push(col)));
           const hasAnyCriteria = CRITERIA_KEYS.some(cat => catCols[cat].length > 0);
-          allTables.push({ tableId, columns, rows, catCols, hasAnyCriteria });
+          const primaryCol = {
+            pacage: choosePrimaryCol(catCols.pacage, "pacage"),
+            siret: choosePrimaryCol(catCols.siret, "siret")
+          };
+          allTables.push({ tableId, columns, rows, catCols, hasAnyCriteria, primaryCol });
         } catch (err) {
           console.error("Erreur chargement de la table", tableId, err);
         }
       }
+
+      buildCrossMaps();
 
       if (suiviTableId) {
         await loadSuiviTable();
@@ -493,11 +550,83 @@
       dataLoaded = true;
     }
 
+    // Construit, à partir des tables qui portent à la fois un PACAGE et un SIRET (ex. DATA_PAC),
+    // les correspondances PACAGE <-> SIRET utilisées pour relier les tables qui n'ont qu'un des deux.
+    function buildCrossMaps() {
+      pacageToSiret = new Map();
+      siretToPacage = new Map();
+      allTables.forEach(t => {
+        if (!t.primaryCol.pacage || !t.primaryCol.siret) return;
+        t.rows.forEach(row => {
+          const p = row[t.primaryCol.pacage], s = row[t.primaryCol.siret];
+          if (p !== null && p !== undefined && p !== "" && s !== null && s !== undefined && s !== "") {
+            const pn = normalizeCode(p), sn = normalizeCode(s);
+            if (!pacageToSiret.has(pn)) pacageToSiret.set(pn, new Set());
+            pacageToSiret.get(pn).add(String(s).trim());
+            if (!siretToPacage.has(sn)) siretToPacage.set(sn, new Set());
+            siretToPacage.get(sn).add(String(p).trim());
+          }
+        });
+      });
+    }
+
     async function loadSuiviTable() {
       const raw = await fetchTableRaw(suiviTableId);
       suiviColumns = columnsFromRaw(raw);
       suiviRows = rowsFromRaw(raw, suiviColumns);
       suiviFieldMap = classifySuiviColumns(suiviColumns);
+    }
+
+    // ================= Identité d'un dossier =================
+    // Un "dossier" = un couple {pacage, siret}, résolu pour n'importe quelle ligne trouvée en
+    // recherche via la colonne principale de la table, et complété via buildCrossMaps() si l'un
+    // des deux codes manque dans cette table précise.
+    function identityForRow(tableEntry, row) {
+      let pacage = tableEntry.primaryCol.pacage ? row[tableEntry.primaryCol.pacage] : null;
+      let siret = tableEntry.primaryCol.siret ? row[tableEntry.primaryCol.siret] : null;
+      pacage = (pacage !== null && pacage !== undefined && pacage !== "") ? String(pacage).trim() : null;
+      siret = (siret !== null && siret !== undefined && siret !== "") ? String(siret).trim() : null;
+      if (!pacage && siret) {
+        const set = siretToPacage.get(normalizeCode(siret));
+        if (set && set.size) pacage = [...set][0];
+      }
+      if (!siret && pacage) {
+        const set = pacageToSiret.get(normalizeCode(pacage));
+        if (set && set.size) siret = [...set][0];
+      }
+      return { pacage, siret };
+    }
+
+    function identityKeyOf(identity) {
+      if (identity.pacage) return "P:" + normalizeCode(identity.pacage);
+      if (identity.siret) return "S:" + normalizeCode(identity.siret);
+      return null;
+    }
+
+    function identityLabel(identity) {
+      const parts = [];
+      if (identity.pacage) parts.push("PACAGE " + identity.pacage);
+      if (identity.siret) parts.push("SIRET " + identity.siret);
+      return parts.join(" · ") || "Enregistrement";
+    }
+
+    // Rassemble, pour un dossier donné, toutes les lignes de toutes les tables qui s'y rattachent
+    // via leur colonne PACAGE/SIRET principale.
+    function gatherDossier(identity) {
+      const sections = [];
+      allTables.forEach(t => {
+        const pCol = t.primaryCol.pacage, sCol = t.primaryCol.siret;
+        if (!pCol && !sCol) return;
+        const rows = t.rows.filter(row => {
+          const pVal = pCol ? row[pCol] : null;
+          const sVal = sCol ? row[sCol] : null;
+          const pMatch = identity.pacage && pVal !== null && pVal !== undefined && pVal !== "" && normalizeCode(pVal) === normalizeCode(identity.pacage);
+          const sMatch = identity.siret && sVal !== null && sVal !== undefined && sVal !== "" && normalizeCode(sVal) === normalizeCode(identity.siret);
+          return pMatch || sMatch;
+        });
+        if (rows.length) sections.push({ tableId: t.tableId, rows });
+      });
+      return sections;
     }
 
     // ================= Filtres / recherche =================
@@ -540,20 +669,27 @@
       return `${tableEntry.tableId} — ligne #${row.id}`;
     }
 
-    function searchAll(query) {
+    // Recherche, sur les 5 critères actifs, puis regroupe immédiatement chaque ligne trouvée
+    // par dossier (PACAGE/SIRET) : la recherche renvoie des DOSSIERS, pas des lignes brutes.
+    function searchDossiers(query) {
       const q = normalize(query);
       const cats = activeCriteriaKeys();
-      const out = [];
+      const found = new Map(); // identityKey -> { identity, sampleTable, sampleRow, sampleMatched }
       allTables.forEach(tableEntry => {
         if (!tableEntry.hasAnyCriteria) return;
         tableEntry.rows.forEach(row => {
           const matched = getMatchedFields(tableEntry, row, cats);
           if (!matched.length) return;
           const hit = matched.some(m => normalize(m.text).includes(q));
-          if (hit) out.push({ tableEntry, row, matched });
+          if (!hit) return;
+          const identity = identityForRow(tableEntry, row);
+          const key = identityKeyOf(identity) || `R:${tableEntry.tableId}:${row.id}`;
+          if (!found.has(key)) {
+            found.set(key, { identity, key, sampleTable: tableEntry, sampleRow: row, sampleMatched: matched });
+          }
         });
       });
-      return out;
+      return found;
     }
 
     function render() {
@@ -569,38 +705,45 @@
         return;
       }
 
-      const hits = searchAll(query);
-      const limited = hits.slice(0, 200);
-      metaEl.textContent = `${hits.length} résultat(s) trouvé(s)${hits.length > limited.length ? " (200 premiers affichés, affinez votre recherche)" : ""} sur ${eligibleTables} table(s) contenant au moins un des 5 critères.`;
+      const found = searchDossiers(query);
+      const entries = [...found.values()];
 
-      if (!limited.length) {
+      if (!entries.length) {
+        metaEl.textContent = "Aucun dossier trouvé.";
         resultsEl.innerHTML = `<div class="empty">Aucun résultat trouvé</div>`;
         return;
       }
 
-      resultsEl.innerHTML = limited.map(({ tableEntry, row, matched }) => {
-        const key = `${tableEntry.tableId}:${row.id}`;
-        const title = guessTitle(tableEntry, row, matched);
-        const lines = matched.slice(0, 6).map(m =>
-          `<strong>${escapeHtml(humanizeKey(m.col))}</strong> <span class="crit-dot ${CRITERIA[m.cat].cls}">${escapeHtml(CRITERIA[m.cat].label)}</span> : ${highlight(m.text, query)}`
+      // Un seul dossier trouvé : on affiche directement le résumé, sans étape intermédiaire.
+      if (entries.length === 1) {
+        metaEl.textContent = "1 dossier trouvé.";
+        resultsEl.innerHTML = "";
+        openDossier(entries[0].identity);
+        return;
+      }
+
+      metaEl.textContent = `${entries.length} dossiers distincts trouvés. Sélectionnez celui à afficher.`;
+      resultsEl.innerHTML = entries.slice(0, 100).map(entry => {
+        const { identity, sampleTable, sampleRow, sampleMatched, key } = entry;
+        const title = identity.pacage || identity.siret ? identityLabel(identity) : guessTitle(sampleTable, sampleRow, sampleMatched);
+        const nameGuess = guessTitle(sampleTable, sampleRow, sampleMatched);
+        const lines = sampleMatched.slice(0, 4).map(m =>
+          `<strong>${escapeHtml(labelFor(m.col))}</strong> <span class="crit-dot ${CRITERIA[m.cat].cls}">${escapeHtml(CRITERIA[m.cat].label)}</span> : ${highlight(m.text, query)}`
         ).join("<br>");
         return `
-          <div class="card" data-key="${escapeHtml(key)}" data-tableid="${escapeHtml(tableEntry.tableId)}" data-rowid="${row.id}">
-            <div class="table-pill">${escapeHtml(tableEntry.tableId)}</div>
-            <div class="title">${highlight(title, query)}</div>
-            <div class="line">${lines}</div>
-            <div class="small">ID de ligne Grist : ${row.id}</div>
-            <div class="open-fiche-btn" data-key="${escapeHtml(key)}">Voir la fiche complète →</div>
+          <div class="card" data-key="${escapeHtml(key)}">
+            <div class="table-pill">${escapeHtml(sampleTable.tableId)}</div>
+            <div class="title">${escapeHtml(title)}</div>
+            <div class="line">${nameGuess !== title ? escapeHtml(nameGuess) + "<br>" : ""}${lines}</div>
+            <div class="open-fiche-btn" data-key="${escapeHtml(key)}">Ouvrir ce dossier →</div>
           </div>
         `;
       }).join("");
 
       document.querySelectorAll(".card").forEach(card => {
-        card.addEventListener("click", async (ev) => {
-          const tableId = card.dataset.tableid;
-          const rowId = Number(card.dataset.rowid);
-          try { await grist.setCursorPos({ tableId, rowId }); } catch (e) { /* certains docs refusent le changement de table active */ }
-          openFiche(tableId, rowId);
+        card.addEventListener("click", () => {
+          const entry = found.get(card.dataset.key);
+          if (entry) openDossier(entry.identity);
         });
       });
     }
@@ -630,19 +773,22 @@
         }
         const critLines = CRITERIA_KEYS
           .filter(cat => t.catCols[cat].length)
-          .map(cat => `<div class="debug-crit">• ${escapeHtml(CRITERIA[cat].label)} → ${t.catCols[cat].map(escapeHtml).join(", ")}</div>`)
+          .map(cat => {
+            const colsTxt = t.catCols[cat].map(c => `<span title="${escapeHtml(c)}">${escapeHtml(labelFor(c))}</span>`).join(", ");
+            const primaryNote = (cat === "pacage" && t.primaryCol.pacage) ? ` (identifiant : ${escapeHtml(t.primaryCol.pacage)})` : (cat === "siret" && t.primaryCol.siret) ? ` (identifiant : ${escapeHtml(t.primaryCol.siret)})` : "";
+            return `<div class="debug-crit">• ${escapeHtml(CRITERIA[cat].label)} → ${colsTxt}${primaryNote}</div>`;
+          })
           .join("");
         return `<div class="debug-table"><span class="tname">${escapeHtml(t.tableId)}</span> (${t.rows.length} ligne(s))${critLines}</div>`;
       }).join("");
 
       const suiviBlock = suiviTableId
         ? `<div class="debug-table"><span class="tname">${escapeHtml(suiviTableId)}</span> — table "Suivi de dossier" détectée (${suiviRows.length} ligne(s))
-            <div class="debug-crit">• Rattachement table source → ${suiviFieldMap.tableRef ? escapeHtml(suiviFieldMap.tableRef) : "non trouvé (le lien se fait via une balise cachée dans le commentaire)"}</div>
-            <div class="debug-crit">• Rattachement ligne source → ${suiviFieldMap.recordRef ? escapeHtml(suiviFieldMap.recordRef) : "non trouvé (le lien se fait via une balise cachée dans le commentaire)"}</div>
             <div class="debug-crit">• Commentaire → ${suiviFieldMap.commentaire ? escapeHtml(suiviFieldMap.commentaire) : "aucune colonne texte disponible"}</div>
             <div class="debug-crit">• Statut → ${suiviFieldMap.statut ? escapeHtml(suiviFieldMap.statut) : "non trouvé"}</div>
             <div class="debug-crit">• Date → ${suiviFieldMap.date ? escapeHtml(suiviFieldMap.date) : "non trouvé"}</div>
             <div class="debug-crit">• Auteur → ${suiviFieldMap.auteur ? escapeHtml(suiviFieldMap.auteur) : "non trouvé"}</div>
+            <div class="debug-crit">• Identifiant dossier → ${suiviFieldMap.identifiant ? escapeHtml(suiviFieldMap.identifiant) : "non trouvé (le lien se fait via une balise cachée dans le commentaire)"}</div>
            </div>`
         : `<div class="debug-table"><span class="skipped">Aucune table "Suivi de dossier" trouvée dans ce document (le nom technique doit contenir "suivi" et "dossier"). Le panneau d'annotation sera désactivé sur les fiches.</span></div>`;
 
@@ -662,7 +808,7 @@
 
     function renderFieldRow(key, rawValue) {
       const text = fieldValueToText(rawValue);
-      const label = humanizeKey(key);
+      const label = labelFor(key);
       const cats = classifyColumn(key);
       const critBadges = cats.map(c => `<span class="crit-dot ${CRITERIA[c].cls}">${escapeHtml(CRITERIA[c].label)}</span>`).join("");
       const items = splitIntoListItems(text);
@@ -706,20 +852,14 @@
     }
 
     // ================= Suivi de dossier =================
-    function matchingSuiviRows(tableId, rowId) {
+    function matchingSuiviRows(identityKey) {
       if (!suiviTableId || !suiviFieldMap.commentaire) return [];
-      const tag = recordTag(tableId, rowId);
-      return suiviRows.filter(r => {
-        const text = String(r[suiviFieldMap.commentaire] || "");
-        if (text.includes(tag)) return true;
-        if (suiviFieldMap.tableRef && suiviFieldMap.recordRef) {
-          return String(r[suiviFieldMap.tableRef] || "") === tableId && Number(r[suiviFieldMap.recordRef]) === rowId;
-        }
-        return false;
-      }).sort((a, b) => {
-        if (suiviFieldMap.date) return (Number(b[suiviFieldMap.date]) || 0) - (Number(a[suiviFieldMap.date]) || 0);
-        return b.id - a.id;
-      });
+      const tag = dossierTag(identityKey);
+      return suiviRows.filter(r => String(r[suiviFieldMap.commentaire] || "").includes(tag))
+        .sort((a, b) => {
+          if (suiviFieldMap.date) return (Number(b[suiviFieldMap.date]) || 0) - (Number(a[suiviFieldMap.date]) || 0);
+          return b.id - a.id;
+        });
     }
 
     function distinctStatutValues() {
@@ -737,7 +877,7 @@
       const date = suiviFieldMap.date ? formatDateTime(entry[suiviFieldMap.date]) : null;
       const auteur = suiviFieldMap.auteur ? entry[suiviFieldMap.auteur] : null;
       const rawComment = suiviFieldMap.commentaire ? String(entry[suiviFieldMap.commentaire] || "") : "";
-      const comment = rawComment.replace(/\[REF:[^\]]+\]/g, "").trim();
+      const comment = rawComment.replace(/\[DOSSIER:[^\]]+\]/g, "").trim();
       const colors = badgeColorForStatus(statut);
 
       const statutControl = suiviFieldMap.statut
@@ -796,7 +936,7 @@
       `;
     }
 
-    function renderSuiviPanel(ctx) {
+    function renderSuiviPanel(identityKey) {
       if (!suiviTableId) {
         return `
           <div class="suivi-panel">
@@ -813,10 +953,10 @@
           </div>
         `;
       }
-      const entries = matchingSuiviRows(ctx.tableId, ctx.rowId);
+      const entries = matchingSuiviRows(identityKey);
       const body = entries.length
         ? entries.map(renderSuiviCard).join("")
-        : `<div class="suivi-empty">Aucune annotation pour cet enregistrement</div>`;
+        : `<div class="suivi-empty">Aucune annotation pour ce dossier</div>`;
       return `
         <div class="suivi-panel" id="suiviPanelWrap">
           <div class="suivi-header">
@@ -831,7 +971,7 @@
       `;
     }
 
-    async function updateSuiviStatut(select, ctx) {
+    async function updateSuiviStatut(select) {
       const entryId = Number(select.dataset.entryid);
       const newValue = select.value;
       select.disabled = true;
@@ -852,16 +992,16 @@
       }
     }
 
-    async function refreshSuiviPanel(ctx) {
+    async function refreshSuiviPanel(identity, identityKey) {
       await loadSuiviTable();
       const wrap = document.getElementById("suiviPanelWrap") || document.querySelector(".suivi-panel");
       if (wrap) {
-        wrap.outerHTML = renderSuiviPanel(ctx);
-        bindSuiviUI(ctx);
+        wrap.outerHTML = renderSuiviPanel(identityKey);
+        bindSuiviUI(identity, identityKey);
       }
     }
 
-    async function submitNewSuivi(form, ctx) {
+    async function submitNewSuivi(form, identity, identityKey) {
       const messageEl = document.getElementById("suiviFormMessage");
       const submitBtn = document.getElementById("submitNewSuiviBtn");
       messageEl.innerHTML = "";
@@ -882,18 +1022,17 @@
       submitBtn.textContent = "Enregistrement...";
 
       try {
-        const tag = recordTag(ctx.tableId, ctx.rowId);
+        const tag = dossierTag(identityKey);
         const fields = {};
         fields[suiviFieldMap.commentaire] = `${tag} ${commentaire}`.trim();
         if (suiviFieldMap.statut && statutValue) fields[suiviFieldMap.statut] = statutValue;
         if (suiviFieldMap.auteur && auteurValue) fields[suiviFieldMap.auteur] = auteurValue;
-        if (suiviFieldMap.tableRef) fields[suiviFieldMap.tableRef] = ctx.tableId;
-        if (suiviFieldMap.recordRef) fields[suiviFieldMap.recordRef] = ctx.rowId;
+        if (suiviFieldMap.identifiant) fields[suiviFieldMap.identifiant] = identityLabel(identity);
 
         await grist.docApi.applyUserActions([
           ["AddRecord", suiviTableId, null, fields]
         ]);
-        await refreshSuiviPanel(ctx);
+        await refreshSuiviPanel(identity, identityKey);
         const newMessageEl = document.getElementById("suiviFormMessage");
         if (newMessageEl) newMessageEl.innerHTML = `<div class="form-message success">Annotation enregistrée.</div>`;
       } catch (err) {
@@ -904,7 +1043,7 @@
       }
     }
 
-    function bindSuiviUI(ctx) {
+    function bindSuiviUI(identity, identityKey) {
       const toggleBtn = document.getElementById("toggleNewSuiviBtn");
       const form = document.getElementById("newSuiviForm");
       const cancelBtn = document.getElementById("cancelNewSuiviBtn");
@@ -912,7 +1051,7 @@
       const statutAutreWrap = document.getElementById("statutAutreWrap");
 
       document.querySelectorAll(".badge-select").forEach(select => {
-        select.addEventListener("change", () => updateSuiviStatut(select, ctx));
+        select.addEventListener("change", () => updateSuiviStatut(select));
       });
 
       if (statutSelect && statutAutreWrap) {
@@ -926,60 +1065,58 @@
       if (cancelBtn) cancelBtn.addEventListener("click", () => form.classList.add("hidden"));
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
-        await submitNewSuivi(form, ctx);
+        await submitNewSuivi(form, identity, identityKey);
       });
     }
 
-    // ================= Fiche =================
-    function openFiche(tableId, rowId) {
-      const tableEntry = allTables.find(t => t.tableId === tableId);
-      const row = tableEntry ? tableEntry.rows.find(r => r.id === rowId) : null;
-      if (!tableEntry || !row) {
-        ficheContent.innerHTML = `<div class="fiche-error">Enregistrement introuvable (il a peut-être été supprimé). Actualisez la recherche.</div>`;
-        searchView.style.display = "none";
-        ficheView.style.display = "block";
-        return;
-      }
+    // ================= Fiche consolidée (résumé du dossier) =================
+    function openDossier(identity) {
+      const identityKey = identityKeyOf(identity) || "inconnu";
+      currentIdentity = identity;
+      const sections = gatherDossier(identity);
 
-      currentOpenKey = `${tableId}:${rowId}`;
-      const matched = getMatchedFields(tableEntry, row, CRITERIA_KEYS);
-      const title = guessTitle(tableEntry, row, matched);
+      // Meilleur nom trouvé toutes tables confondues, pour le titre de la fiche.
+      let displayName = null;
+      for (const section of sections) {
+        for (const row of section.rows) {
+          const nameCol = Object.keys(row).find(c => /^nom$|raison.*sociale|denomination|exploitant|prenom/.test(normCol(c)));
+          if (nameCol && row[nameCol]) { displayName = fieldValueToText(row[nameCol]); break; }
+        }
+        if (displayName) break;
+      }
 
       searchView.style.display = "none";
       ficheView.style.display = "block";
 
       const header = `
         <div class="fiche-header">
-          <div class="table-pill">${escapeHtml(tableId)}</div>
-          <div class="title">${escapeHtml(title)}</div>
-          <div class="sub">ID de ligne Grist : ${rowId}</div>
+          <div class="title">${escapeHtml(displayName || identityLabel(identity))}</div>
+          <div class="sub">${escapeHtml(identityLabel(identity))} · données présentes dans ${sections.length} table(s)</div>
           <div class="badges">
-            ${CRITERIA_KEYS.filter(cat => tableEntry.catCols[cat].some(col => row[col])).map(cat =>
-              `<span class="tag ${CRITERIA[cat].cls}">${escapeHtml(CRITERIA[cat].label)}</span>`
-            ).join("")}
+            ${sections.map(s => `<span class="table-pill">${escapeHtml(tableLabelFor(s.tableId))}</span>`).join("")}
           </div>
         </div>
       `;
 
-      const ctx = { tableId, rowId };
+      const mainSectionsHtml = sections.length
+        ? sections.map(s => renderSection(tableLabelFor(s.tableId), s.rows)).join("")
+        : `<div class="empty">Aucune donnée rattachée à ce dossier n'a été retrouvée.</div>`;
 
       ficheContent.innerHTML = `
         ${header}
         <div class="fiche-layout">
-          ${renderSuiviPanel(ctx)}
-          <div class="fiche-main">
-            ${renderSection("Détails de l'enregistrement", [row])}
-          </div>
+          ${renderSuiviPanel(identityKey)}
+          <div class="fiche-main">${mainSectionsHtml}</div>
         </div>
       `;
 
-      bindSuiviUI(ctx);
+      bindSuiviUI(identity, identityKey);
     }
 
     backBtn.addEventListener("click", () => {
       ficheView.style.display = "none";
       searchView.style.display = "block";
-      currentOpenKey = null;
+      currentIdentity = null;
     });
 
     // ================= Initialisation Grist =================
