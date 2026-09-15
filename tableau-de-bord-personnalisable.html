@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-scheme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tableau de bord personnalisable</title>
+
+<!-- Système de Design de l'État (DSFR) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr/dist/dsfr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr/dist/utility/icons/icons.min.css">
+
+<!-- API du widget Grist -->
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+
+<style>
+  /* Compléments légers, cohérents avec les jetons de couleur du DSFR
+     (variables officielles avec repli en dur au cas où). */
+  body{
+    background-color: var(--background-default-grey, #fff);
+  }
+  .mast{
+    padding: 1.5rem 0;
+    border-bottom: 1px solid var(--border-default-grey, #ddd);
+  }
+  .head-actions{
+    display:flex;
+    gap: 0.5rem;
+    justify-content:flex-end;
+    flex-wrap:wrap;
+  }
+  .kpi-highlight{
+    height: 100%;
+    border-left-color: var(--blue-france-sun-113-625, #000091) !important;
+  }
+  .kpi-value{
+    font-weight: 700;
+    color: var(--text-title-grey, #161616);
+  }
+  .kpi-remove{
+    position:absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+  }
+  .anomalies-head{
+    display:flex;
+    align-items:center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .bar-track{
+    display:block;
+    height: 6px;
+    border-radius: 3px;
+    background-color: var(--background-alt-grey, #f6f6f6);
+    overflow:hidden;
+    min-width: 120px;
+  }
+  .bar-fill{
+    display:block;
+    height:100%;
+    background-color: var(--blue-france-sun-113-625, #000091);
+  }
+  .value-count{
+    font-weight:700;
+    white-space:nowrap;
+  }
+  #noticeZone > * + *{
+    margin-top: 0.75rem;
+  }
+  .fr-table td, .fr-table th{
+    vertical-align: middle;
+  }
+  #settingsPanel{
+    display:none;
+  }
+  #settingsPanel.open{
+    display:block;
+  }
+  .indicator-row{
+    display:flex;
+    gap: 0.75rem;
+    align-items:flex-end;
+    flex-wrap: wrap;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--border-default-grey, #ddd);
+  }
+  .indicator-row:last-child{
+    border-bottom: none;
+  }
+  .indicator-row > div{
+    flex: 1 1 200px;
+    min-width: 160px;
+  }
+  .indicator-row .remove-wrap{
+    flex: 0 0 auto;
+    min-width: auto;
+  }
+  .field-hint{
+    font-size: 0.75rem;
+    color: var(--text-mention-grey, #666);
+  }
+</style>
+</head>
+<body>
+
+<div class="fr-container fr-py-4w">
+
+  <!-- En-tête (sans bloc-marque / logo) -->
+  <div class="mast fr-mb-4w">
+    <div class="fr-grid-row fr-grid-row--gutters fr-grid-row--middle">
+      <div class="fr-col-12 fr-col-md-8">
+        <p class="fr-badge fr-badge--sm fr-badge--info fr-mb-2w" id="dashBadge" hidden></p>
+        <h1 class="fr-h3 fr-mb-1v" id="dashTitle">Tableau de bord</h1>
+        <p class="fr-text--sm fr-mb-0" id="dashSubtitle" style="color:var(--text-mention-grey,#666)"></p>
+      </div>
+      <div class="fr-col-12 fr-col-md-4">
+        <p class="fr-text--sm fr-mb-1w" id="syncLabel" style="text-align:right">Connexion à Grist…</p>
+        <div class="head-actions">
+          <button type="button" class="fr-btn fr-btn--secondary fr-btn--icon-left fr-icon-settings-5-line" id="settingsBtn">
+            Configurer
+          </button>
+          <button type="button" class="fr-btn fr-btn--secondary fr-btn--icon-left fr-icon-refresh-line" id="refreshBtn">
+            Rafraîchir
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Panneau de configuration -->
+  <div class="fr-callout fr-mb-4w" id="settingsPanel">
+    <h2 class="fr-callout__title fr-h6">Configuration du tableau de bord</h2>
+    <div class="fr-callout__text">
+
+      <div class="fr-grid-row fr-grid-row--gutters fr-mb-2w">
+        <div class="fr-col-12 fr-col-md-6">
+          <div class="fr-select-group">
+            <label class="fr-label" for="tableSelect">Table source</label>
+            <select class="fr-select" id="tableSelect">
+              <option value="">— Choisir une table —</option>
+            </select>
+          </div>
+        </div>
+        <div class="fr-col-12 fr-col-md-6">
+          <div class="fr-input-group">
+            <label class="fr-label" for="badgeInput">Badge (bandeau au-dessus du titre, optionnel)</label>
+            <input class="fr-input" id="badgeInput" type="text" placeholder="ex. Démarche n°149963">
+          </div>
+        </div>
+        <div class="fr-col-12 fr-col-md-6">
+          <div class="fr-input-group">
+            <label class="fr-label" for="titleInput">Titre du tableau de bord</label>
+            <input class="fr-input" id="titleInput" type="text" placeholder="Tableau de bord">
+          </div>
+        </div>
+        <div class="fr-col-12 fr-col-md-6">
+          <div class="fr-input-group">
+            <label class="fr-label" for="subtitleInput">Sous-titre (optionnel)</label>
+            <input class="fr-input" id="subtitleInput" type="text" placeholder="">
+          </div>
+        </div>
+      </div>
+
+      <h3 class="fr-h6 fr-mt-3w">Indicateurs clés</h3>
+      <p class="field-hint fr-mb-1w">Choisissez une colonne et un calcul pour chaque indicateur, puis renommez-le librement.</p>
+      <div id="indicatorsEditor"></div>
+      <button class="fr-btn fr-btn--secondary fr-btn--sm fr-icon-add-line fr-btn--icon-left fr-mt-2w" id="addIndicatorBtn" type="button">
+        Ajouter un indicateur
+      </button>
+
+      <h3 class="fr-h6 fr-mt-3w">Répartition par colonne (optionnel)</h3>
+      <p class="field-hint fr-mb-1w">Affiche la liste des valeurs d'une colonne avec leur effectif, sous forme de barres.</p>
+      <div class="fr-grid-row fr-grid-row--gutters">
+        <div class="fr-col-12 fr-col-md-6">
+          <div class="fr-select-group">
+            <label class="fr-label" for="breakdownColumn">Colonne à répartir</label>
+            <select class="fr-select" id="breakdownColumn">
+              <option value="">— Aucune —</option>
+            </select>
+          </div>
+        </div>
+        <div class="fr-col-12 fr-col-md-6">
+          <div class="fr-input-group">
+            <label class="fr-label" for="breakdownTitle">Titre de la section</label>
+            <input class="fr-input" id="breakdownTitle" type="text" placeholder="Répartition">
+          </div>
+        </div>
+      </div>
+
+      <div class="fr-btns-group fr-btns-group--inline fr-mt-3w">
+        <button class="fr-btn" id="saveSettingsBtn" type="button">Enregistrer</button>
+        <button class="fr-btn fr-btn--secondary" id="closeSettingsBtn" type="button">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Indicateurs clés -->
+  <div class="fr-grid-row fr-grid-row--gutters fr-mb-4w" id="kpiRow"></div>
+
+  <!-- Répartition -->
+  <div class="fr-mb-4w" id="breakdownSection" hidden>
+    <div class="anomalies-head fr-mb-2w">
+      <h2 class="fr-h5 fr-mb-0" id="breakdownTitleDisplay">Répartition</h2>
+      <span class="fr-badge fr-badge--warning" id="breakdownTotal">—</span>
+    </div>
+
+    <div class="fr-table fr-table--bordered">
+      <table>
+        <caption class="fr-hidden">Répartition des valeurs de la colonne sélectionnée</caption>
+        <thead>
+          <tr>
+            <th scope="col">Valeur</th>
+            <th scope="col">Répartition</th>
+            <th scope="col" style="text-align:right">Effectif</th>
+          </tr>
+        </thead>
+        <tbody id="breakdownBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Zone d'alertes dynamiques (données manquantes, erreurs) -->
+  <div id="noticeZone"></div>
+
+  <p class="fr-text--sm fr-mt-4w" style="color:var(--text-mention-grey,#666)" id="footNote">Chargement des données…</p>
+
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  const el = id => document.getElementById(id);
+  const fmt = n => (n === null || n === undefined || Number.isNaN(n)) ? '—' : n.toLocaleString('fr-FR');
+
+  const HIDDEN_COLUMNS = ['id', 'manualSort'];
+
+  // Encodage Grist des colonnes de type liste (ChoiceList, RefList) : ['L', v1, v2, ...]
+  function listValues(cell){
+    if (Array.isArray(cell)){
+      if (cell[0] === 'L') return cell.slice(1).filter(v => v !== null && v !== undefined && v !== '');
+      return cell.filter(v => v !== null && v !== undefined && v !== '');
+    }
+    if (cell === null || cell === undefined || cell === '') return [];
+    return [cell];
+  }
+
+  function escapeHtml(s){
+    return (s === null || s === undefined ? '' : String(s))
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function renderAlert(kind, title, message){
+    const wrap = document.createElement('div');
+    wrap.className = 'fr-alert fr-alert--' + kind + ' fr-alert--sm';
+    wrap.setAttribute('role', 'alert');
+    wrap.innerHTML =
+      (title ? '<p class="fr-alert__title">' + escapeHtml(title) + '</p>' : '') +
+      '<p>' + escapeHtml(message) + '</p>';
+    return wrap;
+  }
+  function clearNotices(){ el('noticeZone').innerHTML = ''; }
+  function pushNotice(node){ el('noticeZone').appendChild(node); }
+
+  // ============================================================
+  // Configuration (persistée dans les options du widget Grist)
+  // ============================================================
+  const DEFAULT_CONFIG = {
+    tableId: '',
+    badge: '',
+    title: 'Tableau de bord',
+    subtitle: '',
+    indicators: [],              // [{ column, agg, label }]
+    breakdown: { column: '', title: 'Répartition' }
+  };
+
+  let config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  let allTables = [];
+  let sourceTableData = null;    // données brutes de la table choisie dans le panneau de réglages
+  let currentTableData = null;   // données brutes de la table actuellement affichée dans le tableau de bord
+  let savingFromOptions = false;
+
+  function mergeConfig(saved){
+    const merged = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+    if (saved && typeof saved === 'object'){
+      Object.assign(merged, saved);
+      if (!Array.isArray(merged.indicators)) merged.indicators = [];
+      if (!merged.breakdown || typeof merged.breakdown !== 'object') merged.breakdown = { column: '', title: 'Répartition' };
+    }
+    return merged;
+  }
+
+  // ============================================================
+  // Accès aux données Grist
+  // ============================================================
+  async function safeFetchTable(name){
+    if (!name) return null;
+    try{
+      return await grist.docApi.fetchTable(name);
+    }catch(e){
+      console.warn('Table indisponible :', name, e);
+      return null;
+    }
+  }
+
+  function columnIdsOf(tableData){
+    if (!tableData) return [];
+    return Object.keys(tableData).filter(k => !HIDDEN_COLUMNS.includes(k) && !k.startsWith('gristHelper_'));
+  }
+
+  function inferKind(values){
+    const nonEmpty = values.filter(v => v !== null && v !== undefined && v !== '');
+    const flat = [];
+    let hasList = false;
+    nonEmpty.forEach(v => {
+      if (Array.isArray(v)){ hasList = true; listValues(v).forEach(x => flat.push(x)); }
+      else flat.push(v);
+    });
+    if (hasList) return 'list';
+    if (nonEmpty.length && nonEmpty.every(v => typeof v === 'boolean')) return 'bool';
+    if (nonEmpty.length && nonEmpty.every(v => typeof v === 'number')) return 'number';
+    return 'text';
+  }
+
+  const AGG_LABELS = {
+    count: 'Nombre de lignes',
+    nonEmpty: 'Nombre de valeurs renseignées',
+    countDistinct: 'Nombre de valeurs distinctes',
+    sum: 'Somme',
+    avg: 'Moyenne',
+    min: 'Minimum',
+    max: 'Maximum',
+    countTrue: 'Nombre de "Oui"',
+    percentTrue: 'Taux de "Oui" (%)'
+  };
+
+  function aggOptionsForKind(kind){
+    switch(kind){
+      case 'number': return ['count', 'nonEmpty', 'sum', 'avg', 'min', 'max', 'countDistinct'];
+      case 'bool': return ['count', 'countTrue', 'percentTrue'];
+      case 'list': return ['count', 'nonEmpty', 'countDistinct'];
+      default: return ['count', 'nonEmpty', 'countDistinct'];
+    }
+  }
+
+  function computeAggregate(values, agg){
+    const nonEmpty = values.filter(v => v !== null && v !== undefined && v !== '');
+    switch(agg){
+      case 'count': return values.length;
+      case 'nonEmpty': return nonEmpty.length;
+      case 'countTrue': return values.filter(v => v === true).length;
+      case 'percentTrue': return values.length ? Math.round((values.filter(v => v === true).length / values.length) * 100) : null;
+      case 'countDistinct': {
+        const set = new Set();
+        nonEmpty.forEach(v => { if (Array.isArray(v)) listValues(v).forEach(x => set.add(x)); else set.add(v); });
+        return set.size;
+      }
+      case 'sum': {
+        const nums = nonEmpty.filter(v => typeof v === 'number');
+        return nums.reduce((a, b) => a + b, 0);
+      }
+      case 'avg': {
+        const nums = nonEmpty.filter(v => typeof v === 'number');
+        return nums.length ? Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 100) / 100 : null;
+      }
+      case 'min': {
+        const nums = nonEmpty.filter(v => typeof v === 'number');
+        return nums.length ? Math.min(...nums) : null;
+      }
+      case 'max': {
+        const nums = nonEmpty.filter(v => typeof v === 'number');
+        return nums.length ? Math.max(...nums) : null;
+      }
+      default: return null;
+    }
+  }
+
+  function formatAggregateValue(value, agg){
+    if (value === null || value === undefined) return '—';
+    if (agg === 'percentTrue') return fmt(value) + ' %';
+    return fmt(value);
+  }
+
+  // ============================================================
+  // Panneau de réglages
+  // ============================================================
+  function fillTableSelect(){
+    const sel = el('tableSelect');
+    sel.innerHTML = '<option value="">— Choisir une table —</option>' +
+      allTables.map(t => '<option value="' + escapeHtml(t) + '">' + escapeHtml(t) + '</option>').join('');
+    sel.value = config.tableId || '';
+  }
+
+  function fillColumnOptions(selectEl, columns, selected, placeholder){
+    selectEl.innerHTML = (placeholder ? '<option value="">' + escapeHtml(placeholder) + '</option>' : '') +
+      columns.map(c => '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>').join('');
+    selectEl.value = selected || '';
+  }
+
+  function indicatorRowTemplate(ind, idx, columns){
+    const row = document.createElement('div');
+    row.className = 'indicator-row';
+    row.dataset.idx = idx;
+    row.innerHTML =
+      '<div>' +
+        '<label class="fr-label" for="ind-col-' + idx + '">Colonne</label>' +
+        '<select class="fr-select" id="ind-col-' + idx + '"></select>' +
+      '</div>' +
+      '<div>' +
+        '<label class="fr-label" for="ind-agg-' + idx + '">Calcul</label>' +
+        '<select class="fr-select" id="ind-agg-' + idx + '"></select>' +
+      '</div>' +
+      '<div>' +
+        '<label class="fr-label" for="ind-label-' + idx + '">Nom affiché</label>' +
+        '<input class="fr-input" id="ind-label-' + idx + '" type="text" placeholder="Nom de l\'indicateur">' +
+      '</div>' +
+      '<div class="remove-wrap">' +
+        '<button type="button" class="fr-btn fr-btn--tertiary-no-outline fr-icon-delete-line fr-btn--icon-left" title="Supprimer cet indicateur">Supprimer</button>' +
+      '</div>';
+
+    const colSel = row.querySelector('#ind-col-' + idx);
+    const aggSel = row.querySelector('#ind-agg-' + idx);
+    const labelInput = row.querySelector('#ind-label-' + idx);
+
+    fillColumnOptions(colSel, columns, ind.column, '— Choisir une colonne —');
+    labelInput.value = ind.label || '';
+
+    function refreshAggOptions(){
+      const values = (sourceTableData && sourceTableData[colSel.value]) || [];
+      const kind = inferKind(values);
+      const options = aggOptionsForKind(kind);
+      aggSel.innerHTML = options.map(a => '<option value="' + a + '">' + AGG_LABELS[a] + '</option>').join('');
+      aggSel.value = options.includes(ind.agg) ? ind.agg : options[0];
+    }
+    refreshAggOptions();
+    colSel.addEventListener('change', function(){
+      if (!labelInput.value.trim() || labelInput.dataset.auto === '1'){
+        labelInput.value = colSel.value;
+        labelInput.dataset.auto = '1';
+      }
+      refreshAggOptions();
+    });
+    labelInput.addEventListener('input', function(){ labelInput.dataset.auto = ''; });
+
+    row.querySelector('.remove-wrap button').addEventListener('click', function(){
+      editorIndicators.splice(idx, 1);
+      renderIndicatorsEditor();
+    });
+
+    return { row, colSel, aggSel, labelInput };
+  }
+
+  let editorIndicators = [];
+  let editorRowRefs = [];
+
+  function renderIndicatorsEditor(){
+    const container = el('indicatorsEditor');
+    container.innerHTML = '';
+    editorRowRefs = [];
+    const columns = columnIdsOf(sourceTableData);
+    if (!columns.length){
+      container.innerHTML = '<p class="field-hint">Choisissez d\'abord une table source ci-dessus.</p>';
+      return;
+    }
+    if (!editorIndicators.length){
+      container.innerHTML = '<p class="field-hint">Aucun indicateur pour l\'instant — cliquez sur « Ajouter un indicateur ».</p>';
+      return;
+    }
+    editorIndicators.forEach((ind, idx) => {
+      const refs = indicatorRowTemplate(ind, idx, columns);
+      container.appendChild(refs.row);
+      editorRowRefs.push(refs);
+    });
+  }
+
+  function collectIndicatorsFromEditor(){
+    return editorRowRefs
+      .map(r => ({
+        column: r.colSel.value,
+        agg: r.aggSel.value,
+        label: r.labelInput.value.trim()
+      }))
+      .filter(ind => ind.column);
+  }
+
+  async function onTableSelectChange(){
+    const tableId = el('tableSelect').value;
+    sourceTableData = await safeFetchTable(tableId);
+    const columns = columnIdsOf(sourceTableData);
+    fillColumnOptions(el('breakdownColumn'), columns, config.breakdown.column, '— Aucune —');
+    renderIndicatorsEditor();
+  }
+
+  async function openSettingsPanel(){
+    if (!allTables.length){
+      try{ allTables = await grist.docApi.listTables(); }catch(e){ allTables = []; }
+    }
+    fillTableSelect();
+    el('badgeInput').value = config.badge || '';
+    el('titleInput').value = config.title || '';
+    el('subtitleInput').value = config.subtitle || '';
+    el('breakdownTitle').value = (config.breakdown && config.breakdown.title) || '';
+
+    sourceTableData = config.tableId ? await safeFetchTable(config.tableId) : null;
+    const columns = columnIdsOf(sourceTableData);
+    fillColumnOptions(el('breakdownColumn'), columns, config.breakdown.column, '— Aucune —');
+
+    editorIndicators = config.indicators.map(i => Object.assign({}, i));
+    renderIndicatorsEditor();
+
+    el('settingsPanel').classList.add('open');
+  }
+
+  function closeSettingsPanel(){
+    el('settingsPanel').classList.remove('open');
+  }
+
+  async function saveSettings(){
+    config = {
+      tableId: el('tableSelect').value,
+      badge: el('badgeInput').value.trim(),
+      title: el('titleInput').value.trim() || 'Tableau de bord',
+      subtitle: el('subtitleInput').value.trim(),
+      indicators: collectIndicatorsFromEditor(),
+      breakdown: {
+        column: el('breakdownColumn').value,
+        title: el('breakdownTitle').value.trim() || 'Répartition'
+      }
+    };
+    savingFromOptions = true;
+    try{
+      await grist.setOption('dashboardConfig', config);
+    }catch(e){
+      console.warn('Impossible d\'enregistrer la configuration :', e);
+    }
+    savingFromOptions = false;
+    closeSettingsPanel();
+    applyHeaderFromConfig();
+    await loadDashboard();
+  }
+
+  el('settingsBtn').addEventListener('click', openSettingsPanel);
+  el('closeSettingsBtn').addEventListener('click', closeSettingsPanel);
+  el('saveSettingsBtn').addEventListener('click', function(){
+    saveSettings().catch(e => console.error(e));
+  });
+  el('tableSelect').addEventListener('change', function(){
+    onTableSelectChange().catch(e => console.error(e));
+  });
+  el('addIndicatorBtn').addEventListener('click', function(){
+    editorIndicators.push({ column: '', agg: 'count', label: '' });
+    renderIndicatorsEditor();
+  });
+
+  // ============================================================
+  // Rendu du tableau de bord
+  // ============================================================
+  function applyHeaderFromConfig(){
+    el('dashTitle').textContent = config.title || 'Tableau de bord';
+    const sub = el('dashSubtitle');
+    sub.textContent = config.subtitle || '';
+    sub.hidden = !config.subtitle;
+    const badge = el('dashBadge');
+    badge.textContent = config.badge || '';
+    badge.hidden = !config.badge;
+  }
+
+  function renderKpiRow(){
+    const row = el('kpiRow');
+    row.innerHTML = '';
+    if (!config.indicators.length){
+      row.innerHTML = '<div class="fr-col-12"><p class="fr-text--sm" style="color:var(--text-mention-grey,#666)">' +
+        'Aucun indicateur configuré. Cliquez sur « Configurer » pour en ajouter.</p></div>';
+      return;
+    }
+    config.indicators.forEach(ind => {
+      const values = currentTableData ? (currentTableData[ind.column] || []) : null;
+      const missing = !currentTableData || !(ind.column in currentTableData);
+      const value = missing ? null : computeAggregate(values, ind.agg);
+
+      const col = document.createElement('div');
+      col.className = 'fr-col-12 fr-col-sm-6 fr-col-md-3';
+      col.innerHTML =
+        '<div class="fr-highlight kpi-highlight fr-mb-0">' +
+          '<p class="fr-display--xs kpi-value fr-mb-1v">' + (missing ? '—' : formatAggregateValue(value, ind.agg)) + '</p>' +
+          '<p class="fr-text--sm fr-mb-0">' + escapeHtml(ind.label || ind.column) + '</p>' +
+          '<p class="fr-hint-text fr-mb-0">' + escapeHtml(AGG_LABELS[ind.agg] || '') + ' — ' + escapeHtml(ind.column) + '</p>' +
+        '</div>';
+      row.appendChild(col);
+    });
+  }
+
+  function formatBreakdownValue(raw, columnId){
+    if (typeof raw === 'number' && /date/i.test(columnId)){
+      const d = new Date(raw * 1000);
+      if (!isNaN(d.getTime())) return d.toLocaleDateString('fr-FR');
+    }
+    if (typeof raw === 'boolean') return raw ? 'Oui' : 'Non';
+    return String(raw);
+  }
+
+  function renderBreakdown(){
+    const section = el('breakdownSection');
+    const columnId = config.breakdown && config.breakdown.column;
+    if (!columnId || !currentTableData || !(columnId in currentTableData)){
+      section.hidden = true;
+      return;
+    }
+    section.hidden = false;
+    el('breakdownTitleDisplay').textContent = config.breakdown.title || 'Répartition';
+
+    const counts = new Map();
+    (currentTableData[columnId] || []).forEach(cell => {
+      const items = Array.isArray(cell) ? listValues(cell) : [cell];
+      items.forEach(raw => {
+        if (raw === null || raw === undefined || raw === '') return;
+        const key = formatBreakdownValue(raw, columnId);
+        counts.set(key, (counts.get(key) || 0) + 1);
+      });
+    });
+
+    const entries = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+    const total = entries.reduce((a, [, n]) => a + n, 0);
+    const maxCount = Math.max(1, ...entries.map(([, n]) => n));
+
+    el('breakdownTotal').textContent = fmt(total) + ' valeur(s)';
+
+    const TOP_N = 12;
+    const shown = entries.slice(0, TOP_N);
+    const rest = entries.slice(TOP_N);
+
+    let html = shown.map(([label, n]) =>
+      '<tr>' +
+        '<td>' + escapeHtml(label) + '</td>' +
+        '<td><span class="bar-track"><span class="bar-fill" style="width:' + Math.round(n / maxCount * 100) + '%"></span></span></td>' +
+        '<td style="text-align:right"><span class="value-count">' + fmt(n) + '</span></td>' +
+      '</tr>'
+    ).join('');
+
+    if (rest.length){
+      const restTotal = rest.reduce((a, [, n]) => a + n, 0);
+      html += '<tr>' +
+        '<td>Autres (' + rest.length + ' valeurs)</td>' +
+        '<td><span class="bar-track"><span class="bar-fill" style="width:' + Math.round(restTotal / maxCount * 100) + '%"></span></span></td>' +
+        '<td style="text-align:right"><span class="value-count">' + fmt(restTotal) + '</span></td>' +
+      '</tr>';
+    }
+
+    el('breakdownBody').innerHTML = html || '<tr><td colspan="3">Aucune donnée.</td></tr>';
+  }
+
+  async function loadDashboard(){
+    el('refreshBtn').disabled = true;
+    el('syncLabel').textContent = 'Actualisation…';
+    clearNotices();
+
+    applyHeaderFromConfig();
+
+    if (!config.tableId){
+      currentTableData = null;
+      renderKpiRow();
+      renderBreakdown();
+      el('syncLabel').textContent = 'Aucune table configurée';
+      el('footNote').textContent = 'Cliquez sur « Configurer » pour choisir une table et vos indicateurs.';
+      el('refreshBtn').disabled = false;
+      return;
+    }
+
+    currentTableData = await safeFetchTable(config.tableId);
+    const missing = [];
+
+    if (!currentTableData){
+      missing.push(config.tableId + ' (table introuvable ou inaccessible)');
+    } else {
+      config.indicators.forEach(ind => {
+        if (!(ind.column in currentTableData)) missing.push(config.tableId + '.' + ind.column);
+      });
+      if (config.breakdown && config.breakdown.column && !(config.breakdown.column in currentTableData)){
+        missing.push(config.tableId + '.' + config.breakdown.column);
+      }
+    }
+
+    renderKpiRow();
+    renderBreakdown();
+
+    if (missing.length){
+      pushNotice(renderAlert(
+        'warning',
+        'Données incomplètes',
+        'Tables ou colonnes indisponibles : ' + missing.join(', ') + '. Vérifiez la configuration ou les droits d\'accès du widget.'
+      ));
+    }
+
+    el('syncLabel').textContent = currentTableData ? 'Table : ' + config.tableId : 'Table indisponible';
+    el('footNote').textContent = 'Source : ' + (config.tableId || '—') + ' — dernière actualisation locale : ' + new Date().toLocaleTimeString('fr-FR');
+    el('refreshBtn').disabled = false;
+  }
+
+  el('refreshBtn').addEventListener('click', function(){ loadDashboard().catch(e => console.error(e)); });
+
+  // ============================================================
+  // Démarrage
+  // ============================================================
+  if (window.grist){
+    grist.ready({ requiredAccess: 'full' });
+
+    grist.onOptions(function(options){
+      if (savingFromOptions) return;
+      config = mergeConfig(options && options.dashboardConfig);
+      applyHeaderFromConfig();
+      loadDashboard().catch(e => console.error(e));
+    });
+
+    grist.docApi.listTables().then(function(tables){ allTables = tables || []; }).catch(function(){ allTables = []; });
+
+    let refreshTimer = null;
+    grist.onRecords(function(){
+      clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(function(){ loadDashboard().catch(e => console.error(e)); }, 300);
+    });
+
+    // Si aucune option n'a encore été enregistrée, onOptions peut ne pas se déclencher
+    // avec des données : on affiche tout de même l'état par défaut.
+    applyHeaderFromConfig();
+    loadDashboard().catch(e => console.error(e));
+  } else {
+    pushNotice(renderAlert('info', 'Widget hors de Grist', 'Ouvrez cette page en tant que widget personnalisé dans Grist (avec accès complet au document) pour afficher les données.'));
+    el('footNote').textContent = 'API Grist non détectée.';
+    el('syncLabel').textContent = '';
+  }
+})();
+</script>
+
+</body>
+</html>
