@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vigie entreprises</title>
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 16px; font-family: Arial, sans-serif; background: #f5f7fb; color: #1f2937; }
+    .container { width: 100%; }
+
+    h1 { font-size: 18px; font-weight: 700; color: #111827; margin: 0 0 4px; }
+    .subtitle { font-size: 12.5px; color: #6b7280; margin: 0 0 10px; }
+
+    .info-banner {
+      background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; border-radius: 12px;
+      padding: 10px 14px; font-size: 12px; line-height: 1.6; margin-bottom: 12px;
+    }
+    .info-banner b { color: #1e3a8a; }
+
+    .toolbar-wrap { position: sticky; top: 0; z-index: 10; background: #f5f7fb; padding-bottom: 10px; }
+    .search-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+    .search-input { flex: 1; min-width: 200px; padding: 10px 13px; border: 1px solid #d1d5db; border-radius: 14px; font-size: 14px; outline: none; background: #fff; }
+    .search-input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12); }
+    .btn {
+      border: 1px solid #d1d5db; background: #fff; color: #374151; border-radius: 10px;
+      padding: 9px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap;
+    }
+    .btn:hover { border-color: #93c5fd; }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-primary { background: #2563eb; color: #fff; border-color: #2563eb; }
+    .btn-primary:hover { background: #1d4ed8; }
+
+    .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip {
+      border: 1px solid #d1d5db; background: #fff; color: #374151; border-radius: 999px;
+      padding: 5px 11px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap;
+    }
+    .chip:hover { border-color: #93c5fd; }
+    .chip.active { background: #2563eb; border-color: #2563eb; color: #fff; }
+    .meta { font-size: 12.5px; color: #6b7280; margin-top: 6px; }
+    .progress { font-size: 12px; color: #2563eb; margin-top: 4px; }
+
+    /* ---------- Table ---------- */
+    .table-wrap { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; overflow: auto; margin-top: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th {
+      position: sticky; top: 0; background: #f9fafb; text-align: left; padding: 10px 12px;
+      font-size: 11.5px; font-weight: 700; color: #6b7280; text-transform: uppercase;
+      letter-spacing: 0.03em; border-bottom: 1px solid #e5e7eb; white-space: nowrap;
+    }
+    tbody td { padding: 10px 12px; border-bottom: 1px solid #f0f1f4; vertical-align: top; }
+    tbody tr { cursor: pointer; }
+    tbody tr:hover { background: #f8faff; }
+    tbody tr:last-child td { border-bottom: none; }
+    .cell-name { font-weight: 600; color: #111827; }
+    .cell-sub { font-size: 12px; color: #6b7280; margin-top: 2px; }
+
+    .tag { display: inline-block; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
+    .tag-ok { color: #166534; background: #dcfce7; border: 1px solid #bbf7d0; }
+    .tag-alert { color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; }
+    .tag-warn { color: #92400e; background: #fef3c7; border: 1px solid #fde68a; }
+    .tag-pending { color: #6b7280; background: #f3f4f6; border: 1px solid #e5e7eb; }
+    .tag-flag { color: #4338ca; background: #eef2ff; border: 1px solid #c7d2fe; }
+
+    .empty { background: #fff; border: 1px dashed #d1d5db; border-radius: 14px; padding: 24px; text-align: center; color: #6b7280; margin-top: 10px; }
+
+    /* ---------- Fiche détail ---------- */
+    .back-btn {
+      display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 1px solid #d1d5db;
+      border-radius: 10px; padding: 8px 12px; font-size: 14px; cursor: pointer; margin-bottom: 14px;
+    }
+    .back-btn:hover { border-color: #93c5fd; }
+    .fiche-header { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+    .fiche-header .title { font-size: 20px; font-weight: 700; margin-bottom: 4px; color: #111827; }
+    .fiche-header .sub { font-size: 13px; color: #6b7280; margin-bottom: 8px; }
+    .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+    .fiche-layout { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+    .fiche-col { flex: 1 1 360px; min-width: 300px; }
+
+    .section { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; margin-bottom: 12px; overflow: hidden; }
+    .section-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; font-weight: 700; font-size: 14px; color: #111827; }
+    .section-body { padding: 10px 14px; }
+    .field { display: flex; gap: 6px; font-size: 13px; line-height: 1.5; padding: 4px 0; border-bottom: 1px dashed #eef0f3; }
+    .field:last-child { border-bottom: none; }
+    .field-label { color: #6b7280; min-width: 42%; flex-shrink: 0; }
+    .field-value { color: #1f2937; font-weight: 500; word-break: break-word; }
+    .section-empty { font-size: 13px; color: #9ca3af; font-style: italic; padding: 6px 0; }
+
+    .alert-box { border-radius: 10px; padding: 10px 12px; font-size: 12.5px; margin-bottom: 8px; line-height: 1.5; }
+    .alert-box.alert { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+    .alert-box.warn { background: #fef3c7; border: 1px solid #fde68a; color: #92400e; }
+    .alert-box.ok { background: #dcfce7; border: 1px solid #bbf7d0; color: #166534; }
+
+    .bodacc-item { border: 1px solid #f0f1f4; border-radius: 10px; padding: 8px 10px; margin-bottom: 6px; font-size: 12.5px; }
+    .bodacc-item:last-child { margin-bottom: 0; }
+    .bodacc-date { font-weight: 700; color: #111827; }
+    .bodacc-nature { color: #991b1b; font-weight: 600; margin-top: 2px; }
+    .bodacc-tribunal { color: #6b7280; margin-top: 2px; }
+    .bodacc-link { color: #2563eb; font-weight: 600; text-decoration: none; }
+    .bodacc-link:hover { text-decoration: underline; }
+
+    .source-note { font-size: 11px; color: #9ca3af; margin-top: 10px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="listView">
+      <h1>🔎 Vigie entreprises</h1>
+      <p class="subtitle">Croise chaque SIRET de Demarche_155804_demandeurs avec l'état légal réel (API Recherche d'Entreprises) et les procédures collectives publiées (BODACC)</p>
+
+      <div class="info-banner">
+        Vérifications en <b>temps réel</b>, en direct depuis ce navigateur, via deux API publiques officielles sans clé :
+        <b>recherche-entreprises.api.gouv.fr</b> (annuaire des entreprises, Etalab) et <b>BODACC</b> (bodacc-datadila.opendatasoft.com, DILA — Licence Ouverte).
+        Aucune donnée n'est envoyée ailleurs. La MSA et l'ASP/ISIS n'exposent pas d'API publique accessible depuis un navigateur (accès réservé aux organismes habilités) : elles ne peuvent donc pas être branchées ici.
+      </div>
+
+      <div class="toolbar-wrap">
+        <div class="search-row">
+          <input id="searchInput" class="search-input" type="text" placeholder="Rechercher un nom, un SIRET, une commune...">
+          <button type="button" class="btn btn-primary" id="checkAllBtn">🔎 Vérifier les dossiers visibles</button>
+          <button type="button" class="btn" id="refreshBtn">↻ Actualiser Grist</button>
+        </div>
+        <div class="chip-row" id="filterChips"></div>
+        <div class="meta" id="meta">Chargement...</div>
+        <div class="progress" id="progress"></div>
+      </div>
+
+      <div id="tableWrap"></div>
+    </div>
+
+    <div id="ficheView" style="display:none;">
+      <button class="back-btn" id="backBtn">&larr; Retour à la liste</button>
+      <div id="ficheContent"></div>
+    </div>
+  </div>
+
+  <script>
+    // ================= Constantes =================
+    const DOSSIERS_TABLE = "Demarche_155804_dossiers";
+    const DEMANDEURS_TABLE = "Demarche_155804_demandeurs";
+    const RE_API = "https://recherche-entreprises.api.gouv.fr/search";
+    const BODACC_API = "https://bodacc-datadila.opendatasoft.com/api/explore/v2.1/catalog/datasets/annonces-commerciales/records";
+    const CACHE_PREFIX = "vigie-entreprise-cache:";
+    const CACHE_TTL_MS = 24 * 3600 * 1000; // 24h : l'état légal/BODACC ne change pas d'une minute à l'autre
+
+    // Lien vers l'explorateur Opendatasoft officiel (schéma d'URL stable de la plateforme),
+    // plutôt qu'un lien par annonce dont le format exact n'a pas pu être vérifié en direct.
+    function bodaccExploreUrl(siren) {
+      return "https://bodacc-datadila.opendatasoft.com/explore/dataset/annonces-commerciales/table/?q=" + encodeURIComponent(siren || "");
+    }
+
+    const INSOLVENCY_PATTERNS = {
+      liquidation: /liquidation judiciaire/i,
+      redressement: /redressement judiciaire/i,
+      sauvegarde: /sauvegarde/i,
+      radiation: /radiation/i,
+      cloture: /cl[oô]ture/i
+    };
+
+    // ================= Utilitaires =================
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+    function stripAccents(str) { return String(str ?? "").normalize("NFD").replace(/[̀-ͯ]/g, ""); }
+    function normalize(value) { return stripAccents(String(value ?? "")).toLowerCase().trim(); }
+    function onlyDigits(v) { return String(v ?? "").replace(/\D/g, ""); }
+    function fieldValueToText(val) {
+      if (Array.isArray(val) && val[0] === "L") return val.slice(1).join(", ");
+      if (Array.isArray(val)) return val.join(", ");
+      if (typeof val === "boolean") return val ? "Oui" : "Non";
+      return String(val ?? "");
+    }
+    function formatIsoDateShort(value) {
+      if (!value) return "—";
+      const d = new Date(value);
+      if (isNaN(d.getTime())) return String(value);
+      return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
+    }
+
+    const FIELD_LABELS = {
+      dossier_number: "N° de dossier", state: "État du dossier", suivi_par: "Suivi par",
+      siret: "SIRET", raison_sociale: "Raison sociale", nom_commercial: "Nom commercial",
+      forme_juridique: "Forme juridique", etat_administratif: "État administratif (déclaré)",
+      ville: "Commune", code_postal: "Code postal", Liquidation: "Liquidation (Grist)", AREA: "Bénéficiaire AREA"
+    };
+    function labelFor(col) { return FIELD_LABELS[col] || String(col).replace(/_/g, " ").replace(/^./, c => c.toUpperCase()); }
+
+    // ================= Accès Grist =================
+    async function fetchTableRaw(tableId) { return await grist.docApi.fetchTable(tableId); }
+    function columnsFromRaw(raw) { return Object.keys(raw).filter(c => c !== "id" && !c.startsWith("gristHelper")); }
+    function rowsFromRaw(raw, cols) {
+      const ids = raw.id || [];
+      return ids.map((id, i) => {
+        const row = { id };
+        cols.forEach(c => (row[c] = raw[c][i]));
+        return row;
+      });
+    }
+
+    // ================= État global =================
+    let allDossiers = [];
+    let dataLoaded = false;
+    let activeFilter = "all"; // all | alert | warn | ok | pending
+    const vigieCache = new Map(); // siret -> résultat en mémoire (évite de re-fetch pendant la session)
+
+    const searchInput = document.getElementById("searchInput");
+    const metaEl = document.getElementById("meta");
+    const progressEl = document.getElementById("progress");
+    const tableWrap = document.getElementById("tableWrap");
+    const filterChipsEl = document.getElementById("filterChips");
+    const listView = document.getElementById("listView");
+    const ficheView = document.getElementById("ficheView");
+    const ficheContent = document.getElementById("ficheContent");
+    const backBtn = document.getElementById("backBtn");
+    const checkAllBtn = document.getElementById("checkAllBtn");
+    const refreshBtn = document.getElementById("refreshBtn");
+
+    async function loadEverything() {
+      metaEl.textContent = "Chargement des dossiers...";
+      const [dossiersRaw, demandeursRaw] = await Promise.all([
+        fetchTableRaw(DOSSIERS_TABLE),
+        fetchTableRaw(DEMANDEURS_TABLE)
+      ]);
+      const dossiersCols = columnsFromRaw(dossiersRaw);
+      const dossiersRows = rowsFromRaw(dossiersRaw, dossiersCols);
+      const demandeursCols = columnsFromRaw(demandeursRaw);
+      const demandeursRows = rowsFromRaw(demandeursRaw, demandeursCols);
+
+      const dossiersByNumber = new Map();
+      dossiersRows.forEach(d => {
+        const key = String(d.dossier_number || "").trim();
+        if (key) dossiersByNumber.set(key, d);
+      });
+
+      allDossiers = demandeursRows.map(demandeur => {
+        const key = String(demandeur.dossier_number || "").trim();
+        const dossier = dossiersByNumber.get(key) || null;
+        const siren = onlyDigits(demandeur.siret).slice(0, 9);
+        return {
+          demandeurId: demandeur.id,
+          dossier_number: demandeur.dossier_number,
+          nom: demandeur.nom_commercial || demandeur.raison_sociale || "",
+          siret: demandeur.siret,
+          siren,
+          ville: demandeur.ville,
+          code_postal: demandeur.code_postal,
+          demandeur,
+          dossier,
+          vigie: siren ? (loadCachedVigie(siren) || { status: "pending" }) : { status: "no-siret" }
+        };
+      });
+
+      dataLoaded = true;
+    }
+
+    // ================= Cache localStorage =================
+    function loadCachedVigie(siren) {
+      if (vigieCache.has(siren)) return vigieCache.get(siren);
+      try {
+        const raw = localStorage.getItem(CACHE_PREFIX + siren);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed.fetchedAt || Date.now() - parsed.fetchedAt > CACHE_TTL_MS) return null;
+        vigieCache.set(siren, parsed);
+        return parsed;
+      } catch (e) { return null; }
+    }
+    function saveCachedVigie(siren, result) {
+      vigieCache.set(siren, result);
+      try { localStorage.setItem(CACHE_PREFIX + siren, JSON.stringify(result)); } catch (e) { /* stockage indisponible */ }
+    }
+
+    // ================= Appels API =================
+    async function fetchEntreprise(siren) {
+      const url = RE_API + "?q=" + encodeURIComponent("siren:" + siren);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("recherche-entreprises http-" + res.status);
+      const data = await res.json();
+      const result = data && Array.isArray(data.results) ? data.results[0] : null;
+      if (!result) return null;
+      return {
+        nom_complet: result.nom_complet || null,
+        etat_administratif: result.etat_administratif || (result.siege && result.siege.etat_administratif) || null,
+        date_creation: result.date_creation || null,
+        nature_juridique: result.nature_juridique || null,
+        activite_principale: result.activite_principale || (result.siege && result.siege.activite_principale) || null,
+        adresse: result.siege ? [result.siege.numero_voie, result.siege.type_voie, result.siege.libelle_voie, result.siege.code_postal, result.siege.libelle_commune].filter(Boolean).join(" ") : null
+      };
+    }
+
+    // L'API BODACC n'a pas un schéma parfaitement stable d'une année à l'autre : on cherche
+    // les mots-clés d'insolvabilité dans l'ensemble du texte du champ "jugement" plutôt que
+    // de dépendre d'un chemin de champ précis, pour rester robuste aux évolutions du format.
+    async function fetchBodacc(siren) {
+      const where = `registre like "${siren}"`;
+      const url = BODACC_API + "?where=" + encodeURIComponent(where) + "&limit=20&order_by=dateparution%20desc";
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("bodacc http-" + res.status);
+      const data = await res.json();
+      const records = (data && data.results) || [];
+      return records.map(r => {
+        const jugementRaw = r.jugement;
+        let jugementText = "";
+        if (typeof jugementRaw === "string") jugementText = jugementRaw;
+        else if (jugementRaw) jugementText = JSON.stringify(jugementRaw);
+        const natureMatch = Object.keys(INSOLVENCY_PATTERNS).find(k => INSOLVENCY_PATTERNS[k].test(jugementText) || INSOLVENCY_PATTERNS[k].test(r.familleavis_lib || ""));
+        return {
+          date: r.dateparution || null,
+          tribunal: r.tribunal || null,
+          natureKey: natureMatch || null,
+          natureText: jugementText || r.familleavis_lib || "(nature non précisée)"
+        };
+      });
+    }
+
+    async function checkOne(d) {
+      if (!d.siren) { d.vigie = { status: "no-siret" }; return; }
+      d.vigie = { status: "loading" };
+      renderTable();
+      try {
+        const [entreprise, bodaccRecords] = await Promise.all([
+          fetchEntreprise(d.siren).catch(err => { console.warn("Erreur API Recherche d'Entreprises", d.siren, err); return { error: String(err.message || err) }; }),
+          fetchBodacc(d.siren).catch(err => { console.warn("Erreur API BODACC", d.siren, err); return { error: String(err.message || err) }; })
+        ]);
+        const bodaccOk = Array.isArray(bodaccRecords);
+        const insolvencyRecords = bodaccOk ? bodaccRecords.filter(r => r.natureKey && r.natureKey !== "cloture") : [];
+        let status = "ok";
+        if ((!entreprise || entreprise.error) && (!bodaccOk)) status = "error";
+        else if (insolvencyRecords.length) status = "alert";
+        else if (entreprise && !entreprise.error && entreprise.etat_administratif && entreprise.etat_administratif !== "A") status = "warn";
+
+        const result = {
+          status,
+          fetchedAt: Date.now(),
+          entreprise: entreprise && !entreprise.error ? entreprise : null,
+          entrepriseError: entreprise && entreprise.error ? entreprise.error : null,
+          bodacc: bodaccOk ? bodaccRecords : [],
+          bodaccError: bodaccOk ? null : (bodaccRecords && bodaccRecords.error)
+        };
+        d.vigie = result;
+        saveCachedVigie(d.siren, result);
+      } catch (err) {
+        console.error("Erreur vérification", d.siren, err);
+        d.vigie = { status: "error", fetchedAt: Date.now(), error: String(err.message || err) };
+      }
+      renderTable();
+    }
+
+    async function runQueue(items, worker, concurrency) {
+      let i = 0;
+      async function next() {
+        if (i >= items.length) return;
+        const idx = i++;
+        await worker(items[idx]);
+        return next();
+      }
+      const n = Math.min(concurrency, items.length) || 0;
+      const runners = [];
+      for (let k = 0; k < n; k++) runners.push(next());
+      await Promise.all(runners);
+    }
+
+    async function checkAllVisible() {
+      const targets = getFiltered().filter(d => d.siren && (!d.vigie || d.vigie.status === "pending" || d.vigie.status === "error"));
+      if (!targets.length) { progressEl.textContent = "Rien à vérifier (déjà en cache ou pas de SIRET)."; return; }
+      checkAllBtn.disabled = true;
+      let done = 0;
+      progressEl.textContent = `Vérification 0 / ${targets.length}...`;
+      await runQueue(targets, async (d) => {
+        await checkOne(d);
+        done++;
+        progressEl.textContent = `Vérification ${done} / ${targets.length}...`;
+      }, 3); // limite la cadence pour respecter les quotas des API publiques
+      progressEl.textContent = `Vérification terminée (${targets.length} dossier(s)).`;
+      checkAllBtn.disabled = false;
+      renderAll();
+    }
+
+    // ================= Filtrage / rendu liste =================
+    function statusMeta(status) {
+      const map = {
+        ok: { label: "RAS", cls: "tag-ok" },
+        warn: { label: "À vérifier", cls: "tag-warn" },
+        alert: { label: "Procédure trouvée", cls: "tag-alert" },
+        pending: { label: "Non vérifié", cls: "tag-pending" },
+        loading: { label: "Vérification...", cls: "tag-pending" },
+        error: { label: "Erreur de vérification", cls: "tag-warn" },
+        "no-siret": { label: "Pas de SIRET", cls: "tag-pending" }
+      };
+      return map[status] || map.pending;
+    }
+
+    function renderFilterChips() {
+      const options = [
+        { key: "all", label: "Tous" },
+        { key: "alert", label: "🔴 Procédures trouvées" },
+        { key: "warn", label: "🟠 À vérifier" },
+        { key: "ok", label: "🟢 RAS" },
+        { key: "pending", label: "Non vérifiés" }
+      ];
+      filterChipsEl.innerHTML = options.map(o => `<button type="button" class="chip ${activeFilter === o.key ? "active" : ""}" data-key="${o.key}">${escapeHtml(o.label)}</button>`).join("");
+      filterChipsEl.querySelectorAll(".chip").forEach(chip => {
+        chip.addEventListener("click", () => { activeFilter = chip.dataset.key; renderAll(); });
+      });
+    }
+
+    function getFiltered() {
+      const q = normalize(searchInput.value.trim());
+      return allDossiers.filter(d => {
+        if (activeFilter !== "all") {
+          const st = d.vigie ? d.vigie.status : "pending";
+          if (activeFilter === "pending" && !(st === "pending" || st === "no-siret")) return false;
+          if (activeFilter !== "pending" && st !== activeFilter) return false;
+        }
+        if (!q) return true;
+        const hay = normalize([d.nom, d.siret, d.ville, d.code_postal, d.dossier_number].join(" "));
+        return hay.includes(q);
+      });
+    }
+
+    function renderTable() {
+      const filtered = getFiltered();
+      const limited = filtered.slice(0, 300);
+      metaEl.textContent = `${filtered.length} dossier(s)${filtered.length > limited.length ? " (300 premiers affichés)" : ""} sur ${allDossiers.length} au total.`;
+
+      if (!limited.length) {
+        tableWrap.innerHTML = `<div class="empty">Aucun dossier ne correspond à ces critères</div>`;
+        return;
+      }
+
+      const rows = limited.map(d => {
+        const meta = statusMeta(d.vigie ? d.vigie.status : "pending");
+        return `
+          <tr data-demandeurid="${d.demandeurId}">
+            <td>
+              <div class="cell-name">${escapeHtml(d.nom || "—")}</div>
+              <div class="cell-sub">Dossier n° ${escapeHtml(d.dossier_number || "—")}</div>
+            </td>
+            <td>${escapeHtml(d.siret || "—")}</td>
+            <td>${escapeHtml([d.code_postal, d.ville].filter(Boolean).join(" ") || "—")}</td>
+            <td><span class="tag ${meta.cls}">${escapeHtml(meta.label)}</span></td>
+          </tr>
+        `;
+      }).join("");
+
+      tableWrap.innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Nom / Raison sociale</th><th>SIRET</th><th>Commune</th><th>Vigie</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      `;
+      tableWrap.querySelectorAll("tbody tr").forEach(tr => {
+        tr.addEventListener("click", () => openFiche(Number(tr.dataset.demandeurid)));
+      });
+    }
+
+    function renderAll() {
+      if (!dataLoaded) return;
+      renderFilterChips();
+      renderTable();
+    }
+
+    searchInput.addEventListener("input", renderTable);
+    checkAllBtn.addEventListener("click", checkAllVisible);
+    refreshBtn.addEventListener("click", async () => {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = "Actualisation...";
+      try {
+        const previous = new Map(allDossiers.map(d => [d.demandeurId, d.vigie]));
+        await loadEverything();
+        allDossiers.forEach(d => { if (previous.has(d.demandeurId) && previous.get(d.demandeurId).status !== "pending") d.vigie = previous.get(d.demandeurId); });
+        renderAll();
+      } catch (err) {
+        console.error("Erreur actualisation :", err);
+        metaEl.textContent = "Erreur lors de l'actualisation : " + (err.message || err);
+      } finally {
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = "↻ Actualiser Grist";
+      }
+    });
+
+    // ================= Fiche détail =================
+    function renderFieldRow(key, rawValue) {
+      const val = fieldValueToText(rawValue);
+      if (val === "" || val === "null" || val === "undefined") return "";
+      return `<div class="field"><span class="field-label">${escapeHtml(labelFor(key))}</span><span class="field-value">${escapeHtml(val)}</span></div>`;
+    }
+    function renderSection(title, row, keys) {
+      const body = keys.map(k => renderFieldRow(k, row[k])).filter(Boolean).join("");
+      return `<div class="section"><div class="section-header">${escapeHtml(title)}</div><div class="section-body">${body || '<div class="section-empty">Aucune donnée</div>'}</div></div>`;
+    }
+
+    function renderVigieSection(d) {
+      const v = d.vigie || { status: "pending" };
+      if (v.status === "no-siret") return `<div class="section"><div class="section-header">🔎 Vérification en temps réel</div><div class="section-body"><div class="section-empty">Pas de SIRET renseigné pour ce dossier.</div></div></div>`;
+      if (v.status === "pending") return `<div class="section"><div class="section-header">🔎 Vérification en temps réel</div><div class="section-body"><div class="section-empty">Pas encore vérifié.</div><button type="button" class="btn btn-primary" id="checkOneBtn" style="margin-top:8px;">🔎 Vérifier maintenant</button></div></div>`;
+      if (v.status === "loading") return `<div class="section"><div class="section-header">🔎 Vérification en temps réel</div><div class="section-body"><div class="section-empty">Vérification en cours...</div></div></div>`;
+
+      const alerts = [];
+      const entreprise = v.entreprise;
+      const grist = {
+        etatDeclare: d.demandeur.etat_administratif,
+        liquidationGrist: !!d.demandeur.Liquidation
+      };
+
+      if (entreprise && entreprise.etat_administratif && entreprise.etat_administratif !== "A") {
+        alerts.push({ level: "warn", text: `L'entreprise apparaît comme <b>cessée</b> (état administratif "${escapeHtml(entreprise.etat_administratif)}") dans l'annuaire officiel des entreprises.` });
+      }
+      const insolvency = (v.bodacc || []).filter(r => r.natureKey && r.natureKey !== "cloture");
+      if (insolvency.length) {
+        alerts.push({ level: "alert", text: `${insolvency.length} annonce(s) BODACC évoquant une procédure collective (liquidation / redressement / sauvegarde) ont été trouvées pour ce SIREN.` });
+        if (!grist.liquidationGrist) {
+          alerts.push({ level: "alert", text: `⚠ Écart détecté : le champ "Liquidation" dans Grist n'est pas coché alors que le BODACC signale une procédure. À vérifier manuellement.` });
+        }
+      } else if (grist.liquidationGrist) {
+        alerts.push({ level: "warn", text: `Le champ "Liquidation" dans Grist est coché, mais aucune procédure correspondante n'a été retrouvée au BODACC pour ce SIREN (peut être antérieure à la période indexée, ou saisie manuelle).` });
+      }
+      if (v.entrepriseError) alerts.push({ level: "warn", text: `Recherche d'Entreprises indisponible : ${escapeHtml(v.entrepriseError)}` });
+      if (v.bodaccError) alerts.push({ level: "warn", text: `BODACC indisponible : ${escapeHtml(v.bodaccError)}` });
+      if (!alerts.length) alerts.push({ level: "ok", text: "Aucun écart ni procédure collective détecté sur les sources publiques consultées." });
+
+      const alertsHtml = alerts.map(a => `<div class="alert-box ${a.level}">${a.text}</div>`).join("");
+
+      const entrepriseHtml = entreprise ? `
+        <div class="field"><span class="field-label">Nom (annuaire officiel)</span><span class="field-value">${escapeHtml(entreprise.nom_complet || "—")}</span></div>
+        <div class="field"><span class="field-label">État administratif</span><span class="field-value">${escapeHtml(entreprise.etat_administratif === "A" ? "Actif" : entreprise.etat_administratif || "—")}</span></div>
+        <div class="field"><span class="field-label">Date de création</span><span class="field-value">${escapeHtml(formatIsoDateShort(entreprise.date_creation))}</span></div>
+        <div class="field"><span class="field-label">Nature juridique</span><span class="field-value">${escapeHtml(entreprise.nature_juridique || "—")}</span></div>
+        <div class="field"><span class="field-label">Activité principale</span><span class="field-value">${escapeHtml(entreprise.activite_principale ? (entreprise.activite_principale.libelle || entreprise.activite_principale.code || fieldValueToText(entreprise.activite_principale)) : "—")}</span></div>
+        <div class="field"><span class="field-label">Adresse du siège</span><span class="field-value">${escapeHtml(entreprise.adresse || "—")}</span></div>
+      ` : `<div class="section-empty">Donnée indisponible.</div>`;
+
+      const bodaccHtml = (v.bodacc || []).length
+        ? v.bodacc.map(r => `
+            <div class="bodacc-item">
+              <div class="bodacc-date">${escapeHtml(formatIsoDateShort(r.date))}</div>
+              <div class="bodacc-nature">${escapeHtml(r.natureText.length > 200 ? r.natureText.slice(0, 200) + "…" : r.natureText)}</div>
+              ${r.tribunal ? `<div class="bodacc-tribunal">Tribunal : ${escapeHtml(r.tribunal)}</div>` : ""}
+            </div>
+          `).join("")
+        : `<div class="section-empty">Aucune annonce BODACC trouvée pour ce SIREN.</div>`;
+
+      return `
+        <div class="section">
+          <div class="section-header"><span>🔎 Vérification en temps réel</span><span style="font-size:11px;font-weight:600;color:#6b7280;">Le ${escapeHtml(formatIsoDateShort(v.fetchedAt))}</span></div>
+          <div class="section-body">
+            ${alertsHtml}
+            <button type="button" class="btn" id="recheckBtn" style="margin-bottom:10px;">↻ Revérifier maintenant</button>
+            <div class="field-label" style="margin:10px 0 4px;font-weight:700;color:#374151;">Annuaire officiel des entreprises</div>
+            ${entrepriseHtml}
+            <div class="field-label" style="margin:14px 0 4px;font-weight:700;color:#374151;">
+              Annonces BODACC (SIREN ${escapeHtml(d.siren)})
+              — <a class="bodacc-link" href="${escapeHtml(bodaccExploreUrl(d.siren))}" target="_blank" rel="noopener">tout voir sur l'explorateur officiel →</a>
+            </div>
+            ${bodaccHtml}
+            <div class="source-note">Sources : recherche-entreprises.api.gouv.fr (Etalab) · BODACC — bodacc-datadila.opendatasoft.com (DILA, Licence Ouverte Etalab 2.0). Vérification informative, ne remplace pas une consultation officielle du registre.</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function openFiche(demandeurId) {
+      const d = allDossiers.find(x => x.demandeurId === demandeurId);
+      if (!d) return;
+      try { grist.setCursorPos({ tableId: DEMANDEURS_TABLE, rowId: demandeurId }); } catch (e) { /* facultatif */ }
+
+      listView.style.display = "none";
+      ficheView.style.display = "block";
+
+      const meta = statusMeta(d.vigie ? d.vigie.status : "pending");
+      const header = `
+        <div class="fiche-header">
+          <div class="title">${escapeHtml(d.nom || "Dossier " + (d.dossier_number || ""))}</div>
+          <div class="sub">Dossier n° ${escapeHtml(d.dossier_number || "—")} · SIRET ${escapeHtml(d.siret || "—")}</div>
+          <div class="badges">
+            <span class="tag ${meta.cls}">${escapeHtml(meta.label)}</span>
+            ${d.demandeur.Est_un_GAEC ? `<span class="tag tag-flag">GAEC</span>` : ""}
+            ${d.demandeur.AREA ? `<span class="tag tag-flag">Bénéficiaire AREA</span>` : ""}
+          </div>
+        </div>
+      `;
+
+      const demandeurKeys = ["type", "usager_email", "siret", "siren", "raison_sociale", "nom_commercial", "forme_juridique", "etat_administratif", "street_address", "code_postal", "ville"];
+      const dossierKeys = ["state", "date_depot", "date_derniere_modification", "suivi_par"];
+
+      ficheContent.innerHTML = `
+        ${header}
+        <div class="fiche-layout">
+          <div class="fiche-col">
+            ${renderSection("Déclaré dans Grist", d.demandeur, demandeurKeys)}
+            ${d.dossier ? renderSection("Dossier (Démarches Simplifiées)", d.dossier, dossierKeys) : ""}
+          </div>
+          <div class="fiche-col">
+            ${renderVigieSection(d)}
+          </div>
+        </div>
+      `;
+
+      const checkBtn = document.getElementById("checkOneBtn");
+      if (checkBtn) checkBtn.addEventListener("click", async () => { await checkOne(d); openFiche(demandeurId); });
+      const recheckBtn = document.getElementById("recheckBtn");
+      if (recheckBtn) recheckBtn.addEventListener("click", async () => {
+        if (d.siren) { try { localStorage.removeItem(CACHE_PREFIX + d.siren); } catch (e) {} vigieCache.delete(d.siren); }
+        d.vigie = { status: "pending" };
+        await checkOne(d);
+        openFiche(demandeurId);
+      });
+    }
+
+    backBtn.addEventListener("click", () => {
+      ficheView.style.display = "none";
+      listView.style.display = "block";
+      renderTable();
+    });
+
+    // ================= Initialisation =================
+    grist.ready({ requiredAccess: "full" });
+
+    (async function init() {
+      try {
+        await loadEverything();
+        renderAll();
+      } catch (err) {
+        console.error("Erreur chargement initial :", err);
+        metaEl.textContent = "Erreur lors du chargement.";
+        tableWrap.innerHTML = `<div class="empty">Échec du chargement (${escapeHtml(err.message || err)}).<br>Vérifie que les tables "${escapeHtml(DOSSIERS_TABLE)}" et "${escapeHtml(DEMANDEURS_TABLE)}" existent et que le widget a l'accès complet.</div>`;
+      }
+    })();
+  </script>
+</body>
+</html>
