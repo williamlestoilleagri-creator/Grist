@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Moteur de recherche unifié</title>
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 16px;
+      font-family: Arial, sans-serif;
+      background: #f5f7fb;
+      color: #1f2937;
+    }
+
+    .container { width: 100%; }
+
+    /* ---------- Recherche ---------- */
+    .search-wrap {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: #f5f7fb;
+      padding-bottom: 12px;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 14px;
+      font-size: 15px;
+      outline: none;
+      background: #fff;
+    }
+    .search-input:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    }
+
+    .filter-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .chip {
+      border: 1px solid #d1d5db; background: #fff; color: #374151;
+      border-radius: 999px; padding: 6px 12px; font-size: 12.5px; font-weight: 700;
+      cursor: pointer; white-space: nowrap;
+    }
+    .chip:hover { border-color: #93c5fd; }
+    .chip.active { background: #2563eb; border-color: #2563eb; color: #fff; }
+
+    .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
+    .refresh-btn {
+      border: 1px solid #d1d5db; background: #fff; color: #374151; border-radius: 10px;
+      padding: 7px 12px; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap;
+    }
+    .refresh-btn:hover { border-color: #93c5fd; }
+    .refresh-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .meta { margin-top: 10px; font-size: 13px; color: #6b7280; }
+
+    .results { display: grid; gap: 10px; margin-top: 10px; }
+
+    .card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 14px;
+      padding: 14px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .card:hover { border-color: #93c5fd; box-shadow: 0 8px 18px rgba(0, 0, 0, 0.06); transform: translateY(-1px); }
+    .card.active { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.10); }
+
+    .table-pill {
+      display: inline-block; font-size: 11px; font-weight: 700; color: #4338ca;
+      background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 999px;
+      padding: 2px 9px; margin-bottom: 8px;
+    }
+
+    .title { font-size: 20px; font-weight: 700; margin-bottom: 8px; color: #111827; }
+    .line { font-size: 14px; line-height: 1.5; color: #374151; word-break: break-word; }
+    .empty { background: #fff; border: 1px dashed #d1d5db; border-radius: 14px; padding: 18px; text-align: center; color: #6b7280; }
+    mark { background: #fde68a; padding: 0 2px; border-radius: 4px; }
+    .small { font-size: 12px; color: #6b7280; margin-top: 6px; }
+
+    .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .tag {
+      display: inline-block;
+      font-size: 11.5px;
+      font-weight: 700;
+      border-radius: 999px;
+      padding: 3px 9px;
+      white-space: nowrap;
+    }
+    .crit-pacage { color: #3730a3; background: #e0e7ff; border: 1px solid #c7d2fe; }
+    .crit-siret { color: #166534; background: #dcfce7; border: 1px solid #bbf7d0; }
+    .crit-adresse { color: #92400e; background: #fef3c7; border: 1px solid #fde68a; }
+    .crit-telephone { color: #075985; background: #e0f2fe; border: 1px solid #bae6fd; }
+    .crit-typeAide { color: #9d174d; background: #fce7f3; border: 1px solid #fbcfe8; }
+
+    .open-fiche-btn {
+      margin-top: 10px;
+      display: inline-block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #2563eb;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 10px;
+      padding: 6px 10px;
+      cursor: pointer;
+    }
+    .open-fiche-btn:hover { background: #dbeafe; }
+
+    /* ---------- Panneau de diagnostic ---------- */
+    .debug-panel {
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 14px;
+      margin-top: 10px; padding: 0;
+    }
+    .debug-panel summary {
+      cursor: pointer; padding: 10px 14px; font-size: 13px; font-weight: 700; color: #374151;
+      list-style: none;
+    }
+    .debug-panel summary::-webkit-details-marker { display: none; }
+    .debug-panel[open] summary { border-bottom: 1px solid #e5e7eb; }
+    .debug-body { padding: 10px 14px 14px; font-size: 12.5px; color: #4b5563; }
+    .debug-table { margin-bottom: 10px; }
+    .debug-table .tname { font-weight: 700; color: #111827; }
+    .debug-table .skipped { color: #b91c1c; font-style: italic; }
+    .debug-crit { margin: 2px 0 0 10px; }
+
+    /* ---------- Fiche ---------- */
+    .back-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #fff; border: 1px solid #d1d5db; border-radius: 10px;
+      padding: 8px 12px; font-size: 14px; cursor: pointer; margin-bottom: 14px;
+    }
+    .back-btn:hover { border-color: #93c5fd; }
+
+    .fiche-header {
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 14px;
+      padding: 16px; margin-bottom: 14px;
+    }
+    .fiche-header .title { margin-bottom: 4px; }
+    .fiche-header .sub { font-size: 13px; color: #6b7280; margin-bottom: 8px; }
+
+    .fiche-loading {
+      background: #fff; border: 1px dashed #d1d5db; border-radius: 14px;
+      padding: 24px; text-align: center; color: #6b7280;
+    }
+
+    .section {
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 14px;
+      margin-bottom: 12px; overflow: hidden;
+    }
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 14px; background: #f9fafb; border-bottom: 1px solid #e5e7eb;
+      font-weight: 700; font-size: 14px; color: #111827;
+    }
+    .section-count {
+      font-size: 12px; font-weight: 600; color: #2563eb; background: #eff6ff;
+      border-radius: 999px; padding: 2px 8px;
+    }
+    .section-body { padding: 10px 14px; }
+
+    .row-block {
+      border: 1px solid #f0f1f4; border-radius: 10px; padding: 10px 12px;
+      margin-bottom: 8px; background: #fcfcfd;
+    }
+    .row-block:last-child { margin-bottom: 0; }
+
+    .field {
+      display: flex; gap: 6px; font-size: 13px; line-height: 1.5;
+      padding: 2px 0; border-bottom: 1px dashed #eef0f3;
+    }
+    .field:last-child { border-bottom: none; }
+    .field-list { flex-direction: column; align-items: flex-start; }
+    .field-label { color: #6b7280; min-width: 42%; flex-shrink: 0; display: flex; align-items: center; gap: 5px; }
+    .field-value { color: #1f2937; font-weight: 500; word-break: break-word; }
+    .value-list { margin: 6px 0 2px 4px; padding-left: 18px; color: #1f2937; font-weight: 500; }
+    .value-list li { margin-bottom: 3px; word-break: break-word; }
+    .section-empty { font-size: 13px; color: #9ca3af; font-style: italic; padding: 6px 0; }
+    .crit-dot {
+      display: inline-block; font-size: 9.5px; font-weight: 700; border-radius: 999px;
+      padding: 1px 6px; white-space: nowrap;
+    }
+
+    .fiche-error, .fiche-info {
+      border-radius: 12px; padding: 14px; font-size: 14px;
+    }
+    .fiche-error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+    .fiche-info { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
+
+    /* ---------- Mise en page à deux colonnes ---------- */
+    .fiche-layout { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+    .fiche-main { flex: 3 1 400px; min-width: 280px; }
+
+    /* ---------- Suivi de dossier ---------- */
+    .suivi-panel {
+      flex: 1 1 260px; max-width: 340px;
+      background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 14px; padding: 12px;
+    }
+    .suivi-header {
+      display: flex; align-items: center; justify-content: space-between;
+      font-weight: 700; font-size: 14px; color: #3730a3; margin-bottom: 10px; padding: 0 2px;
+    }
+    .suivi-count {
+      font-size: 12px; font-weight: 700; background: #c7d2fe; color: #3730a3;
+      border-radius: 999px; padding: 2px 8px;
+    }
+    .suivi-body { display: flex; flex-direction: column; gap: 10px; }
+    .suivi-empty { font-size: 13px; color: #6366f1; font-style: italic; text-align: center; padding: 14px 0; }
+
+    .suivi-card {
+      background: #fff; border-left: 4px solid #6366f1; border-radius: 10px;
+      padding: 10px 12px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+    .suivi-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; gap: 6px; }
+    .suivi-date { font-weight: 700; font-size: 12px; color: #3730a3; }
+
+    .badge-select {
+      appearance: none; -webkit-appearance: none; -moz-appearance: none;
+      border: none; font-size: 11px; font-weight: 700; padding: 3px 22px 3px 8px;
+      border-radius: 999px; cursor: pointer; white-space: nowrap;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%23374151'><path d='M5.5 7.5l4.5 4.5 4.5-4.5' stroke='%23374151' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+      background-repeat: no-repeat; background-position: right 6px center; background-size: 12px;
+    }
+    .badge-select:focus { outline: 2px solid rgba(99, 102, 241, 0.4); }
+
+    .suivi-field { font-size: 12.5px; line-height: 1.5; display: flex; gap: 4px; flex-wrap: wrap; padding: 1px 0; }
+    .suivi-label { color: #6366f1; font-weight: 600; min-width: 60px; }
+    .suivi-value { color: #1f2937; word-break: break-word; }
+
+    /* ---------- Formulaire "Nouvelle annotation" ---------- */
+    .new-suivi-btn {
+      width: 100%; background: #4f46e5; color: #fff; border: none; border-radius: 10px;
+      padding: 9px 12px; font-size: 13px; font-weight: 700; cursor: pointer; margin-bottom: 10px;
+    }
+    .new-suivi-btn:hover { background: #4338ca; }
+
+    .new-suivi-form {
+      background: #fff; border: 1px solid #c7d2fe; border-radius: 12px; padding: 12px;
+      margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .new-suivi-form.hidden { display: none; }
+
+    .form-field { display: flex; flex-direction: column; gap: 3px; }
+    .form-field label { font-size: 11.5px; font-weight: 700; color: #4338ca; }
+    .form-field input, .form-field select, .form-field textarea {
+      font-family: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid #d1d5db;
+      border-radius: 8px; outline: none; background: #fff; color: #1f2937;
+    }
+    .form-field input:focus, .form-field select:focus, .form-field textarea:focus {
+      border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+    }
+    .form-field textarea { resize: vertical; min-height: 60px; }
+    .form-hint { font-size: 10.5px; color: #9ca3af; }
+
+    .form-actions { display: flex; gap: 8px; margin-top: 4px; }
+    .form-submit-btn {
+      flex: 1; background: #16a34a; color: #fff; border: none; border-radius: 8px;
+      padding: 8px 10px; font-size: 13px; font-weight: 700; cursor: pointer;
+    }
+    .form-submit-btn:hover { background: #15803d; }
+    .form-submit-btn:disabled { background: #9ca3af; cursor: not-allowed; }
+
+    .form-cancel-btn {
+      background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; border-radius: 8px;
+      padding: 8px 10px; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .form-cancel-btn:hover { background: #e5e7eb; }
+
+    .form-message { font-size: 12px; border-radius: 8px; padding: 6px 8px; }
+    .form-message.success { background: #dcfce7; color: #166534; }
+    .form-message.error { background: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Vue recherche -->
+    <div id="searchView">
+      <div class="search-wrap">
+        <input
+          id="searchInput"
+          class="search-input"
+          type="text"
+          placeholder="Rechercher un code PACAGE, un SIRET, une adresse, un téléphone, un type d'aide..."
+        />
+        <div class="filter-chips" id="filterChips"></div>
+        <div class="toolbar">
+          <div id="meta" class="meta">Chargement des tables...</div>
+          <button type="button" class="refresh-btn" id="refreshBtn">↻ Actualiser</button>
+        </div>
+        <details class="debug-panel" id="debugPanel">
+          <summary>🔍 Tables et colonnes détectées (diagnostic)</summary>
+          <div class="debug-body" id="debugBody"></div>
+        </details>
+      </div>
+      <div id="results" class="results"></div>
+    </div>
+
+    <!-- Vue fiche -->
+    <div id="ficheView" style="display:none;">
+      <button class="back-btn" id="backBtn">&larr; Retour à la recherche</button>
+      <div id="ficheContent"></div>
+    </div>
+  </div>
+
+  <script>
+    // ================= Critères de recherche =================
+    // Chaque colonne de chaque table du document est classée dans 0, 1 ou plusieurs de ces
+    // 5 catégories, par reconnaissance de son nom (insensible aux accents/casse/soulignés).
+    const CRITERIA = {
+      pacage: { label: "Code PACAGE", cls: "crit-pacage" },
+      siret: { label: "SIRET", cls: "crit-siret" },
+      adresse: { label: "Adresse", cls: "crit-adresse" },
+      telephone: { label: "Téléphone", cls: "crit-telephone" },
+      typeAide: { label: "Type d'aide", cls: "crit-typeAide" }
+    };
+    const CRITERIA_KEYS = Object.keys(CRITERIA);
+
+    function stripAccents(str) {
+      return String(str ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "");
+    }
+    function normCol(col) { return stripAccents(col).toLowerCase(); }
+
+    function classifyColumn(col) {
+      const n = normCol(col);
+      const cats = [];
+      if (/pacage/.test(n)) cats.push("pacage");
+      if (/siret/.test(n)) cats.push("siret");
+      const isMailLike = /mail|courriel|email|site|url/.test(n);
+      if (!isMailLike && /adresse|^commune$|code.?postal|codepostal/.test(n)) cats.push("adresse");
+      if (/telephone|mobile|portable|gsm|(^|_)tel(_|$)/.test(n)) cats.push("telephone");
+      if (/dispositif|typeaide|type.*aide|aide.*type|nature.*aide|nature.*dispositif/.test(n)) cats.push("typeAide");
+      return cats;
+    }
+
+    // ================= État global =================
+    let allTables = [];      // [{ tableId, columns, rows, catCols: {pacage:[...], ...}, hasAnyCriteria }]
+    let suiviTableId = null;
+    let suiviColumns = [];
+    let suiviRows = [];
+    let suiviFieldMap = { tableRef: null, recordRef: null, commentaire: null, statut: null, date: null, auteur: null };
+    let dataLoaded = false;
+    let activeFilter = "all";  // "all" ou une clé de CRITERIA
+    let currentOpenKey = null;
+
+    const searchInput = document.getElementById("searchInput");
+    const metaEl = document.getElementById("meta");
+    const resultsEl = document.getElementById("results");
+    const searchView = document.getElementById("searchView");
+    const ficheView = document.getElementById("ficheView");
+    const ficheContent = document.getElementById("ficheContent");
+    const backBtn = document.getElementById("backBtn");
+    const filterChipsEl = document.getElementById("filterChips");
+    const refreshBtn = document.getElementById("refreshBtn");
+    const debugBody = document.getElementById("debugBody");
+
+    // ================= Utilitaires =================
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+    function escapeRegExp(string) { return String(string).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+    function highlight(text, query) {
+      const safeText = escapeHtml(text ?? "");
+      if (!query) return safeText;
+      const regex = new RegExp("(" + escapeRegExp(query) + ")", "ig");
+      return safeText.replace(regex, "<mark>$1</mark>");
+    }
+    function normalize(value) { return stripAccents(String(value ?? "")).toLowerCase().trim(); }
+
+    function fieldValueToText(val) {
+      if (Array.isArray(val) && val[0] === "L") return val.slice(1).join(", ");
+      if (Array.isArray(val)) return val.join(", ");
+      if (typeof val === "boolean") return val ? "Oui" : "Non";
+      return String(val ?? "");
+    }
+
+    function humanizeKey(key) {
+      const spaced = String(key).replace(/_/g, " ").trim();
+      if (!spaced) return key;
+      return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+    }
+
+    function formatDateTime(value) {
+      if (typeof value === "number" && value) {
+        try {
+          return new Date(value * 1000).toLocaleString("fr-FR", {
+            day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"
+          });
+        } catch (e) { return String(value); }
+      }
+      return value ? String(value) : "—";
+    }
+
+    function badgeColorForStatus(status) {
+      const palette = [
+        { bg: "#dcfce7", fg: "#166534" }, { bg: "#fef9c3", fg: "#854d0e" },
+        { bg: "#fee2e2", fg: "#991b1b" }, { bg: "#e0e7ff", fg: "#3730a3" },
+        { bg: "#f3e8ff", fg: "#6b21a8" }, { bg: "#e0f2fe", fg: "#075985" }
+      ];
+      if (!status) return { bg: "#e5e7eb", fg: "#374151" };
+      let h = 0;
+      const s = String(status);
+      for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+      return palette[h % palette.length];
+    }
+
+    // ================= Accès Grist =================
+    async function fetchTableRaw(tableId) {
+      return await grist.docApi.fetchTable(tableId);
+    }
+    function columnsFromRaw(raw) {
+      return Object.keys(raw).filter(c => c !== "id" && !c.startsWith("gristHelper"));
+    }
+    function rowsFromRaw(raw, cols) {
+      const ids = raw.id || [];
+      return ids.map((id, i) => {
+        const row = { id };
+        cols.forEach(c => (row[c] = raw[c][i]));
+        return row;
+      });
+    }
+
+    function isSuiviTableId(tableId) {
+      const n = stripAccents(tableId).toLowerCase().replace(/[^a-z]/g, "");
+      return n.includes("suivi") && n.includes("dossier");
+    }
+
+    // Reconnaît, parmi les colonnes de la table "Suivi de dossier", celles qui servent à
+    // rattacher une annotation à un enregistrement source, ainsi que le commentaire/statut/etc.
+    function classifySuiviColumns(cols) {
+      const map = { tableRef: null, recordRef: null, commentaire: null, statut: null, date: null, auteur: null };
+      cols.forEach(col => {
+        const n = normCol(col);
+        if (!map.tableRef && /(table|source).*(source|table)|^table$|nom.*table/.test(n)) map.tableRef = col;
+        if (!map.recordRef && /(id|ref).*(ligne|enregistrement|record|source)|(ligne|enregistrement).*id/.test(n)) map.recordRef = col;
+        if (!map.statut && /statut|^etat$|status/.test(n)) map.statut = col;
+        if (!map.date && /^date|date.*creation|cree.*le/.test(n)) map.date = col;
+        if (!map.auteur && /auteur|utilisateur|redacteur|redige.*par|cree.*par|agent/.test(n)) map.auteur = col;
+        if (!map.commentaire && /commentaire|annotation|note|description|observation|detail/.test(n)) map.commentaire = col;
+      });
+      // Repli : si aucune colonne de commentaire reconnue, on prend la première colonne texte
+      // restante (hors celles déjà affectées) pour ne pas bloquer la fonctionnalité.
+      if (!map.commentaire) {
+        const used = new Set(Object.values(map).filter(Boolean));
+        const fallback = cols.find(c => !used.has(c));
+        if (fallback) map.commentaire = fallback;
+      }
+      return map;
+    }
+
+    function recordTag(tableId, rowId) { return `[REF:${tableId}:${rowId}]`; }
+    function stripTag(text, tag) { return (text || "").replace(tag, "").trim(); }
+
+    async function loadEverything() {
+      metaEl.textContent = "Chargement des tables du document...";
+      resultsEl.innerHTML = "";
+      const tableIds = await grist.docApi.listTables();
+      const cleanIds = (tableIds || []).filter(id => id && !id.startsWith("_grist") && !/^GristHidden_/i.test(id));
+
+      suiviTableId = cleanIds.find(isSuiviTableId) || null;
+      const searchableIds = cleanIds.filter(id => id !== suiviTableId);
+
+      allTables = [];
+      for (const tableId of searchableIds) {
+        try {
+          const raw = await fetchTableRaw(tableId);
+          const columns = columnsFromRaw(raw);
+          const rows = rowsFromRaw(raw, columns);
+          const catCols = { pacage: [], siret: [], adresse: [], telephone: [], typeAide: [] };
+          columns.forEach(col => classifyColumn(col).forEach(cat => catCols[cat].push(col)));
+          const hasAnyCriteria = CRITERIA_KEYS.some(cat => catCols[cat].length > 0);
+          allTables.push({ tableId, columns, rows, catCols, hasAnyCriteria });
+        } catch (err) {
+          console.error("Erreur chargement de la table", tableId, err);
+        }
+      }
+
+      if (suiviTableId) {
+        await loadSuiviTable();
+      } else {
+        suiviColumns = [];
+        suiviRows = [];
+      }
+
+      dataLoaded = true;
+    }
+
+    async function loadSuiviTable() {
+      const raw = await fetchTableRaw(suiviTableId);
+      suiviColumns = columnsFromRaw(raw);
+      suiviRows = rowsFromRaw(raw, suiviColumns);
+      suiviFieldMap = classifySuiviColumns(suiviColumns);
+    }
+
+    // ================= Filtres / recherche =================
+    function renderFilterChips() {
+      const chips = [`<button type="button" class="chip ${activeFilter === "all" ? "active" : ""}" data-filter="all">Tous les critères</button>`];
+      CRITERIA_KEYS.forEach(key => {
+        chips.push(`<button type="button" class="chip ${activeFilter === key ? "active" : ""}" data-filter="${key}">${escapeHtml(CRITERIA[key].label)}</button>`);
+      });
+      filterChipsEl.innerHTML = chips.join("");
+      filterChipsEl.querySelectorAll(".chip").forEach(btn => {
+        btn.addEventListener("click", () => {
+          activeFilter = btn.dataset.filter;
+          renderFilterChips();
+          render();
+        });
+      });
+    }
+
+    function activeCriteriaKeys() {
+      return activeFilter === "all" ? CRITERIA_KEYS : [activeFilter];
+    }
+
+    function getMatchedFields(tableEntry, row, cats) {
+      const matched = [];
+      cats.forEach(cat => {
+        tableEntry.catCols[cat].forEach(col => {
+          const val = row[col];
+          if (val !== null && val !== undefined && val !== "") {
+            matched.push({ cat, col, text: fieldValueToText(val) });
+          }
+        });
+      });
+      return matched;
+    }
+
+    function guessTitle(tableEntry, row, matched) {
+      const identityCol = tableEntry.columns.find(c => /^nom$|raison.*sociale|denomination|exploitant|prenom/.test(normCol(c)));
+      if (identityCol && row[identityCol]) return fieldValueToText(row[identityCol]);
+      if (matched.length) return matched[0].text;
+      return `${tableEntry.tableId} — ligne #${row.id}`;
+    }
+
+    function searchAll(query) {
+      const q = normalize(query);
+      const cats = activeCriteriaKeys();
+      const out = [];
+      allTables.forEach(tableEntry => {
+        if (!tableEntry.hasAnyCriteria) return;
+        tableEntry.rows.forEach(row => {
+          const matched = getMatchedFields(tableEntry, row, cats);
+          if (!matched.length) return;
+          const hit = matched.some(m => normalize(m.text).includes(q));
+          if (hit) out.push({ tableEntry, row, matched });
+        });
+      });
+      return out;
+    }
+
+    function render() {
+      if (!dataLoaded) return;
+
+      const query = searchInput.value.trim();
+      const totalRows = allTables.reduce((sum, t) => sum + t.rows.length, 0);
+      const eligibleTables = allTables.filter(t => t.hasAnyCriteria).length;
+
+      if (query.length < 2) {
+        metaEl.textContent = `${allTables.length} table(s) chargée(s), ${eligibleTables} avec au moins un des 5 critères (${totalRows} lignes au total). Tapez au moins 2 caractères pour lancer la recherche.`;
+        resultsEl.innerHTML = "";
+        return;
+      }
+
+      const hits = searchAll(query);
+      const limited = hits.slice(0, 200);
+      metaEl.textContent = `${hits.length} résultat(s) trouvé(s)${hits.length > limited.length ? " (200 premiers affichés, affinez votre recherche)" : ""} sur ${eligibleTables} table(s) contenant au moins un des 5 critères.`;
+
+      if (!limited.length) {
+        resultsEl.innerHTML = `<div class="empty">Aucun résultat trouvé</div>`;
+        return;
+      }
+
+      resultsEl.innerHTML = limited.map(({ tableEntry, row, matched }) => {
+        const key = `${tableEntry.tableId}:${row.id}`;
+        const title = guessTitle(tableEntry, row, matched);
+        const lines = matched.slice(0, 6).map(m =>
+          `<strong>${escapeHtml(humanizeKey(m.col))}</strong> <span class="crit-dot ${CRITERIA[m.cat].cls}">${escapeHtml(CRITERIA[m.cat].label)}</span> : ${highlight(m.text, query)}`
+        ).join("<br>");
+        return `
+          <div class="card" data-key="${escapeHtml(key)}" data-tableid="${escapeHtml(tableEntry.tableId)}" data-rowid="${row.id}">
+            <div class="table-pill">${escapeHtml(tableEntry.tableId)}</div>
+            <div class="title">${highlight(title, query)}</div>
+            <div class="line">${lines}</div>
+            <div class="small">ID de ligne Grist : ${row.id}</div>
+            <div class="open-fiche-btn" data-key="${escapeHtml(key)}">Voir la fiche complète →</div>
+          </div>
+        `;
+      }).join("");
+
+      document.querySelectorAll(".card").forEach(card => {
+        card.addEventListener("click", async (ev) => {
+          const tableId = card.dataset.tableid;
+          const rowId = Number(card.dataset.rowid);
+          try { await grist.setCursorPos({ tableId, rowId }); } catch (e) { /* certains docs refusent le changement de table active */ }
+          openFiche(tableId, rowId);
+        });
+      });
+    }
+
+    searchInput.addEventListener("input", render);
+    refreshBtn.addEventListener("click", async () => {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = "Actualisation...";
+      try {
+        await loadEverything();
+        renderDebugPanel();
+        render();
+      } catch (err) {
+        console.error("Erreur actualisation :", err);
+        metaEl.textContent = "Erreur lors de l'actualisation : " + (err.message || err);
+      } finally {
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = "↻ Actualiser";
+      }
+    });
+
+    // ================= Panneau de diagnostic =================
+    function renderDebugPanel() {
+      const blocks = allTables.map(t => {
+        if (!t.hasAnyCriteria) {
+          return `<div class="debug-table"><span class="tname">${escapeHtml(t.tableId)}</span> — <span class="skipped">aucun des 5 critères détecté, table ignorée pour la recherche (${t.rows.length} ligne(s))</span></div>`;
+        }
+        const critLines = CRITERIA_KEYS
+          .filter(cat => t.catCols[cat].length)
+          .map(cat => `<div class="debug-crit">• ${escapeHtml(CRITERIA[cat].label)} → ${t.catCols[cat].map(escapeHtml).join(", ")}</div>`)
+          .join("");
+        return `<div class="debug-table"><span class="tname">${escapeHtml(t.tableId)}</span> (${t.rows.length} ligne(s))${critLines}</div>`;
+      }).join("");
+
+      const suiviBlock = suiviTableId
+        ? `<div class="debug-table"><span class="tname">${escapeHtml(suiviTableId)}</span> — table "Suivi de dossier" détectée (${suiviRows.length} ligne(s))
+            <div class="debug-crit">• Rattachement table source → ${suiviFieldMap.tableRef ? escapeHtml(suiviFieldMap.tableRef) : "non trouvé (le lien se fait via une balise cachée dans le commentaire)"}</div>
+            <div class="debug-crit">• Rattachement ligne source → ${suiviFieldMap.recordRef ? escapeHtml(suiviFieldMap.recordRef) : "non trouvé (le lien se fait via une balise cachée dans le commentaire)"}</div>
+            <div class="debug-crit">• Commentaire → ${suiviFieldMap.commentaire ? escapeHtml(suiviFieldMap.commentaire) : "aucune colonne texte disponible"}</div>
+            <div class="debug-crit">• Statut → ${suiviFieldMap.statut ? escapeHtml(suiviFieldMap.statut) : "non trouvé"}</div>
+            <div class="debug-crit">• Date → ${suiviFieldMap.date ? escapeHtml(suiviFieldMap.date) : "non trouvé"}</div>
+            <div class="debug-crit">• Auteur → ${suiviFieldMap.auteur ? escapeHtml(suiviFieldMap.auteur) : "non trouvé"}</div>
+           </div>`
+        : `<div class="debug-table"><span class="skipped">Aucune table "Suivi de dossier" trouvée dans ce document (le nom technique doit contenir "suivi" et "dossier"). Le panneau d'annotation sera désactivé sur les fiches.</span></div>`;
+
+      debugBody.innerHTML = blocks + suiviBlock;
+    }
+
+    // ================= Rendu générique de champs (fiche) =================
+    function splitIntoListItems(text) {
+      if (typeof text !== "string") return null;
+      let items = null;
+      if (text.includes("\n")) items = text.split(/\n+/);
+      else if (text.includes("•")) items = text.split("•");
+      if (!items) return null;
+      items = items.map(s => s.replace(/^[•\-\*]\s*/, "").trim()).filter(Boolean);
+      return items.length > 1 ? items : null;
+    }
+
+    function renderFieldRow(key, rawValue) {
+      const text = fieldValueToText(rawValue);
+      const label = humanizeKey(key);
+      const cats = classifyColumn(key);
+      const critBadges = cats.map(c => `<span class="crit-dot ${CRITERIA[c].cls}">${escapeHtml(CRITERIA[c].label)}</span>`).join("");
+      const items = splitIntoListItems(text);
+      if (items) {
+        return `
+          <div class="field field-list">
+            <span class="field-label">${escapeHtml(label)} ${critBadges}</span>
+            <ul class="value-list">${items.map(i => `<li>${escapeHtml(i)}</li>`).join("")}</ul>
+          </div>
+        `;
+      }
+      return `
+        <div class="field">
+          <span class="field-label">${escapeHtml(label)} ${critBadges}</span>
+          <span class="field-value">${escapeHtml(text)}</span>
+        </div>
+      `;
+    }
+
+    function renderGenericRow(row, skip = []) {
+      const parts = Object.keys(row)
+        .filter(k => k !== "id" && !k.startsWith("gristHelper") && !skip.includes(k))
+        .filter(k => row[k] !== null && row[k] !== undefined && row[k] !== "")
+        .map(k => renderFieldRow(k, row[k]));
+      return parts.join("") || `<div class="section-empty">Aucune donnée</div>`;
+    }
+
+    function renderSection(title, rows, skip = []) {
+      const body = rows.length
+        ? rows.map(r => `<div class="row-block">${renderGenericRow(r, skip)}</div>`).join("")
+        : `<div class="section-empty">Aucune ligne trouvée</div>`;
+      return `
+        <div class="section">
+          <div class="section-header">
+            <span>${escapeHtml(title)}</span>
+            <span class="section-count">${rows.length}</span>
+          </div>
+          <div class="section-body">${body}</div>
+        </div>
+      `;
+    }
+
+    // ================= Suivi de dossier =================
+    function matchingSuiviRows(tableId, rowId) {
+      if (!suiviTableId || !suiviFieldMap.commentaire) return [];
+      const tag = recordTag(tableId, rowId);
+      return suiviRows.filter(r => {
+        const text = String(r[suiviFieldMap.commentaire] || "");
+        if (text.includes(tag)) return true;
+        if (suiviFieldMap.tableRef && suiviFieldMap.recordRef) {
+          return String(r[suiviFieldMap.tableRef] || "") === tableId && Number(r[suiviFieldMap.recordRef]) === rowId;
+        }
+        return false;
+      }).sort((a, b) => {
+        if (suiviFieldMap.date) return (Number(b[suiviFieldMap.date]) || 0) - (Number(a[suiviFieldMap.date]) || 0);
+        return b.id - a.id;
+      });
+    }
+
+    function distinctStatutValues() {
+      if (!suiviFieldMap.statut) return [];
+      const set = new Set();
+      suiviRows.forEach(r => {
+        const v = r[suiviFieldMap.statut];
+        if (v !== null && v !== undefined && v !== "") set.add(String(v));
+      });
+      return [...set];
+    }
+
+    function renderSuiviCard(entry) {
+      const statut = suiviFieldMap.statut ? entry[suiviFieldMap.statut] : null;
+      const date = suiviFieldMap.date ? formatDateTime(entry[suiviFieldMap.date]) : null;
+      const auteur = suiviFieldMap.auteur ? entry[suiviFieldMap.auteur] : null;
+      const rawComment = suiviFieldMap.commentaire ? String(entry[suiviFieldMap.commentaire] || "") : "";
+      const comment = rawComment.replace(/\[REF:[^\]]+\]/g, "").trim();
+      const colors = badgeColorForStatus(statut);
+
+      const statutControl = suiviFieldMap.statut
+        ? `<select class="badge-select" data-entryid="${entry.id}" style="background-color:${colors.bg};color:${colors.fg}">
+            ${distinctStatutValues().map(v => `<option value="${escapeHtml(v)}" ${String(statut) === v ? "selected" : ""}>${escapeHtml(v)}</option>`).join("")}
+            ${statut && !distinctStatutValues().includes(String(statut)) ? `<option value="${escapeHtml(String(statut))}" selected>${escapeHtml(String(statut))}</option>` : ""}
+          </select>`
+        : "";
+
+      return `
+        <div class="suivi-card">
+          <div class="suivi-card-top">
+            <span class="suivi-date">${date ? escapeHtml(date) : "—"}</span>
+            ${statutControl}
+          </div>
+          ${auteur ? `<div class="suivi-field"><span class="suivi-label">Auteur</span><span class="suivi-value">${escapeHtml(String(auteur))}</span></div>` : ""}
+          ${comment ? `<div class="suivi-field"><span class="suivi-label">Note</span><span class="suivi-value">${escapeHtml(comment)}</span></div>` : ""}
+        </div>
+      `;
+    }
+
+    function renderNewSuiviForm() {
+      const statutOptions = distinctStatutValues();
+      const statutField = suiviFieldMap.statut
+        ? (statutOptions.length
+            ? `<div class="form-field">
+                 <label>Statut</label>
+                 <select name="statut">
+                   ${statutOptions.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("")}
+                   <option value="__autre__">Autre (saisir)…</option>
+                 </select>
+               </div>
+               <div class="form-field" id="statutAutreWrap" style="display:none;">
+                 <label>Préciser le statut</label>
+                 <input type="text" name="statut_autre">
+               </div>`
+            : `<div class="form-field"><label>Statut</label><input type="text" name="statut"></div>`)
+        : "";
+      const auteurField = suiviFieldMap.auteur
+        ? `<div class="form-field"><label>Auteur</label><input type="text" name="auteur" placeholder="Votre nom"></div>`
+        : "";
+
+      return `
+        <form class="new-suivi-form hidden" id="newSuiviForm">
+          ${statutField}
+          ${auteurField}
+          <div class="form-field">
+            <label>Commentaire / annotation</label>
+            <textarea name="commentaire" placeholder="Détail du suivi de dossier..." required></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="form-submit-btn" id="submitNewSuiviBtn">Enregistrer</button>
+            <button type="button" class="form-cancel-btn" id="cancelNewSuiviBtn">Annuler</button>
+          </div>
+        </form>
+      `;
+    }
+
+    function renderSuiviPanel(ctx) {
+      if (!suiviTableId) {
+        return `
+          <div class="suivi-panel">
+            <div class="suivi-header"><span>🗂 Suivi de dossier</span></div>
+            <div class="fiche-info">Aucune table "Suivi de dossier" trouvée dans ce document. Créez-en une (le nom technique doit contenir "suivi" et "dossier", avec au minimum une colonne de commentaire) pour activer les annotations.</div>
+          </div>
+        `;
+      }
+      if (!suiviFieldMap.commentaire) {
+        return `
+          <div class="suivi-panel">
+            <div class="suivi-header"><span>🗂 Suivi de dossier</span></div>
+            <div class="fiche-info">La table "${escapeHtml(suiviTableId)}" a été trouvée mais ne contient aucune colonne texte utilisable comme commentaire.</div>
+          </div>
+        `;
+      }
+      const entries = matchingSuiviRows(ctx.tableId, ctx.rowId);
+      const body = entries.length
+        ? entries.map(renderSuiviCard).join("")
+        : `<div class="suivi-empty">Aucune annotation pour cet enregistrement</div>`;
+      return `
+        <div class="suivi-panel" id="suiviPanelWrap">
+          <div class="suivi-header">
+            <span>🗂 Suivi de dossier</span>
+            <span class="suivi-count">${entries.length}</span>
+          </div>
+          <button type="button" class="new-suivi-btn" id="toggleNewSuiviBtn">+ Nouvelle annotation</button>
+          ${renderNewSuiviForm()}
+          <div id="suiviFormMessage"></div>
+          <div class="suivi-body">${body}</div>
+        </div>
+      `;
+    }
+
+    async function updateSuiviStatut(select, ctx) {
+      const entryId = Number(select.dataset.entryid);
+      const newValue = select.value;
+      select.disabled = true;
+      try {
+        await grist.docApi.applyUserActions([
+          ["UpdateRecord", suiviTableId, entryId, { [suiviFieldMap.statut]: newValue }]
+        ]);
+        const entry = suiviRows.find(r => r.id === entryId);
+        if (entry) entry[suiviFieldMap.statut] = newValue;
+        const colors = badgeColorForStatus(newValue);
+        select.style.backgroundColor = colors.bg;
+        select.style.color = colors.fg;
+      } catch (err) {
+        console.error("Erreur mise à jour du statut :", err);
+        alert("Impossible de mettre à jour le statut (" + (err.message || err) + ").");
+      } finally {
+        select.disabled = false;
+      }
+    }
+
+    async function refreshSuiviPanel(ctx) {
+      await loadSuiviTable();
+      const wrap = document.getElementById("suiviPanelWrap") || document.querySelector(".suivi-panel");
+      if (wrap) {
+        wrap.outerHTML = renderSuiviPanel(ctx);
+        bindSuiviUI(ctx);
+      }
+    }
+
+    async function submitNewSuivi(form, ctx) {
+      const messageEl = document.getElementById("suiviFormMessage");
+      const submitBtn = document.getElementById("submitNewSuiviBtn");
+      messageEl.innerHTML = "";
+
+      const commentaire = form.querySelector('[name="commentaire"]')?.value.trim() || "";
+      if (!commentaire) {
+        messageEl.innerHTML = `<div class="form-message error">Le commentaire est obligatoire.</div>`;
+        return;
+      }
+
+      let statutValue = form.querySelector('[name="statut"]')?.value || "";
+      if (statutValue === "__autre__") {
+        statutValue = form.querySelector('[name="statut_autre"]')?.value.trim() || "";
+      }
+      const auteurValue = form.querySelector('[name="auteur"]')?.value.trim() || "";
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Enregistrement...";
+
+      try {
+        const tag = recordTag(ctx.tableId, ctx.rowId);
+        const fields = {};
+        fields[suiviFieldMap.commentaire] = `${tag} ${commentaire}`.trim();
+        if (suiviFieldMap.statut && statutValue) fields[suiviFieldMap.statut] = statutValue;
+        if (suiviFieldMap.auteur && auteurValue) fields[suiviFieldMap.auteur] = auteurValue;
+        if (suiviFieldMap.tableRef) fields[suiviFieldMap.tableRef] = ctx.tableId;
+        if (suiviFieldMap.recordRef) fields[suiviFieldMap.recordRef] = ctx.rowId;
+
+        await grist.docApi.applyUserActions([
+          ["AddRecord", suiviTableId, null, fields]
+        ]);
+        await refreshSuiviPanel(ctx);
+        const newMessageEl = document.getElementById("suiviFormMessage");
+        if (newMessageEl) newMessageEl.innerHTML = `<div class="form-message success">Annotation enregistrée.</div>`;
+      } catch (err) {
+        console.error("Erreur création annotation :", err);
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Enregistrer";
+        messageEl.innerHTML = `<div class="form-message error">Échec de l'enregistrement (${escapeHtml(err.message || err)}).</div>`;
+      }
+    }
+
+    function bindSuiviUI(ctx) {
+      const toggleBtn = document.getElementById("toggleNewSuiviBtn");
+      const form = document.getElementById("newSuiviForm");
+      const cancelBtn = document.getElementById("cancelNewSuiviBtn");
+      const statutSelect = form ? form.querySelector('[name="statut"]') : null;
+      const statutAutreWrap = document.getElementById("statutAutreWrap");
+
+      document.querySelectorAll(".badge-select").forEach(select => {
+        select.addEventListener("change", () => updateSuiviStatut(select, ctx));
+      });
+
+      if (statutSelect && statutAutreWrap) {
+        statutSelect.addEventListener("change", () => {
+          statutAutreWrap.style.display = statutSelect.value === "__autre__" ? "flex" : "none";
+        });
+      }
+
+      if (!toggleBtn || !form) return;
+      toggleBtn.addEventListener("click", () => form.classList.toggle("hidden"));
+      if (cancelBtn) cancelBtn.addEventListener("click", () => form.classList.add("hidden"));
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        await submitNewSuivi(form, ctx);
+      });
+    }
+
+    // ================= Fiche =================
+    function openFiche(tableId, rowId) {
+      const tableEntry = allTables.find(t => t.tableId === tableId);
+      const row = tableEntry ? tableEntry.rows.find(r => r.id === rowId) : null;
+      if (!tableEntry || !row) {
+        ficheContent.innerHTML = `<div class="fiche-error">Enregistrement introuvable (il a peut-être été supprimé). Actualisez la recherche.</div>`;
+        searchView.style.display = "none";
+        ficheView.style.display = "block";
+        return;
+      }
+
+      currentOpenKey = `${tableId}:${rowId}`;
+      const matched = getMatchedFields(tableEntry, row, CRITERIA_KEYS);
+      const title = guessTitle(tableEntry, row, matched);
+
+      searchView.style.display = "none";
+      ficheView.style.display = "block";
+
+      const header = `
+        <div class="fiche-header">
+          <div class="table-pill">${escapeHtml(tableId)}</div>
+          <div class="title">${escapeHtml(title)}</div>
+          <div class="sub">ID de ligne Grist : ${rowId}</div>
+          <div class="badges">
+            ${CRITERIA_KEYS.filter(cat => tableEntry.catCols[cat].some(col => row[col])).map(cat =>
+              `<span class="tag ${CRITERIA[cat].cls}">${escapeHtml(CRITERIA[cat].label)}</span>`
+            ).join("")}
+          </div>
+        </div>
+      `;
+
+      const ctx = { tableId, rowId };
+
+      ficheContent.innerHTML = `
+        ${header}
+        <div class="fiche-layout">
+          ${renderSuiviPanel(ctx)}
+          <div class="fiche-main">
+            ${renderSection("Détails de l'enregistrement", [row])}
+          </div>
+        </div>
+      `;
+
+      bindSuiviUI(ctx);
+    }
+
+    backBtn.addEventListener("click", () => {
+      ficheView.style.display = "none";
+      searchView.style.display = "block";
+      currentOpenKey = null;
+    });
+
+    // ================= Initialisation Grist =================
+    grist.ready({
+      requiredAccess: "full" // nécessaire pour parcourir toutes les tables du document et écrire dans "Suivi de dossier"
+    });
+
+    (async function init() {
+      renderFilterChips();
+      try {
+        await loadEverything();
+        renderDebugPanel();
+        render();
+      } catch (err) {
+        console.error("Erreur chargement initial :", err);
+        metaEl.textContent = "Erreur lors du chargement des tables du document.";
+        resultsEl.innerHTML = `<div class="empty">Échec du chargement (${escapeHtml(err.message || err)}).<br>Vérifie que le widget a bien reçu l'autorisation d'accès complet au document Grist.</div>`;
+      }
+    })();
+  </script>
+</body>
+</html>
