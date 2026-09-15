@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pipeline des dossiers</title>
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body { font-family: Arial, sans-serif; background: #f5f7fb; color: #1f2937; }
+
+    .app { display: flex; flex-direction: column; height: 100%; }
+
+    .app-header {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+      padding: 12px 16px; background: #fff; border-bottom: 1px solid #e5e7eb; flex: 0 0 auto;
+    }
+    .app-header h1 { font-size: 16px; font-weight: 700; margin: 0; color: #111827; }
+    .app-header .sub { font-size: 11.5px; color: #6b7280; margin-top: 2px; }
+    .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .search-input {
+      padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 10px; font-size: 13px;
+      outline: none; background: #fcfcfd; width: 220px;
+    }
+    .search-input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12); background: #fff; }
+    .chip {
+      border: 1px solid #d1d5db; background: #fff; color: #374151;
+      border-radius: 999px; padding: 7px 12px; font-size: 12px; font-weight: 700;
+      cursor: pointer; white-space: nowrap;
+    }
+    .chip:hover { border-color: #93c5fd; }
+    .chip.active { background: #2563eb; border-color: #2563eb; color: #fff; }
+    .meta { font-size: 12px; color: #6b7280; padding: 6px 16px 0; flex: 0 0 auto; }
+
+    /* ---------- Plateau Kanban ---------- */
+    .board-wrap { flex: 1 1 auto; overflow: auto; padding: 12px 16px 16px; min-height: 0; }
+    .board { display: flex; gap: 12px; align-items: flex-start; height: 100%; }
+    .column {
+      flex: 0 0 260px; width: 260px; background: #eef1f7; border-radius: 14px;
+      display: flex; flex-direction: column; max-height: 100%;
+    }
+    .column.dragover { background: #dbeafe; outline: 2px dashed #2563eb; outline-offset: -2px; }
+    .column-header {
+      padding: 10px 12px; font-size: 12.5px; font-weight: 700; color: #374151;
+      display: flex; align-items: center; justify-content: space-between; flex: 0 0 auto;
+      border-bottom: 2px solid; border-radius: 14px 14px 0 0;
+    }
+    .column-count {
+      font-size: 11px; font-weight: 700; background: rgba(255,255,255,0.7); border-radius: 999px; padding: 1px 8px;
+    }
+    .column-body { flex: 1 1 auto; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+    .column-empty { font-size: 12px; color: #9ca3af; font-style: italic; text-align: center; padding: 14px 4px; }
+
+    .card {
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 10px 11px;
+      cursor: grab; box-shadow: 0 1px 2px rgba(0,0,0,0.04); transition: box-shadow 0.1s;
+    }
+    .card:hover { box-shadow: 0 4px 10px rgba(0,0,0,0.08); border-color: #93c5fd; }
+    .card.dragging { opacity: 0.4; }
+    .card .nom { font-weight: 700; font-size: 13px; color: #111827; margin-bottom: 2px; }
+    .card .sub { font-size: 11.5px; color: #6b7280; margin-bottom: 6px; }
+    .card .badges { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+    .tag {
+      display: inline-block; font-size: 10.5px; font-weight: 700; border-radius: 999px;
+      padding: 2px 8px; white-space: nowrap;
+    }
+    .tag-flag { color: #4338ca; background: #eef2ff; border: 1px solid #c7d2fe; }
+    .tag-warn { color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; }
+    .card .last-note { font-size: 11.5px; color: #4b5563; border-top: 1px dashed #eef0f3; padding-top: 6px; margin-top: 2px; }
+    .card .last-note .who { font-weight: 700; color: #374151; }
+
+    .empty-state { background: #fff; border: 1px dashed #d1d5db; border-radius: 14px; padding: 24px; text-align: center; color: #6b7280; margin: 12px 16px; }
+
+    /* ---------- Modale déplacement ---------- */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); display: flex;
+      align-items: center; justify-content: center; z-index: 1000;
+    }
+    .modal-overlay.hidden { display: none; }
+    .modal-box { background: #fff; border-radius: 14px; padding: 18px; width: 380px; max-width: 92vw; box-shadow: 0 20px 50px rgba(0,0,0,0.25); }
+    .modal-title { font-size: 15px; font-weight: 700; color: #111827; margin-bottom: 2px; }
+    .modal-sub { font-size: 12.5px; color: #6b7280; margin-bottom: 12px; }
+    .modal-box .form-field { display: flex; flex-direction: column; gap: 3px; margin-bottom: 10px; }
+    .modal-box label { font-size: 11.5px; font-weight: 700; color: #4338ca; }
+    .modal-box input, .modal-box textarea {
+      font-family: inherit; font-size: 13px; padding: 7px 9px; border: 1px solid #d1d5db;
+      border-radius: 8px; outline: none; background: #fff; color: #1f2937;
+    }
+    .modal-box textarea { min-height: 64px; resize: vertical; }
+    .modal-actions { display: flex; gap: 8px; margin-top: 4px; }
+    .modal-submit-btn { flex: 1; background: #16a34a; color: #fff; border: none; border-radius: 8px; padding: 9px 10px; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .modal-submit-btn:hover { background: #15803d; }
+    .modal-cancel-btn { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; border-radius: 8px; padding: 9px 10px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .modal-cancel-btn:hover { background: #e5e7eb; }
+
+    /* ---------- Fiche détail ---------- */
+    .back-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #fff; border: 1px solid #d1d5db; border-radius: 10px;
+      padding: 8px 12px; font-size: 14px; cursor: pointer; margin: 14px 0 0 16px;
+    }
+    .back-btn:hover { border-color: #93c5fd; }
+    #ficheView { overflow-y: auto; height: 100%; }
+    .fiche-inner { max-width: 900px; margin: 0 auto; padding: 0 16px 24px; }
+    .fiche-header { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+    .fiche-header .title { font-size: 20px; font-weight: 700; margin-bottom: 4px; color: #111827; }
+    .fiche-header .sub { font-size: 13px; color: #6b7280; margin-bottom: 8px; }
+    .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+    .fiche-layout { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+    .fiche-main { flex: 2 1 380px; min-width: 280px; }
+
+    .section { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; margin-bottom: 12px; overflow: hidden; }
+    .section-header { padding: 12px 14px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; font-weight: 700; font-size: 14px; color: #111827; }
+    .section-body { padding: 10px 14px; }
+    .field { display: flex; gap: 6px; font-size: 13px; line-height: 1.5; padding: 4px 0; border-bottom: 1px dashed #eef0f3; }
+    .field:last-child { border-bottom: none; }
+    .field-label { color: #6b7280; min-width: 42%; flex-shrink: 0; }
+    .field-value { color: #1f2937; font-weight: 500; word-break: break-word; }
+    .section-empty { font-size: 13px; color: #9ca3af; font-style: italic; padding: 6px 0; }
+
+    /* ---------- Panneau suivi (fiche détail) ---------- */
+    .suivi-panel { flex: 1 1 260px; max-width: 340px; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 14px; padding: 12px; }
+    .suivi-header { display: flex; align-items: center; justify-content: space-between; font-weight: 700; font-size: 14px; color: #3730a3; margin-bottom: 10px; padding: 0 2px; }
+    .suivi-count { font-size: 12px; font-weight: 700; background: #c7d2fe; color: #3730a3; border-radius: 999px; padding: 2px 8px; }
+    .suivi-body { display: flex; flex-direction: column; gap: 10px; }
+    .suivi-empty { font-size: 13px; color: #6366f1; font-style: italic; text-align: center; padding: 14px 0; }
+    .suivi-card { background: #fff; border-left: 4px solid #6366f1; border-radius: 10px; padding: 10px 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+    .suivi-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; gap: 6px; }
+    .suivi-field { font-size: 12.5px; line-height: 1.5; display: flex; gap: 4px; flex-wrap: wrap; padding: 1px 0; }
+    .suivi-label { color: #6366f1; font-weight: 600; min-width: 60px; }
+    .suivi-value { color: #1f2937; word-break: break-word; }
+    .suivi-actions { display: flex; gap: 4px; margin-top: 8px; }
+    .icon-btn { background: none; border: 1px solid transparent; cursor: pointer; font-size: 11.5px; font-weight: 600; color: #4338ca; padding: 3px 8px; border-radius: 8px; }
+    .icon-btn:hover { background: #e0e7ff; }
+    .icon-btn.danger { color: #b91c1c; }
+    .icon-btn.danger:hover { background: #fee2e2; }
+    .suivi-view.hidden, .suivi-edit-form.hidden { display: none; }
+    .suivi-edit-form { display: flex; flex-direction: column; gap: 6px; }
+    .badge-select {
+      border: none; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; cursor: pointer;
+    }
+    .new-suivi-btn { width: 100%; background: #4f46e5; color: #fff; border: none; border-radius: 10px; padding: 9px 12px; font-size: 13px; font-weight: 700; cursor: pointer; margin-bottom: 10px; }
+    .new-suivi-btn:hover { background: #4338ca; }
+    .new-suivi-form { background: #fff; border: 1px solid #c7d2fe; border-radius: 12px; padding: 12px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .new-suivi-form.hidden { display: none; }
+    .form-field { display: flex; flex-direction: column; gap: 3px; }
+    .form-field label { font-size: 11.5px; font-weight: 700; color: #4338ca; }
+    .form-field input, .form-field select, .form-field textarea {
+      font-family: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid #d1d5db;
+      border-radius: 8px; outline: none; background: #fff; color: #1f2937;
+    }
+    .form-field textarea { resize: vertical; min-height: 60px; }
+    .form-actions { display: flex; gap: 8px; margin-top: 4px; }
+    .form-submit-btn { flex: 1; background: #16a34a; color: #fff; border: none; border-radius: 8px; padding: 8px 10px; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .form-submit-btn:hover { background: #15803d; }
+    .form-cancel-btn { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; border-radius: 8px; padding: 8px 10px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .form-cancel-btn:hover { background: #e5e7eb; }
+    .form-message { font-size: 12px; border-radius: 8px; padding: 6px 8px; }
+    .form-message.success { background: #dcfce7; color: #166534; }
+    .form-message.error { background: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body>
+  <div class="app" id="boardView">
+    <header class="app-header">
+      <div>
+        <h1>📌 Pipeline des dossiers</h1>
+        <div class="sub">Démarche 155804 — colonnes = Statut de suivi (table Suivi_dossier)</div>
+      </div>
+      <div class="toolbar">
+        <input type="text" id="searchInput" class="search-input" placeholder="Rechercher un nom, un SIRET, une commune...">
+        <button type="button" class="chip" id="hideDeletedChip">Masquer supprimés</button>
+        <button type="button" class="chip" id="refreshBtn">↻ Actualiser</button>
+      </div>
+    </header>
+    <div class="meta" id="meta">Chargement...</div>
+    <div class="board-wrap"><div class="board" id="board"></div></div>
+  </div>
+
+  <div id="ficheView" style="display:none;">
+    <button class="back-btn" id="backBtn">&larr; Retour au pipeline</button>
+    <div class="fiche-inner" id="ficheContent"></div>
+  </div>
+
+  <div class="modal-overlay hidden" id="moveModal">
+    <div class="modal-box">
+      <div class="modal-title" id="moveModalTitle">Déplacer le dossier</div>
+      <div class="modal-sub" id="moveModalSub"></div>
+      <div class="form-field">
+        <label>Auteur</label>
+        <input type="text" id="moveAuteurInput" placeholder="Votre nom (facultatif)">
+      </div>
+      <div class="form-field">
+        <label>Commentaire</label>
+        <textarea id="moveCommentInput" placeholder="Détail du changement de statut (facultatif)"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="modal-submit-btn" id="moveConfirmBtn">Confirmer</button>
+        <button type="button" class="modal-cancel-btn" id="moveCancelBtn">Annuler</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ================= Constantes =================
+    const DOSSIERS_TABLE = "Demarche_155804_dossiers";
+    const DEMANDEURS_TABLE = "Demarche_155804_demandeurs";
+    const SUIVI_TABLE = "Suivi_dossier";
+    const NON_SUIVI = "__non_suivi__";
+
+    const DS_STATE_META = {
+      instruction: { label: "En instruction", bg: "#dbeafe", fg: "#1e40af" },
+      construction: { label: "Brouillon", bg: "#e5e7eb", fg: "#374151" },
+      accepte: { label: "Accepté", bg: "#dcfce7", fg: "#166534" },
+      refuse: { label: "Refusé", bg: "#fee2e2", fg: "#991b1b" },
+      sans_suite: { label: "Sans suite", bg: "#fef3c7", fg: "#92400e" },
+      autre: { label: "Autre", bg: "#e0e7ff", fg: "#3730a3" },
+      inconnu: { label: "Inconnu", bg: "#e5e7eb", fg: "#374151" }
+    };
+    function stateCategory(rawState) {
+      const n = stripAccents(String(rawState || "")).toLowerCase();
+      if (!rawState) return "inconnu";
+      if (/construction/.test(n)) return "construction";
+      if (/instruction/.test(n)) return "instruction";
+      if (/accept/.test(n)) return "accepte";
+      if (/refus/.test(n)) return "refuse";
+      if (/sans.?suite/.test(n)) return "sans_suite";
+      return "autre";
+    }
+    function dsStateBadge(rawState) {
+      const cat = stateCategory(rawState);
+      const meta = DS_STATE_META[cat];
+      const label = cat === "autre" && rawState ? String(rawState) : meta.label;
+      return `<span class="tag" style="background:${meta.bg};color:${meta.fg}">DS : ${escapeHtml(label)}</span>`;
+    }
+
+    // Couleurs de colonnes du pipeline, dérivées du nom du statut (stable, sans configuration).
+    const COLUMN_PALETTE = [
+      { bg: "#e0e7ff", fg: "#3730a3" }, { bg: "#dcfce7", fg: "#166534" },
+      { bg: "#fef9c3", fg: "#854d0e" }, { bg: "#fce7f3", fg: "#9d174d" },
+      { bg: "#e0f2fe", fg: "#075985" }, { bg: "#f3e8ff", fg: "#6b21a8" },
+      { bg: "#fde68a4d", fg: "#92400e" }
+    ];
+    function colorForColumn(key) {
+      if (key === NON_SUIVI) return { bg: "#e5e7eb", fg: "#374151" };
+      let h = 0;
+      for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+      return COLUMN_PALETTE[h % COLUMN_PALETTE.length];
+    }
+
+    // ================= Utilitaires =================
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+    function stripAccents(str) { return String(str ?? "").normalize("NFD").replace(/[̀-ͯ]/g, ""); }
+    function normalize(value) { return stripAccents(String(value ?? "")).toLowerCase().trim(); }
+    function normalizeCode(v) { return stripAccents(String(v ?? "")).toLowerCase().replace(/[^a-z0-9]/g, ""); }
+    function fieldValueToText(val) {
+      if (Array.isArray(val) && val[0] === "L") return val.slice(1).join(", ");
+      if (Array.isArray(val)) return val.join(", ");
+      if (typeof val === "boolean") return val ? "Oui" : "Non";
+      return String(val ?? "");
+    }
+    function badgeColorForStatus(status) {
+      const palette = [
+        { bg: "#dcfce7", fg: "#166534" }, { bg: "#fef9c3", fg: "#854d0e" },
+        { bg: "#fee2e2", fg: "#991b1b" }, { bg: "#e0e7ff", fg: "#3730a3" },
+        { bg: "#f3e8ff", fg: "#6b21a8" }, { bg: "#e0f2fe", fg: "#075985" }
+      ];
+      if (!status) return { bg: "#e5e7eb", fg: "#374151" };
+      let h = 0;
+      const s = String(status);
+      for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+      return palette[h % palette.length];
+    }
+
+    const FIELD_LABELS = {
+      dossier_number: "N° de dossier", state: "État du dossier", date_depot: "Date de dépôt",
+      date_derniere_modification: "Dernière modification", date_traitement: "Date de traitement",
+      motivation: "Motivation", suivi_par: "Suivi par (Démarches Simplifiées)", type: "Type de déclarant",
+      usager_email: "Email du déclarant", siret: "SIRET", siren: "SIREN",
+      raison_sociale: "Raison sociale", nom_commercial: "Nom commercial", forme_juridique: "Forme juridique",
+      street_address: "Adresse", ville: "Commune", code_postal: "Code postal",
+      departement: "Département", region: "Région",
+      Liquidation: "Liquidation judiciaire", AREA: "Bénéficiaire AREA",
+      Pacage_Report: "N° PACAGE", Est_un_GAEC: "GAEC", Surface_legume: "Surface légumes"
+    };
+    function labelFor(col) { return FIELD_LABELS[col] || String(col).replace(/_/g, " ").replace(/^./, c => c.toUpperCase()); }
+
+    // ================= Accès Grist =================
+    async function fetchTableRaw(tableId) { return await grist.docApi.fetchTable(tableId); }
+    function columnsFromRaw(raw) { return Object.keys(raw).filter(c => c !== "id" && !c.startsWith("gristHelper")); }
+    function rowsFromRaw(raw, cols) {
+      const ids = raw.id || [];
+      return ids.map((id, i) => {
+        const row = { id };
+        cols.forEach(c => (row[c] = raw[c][i]));
+        return row;
+      });
+    }
+
+    async function fetchChoiceOptions(tableId, colId) {
+      try {
+        const [metaTables, metaCols] = await Promise.all([
+          fetchTableRaw("_grist_Tables"),
+          fetchTableRaw("_grist_Tables_column")
+        ]);
+        const tIdx = (metaTables.tableId || []).findIndex(t => t === tableId);
+        if (tIdx === -1) return [];
+        const tableRowId = metaTables.id[tIdx];
+        for (let i = 0; i < (metaCols.id || []).length; i++) {
+          if (metaCols.parentId[i] === tableRowId && metaCols.colId[i] === colId) {
+            try {
+              const opts = JSON.parse(metaCols.widgetOptions[i] || "{}");
+              if (Array.isArray(opts.choices)) return opts.choices;
+            } catch (e) { /* pas de widgetOptions JSON exploitable */ }
+          }
+        }
+        return [];
+      } catch (e) {
+        console.warn("Impossible de lire les choix Grist configurés pour", tableId, colId, e);
+        return [];
+      }
+    }
+
+    // ================= État global =================
+    let allDossiers = [];   // lignes fusionnées demandeur + dossier
+    let suiviRows = [];     // lignes Suivi_dossier brutes
+    let suiviChoices = [];  // choix Statut configurés dans Grist
+    let columnsOrder = [NON_SUIVI];
+    let dataLoaded = false;
+    let hideDeleted = true;
+    let pendingMove = null; // { demandeurId, targetColumn }
+
+    const searchInput = document.getElementById("searchInput");
+    const metaEl = document.getElementById("meta");
+    const boardEl = document.getElementById("board");
+    const hideDeletedChip = document.getElementById("hideDeletedChip");
+    const refreshBtn = document.getElementById("refreshBtn");
+    const boardView = document.getElementById("boardView");
+    const ficheView = document.getElementById("ficheView");
+    const ficheContent = document.getElementById("ficheContent");
+    const backBtn = document.getElementById("backBtn");
+    const moveModal = document.getElementById("moveModal");
+
+    async function loadDossiers() {
+      const [dossiersRaw, demandeursRaw] = await Promise.all([
+        fetchTableRaw(DOSSIERS_TABLE),
+        fetchTableRaw(DEMANDEURS_TABLE)
+      ]);
+      const dossiersCols = columnsFromRaw(dossiersRaw);
+      const dossiersRows = rowsFromRaw(dossiersRaw, dossiersCols);
+      const demandeursCols = columnsFromRaw(demandeursRaw);
+      const demandeursRows = rowsFromRaw(demandeursRaw, demandeursCols);
+
+      const dossiersByNumber = new Map();
+      dossiersRows.forEach(d => {
+        const key = String(d.dossier_number || "").trim();
+        if (key) dossiersByNumber.set(key, d);
+      });
+
+      allDossiers = demandeursRows.map(demandeur => {
+        const key = String(demandeur.dossier_number || "").trim();
+        const dossier = dossiersByNumber.get(key) || null;
+        return {
+          demandeurId: demandeur.id,
+          dossier_number: demandeur.dossier_number,
+          nom: demandeur.nom_commercial || demandeur.raison_sociale || "",
+          siret: demandeur.siret,
+          ville: demandeur.ville,
+          code_postal: demandeur.code_postal,
+          state: dossier ? dossier.state : null,
+          supprime: dossier ? !!dossier.dossiers_supprimes_DN : false,
+          demandeur,
+          dossier
+        };
+      });
+    }
+
+    async function loadSuivi() {
+      const raw = await fetchTableRaw(SUIVI_TABLE);
+      const cols = columnsFromRaw(raw);
+      suiviRows = rowsFromRaw(raw, cols);
+      suiviChoices = await fetchChoiceOptions(SUIVI_TABLE, "Statut");
+    }
+
+    function buildColumnsOrder() {
+      const observed = [...new Set(suiviRows.map(r => r.Statut).filter(Boolean))];
+      const extra = observed.filter(v => !suiviChoices.includes(v));
+      columnsOrder = [NON_SUIVI, ...suiviChoices, ...extra];
+    }
+
+    async function loadEverything() {
+      metaEl.textContent = "Chargement...";
+      await Promise.all([loadDossiers(), loadSuivi()]);
+      buildColumnsOrder();
+      dataLoaded = true;
+    }
+
+    // ================= Rattachement dossier <-> suivi =================
+    function suiviForSiret(siret) {
+      if (!siret) return [];
+      const n = normalizeCode(siret);
+      return suiviRows.filter(r => r.SIRET && normalizeCode(r.SIRET) === n).sort((a, b) => b.id - a.id);
+    }
+    function currentColumnFor(d) {
+      const entries = suiviForSiret(d.siret);
+      const latestWithStatut = entries.find(e => e.Statut);
+      return latestWithStatut ? latestWithStatut.Statut : NON_SUIVI;
+    }
+
+    // ================= Filtrage / rendu du plateau =================
+    function getFiltered() {
+      const q = normalize(searchInput.value.trim());
+      return allDossiers.filter(d => {
+        if (hideDeleted && d.supprime) return false;
+        if (!q) return true;
+        const hay = normalize([d.nom, d.siret, d.ville, d.code_postal, d.dossier_number].join(" "));
+        return hay.includes(q);
+      });
+    }
+
+    function cardHtml(d) {
+      const flags = [];
+      if (d.demandeur.Est_un_GAEC) flags.push({ txt: "GAEC", warn: false });
+      if (d.demandeur.AREA) flags.push({ txt: "AREA", warn: false });
+      if (d.demandeur.Liquidation) flags.push({ txt: "⚠ Liquidation", warn: true });
+
+      const entries = suiviForSiret(d.siret);
+      const last = entries[0];
+      const lastComment = last && last.Commentaire ? String(last.Commentaire).replace(/\[SIRET:[^\]]+\]/g, "").trim() : "";
+
+      return `
+        <div class="card" draggable="true" data-demandeurid="${d.demandeurId}">
+          <div class="nom">${escapeHtml(d.nom || "Sans nom")}</div>
+          <div class="sub">${escapeHtml([d.code_postal, d.ville].filter(Boolean).join(" ") || "—")} · ${escapeHtml(d.siret || "SIRET inconnu")}</div>
+          <div class="badges">
+            ${dsStateBadge(d.state)}
+            ${flags.map(f => `<span class="tag ${f.warn ? "tag-warn" : "tag-flag"}">${escapeHtml(f.txt)}</span>`).join("")}
+          </div>
+          ${last ? `<div class="last-note"><span class="who">${escapeHtml(last.Auteur || "Anonyme")}</span> · ${escapeHtml(lastComment || "(pas de commentaire)")}</div>` : ""}
+        </div>
+      `;
+    }
+
+    function renderBoard() {
+      const filtered = getFiltered();
+      const bySituation = new Map();
+      columnsOrder.forEach(c => bySituation.set(c, []));
+      filtered.forEach(d => {
+        const col = currentColumnFor(d);
+        if (!bySituation.has(col)) { columnsOrder.push(col); bySituation.set(col, []); }
+        bySituation.get(col).push(d);
+      });
+
+      metaEl.textContent = `${filtered.length} dossier(s) affiché(s) sur ${allDossiers.length}.`;
+
+      boardEl.innerHTML = columnsOrder.map(col => {
+        const items = bySituation.get(col) || [];
+        const color = colorForColumn(col);
+        const label = col === NON_SUIVI ? "Non suivi" : col;
+        const body = items.length ? items.map(cardHtml).join("") : `<div class="column-empty">Aucun dossier</div>`;
+        return `
+          <div class="column" data-col="${escapeHtml(col)}">
+            <div class="column-header" style="background:${color.bg};color:${color.fg};border-bottom-color:${color.fg}33">
+              <span>${escapeHtml(label)}</span>
+              <span class="column-count">${items.length}</span>
+            </div>
+            <div class="column-body" data-col="${escapeHtml(col)}">${body}</div>
+          </div>
+        `;
+      }).join("");
+
+      bindDragAndDrop();
+      bindCardClicks();
+    }
+
+    function bindCardClicks() {
+      boardEl.querySelectorAll(".card").forEach(card => {
+        card.addEventListener("click", (e) => {
+          if (card.classList.contains("dragging")) return;
+          openFiche(Number(card.dataset.demandeurid));
+        });
+      });
+    }
+
+    // ================= Glisser-déposer =================
+    let draggedId = null;
+    function bindDragAndDrop() {
+      boardEl.querySelectorAll(".card").forEach(card => {
+        card.addEventListener("dragstart", () => {
+          draggedId = Number(card.dataset.demandeurid);
+          card.classList.add("dragging");
+        });
+        card.addEventListener("dragend", () => card.classList.remove("dragging"));
+      });
+      boardEl.querySelectorAll(".column-body").forEach(colBody => {
+        colBody.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          colBody.closest(".column").classList.add("dragover");
+        });
+        colBody.addEventListener("dragleave", () => colBody.closest(".column").classList.remove("dragover"));
+        colBody.addEventListener("drop", (e) => {
+          e.preventDefault();
+          colBody.closest(".column").classList.remove("dragover");
+          const targetCol = colBody.dataset.col;
+          if (draggedId === null || targetCol === NON_SUIVI) return;
+          const d = allDossiers.find(x => x.demandeurId === draggedId);
+          if (!d) return;
+          if (currentColumnFor(d) === targetCol) return;
+          openMoveModal(d, targetCol);
+        });
+      });
+    }
+
+    function openMoveModal(d, targetCol) {
+      pendingMove = { demandeurId: d.demandeurId, targetColumn: targetCol };
+      document.getElementById("moveModalTitle").textContent = `Déplacer vers "${targetCol}"`;
+      document.getElementById("moveModalSub").textContent = `${d.nom || "Sans nom"} — SIRET ${d.siret || "inconnu"}`;
+      document.getElementById("moveAuteurInput").value = "";
+      document.getElementById("moveCommentInput").value = "";
+      moveModal.classList.remove("hidden");
+    }
+    function closeMoveModal() { moveModal.classList.add("hidden"); pendingMove = null; }
+
+    document.getElementById("moveCancelBtn").addEventListener("click", closeMoveModal);
+    document.getElementById("moveConfirmBtn").addEventListener("click", async () => {
+      if (!pendingMove) return;
+      const d = allDossiers.find(x => x.demandeurId === pendingMove.demandeurId);
+      if (!d) { closeMoveModal(); return; }
+      const auteur = document.getElementById("moveAuteurInput").value.trim();
+      const comment = document.getElementById("moveCommentInput").value.trim();
+      const btn = document.getElementById("moveConfirmBtn");
+      btn.disabled = true; btn.textContent = "Enregistrement...";
+      try {
+        const tag = `[SIRET:${d.siret || ""}]`;
+        const fields = {
+          Statut: pendingMove.targetColumn,
+          Commentaire: `${tag} ${comment || "Changement de statut via le pipeline."}`.trim()
+        };
+        if (auteur) fields.Auteur = auteur;
+        if (d.siret) fields.SIRET = d.siret;
+        await grist.docApi.applyUserActions([["AddRecord", SUIVI_TABLE, null, fields]]);
+        await loadSuivi();
+        buildColumnsOrder();
+        closeMoveModal();
+        renderBoard();
+      } catch (err) {
+        console.error("Erreur déplacement :", err);
+        alert("Impossible d'enregistrer ce changement de statut (" + (err.message || err) + ").");
+      } finally {
+        btn.disabled = false; btn.textContent = "Confirmer";
+      }
+    });
+
+    searchInput.addEventListener("input", renderBoard);
+    hideDeletedChip.classList.add("active");
+    hideDeletedChip.addEventListener("click", () => {
+      hideDeleted = !hideDeleted;
+      hideDeletedChip.classList.toggle("active", hideDeleted);
+      renderBoard();
+    });
+    refreshBtn.addEventListener("click", async () => {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = "Actualisation...";
+      try {
+        await loadEverything();
+        renderBoard();
+      } catch (err) {
+        console.error("Erreur actualisation :", err);
+        metaEl.textContent = "Erreur lors de l'actualisation : " + (err.message || err);
+      } finally {
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = "↻ Actualiser";
+      }
+    });
+
+    // ================= Fiche détail + CRUD Suivi_dossier =================
+    function renderFieldRow(key, rawValue) {
+      const val = fieldValueToText(rawValue);
+      if (val === "" || val === "null" || val === "undefined") return "";
+      return `<div class="field"><span class="field-label">${escapeHtml(labelFor(key))}</span><span class="field-value">${escapeHtml(val)}</span></div>`;
+    }
+    function renderSection(title, row, keys) {
+      const body = keys.map(k => renderFieldRow(k, row[k])).filter(Boolean).join("");
+      return `<div class="section"><div class="section-header">${escapeHtml(title)}</div><div class="section-body">${body || '<div class="section-empty">Aucune donnée</div>'}</div></div>`;
+    }
+
+    function statutOptionsForForm() {
+      if (suiviChoices.length) return suiviChoices;
+      return [...new Set(suiviRows.map(r => r.Statut).filter(Boolean))];
+    }
+
+    function renderSuiviCard(entry) {
+      const colors = badgeColorForStatus(entry.Statut);
+      const comment = entry.Commentaire ? String(entry.Commentaire).replace(/\[SIRET:[^\]]+\]/g, "").trim() : "";
+      const statutOptions = statutOptionsForForm();
+      const statutControl = `
+        <select class="badge-select" data-entryid="${entry.id}" style="background-color:${colors.bg};color:${colors.fg}">
+          ${statutOptions.map(v => `<option value="${escapeHtml(v)}" ${entry.Statut === v ? "selected" : ""}>${escapeHtml(v)}</option>`).join("")}
+          ${entry.Statut && !statutOptions.includes(entry.Statut) ? `<option value="${escapeHtml(entry.Statut)}" selected>${escapeHtml(entry.Statut)}</option>` : ""}
+        </select>
+      `;
+      const editStatutOptions = statutOptions.map(v => `<option value="${escapeHtml(v)}" ${entry.Statut === v ? "selected" : ""}>${escapeHtml(v)}</option>`).join("");
+
+      return `
+        <div class="suivi-card" data-entryid="${entry.id}">
+          <div class="suivi-view">
+            <div class="suivi-card-top">${statutControl}</div>
+            ${entry.Auteur ? `<div class="suivi-field"><span class="suivi-label">Auteur</span><span class="suivi-value">${escapeHtml(entry.Auteur)}</span></div>` : ""}
+            ${comment ? `<div class="suivi-field"><span class="suivi-label">Note</span><span class="suivi-value">${escapeHtml(comment)}</span></div>` : ""}
+            <div class="suivi-actions">
+              <button type="button" class="icon-btn edit-suivi-btn" data-entryid="${entry.id}">✎ Modifier</button>
+              <button type="button" class="icon-btn danger delete-suivi-btn" data-entryid="${entry.id}">🗑 Supprimer</button>
+            </div>
+          </div>
+          <form class="suivi-edit-form hidden" data-entryid="${entry.id}">
+            <div class="form-field"><label>Statut</label><select name="statut">${editStatutOptions}</select></div>
+            <div class="form-field"><label>Auteur</label><input type="text" name="auteur" value="${escapeHtml(entry.Auteur || "")}"></div>
+            <div class="form-field"><label>Commentaire</label><textarea name="commentaire">${escapeHtml(comment)}</textarea></div>
+            <div class="form-actions">
+              <button type="submit" class="form-submit-btn">Enregistrer</button>
+              <button type="button" class="form-cancel-btn cancel-edit-suivi-btn" data-entryid="${entry.id}">Annuler</button>
+            </div>
+          </form>
+        </div>
+      `;
+    }
+
+    function renderNewSuiviForm() {
+      const statutOptions = statutOptionsForForm();
+      return `
+        <form class="new-suivi-form hidden" id="newSuiviForm">
+          <div class="form-field">
+            <label>Statut</label>
+            <select name="statut">${statutOptions.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("") || '<option value="">(aucun choix configuré)</option>'}</select>
+          </div>
+          <div class="form-field"><label>Auteur</label><input type="text" name="auteur" placeholder="Votre nom"></div>
+          <div class="form-field"><label>Commentaire</label><textarea name="commentaire" placeholder="Note de suivi..." required></textarea></div>
+          <div class="form-actions">
+            <button type="submit" class="form-submit-btn" id="submitNewSuiviBtn">Enregistrer</button>
+            <button type="button" class="form-cancel-btn" id="cancelNewSuiviBtn">Annuler</button>
+          </div>
+        </form>
+      `;
+    }
+
+    function renderSuiviPanel(siret) {
+      const entries = suiviForSiret(siret);
+      const body = entries.length ? entries.map(renderSuiviCard).join("") : `<div class="suivi-empty">Aucun suivi pour ce dossier</div>`;
+      return `
+        <div class="suivi-panel" id="suiviPanelWrap" data-siret="${escapeHtml(siret || "")}">
+          <div class="suivi-header"><span>🗂 Suivi du dossier</span><span class="suivi-count">${entries.length}</span></div>
+          <button type="button" class="new-suivi-btn" id="toggleNewSuiviBtn">+ Nouvelle note</button>
+          ${renderNewSuiviForm()}
+          <div id="suiviFormMessage"></div>
+          <div class="suivi-body">${body}</div>
+        </div>
+      `;
+    }
+
+    async function refreshSuiviPanel(siret) {
+      await loadSuivi();
+      buildColumnsOrder();
+      const wrap = document.getElementById("suiviPanelWrap");
+      if (wrap) { wrap.outerHTML = renderSuiviPanel(siret); bindSuiviUI(siret); }
+    }
+
+    async function submitNewSuivi(form, siret) {
+      const messageEl = document.getElementById("suiviFormMessage");
+      const submitBtn = document.getElementById("submitNewSuiviBtn");
+      messageEl.innerHTML = "";
+      const commentaire = form.querySelector('[name="commentaire"]')?.value.trim() || "";
+      if (!commentaire) { messageEl.innerHTML = `<div class="form-message error">Le commentaire est obligatoire.</div>`; return; }
+      const statutValue = form.querySelector('[name="statut"]')?.value || "";
+      const auteurValue = form.querySelector('[name="auteur"]')?.value.trim() || "";
+
+      submitBtn.disabled = true; submitBtn.textContent = "Enregistrement...";
+      try {
+        const tag = `[SIRET:${siret || ""}]`;
+        const fields = { Commentaire: `${tag} ${commentaire}`.trim() };
+        if (statutValue) fields.Statut = statutValue;
+        if (auteurValue) fields.Auteur = auteurValue;
+        if (siret) fields.SIRET = siret;
+        await grist.docApi.applyUserActions([["AddRecord", SUIVI_TABLE, null, fields]]);
+        await refreshSuiviPanel(siret);
+        const m = document.getElementById("suiviFormMessage");
+        if (m) m.innerHTML = `<div class="form-message success">Note enregistrée.</div>`;
+      } catch (err) {
+        console.error("Erreur création note :", err);
+        submitBtn.disabled = false; submitBtn.textContent = "Enregistrer";
+        messageEl.innerHTML = `<div class="form-message error">Échec de l'enregistrement (${escapeHtml(err.message || err)}).</div>`;
+      }
+    }
+
+    async function submitEditSuivi(form, siret) {
+      const entryId = Number(form.dataset.entryid);
+      const submitBtn = form.querySelector(".form-submit-btn");
+      const commentaire = form.querySelector('[name="commentaire"]')?.value.trim() || "";
+      if (!commentaire) { alert("Le commentaire est obligatoire."); return; }
+      const statutValue = form.querySelector('[name="statut"]')?.value || "";
+      const auteurValue = form.querySelector('[name="auteur"]')?.value.trim() || "";
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Enregistrement..."; }
+      try {
+        const entry = suiviRows.find(r => r.id === entryId);
+        const existingTagMatch = entry && entry.Commentaire ? String(entry.Commentaire).match(/\[SIRET:[^\]]+\]/) : null;
+        const tag = existingTagMatch ? existingTagMatch[0] : `[SIRET:${siret || ""}]`;
+        const fields = { Commentaire: `${tag} ${commentaire}`.trim(), Statut: statutValue, Auteur: auteurValue };
+        await grist.docApi.applyUserActions([["UpdateRecord", SUIVI_TABLE, entryId, fields]]);
+        await refreshSuiviPanel(siret);
+      } catch (err) {
+        console.error("Erreur modification note :", err);
+        alert("Impossible d'enregistrer les modifications (" + (err.message || err) + ").");
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Enregistrer"; }
+      }
+    }
+
+    async function deleteSuiviEntry(entryId, siret) {
+      if (!confirm("Supprimer définitivement cette note de suivi ?")) return;
+      try {
+        await grist.docApi.applyUserActions([["RemoveRecord", SUIVI_TABLE, entryId]]);
+        await refreshSuiviPanel(siret);
+      } catch (err) {
+        console.error("Erreur suppression note :", err);
+        alert("Impossible de supprimer cette note (" + (err.message || err) + ").");
+      }
+    }
+
+    async function updateSuiviStatutInline(select, siret) {
+      const entryId = Number(select.dataset.entryid);
+      const newValue = select.value;
+      select.disabled = true;
+      try {
+        await grist.docApi.applyUserActions([["UpdateRecord", SUIVI_TABLE, entryId, { Statut: newValue }]]);
+        const entry = suiviRows.find(r => r.id === entryId);
+        if (entry) entry.Statut = newValue;
+        const colors = badgeColorForStatus(newValue);
+        select.style.backgroundColor = colors.bg;
+        select.style.color = colors.fg;
+      } catch (err) {
+        console.error("Erreur mise à jour du statut :", err);
+        alert("Impossible de mettre à jour le statut (" + (err.message || err) + ").");
+      } finally {
+        select.disabled = false;
+      }
+    }
+
+    function bindSuiviUI(siret) {
+      const toggleBtn = document.getElementById("toggleNewSuiviBtn");
+      const form = document.getElementById("newSuiviForm");
+      const cancelBtn = document.getElementById("cancelNewSuiviBtn");
+
+      document.querySelectorAll(".suivi-card .badge-select").forEach(select => {
+        select.addEventListener("change", () => updateSuiviStatutInline(select, siret));
+      });
+
+      document.querySelectorAll(".suivi-card").forEach(card => {
+        const view = card.querySelector(".suivi-view");
+        const editForm = card.querySelector(".suivi-edit-form");
+        const editBtn = card.querySelector(".edit-suivi-btn");
+        const cancelEditBtn = card.querySelector(".cancel-edit-suivi-btn");
+        const deleteBtn = card.querySelector(".delete-suivi-btn");
+        if (editBtn) editBtn.addEventListener("click", () => { view.classList.add("hidden"); editForm.classList.remove("hidden"); });
+        if (cancelEditBtn) cancelEditBtn.addEventListener("click", () => { editForm.classList.add("hidden"); view.classList.remove("hidden"); });
+        if (deleteBtn) deleteBtn.addEventListener("click", () => deleteSuiviEntry(Number(deleteBtn.dataset.entryid), siret));
+        if (editForm) editForm.addEventListener("submit", async (e) => { e.preventDefault(); await submitEditSuivi(editForm, siret); });
+      });
+
+      if (!toggleBtn || !form) return;
+      toggleBtn.addEventListener("click", () => form.classList.toggle("hidden"));
+      if (cancelBtn) cancelBtn.addEventListener("click", () => form.classList.add("hidden"));
+      form.addEventListener("submit", async (e) => { e.preventDefault(); await submitNewSuivi(form, siret); });
+    }
+
+    function openFiche(demandeurId) {
+      const d = allDossiers.find(x => x.demandeurId === demandeurId);
+      if (!d) return;
+      try { grist.setCursorPos({ tableId: DEMANDEURS_TABLE, rowId: demandeurId }); } catch (e) { /* facultatif */ }
+
+      boardView.style.display = "none";
+      ficheView.style.display = "block";
+
+      const header = `
+        <div class="fiche-header">
+          <div class="title">${escapeHtml(d.nom || "Dossier " + (d.dossier_number || ""))}</div>
+          <div class="sub">Dossier n° ${escapeHtml(d.dossier_number || "—")} · SIRET ${escapeHtml(d.siret || "—")}</div>
+          <div class="badges">
+            ${dsStateBadge(d.state)}
+            ${d.demandeur.Est_un_GAEC ? `<span class="tag tag-flag">GAEC</span>` : ""}
+            ${d.demandeur.AREA ? `<span class="tag tag-flag">Bénéficiaire AREA</span>` : ""}
+            ${d.demandeur.Liquidation ? `<span class="tag tag-warn">⚠ Liquidation judiciaire</span>` : ""}
+            ${d.supprime ? `<span class="tag tag-warn">Dossier supprimé côté Démarches Simplifiées</span>` : ""}
+          </div>
+        </div>
+      `;
+
+      const dossierKeys = ["state", "date_depot", "date_derniere_modification", "date_traitement", "suivi_par", "motivation"];
+      const demandeurKeys = ["type", "usager_email", "siret", "siren", "raison_sociale", "nom_commercial", "forme_juridique", "street_address", "code_postal", "ville", "departement", "region"];
+      const computedKeys = ["Pacage_Report", "Surface_legume", "Est_un_GAEC", "AREA", "Liquidation"];
+
+      ficheContent.innerHTML = `
+        ${header}
+        <div class="fiche-layout">
+          ${renderSuiviPanel(d.siret)}
+          <div class="fiche-main">
+            ${d.dossier ? renderSection("Instruction du dossier (Démarches Simplifiées, lecture seule)", d.dossier, dossierKeys) : `<div class="section"><div class="section-header">Instruction du dossier</div><div class="section-body"><div class="section-empty">Aucun dossier "${escapeHtml(DOSSIERS_TABLE)}" ne correspond à ce n° de dossier.</div></div></div>`}
+            ${renderSection("Déclarant", d.demandeur, demandeurKeys)}
+            ${renderSection("Recoupements (formules)", d.demandeur, computedKeys)}
+          </div>
+        </div>
+      `;
+
+      bindSuiviUI(d.siret);
+    }
+
+    backBtn.addEventListener("click", () => {
+      ficheView.style.display = "none";
+      boardView.style.display = "flex";
+      renderBoard();
+    });
+
+    // ================= Initialisation =================
+    grist.ready({ requiredAccess: "full" });
+
+    (async function init() {
+      try {
+        await loadEverything();
+        renderBoard();
+      } catch (err) {
+        console.error("Erreur chargement initial :", err);
+        metaEl.textContent = "Erreur lors du chargement.";
+        boardEl.innerHTML = `<div class="empty-state">Échec du chargement (${escapeHtml(err.message || err)}).<br>Vérifie que les tables "${escapeHtml(DOSSIERS_TABLE)}", "${escapeHtml(DEMANDEURS_TABLE)}" et "${escapeHtml(SUIVI_TABLE)}" existent et que le widget a l'accès complet.</div>`;
+      }
+    })();
+  </script>
+</body>
+</html>
