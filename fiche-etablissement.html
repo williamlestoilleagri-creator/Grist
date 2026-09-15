@@ -561,6 +561,9 @@
     // et recalcule pour l'année choisie, indépendamment des autres blocs.
     // ============================================================
     const RAW_TABLE_CACHE = {};
+    // Returns { ok, rows }. ok:false means the fetch itself failed (missing access,
+    // unknown table, network error, ...) — this must be shown to the user as an error,
+    // never silently treated as "no data for this year".
     function fetchRawTable(tableName) {
       if (!RAW_TABLE_CACHE[tableName]) {
         RAW_TABLE_CACHE[tableName] = (window.grist && grist.docApi)
@@ -572,15 +575,21 @@
                 for (const col in data) row[col] = data[col][i];
                 rows.push(row);
               }
-              return rows;
-            }).catch(function (e) { console.warn('Impossible de charger ' + tableName, e); return []; })
-          : Promise.resolve([]);
+              return { ok: true, rows: rows };
+            }).catch(function (e) {
+              console.warn('Impossible de charger ' + tableName, e);
+              return { ok: false, rows: [] };
+            })
+          : Promise.resolve({ ok: false, rows: [] });
       }
       return RAW_TABLE_CACHE[tableName];
     }
+    const ACCESS_ERROR_HTML = '<p class="fr-mb-0" style="color:#B34000;">⚠ Impossible de charger les données de ce bloc. ' +
+      'Vérifiez qu’un accès complet aux données du document a bien été autorisé pour ce widget ' +
+      '(un bandeau « Autoriser l’accès » apparaît en général en haut de la fiche lors du premier chargement), puis rechargez la page.</p>';
     function fetchYearsList() {
-      return fetchRawTable('TR_Annee').then(function (rows) {
-        return rows.map(function (r) { return r.Annee; }).filter(Boolean)
+      return fetchRawTable('TR_Annee').then(function (res) {
+        return res.rows.map(function (r) { return r.Annee; }).filter(Boolean)
           .filter(function (v, i, arr) { return arr.indexOf(v) === i; })
           .sort(function (a, b) { return parseInt(b, 10) - parseInt(a, 10); });
       });
@@ -592,12 +601,14 @@
     }
 
     function computeEffectifsForYear(record, ctx, year) {
-      return fetchRawTable('TT_Effectifs2').then(function (rows) {
+      return fetchRawTable('TT_Effectifs2').then(function (res) {
+        if (!res.ok || sitesLoadFailed) return { ok: false, data: null };
+        const rows = res.rows;
         const niveau1Code = ctx.niveau1Site && ctx.niveau1Site.Code_DGER;
-        if (!niveau1Code || !year) return null;
+        if (!niveau1Code || !year) return { ok: true, data: null };
         const codes = siteCodesForNiveau1(niveau1Code);
         const filtered = rows.filter(function (r) { return codes.has(r.CodeDGERTexte) && String(r.Annee_scolaire_Annee) === String(year); });
-        if (!filtered.length) return null;
+        if (!filtered.length) return { ok: true, data: null };
         let total = 0;
         const grouped = new Map();
         filtered.forEach(function (r) {
@@ -612,10 +623,12 @@
           const parts = e[0].split('');
           return { site: parts[0], label: parts[1], value: e[1] };
         }).sort(function (a, b) { return a.site.localeCompare(b.site) || b.value - a.value; });
-        return { total: total, rows: rowsOut };
+        return { ok: true, data: { total: total, rows: rowsOut } };
       });
     }
-    function renderEffectifsBody(data) {
+    function renderEffectifsBody(result) {
+      if (!result.ok) return ACCESS_ERROR_HTML;
+      const data = result.data;
       if (!data) return '<p class="fr-mb-0">Aucune donnée disponible pour l’année sélectionnée.</p>';
       const tableRows = data.rows.map(function (r) {
         return '<tr><td>' + escapeHtml(r.site) + '</td><td>' + escapeHtml(r.label) + '</td><td class="fr-text--right">' + fmtNum(r.value) + '</td></tr>';
@@ -635,10 +648,12 @@
       return out;
     }
     function computeEvolutionForYear(record, ctx, yearN) {
-      return fetchRawTable('TT_Effectifs2').then(function (rows) {
+      return fetchRawTable('TT_Effectifs2').then(function (res) {
+        if (!res.ok || sitesLoadFailed) return { ok: false, data: null };
+        const rows = res.rows;
         const niveau1Code = ctx.niveau1Site && ctx.niveau1Site.Code_DGER;
         const n = parseInt(yearN, 10);
-        if (!niveau1Code || !Number.isFinite(n)) return null;
+        if (!niveau1Code || !Number.isFinite(n)) return { ok: true, data: null };
         const codes = siteCodesForNiveau1(niveau1Code);
         const totals = [3, 2, 1, 0].map(function (offset) {
           const y = String(n - offset);
@@ -646,11 +661,13 @@
             .reduce(function (s, r) { return s + (safeNum(r.Eleves_presents) || 0); }, 0);
           return { label: y, value: sum };
         });
-        if (!totals.some(function (t) { return t.value > 0; })) return null;
-        return { totals: totals, variations: computeVariations(totals) };
+        if (!totals.some(function (t) { return t.value > 0; })) return { ok: true, data: null };
+        return { ok: true, data: { totals: totals, variations: computeVariations(totals) } };
       });
     }
-    function renderEvolutionBody(data) {
+    function renderEvolutionBody(result) {
+      if (!result.ok) return ACCESS_ERROR_HTML;
+      const data = result.data;
       if (!data) return '<p class="fr-mb-0">Aucune donnée disponible pour cette période.</p>';
       const rows = data.totals.map(function (v) {
         return '<tr><td>' + escapeHtml(v.label) + '</td><td class="fr-text--right">' + fmtNum(v.value) + '</td></tr>';
@@ -665,24 +682,28 @@
     }
 
     function computeExamensForYear(record, ctx, year) {
-      return fetchRawTable('TR_Reussite_Examens').then(function (rows) {
+      return fetchRawTable('TR_Reussite_Examens').then(function (res) {
+        if (!res.ok || sitesLoadFailed) return { ok: false, data: null };
+        const rows = res.rows;
         const niveau1Code = ctx.niveau1Site && ctx.niveau1Site.Code_DGER;
-        if (!niveau1Code || !year) return null;
+        if (!niveau1Code || !year) return { ok: true, data: null };
         const codes = siteCodesForNiveau1(niveau1Code);
         const filtered = rows.filter(function (r) {
           return codes.has(r.CodeDGERTexte) && String(r.Annee_Scolaire_Annee) === String(year) && r.Tauxdereussite;
         });
-        if (!filtered.length) return null;
+        if (!filtered.length) return { ok: true, data: null };
         const groups = new Map();
         filtered.forEach(function (r) {
           const label = r.UAI_Elem_DGER_Code__Libelle_public || r.UAI_Elem_Lib_principal_ || r.CodeDGERTexte;
           if (!groups.has(label)) groups.set(label, []);
           groups.get(label).push(String(r.Tauxdereussite));
         });
-        return Array.from(groups.entries()).map(function (e) { return { title: e[0], lines: e[1] }; });
+        return { ok: true, data: Array.from(groups.entries()).map(function (e) { return { title: e[0], lines: e[1] }; }) };
       });
     }
-    function renderExamensBody(groups) {
+    function renderExamensBody(result) {
+      if (!result.ok) return ACCESS_ERROR_HTML;
+      const groups = result.data;
       if (!groups || !groups.length) return '<p class="fr-mb-0">Aucune donnée disponible pour l’année sélectionnée.</p>';
       return '<div class="org-sites">' + groups.map(function (g) {
         const rows = g.lines.map(function (line) {
@@ -697,10 +718,12 @@
 
     function computeFinancesForYear(record, ctx, year) {
       return Promise.all([fetchRawTable('TT_Donnees_financiere_centre'), fetchRawTable('TR_Type_de_centre')]).then(function (results) {
-        const rows = results[0], centres = results[1];
+        const centresRes = results[1];
+        if (!results[0].ok || !centresRes.ok || sitesLoadFailed) return { ok: false, data: null };
+        const rows = results[0].rows, centres = centresRes.rows;
         const centreById = new Map(centres.map(function (c) { return [c.id, c.Centre]; }));
         const niveau1Code = ctx.niveau1Site && ctx.niveau1Site.Code_DGER;
-        if (!niveau1Code || !year) return null;
+        if (!niveau1Code || !year) return { ok: true, data: null };
         const labels = ['Résultat de fonctionnement', 'FOND DE ROULEMENT NET', 'Variation du fonds de roulement BRUT', "CAPACITE D'AUTOFINANCEMENT"];
         const filtered = rows.filter(function (r) {
           return r.Code_DGER_Code_DGER === niveau1Code && String(r.AnneeTexte) === String(year) && labels.indexOf(r.Ligne_libelle) !== -1;
@@ -709,10 +732,12 @@
           const montant = safeNum(r.Montant_annuel_realise);
           return { indicateur: r.Ligne_libelle, centre: centreById.get(r.Centre_libelle) || ('Centre ' + r.Centre_code), montant: montant };
         }).filter(function (r) { return r.montant !== null && Math.abs(r.montant) >= 0.005; });
-        return out.length ? out : null;
+        return { ok: true, data: out.length ? out : null };
       });
     }
-    function renderFinancesBody(rows) {
+    function renderFinancesBody(result) {
+      if (!result.ok) return ACCESS_ERROR_HTML;
+      const rows = result.data;
       if (!rows) return '<p class="fr-mb-0">Aucune donnée disponible pour l’année sélectionnée.</p>';
       const tableRows = rows.map(function (r) {
         return '<tr><td>' + escapeHtml(r.indicateur) + '</td><td>' + escapeHtml(r.centre) + '</td><td class="fr-text--right">' + escapeHtml(fmtEuro(r.montant)) + '</td></tr>';
@@ -779,6 +804,7 @@
     let currentRecord = null;
     let sitesById = new Map();
     let sitesByCode = new Map();
+    let sitesLoadFailed = false;
 
     function savePrefs() {
       if (window.grist && grist.setOption) grist.setOption('fichePrefs', prefs);
@@ -794,10 +820,11 @@
     // Chargement des sites (adresse / contact / rattachement niveau 1)
     // ============================================================
     function loadSitesTable() {
-      if (!window.grist || !grist.docApi) return Promise.resolve();
+      if (!window.grist || !grist.docApi) { sitesLoadFailed = true; return Promise.resolve(); }
       return grist.docApi.fetchTable('TT_Sites_de_formation').then(function (data) {
         sitesById = new Map();
         sitesByCode = new Map();
+        sitesLoadFailed = false;
         const n = (data.id || []).length;
         for (let i = 0; i < n; i++) {
           const row = {};
@@ -805,7 +832,10 @@
           sitesById.set(data.id[i], row);
           if (row.Code_DGER) sitesByCode.set(row.Code_DGER, row);
         }
-      }).catch(function (e) { console.warn('Impossible de charger TT_Sites_de_formation', e); });
+      }).catch(function (e) {
+        console.warn('Impossible de charger TT_Sites_de_formation', e);
+        sitesLoadFailed = true;
+      });
     }
 
     // ============================================================
@@ -880,7 +910,12 @@
         return '<section class="section" data-block="' + id + '"><h2 class="title"><span>' + escapeHtml(b.title) + '</span>' + picker + '</h2>' + body + '</section>';
       }));
 
-      appEl.innerHTML = sections.filter(Boolean).join('') || '<p>Aucune information disponible pour les blocs sélectionnés.</p>';
+      const banner = sitesLoadFailed
+        ? '<div class="fr-alert fr-alert--error fr-mb-4w" role="alert"><p class="fr-alert__title">Accès aux données du document limité</p>' +
+          '<p>Le widget n’a pas pu charger les tables nécessaires (ex. TT_Sites_de_formation). ' +
+          'Vérifiez qu’un accès complet a été autorisé pour ce widget (bandeau « Autoriser l’accès » en haut de la fiche, ou paramètre d’accès du widget dans Grist), puis rechargez la page.</p></div>'
+        : '';
+      appEl.innerHTML = banner + (sections.filter(Boolean).join('') || '<p>Aucune information disponible pour les blocs sélectionnés.</p>');
       window.scrollTo(0, scrollY);
       wireYearPickers();
       renderPrintFooter(record);
@@ -973,7 +1008,10 @@
     // ============================================================
     // Intégration Grist
     // ============================================================
-    grist.ready({ requiredAccess: 'read table' });
+    // 'full' access is required (not just 'read table') because this widget reads
+    // several OTHER tables (sites, effectifs, examens, finances) via grist.docApi.fetchTable,
+    // beyond the single table it is linked to.
+    grist.ready({ requiredAccess: 'full' });
 
     loadSitesTable().then(function () { if (currentRecord) renderAll(); });
 
