@@ -229,6 +229,17 @@
     .suivi-label { color: #6366f1; font-weight: 600; min-width: 60px; }
     .suivi-value { color: #1f2937; word-break: break-word; }
 
+    .suivi-actions { display: flex; gap: 4px; margin-top: 8px; }
+    .icon-btn {
+      background: none; border: 1px solid transparent; cursor: pointer; font-size: 11.5px;
+      font-weight: 600; color: #4338ca; padding: 3px 8px; border-radius: 8px;
+    }
+    .icon-btn:hover { background: #e0e7ff; }
+    .icon-btn.danger { color: #b91c1c; }
+    .icon-btn.danger:hover { background: #fee2e2; }
+    .suivi-edit-form { display: flex; flex-direction: column; gap: 6px; }
+    .suivi-view.hidden, .suivi-edit-form.hidden { display: none; }
+
     /* ---------- Formulaire "Nouvelle annotation" ---------- */
     .new-suivi-btn {
       width: 100%; background: #4f46e5; color: #fff; border: none; border-radius: 10px;
@@ -397,7 +408,8 @@
     let suiviTableId = null;
     let suiviColumns = [];
     let suiviRows = [];
-    let suiviFieldMap = { commentaire: null, statut: null, date: null, auteur: null, identifiant: null };
+    let suiviFieldMap = { commentaire: null, statut: null, date: null, auteur: null, pacageCol: null, siretCol: null };
+    let suiviStatutChoices = [];
     let dataLoaded = false;
     let activeFilter = "all";  // "all" ou une clé de CRITERIA
     let currentIdentity = null;
@@ -491,13 +503,14 @@
     }
 
     function classifySuiviColumns(cols) {
-      const map = { commentaire: null, statut: null, date: null, auteur: null, identifiant: null };
+      const map = { commentaire: null, statut: null, date: null, auteur: null, pacageCol: null, siretCol: null };
       cols.forEach(col => {
         const n = normCol(col);
         if (!map.statut && /statut|^etat$|status/.test(n)) map.statut = col;
         if (!map.date && /^date|date.*creation|cree.*le/.test(n)) map.date = col;
         if (!map.auteur && /auteur|utilisateur|redacteur|redige.*par|cree.*par|agent/.test(n)) map.auteur = col;
-        if (!map.identifiant && /pacage|siret|code.*dossier|identifiant|reference/.test(n)) map.identifiant = col;
+        if (!map.siretCol && /siret/.test(n)) map.siretCol = col;
+        if (!map.pacageCol && /pacage/.test(n)) map.pacageCol = col;
         if (!map.commentaire && /commentaire|annotation|note|description|observation|detail/.test(n)) map.commentaire = col;
       });
       if (!map.commentaire) {
@@ -509,6 +522,34 @@
     }
 
     function dossierTag(identityKey) { return `[DOSSIER:${identityKey}]`; }
+
+    // Certaines colonnes détectées par nom (ex. "PACAGE") peuvent en réalité être des colonnes
+    // formule non éditables : on tente de lire leurs choix Grist réels pour Statut, et on protège
+    // toute écriture avec un essai/repli (cf. submitNewSuivi / updateSuiviEntry).
+    async function fetchChoiceOptions(tableId, colId) {
+      if (!colId) return [];
+      try {
+        const [metaTables, metaCols] = await Promise.all([
+          fetchTableRaw("_grist_Tables"),
+          fetchTableRaw("_grist_Tables_column")
+        ]);
+        const tIdx = (metaTables.tableId || []).findIndex(t => t === tableId);
+        if (tIdx === -1) return [];
+        const tableRowId = metaTables.id[tIdx];
+        for (let i = 0; i < (metaCols.id || []).length; i++) {
+          if (metaCols.parentId[i] === tableRowId && metaCols.colId[i] === colId) {
+            try {
+              const opts = JSON.parse(metaCols.widgetOptions[i] || "{}");
+              if (Array.isArray(opts.choices)) return opts.choices;
+            } catch (e) { /* widgetOptions absent ou non-JSON */ }
+          }
+        }
+        return [];
+      } catch (e) {
+        console.warn("Impossible de lire les choix Grist configurés pour", tableId, colId, e);
+        return [];
+      }
+    }
 
     async function loadEverything() {
       metaEl.textContent = "Chargement des tables du document...";
@@ -575,6 +616,14 @@
       suiviColumns = columnsFromRaw(raw);
       suiviRows = rowsFromRaw(raw, suiviColumns);
       suiviFieldMap = classifySuiviColumns(suiviColumns);
+      suiviStatutChoices = await fetchChoiceOptions(suiviTableId, suiviFieldMap.statut);
+    }
+
+    // Options à proposer pour le Statut : priorité aux choix réellement configurés dans Grist,
+    // puis repli sur les valeurs déjà observées dans les données.
+    function statutOptionsForForm() {
+      if (suiviStatutChoices.length) return suiviStatutChoices;
+      return distinctStatutValues();
     }
 
     // ================= Identité d'un dossier =================
@@ -785,10 +834,12 @@
       const suiviBlock = suiviTableId
         ? `<div class="debug-table"><span class="tname">${escapeHtml(suiviTableId)}</span> — table "Suivi de dossier" détectée (${suiviRows.length} ligne(s))
             <div class="debug-crit">• Commentaire → ${suiviFieldMap.commentaire ? escapeHtml(suiviFieldMap.commentaire) : "aucune colonne texte disponible"}</div>
-            <div class="debug-crit">• Statut → ${suiviFieldMap.statut ? escapeHtml(suiviFieldMap.statut) : "non trouvé"}</div>
+            <div class="debug-crit">• Statut → ${suiviFieldMap.statut ? escapeHtml(suiviFieldMap.statut) : "non trouvé"}${suiviStatutChoices.length ? " (choix Grist : " + suiviStatutChoices.map(escapeHtml).join(", ") + ")" : ""}</div>
             <div class="debug-crit">• Date → ${suiviFieldMap.date ? escapeHtml(suiviFieldMap.date) : "non trouvé"}</div>
             <div class="debug-crit">• Auteur → ${suiviFieldMap.auteur ? escapeHtml(suiviFieldMap.auteur) : "non trouvé"}</div>
-            <div class="debug-crit">• Identifiant dossier → ${suiviFieldMap.identifiant ? escapeHtml(suiviFieldMap.identifiant) : "non trouvé (le lien se fait via une balise cachée dans le commentaire)"}</div>
+            <div class="debug-crit">• Colonne SIRET → ${suiviFieldMap.siretCol ? escapeHtml(suiviFieldMap.siretCol) : "non trouvée"}</div>
+            <div class="debug-crit">• Colonne PACAGE → ${suiviFieldMap.pacageCol ? escapeHtml(suiviFieldMap.pacageCol) : "non trouvée"}</div>
+            <div class="debug-crit">• Rattachement toujours doublé par une balise cachée dans le commentaire (au cas où SIRET/PACAGE seraient des colonnes calculées non modifiables)</div>
            </div>`
         : `<div class="debug-table"><span class="skipped">Aucune table "Suivi de dossier" trouvée dans ce document (le nom technique doit contenir "suivi" et "dossier"). Le panneau d'annotation sera désactivé sur les fiches.</span></div>`;
 
@@ -852,14 +903,27 @@
     }
 
     // ================= Suivi de dossier =================
-    function matchingSuiviRows(identityKey) {
+    // Une annotation est rattachée au dossier soit via la balise cachée dans le commentaire
+    // (annotations créées depuis ce widget), soit via une correspondance directe sur les colonnes
+    // PACAGE/SIRET de la table de suivi (annotations saisies à la main dans la grille Grist).
+    function matchingSuiviRows(identity, identityKey) {
       if (!suiviTableId || !suiviFieldMap.commentaire) return [];
       const tag = dossierTag(identityKey);
-      return suiviRows.filter(r => String(r[suiviFieldMap.commentaire] || "").includes(tag))
-        .sort((a, b) => {
-          if (suiviFieldMap.date) return (Number(b[suiviFieldMap.date]) || 0) - (Number(a[suiviFieldMap.date]) || 0);
-          return b.id - a.id;
-        });
+      return suiviRows.filter(r => {
+        if (String(r[suiviFieldMap.commentaire] || "").includes(tag)) return true;
+        if (suiviFieldMap.siretCol && identity.siret) {
+          const v = r[suiviFieldMap.siretCol];
+          if (v !== null && v !== undefined && v !== "" && normalizeCode(v) === normalizeCode(identity.siret)) return true;
+        }
+        if (suiviFieldMap.pacageCol && identity.pacage) {
+          const v = r[suiviFieldMap.pacageCol];
+          if (v !== null && v !== undefined && v !== "" && normalizeCode(v) === normalizeCode(identity.pacage)) return true;
+        }
+        return false;
+      }).sort((a, b) => {
+        if (suiviFieldMap.date) return (Number(b[suiviFieldMap.date]) || 0) - (Number(a[suiviFieldMap.date]) || 0);
+        return b.id - a.id;
+      });
     }
 
     function distinctStatutValues() {
@@ -879,28 +943,60 @@
       const rawComment = suiviFieldMap.commentaire ? String(entry[suiviFieldMap.commentaire] || "") : "";
       const comment = rawComment.replace(/\[DOSSIER:[^\]]+\]/g, "").trim();
       const colors = badgeColorForStatus(statut);
+      const statutOptions = statutOptionsForForm();
 
       const statutControl = suiviFieldMap.statut
         ? `<select class="badge-select" data-entryid="${entry.id}" style="background-color:${colors.bg};color:${colors.fg}">
-            ${distinctStatutValues().map(v => `<option value="${escapeHtml(v)}" ${String(statut) === v ? "selected" : ""}>${escapeHtml(v)}</option>`).join("")}
-            ${statut && !distinctStatutValues().includes(String(statut)) ? `<option value="${escapeHtml(String(statut))}" selected>${escapeHtml(String(statut))}</option>` : ""}
+            ${statutOptions.map(v => `<option value="${escapeHtml(v)}" ${String(statut) === v ? "selected" : ""}>${escapeHtml(v)}</option>`).join("")}
+            ${statut && !statutOptions.includes(String(statut)) ? `<option value="${escapeHtml(String(statut))}" selected>${escapeHtml(String(statut))}</option>` : ""}
           </select>`
         : "";
 
+      const editStatutField = suiviFieldMap.statut
+        ? `<div class="form-field">
+             <label>Statut</label>
+             <select name="statut">
+               ${statutOptions.map(v => `<option value="${escapeHtml(v)}" ${String(statut) === v ? "selected" : ""}>${escapeHtml(v)}</option>`).join("")}
+               ${statut && !statutOptions.includes(String(statut)) ? `<option value="${escapeHtml(String(statut))}" selected>${escapeHtml(String(statut))}</option>` : ""}
+             </select>
+           </div>`
+        : "";
+      const editAuteurField = suiviFieldMap.auteur
+        ? `<div class="form-field"><label>Auteur</label><input type="text" name="auteur" value="${escapeHtml(auteur ? String(auteur) : "")}"></div>`
+        : "";
+
       return `
-        <div class="suivi-card">
-          <div class="suivi-card-top">
-            <span class="suivi-date">${date ? escapeHtml(date) : "—"}</span>
-            ${statutControl}
+        <div class="suivi-card" data-entryid="${entry.id}">
+          <div class="suivi-view">
+            <div class="suivi-card-top">
+              <span class="suivi-date">${date ? escapeHtml(date) : "—"}</span>
+              ${statutControl}
+            </div>
+            ${auteur ? `<div class="suivi-field"><span class="suivi-label">Auteur</span><span class="suivi-value">${escapeHtml(String(auteur))}</span></div>` : ""}
+            ${comment ? `<div class="suivi-field"><span class="suivi-label">Note</span><span class="suivi-value">${escapeHtml(comment)}</span></div>` : ""}
+            <div class="suivi-actions">
+              <button type="button" class="icon-btn edit-suivi-btn" data-entryid="${entry.id}">✎ Modifier</button>
+              <button type="button" class="icon-btn danger delete-suivi-btn" data-entryid="${entry.id}">🗑 Supprimer</button>
+            </div>
           </div>
-          ${auteur ? `<div class="suivi-field"><span class="suivi-label">Auteur</span><span class="suivi-value">${escapeHtml(String(auteur))}</span></div>` : ""}
-          ${comment ? `<div class="suivi-field"><span class="suivi-label">Note</span><span class="suivi-value">${escapeHtml(comment)}</span></div>` : ""}
+          <form class="suivi-edit-form hidden" data-entryid="${entry.id}">
+            ${editStatutField}
+            ${editAuteurField}
+            <div class="form-field">
+              <label>Commentaire / annotation</label>
+              <textarea name="commentaire" required>${escapeHtml(comment)}</textarea>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="form-submit-btn">Enregistrer</button>
+              <button type="button" class="form-cancel-btn cancel-edit-suivi-btn" data-entryid="${entry.id}">Annuler</button>
+            </div>
+          </form>
         </div>
       `;
     }
 
     function renderNewSuiviForm() {
-      const statutOptions = distinctStatutValues();
+      const statutOptions = statutOptionsForForm();
       const statutField = suiviFieldMap.statut
         ? (statutOptions.length
             ? `<div class="form-field">
@@ -936,7 +1032,7 @@
       `;
     }
 
-    function renderSuiviPanel(identityKey) {
+    function renderSuiviPanel(identity, identityKey) {
       if (!suiviTableId) {
         return `
           <div class="suivi-panel">
@@ -953,7 +1049,7 @@
           </div>
         `;
       }
-      const entries = matchingSuiviRows(identityKey);
+      const entries = matchingSuiviRows(identity, identityKey);
       const body = entries.length
         ? entries.map(renderSuiviCard).join("")
         : `<div class="suivi-empty">Aucune annotation pour ce dossier</div>`;
@@ -996,8 +1092,23 @@
       await loadSuiviTable();
       const wrap = document.getElementById("suiviPanelWrap") || document.querySelector(".suivi-panel");
       if (wrap) {
-        wrap.outerHTML = renderSuiviPanel(identityKey);
+        wrap.outerHTML = renderSuiviPanel(identity, identityKey);
         bindSuiviUI(identity, identityKey);
+      }
+    }
+
+    // Certaines colonnes détectées par nom (PACAGE, SIRET...) peuvent en réalité être des colonnes
+    // formule côté Grist (non éditables via l'API). On tente d'abord d'écrire avec toutes les
+    // colonnes utiles, et si Grist refuse, on retente sans les colonnes de rattachement optionnelles
+    // (la balise cachée dans le commentaire reste alors le seul lien, ce qui suffit à retrouver
+    // l'annotation) : l'utilisateur peut donc toujours enregistrer son annotation.
+    async function applyWithFallback(action, coreFields, optionalFields) {
+      try {
+        return await grist.docApi.applyUserActions([[action.type, suiviTableId, action.rowId, { ...coreFields, ...optionalFields }]]);
+      } catch (err) {
+        if (!Object.keys(optionalFields).length) throw err;
+        console.warn("Écriture avec colonnes optionnelles refusée, nouvel essai sans elles :", err);
+        return await grist.docApi.applyUserActions([[action.type, suiviTableId, action.rowId, coreFields]]);
       }
     }
 
@@ -1023,15 +1134,16 @@
 
       try {
         const tag = dossierTag(identityKey);
-        const fields = {};
-        fields[suiviFieldMap.commentaire] = `${tag} ${commentaire}`.trim();
-        if (suiviFieldMap.statut && statutValue) fields[suiviFieldMap.statut] = statutValue;
-        if (suiviFieldMap.auteur && auteurValue) fields[suiviFieldMap.auteur] = auteurValue;
-        if (suiviFieldMap.identifiant) fields[suiviFieldMap.identifiant] = identityLabel(identity);
+        const coreFields = {};
+        coreFields[suiviFieldMap.commentaire] = `${tag} ${commentaire}`.trim();
+        if (suiviFieldMap.statut && statutValue) coreFields[suiviFieldMap.statut] = statutValue;
+        if (suiviFieldMap.auteur && auteurValue) coreFields[suiviFieldMap.auteur] = auteurValue;
 
-        await grist.docApi.applyUserActions([
-          ["AddRecord", suiviTableId, null, fields]
-        ]);
+        const optionalFields = {};
+        if (suiviFieldMap.siretCol && identity.siret) optionalFields[suiviFieldMap.siretCol] = identity.siret;
+        if (suiviFieldMap.pacageCol && identity.pacage) optionalFields[suiviFieldMap.pacageCol] = identity.pacage;
+
+        await applyWithFallback({ type: "AddRecord", rowId: null }, coreFields, optionalFields);
         await refreshSuiviPanel(identity, identityKey);
         const newMessageEl = document.getElementById("suiviFormMessage");
         if (newMessageEl) newMessageEl.innerHTML = `<div class="form-message success">Annotation enregistrée.</div>`;
@@ -1040,6 +1152,44 @@
         submitBtn.disabled = false;
         submitBtn.textContent = "Enregistrer";
         messageEl.innerHTML = `<div class="form-message error">Échec de l'enregistrement (${escapeHtml(err.message || err)}).</div>`;
+      }
+    }
+
+    async function submitEditSuivi(form, identity, identityKey) {
+      const entryId = Number(form.dataset.entryid);
+      const submitBtn = form.querySelector('.form-submit-btn');
+      const commentaire = form.querySelector('[name="commentaire"]')?.value.trim() || "";
+      if (!commentaire) { alert("Le commentaire est obligatoire."); return; }
+      const statutValue = form.querySelector('[name="statut"]')?.value || "";
+      const auteurValue = form.querySelector('[name="auteur"]')?.value.trim() || "";
+
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Enregistrement..."; }
+      try {
+        const entry = suiviRows.find(r => r.id === entryId);
+        const existingTagMatch = entry ? String(entry[suiviFieldMap.commentaire] || "").match(/\[DOSSIER:[^\]]+\]/) : null;
+        const tag = existingTagMatch ? existingTagMatch[0] : dossierTag(identityKey);
+        const fields = {};
+        fields[suiviFieldMap.commentaire] = `${tag} ${commentaire}`.trim();
+        if (suiviFieldMap.statut && statutValue) fields[suiviFieldMap.statut] = statutValue;
+        if (suiviFieldMap.auteur) fields[suiviFieldMap.auteur] = auteurValue;
+
+        await grist.docApi.applyUserActions([["UpdateRecord", suiviTableId, entryId, fields]]);
+        await refreshSuiviPanel(identity, identityKey);
+      } catch (err) {
+        console.error("Erreur modification annotation :", err);
+        alert("Impossible d'enregistrer les modifications (" + (err.message || err) + ").");
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Enregistrer"; }
+      }
+    }
+
+    async function deleteSuiviEntry(entryId, identity, identityKey) {
+      if (!confirm("Supprimer définitivement cette annotation ?")) return;
+      try {
+        await grist.docApi.applyUserActions([["RemoveRecord", suiviTableId, entryId]]);
+        await refreshSuiviPanel(identity, identityKey);
+      } catch (err) {
+        console.error("Erreur suppression annotation :", err);
+        alert("Impossible de supprimer l'annotation (" + (err.message || err) + ").");
       }
     }
 
@@ -1059,6 +1209,31 @@
           statutAutreWrap.style.display = statutSelect.value === "__autre__" ? "flex" : "none";
         });
       }
+
+      // Bascule vue/édition sur chaque annotation existante, et branchement suppression.
+      document.querySelectorAll(".suivi-card").forEach(card => {
+        const view = card.querySelector(".suivi-view");
+        const editForm = card.querySelector(".suivi-edit-form");
+        const editBtn = card.querySelector(".edit-suivi-btn");
+        const cancelEditBtn = card.querySelector(".cancel-edit-suivi-btn");
+        const deleteBtn = card.querySelector(".delete-suivi-btn");
+
+        if (editBtn && view && editForm) {
+          editBtn.addEventListener("click", () => { view.classList.add("hidden"); editForm.classList.remove("hidden"); });
+        }
+        if (cancelEditBtn && view && editForm) {
+          cancelEditBtn.addEventListener("click", () => { editForm.classList.add("hidden"); view.classList.remove("hidden"); });
+        }
+        if (deleteBtn) {
+          deleteBtn.addEventListener("click", () => deleteSuiviEntry(Number(deleteBtn.dataset.entryid), identity, identityKey));
+        }
+        if (editForm) {
+          editForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            await submitEditSuivi(editForm, identity, identityKey);
+          });
+        }
+      });
 
       if (!toggleBtn || !form) return;
       toggleBtn.addEventListener("click", () => form.classList.toggle("hidden"));
@@ -1105,7 +1280,7 @@
       ficheContent.innerHTML = `
         ${header}
         <div class="fiche-layout">
-          ${renderSuiviPanel(identityKey)}
+          ${renderSuiviPanel(identity, identityKey)}
           <div class="fiche-main">${mainSectionsHtml}</div>
         </div>
       `;
