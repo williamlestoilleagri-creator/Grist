@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dossiers en cours</title>
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 16px;
+      font-family: Arial, sans-serif;
+      background: #f5f7fb;
+      color: #1f2937;
+    }
+
+    .container { width: 100%; }
+
+    h1 {
+      font-size: 18px; font-weight: 700; color: #111827; margin: 0 0 4px;
+    }
+    .subtitle { font-size: 12.5px; color: #6b7280; margin: 0 0 12px; }
+
+    /* ---------- Barre d'outils / recherche ---------- */
+    .toolbar-wrap {
+      position: sticky; top: 0; z-index: 10; background: #f5f7fb; padding-bottom: 12px;
+    }
+
+    .stat-tiles { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+    .stat-tile {
+      flex: 1 1 110px; min-width: 110px; text-align: left; cursor: pointer;
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 10px 12px;
+      transition: all 0.15s ease;
+    }
+    .stat-tile:hover { border-color: #93c5fd; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+    .stat-tile.active { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12); }
+    .stat-tile .num { font-size: 22px; font-weight: 700; line-height: 1.1; }
+    .stat-tile .lbl { font-size: 11.5px; font-weight: 600; margin-top: 2px; }
+
+    .search-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .search-input {
+      flex: 1; padding: 11px 14px; border: 1px solid #d1d5db; border-radius: 14px;
+      font-size: 14px; outline: none; background: #fff;
+    }
+    .search-input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12); }
+    .refresh-btn {
+      border: 1px solid #d1d5db; background: #fff; color: #374151; border-radius: 10px;
+      padding: 9px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap;
+    }
+    .refresh-btn:hover { border-color: #93c5fd; }
+    .refresh-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .filter-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: space-between; }
+    .filter-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip {
+      border: 1px solid #d1d5db; background: #fff; color: #374151;
+      border-radius: 999px; padding: 5px 11px; font-size: 12px; font-weight: 700;
+      cursor: pointer; white-space: nowrap;
+    }
+    .chip:hover { border-color: #93c5fd; }
+    .chip.active { background: #2563eb; border-color: #2563eb; color: #fff; }
+    .meta { font-size: 12.5px; color: #6b7280; }
+
+    /* ---------- Table ---------- */
+    .table-wrap {
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; overflow: auto; margin-top: 10px;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th {
+      position: sticky; top: 0; background: #f9fafb; text-align: left; padding: 10px 12px;
+      font-size: 11.5px; font-weight: 700; color: #6b7280; text-transform: uppercase;
+      letter-spacing: 0.03em; border-bottom: 1px solid #e5e7eb; cursor: pointer; white-space: nowrap;
+    }
+    thead th:hover { color: #2563eb; }
+    thead th .sort-arrow { font-size: 10px; margin-left: 3px; color: #2563eb; }
+    tbody td { padding: 10px 12px; border-bottom: 1px solid #f0f1f4; vertical-align: top; }
+    tbody tr { cursor: pointer; }
+    tbody tr:hover { background: #f8faff; }
+    tbody tr:last-child td { border-bottom: none; }
+    .cell-name { font-weight: 600; color: #111827; }
+    .cell-sub { font-size: 12px; color: #6b7280; margin-top: 2px; }
+    .badge-flags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+
+    .tag {
+      display: inline-block; font-size: 11px; font-weight: 700; border-radius: 999px;
+      padding: 3px 9px; white-space: nowrap;
+    }
+    .tag-flag { color: #4338ca; background: #eef2ff; border: 1px solid #c7d2fe; }
+    .tag-warn { color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; }
+
+    .empty { background: #fff; border: 1px dashed #d1d5db; border-radius: 14px; padding: 24px; text-align: center; color: #6b7280; margin-top: 10px; }
+
+    /* ---------- Fiche détail ---------- */
+    .back-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #fff; border: 1px solid #d1d5db; border-radius: 10px;
+      padding: 8px 12px; font-size: 14px; cursor: pointer; margin-bottom: 14px;
+    }
+    .back-btn:hover { border-color: #93c5fd; }
+
+    .fiche-header {
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 14px;
+      padding: 16px; margin-bottom: 14px;
+    }
+    .fiche-header .title { font-size: 20px; font-weight: 700; margin-bottom: 4px; color: #111827; }
+    .fiche-header .sub { font-size: 13px; color: #6b7280; margin-bottom: 8px; }
+    .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+    .fiche-layout { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+    .fiche-main { flex: 1 1 400px; min-width: 280px; }
+
+    .section {
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 14px;
+      margin-bottom: 12px; overflow: hidden;
+    }
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 14px; background: #f9fafb; border-bottom: 1px solid #e5e7eb;
+      font-weight: 700; font-size: 14px; color: #111827;
+    }
+    .section-body { padding: 10px 14px; }
+    .field {
+      display: flex; gap: 6px; font-size: 13px; line-height: 1.5;
+      padding: 4px 0; border-bottom: 1px dashed #eef0f3;
+    }
+    .field:last-child { border-bottom: none; }
+    .field-label { color: #6b7280; min-width: 42%; flex-shrink: 0; }
+    .field-value { color: #1f2937; font-weight: 500; word-break: break-word; }
+    .section-empty { font-size: 13px; color: #9ca3af; font-style: italic; padding: 6px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Vue liste -->
+    <div id="listView">
+      <h1>📋 Dossiers en cours</h1>
+      <p class="subtitle">Démarche 155804 — d'après Demarche_155804_demandeurs / Demarche_155804_dossiers</p>
+
+      <div class="toolbar-wrap">
+        <div class="stat-tiles" id="statTiles"></div>
+        <div class="search-row">
+          <input id="searchInput" class="search-input" type="text" placeholder="Rechercher un nom, un SIRET, une commune, un n° de dossier..." />
+          <button type="button" class="refresh-btn" id="refreshBtn">↻ Actualiser</button>
+        </div>
+        <div class="filter-row">
+          <div class="filter-chips" id="filterChips"></div>
+          <div id="meta" class="meta">Chargement...</div>
+        </div>
+      </div>
+
+      <div id="tableWrap"></div>
+    </div>
+
+    <!-- Vue fiche -->
+    <div id="ficheView" style="display:none;">
+      <button class="back-btn" id="backBtn">&larr; Retour à la liste</button>
+      <div id="ficheContent"></div>
+    </div>
+  </div>
+
+  <script>
+    // ================= Libellés =================
+    const FIELD_LABELS = {
+      dossier_number: "N° de dossier",
+      state: "État du dossier",
+      date_depot: "Date de dépôt",
+      date_derniere_modification: "Dernière modification",
+      date_traitement: "Date de traitement",
+      date_expiration: "Date d'expiration",
+      motivation: "Motivation",
+      suivi_par: "Suivi par",
+      correction_instructeur: "Correction demandée",
+      label_names: "Labels",
+      type: "Type de déclarant",
+      usager_email: "Email du déclarant",
+      siret: "SIRET",
+      siren: "SIREN",
+      raison_sociale: "Raison sociale",
+      nom_commercial: "Nom commercial",
+      forme_juridique: "Forme juridique",
+      naf: "Code NAF",
+      libelle_naf: "Activité (NAF)",
+      street_address: "Adresse",
+      ville: "Commune",
+      code_postal: "Code postal",
+      departement: "Département",
+      region: "Région",
+      etat_administratif: "État administratif",
+      date_creation: "Date de création (entreprise)",
+      Liquidation: "Liquidation judiciaire",
+      AREA: "Bénéficiaire AREA",
+      Pacage_Report: "N° PACAGE",
+      Est_un_GAEC: "GAEC",
+      Surface_legume: "Surface légumes (DATA_SURFACE_MAR)",
+      Associes_GAEC: "Associés GAEC"
+    };
+    function labelFor(col) { return FIELD_LABELS[col] || String(col).replace(/_/g, " ").replace(/^./, c => c.toUpperCase()); }
+
+    // ================= Utilitaires =================
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+    function stripAccents(str) { return String(str ?? "").normalize("NFD").replace(/[̀-ͯ]/g, ""); }
+    function normalize(value) { return stripAccents(String(value ?? "")).toLowerCase().trim(); }
+    function fieldValueToText(val) {
+      if (Array.isArray(val) && val[0] === "L") return val.slice(1).join(", ");
+      if (Array.isArray(val)) return val.join(", ");
+      if (typeof val === "boolean") return val ? "Oui" : "Non";
+      return String(val ?? "");
+    }
+    function formatIsoDate(value) {
+      if (!value) return "—";
+      const d = new Date(value);
+      if (isNaN(d.getTime())) return String(value);
+      return d.toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    }
+    function formatIsoDateShort(value) {
+      if (!value) return "—";
+      const d = new Date(value);
+      if (isNaN(d.getTime())) return String(value);
+      return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
+    }
+
+    // Regroupe les états bruts de Démarches Simplifiées en catégories connues, avec repli
+    // générique pour toute valeur inattendue (couleur dérivée du texte, jamais de crash).
+    function stateMeta(rawState) {
+      const n = stripAccents(String(rawState || "")).toLowerCase();
+      if (!rawState) return { label: "Inconnu", bg: "#e5e7eb", fg: "#374151", cat: "inconnu" };
+      if (/construction/.test(n)) return { label: "Brouillon (en construction)", bg: "#e5e7eb", fg: "#374151", cat: "construction" };
+      if (/instruction/.test(n)) return { label: "En instruction", bg: "#dbeafe", fg: "#1e40af", cat: "instruction" };
+      if (/accept/.test(n)) return { label: "Accepté", bg: "#dcfce7", fg: "#166534", cat: "accepte" };
+      if (/refus/.test(n)) return { label: "Refusé", bg: "#fee2e2", fg: "#991b1b", cat: "refuse" };
+      if (/sans.?suite/.test(n)) return { label: "Classé sans suite", bg: "#fef3c7", fg: "#92400e", cat: "sans_suite" };
+      let h = 0;
+      const s = String(rawState);
+      for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+      const palette = [{ bg: "#e0e7ff", fg: "#3730a3" }, { bg: "#fce7f3", fg: "#9d174d" }, { bg: "#e0f2fe", fg: "#075985" }];
+      const c = palette[h % palette.length];
+      return { label: String(rawState), bg: c.bg, fg: c.fg, cat: "autre" };
+    }
+
+    const STATE_CATEGORIES = [
+      { key: "instruction", label: "En instruction" },
+      { key: "construction", label: "Brouillons" },
+      { key: "accepte", label: "Acceptés" },
+      { key: "refuse", label: "Refusés" },
+      { key: "sans_suite", label: "Sans suite" },
+      { key: "autre", label: "Autre" },
+      { key: "inconnu", label: "Inconnu" }
+    ];
+    const CATEGORY_STYLE = {
+      instruction: { bg: "#dbeafe", fg: "#1e40af" },
+      construction: { bg: "#e5e7eb", fg: "#374151" },
+      accepte: { bg: "#dcfce7", fg: "#166534" },
+      refuse: { bg: "#fee2e2", fg: "#991b1b" },
+      sans_suite: { bg: "#fef3c7", fg: "#92400e" },
+      autre: { bg: "#e0e7ff", fg: "#3730a3" },
+      inconnu: { bg: "#e5e7eb", fg: "#374151" }
+    };
+
+    // ================= État global =================
+    const DOSSIERS_TABLE = "Demarche_155804_dossiers";
+    const DEMANDEURS_TABLE = "Demarche_155804_demandeurs";
+    let allDossiers = [];       // lignes fusionnées demandeur + dossier
+    let dataLoaded = false;
+    let activeCategory = "instruction"; // catégorie d'état active, ou "all"
+    let hideDeleted = true;
+    let sortKey = "date_depot";
+    let sortDir = "desc";
+
+    const searchInput = document.getElementById("searchInput");
+    const metaEl = document.getElementById("meta");
+    const tableWrap = document.getElementById("tableWrap");
+    const statTilesEl = document.getElementById("statTiles");
+    const filterChipsEl = document.getElementById("filterChips");
+    const listView = document.getElementById("listView");
+    const ficheView = document.getElementById("ficheView");
+    const ficheContent = document.getElementById("ficheContent");
+    const backBtn = document.getElementById("backBtn");
+    const refreshBtn = document.getElementById("refreshBtn");
+
+    // ================= Accès Grist =================
+    async function fetchTableRaw(tableId) { return await grist.docApi.fetchTable(tableId); }
+    function columnsFromRaw(raw) { return Object.keys(raw).filter(c => c !== "id" && !c.startsWith("gristHelper")); }
+    function rowsFromRaw(raw, cols) {
+      const ids = raw.id || [];
+      return ids.map((id, i) => {
+        const row = { id };
+        cols.forEach(c => (row[c] = raw[c][i]));
+        return row;
+      });
+    }
+
+    async function loadEverything() {
+      metaEl.textContent = "Chargement des dossiers...";
+      tableWrap.innerHTML = "";
+      const [dossiersRaw, demandeursRaw] = await Promise.all([
+        fetchTableRaw(DOSSIERS_TABLE),
+        fetchTableRaw(DEMANDEURS_TABLE)
+      ]);
+      const dossiersCols = columnsFromRaw(dossiersRaw);
+      const dossiersRows = rowsFromRaw(dossiersRaw, dossiersCols);
+      const demandeursCols = columnsFromRaw(demandeursRaw);
+      const demandeursRows = rowsFromRaw(demandeursRaw, demandeursCols);
+
+      const dossiersByNumber = new Map();
+      dossiersRows.forEach(d => {
+        const key = String(d.dossier_number || "").trim();
+        if (key) dossiersByNumber.set(key, d);
+      });
+
+      allDossiers = demandeursRows.map(demandeur => {
+        const key = String(demandeur.dossier_number || "").trim();
+        const dossier = dossiersByNumber.get(key) || null;
+        const nom = demandeur.nom_commercial || demandeur.raison_sociale || "";
+        return {
+          demandeurId: demandeur.id,
+          dossierRowId: dossier ? dossier.id : null,
+          dossier_number: demandeur.dossier_number,
+          nom,
+          siret: demandeur.siret,
+          ville: demandeur.ville,
+          code_postal: demandeur.code_postal,
+          state: dossier ? dossier.state : null,
+          date_depot: dossier ? dossier.date_depot : null,
+          date_derniere_modification: dossier ? dossier.date_derniere_modification : null,
+          suivi_par: dossier ? dossier.suivi_par : null,
+          supprime: dossier ? !!dossier.dossiers_supprimes_DN : false,
+          demandeur,
+          dossier
+        };
+      });
+
+      dataLoaded = true;
+    }
+
+    // ================= Filtrage / tri / recherche =================
+    function categoryCounts() {
+      const counts = {};
+      STATE_CATEGORIES.forEach(c => (counts[c.key] = 0));
+      allDossiers.forEach(d => {
+        if (d.supprime) return;
+        const cat = stateMeta(d.state).cat;
+        counts[cat] = (counts[cat] || 0) + 1;
+      });
+      return counts;
+    }
+
+    function renderStatTiles() {
+      const counts = categoryCounts();
+      const total = Object.values(counts).reduce((a, b) => a + b, 0);
+      const tiles = [{ key: "all", label: "Tous les dossiers", count: total, bg: "#eff6ff", fg: "#1d4ed8" }];
+      STATE_CATEGORIES.forEach(c => {
+        if (!counts[c.key]) return;
+        const style = CATEGORY_STYLE[c.key];
+        tiles.push({ key: c.key, label: c.label, count: counts[c.key], bg: style.bg, fg: style.fg });
+      });
+      statTilesEl.innerHTML = tiles.map(t => `
+        <div class="stat-tile ${activeCategory === t.key ? "active" : ""}" data-cat="${escapeHtml(t.key)}" style="background:${t.bg}">
+          <div class="num" style="color:${t.fg}">${t.count}</div>
+          <div class="lbl" style="color:${t.fg}">${escapeHtml(t.label)}</div>
+        </div>
+      `).join("");
+      statTilesEl.querySelectorAll(".stat-tile").forEach(el => {
+        el.addEventListener("click", () => { activeCategory = el.dataset.cat; renderAll(); });
+      });
+    }
+
+    function renderFilterChips() {
+      filterChipsEl.innerHTML = `
+        <button type="button" class="chip ${hideDeleted ? "active" : ""}" id="hideDeletedChip">Masquer les dossiers supprimés</button>
+      `;
+      document.getElementById("hideDeletedChip").addEventListener("click", () => {
+        hideDeleted = !hideDeleted;
+        renderAll();
+      });
+    }
+
+    function getFiltered() {
+      const q = normalize(searchInput.value.trim());
+      return allDossiers.filter(d => {
+        if (hideDeleted && d.supprime) return false;
+        if (activeCategory !== "all" && stateMeta(d.state).cat !== activeCategory) return false;
+        if (!q) return true;
+        const hay = normalize([d.nom, d.siret, d.ville, d.code_postal, d.dossier_number].join(" "));
+        return hay.includes(q);
+      });
+    }
+
+    function sortRows(rows) {
+      const dir = sortDir === "asc" ? 1 : -1;
+      return rows.slice().sort((a, b) => {
+        let va = a[sortKey], vb = b[sortKey];
+        va = va === null || va === undefined ? "" : va;
+        vb = vb === null || vb === undefined ? "" : vb;
+        if (va < vb) return -1 * dir;
+        if (va > vb) return 1 * dir;
+        return 0;
+      });
+    }
+
+    function setSort(key) {
+      if (sortKey === key) {
+        sortDir = sortDir === "asc" ? "desc" : "asc";
+      } else {
+        sortKey = key;
+        sortDir = key === "nom" ? "asc" : "desc";
+      }
+      renderTable();
+    }
+
+    const COLUMNS = [
+      { key: "nom", label: "Nom / Raison sociale" },
+      { key: "siret", label: "SIRET" },
+      { key: "ville", label: "Commune" },
+      { key: "state", label: "État" },
+      { key: "date_depot", label: "Déposé le" },
+      { key: "date_derniere_modification", label: "Modifié le" },
+      { key: "suivi_par", label: "Suivi par" }
+    ];
+
+    function renderTable() {
+      const filtered = sortRows(getFiltered());
+      const limited = filtered.slice(0, 300);
+      metaEl.textContent = `${filtered.length} dossier(s)${filtered.length > limited.length ? " (300 premiers affichés, affinez la recherche)" : ""} sur ${allDossiers.length} au total.`;
+
+      if (!limited.length) {
+        tableWrap.innerHTML = `<div class="empty">Aucun dossier ne correspond à ces critères</div>`;
+        return;
+      }
+
+      const headHtml = COLUMNS.map(c => {
+        const arrow = sortKey === c.key ? `<span class="sort-arrow">${sortDir === "asc" ? "▲" : "▼"}</span>` : "";
+        return `<th data-key="${c.key}">${escapeHtml(c.label)}${arrow}</th>`;
+      }).join("");
+
+      const bodyHtml = limited.map(d => {
+        const meta = stateMeta(d.state);
+        const flags = [];
+        if (d.demandeur.Est_un_GAEC) flags.push("GAEC");
+        if (d.demandeur.AREA) flags.push("AREA");
+        if (d.demandeur.Liquidation) flags.push("⚠ Liquidation");
+        return `
+          <tr data-demandeurid="${d.demandeurId}">
+            <td>
+              <div class="cell-name">${escapeHtml(d.nom || "—")}</div>
+              <div class="cell-sub">Dossier n° ${escapeHtml(d.dossier_number || "—")}</div>
+              ${flags.length ? `<div class="badge-flags">${flags.map(f => `<span class="tag ${f.startsWith("⚠") ? "tag-warn" : "tag-flag"}">${escapeHtml(f)}</span>`).join("")}</div>` : ""}
+            </td>
+            <td>${escapeHtml(d.siret || "—")}</td>
+            <td>${escapeHtml([d.code_postal, d.ville].filter(Boolean).join(" ") || "—")}</td>
+            <td><span class="tag" style="background:${meta.bg};color:${meta.fg}">${escapeHtml(meta.label)}</span></td>
+            <td>${escapeHtml(formatIsoDateShort(d.date_depot))}</td>
+            <td>${escapeHtml(formatIsoDateShort(d.date_derniere_modification))}</td>
+            <td>${escapeHtml(d.suivi_par || "—")}</td>
+          </tr>
+        `;
+      }).join("");
+
+      tableWrap.innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead><tr>${headHtml}</tr></thead>
+            <tbody>${bodyHtml}</tbody>
+          </table>
+        </div>
+      `;
+
+      tableWrap.querySelectorAll("thead th").forEach(th => {
+        th.addEventListener("click", () => setSort(th.dataset.key));
+      });
+      tableWrap.querySelectorAll("tbody tr").forEach(tr => {
+        tr.addEventListener("click", () => openFiche(Number(tr.dataset.demandeurid)));
+      });
+    }
+
+    function renderAll() {
+      if (!dataLoaded) return;
+      renderStatTiles();
+      renderFilterChips();
+      renderTable();
+    }
+
+    searchInput.addEventListener("input", renderTable);
+    refreshBtn.addEventListener("click", async () => {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = "Actualisation...";
+      try {
+        await loadEverything();
+        renderAll();
+      } catch (err) {
+        console.error("Erreur actualisation :", err);
+        metaEl.textContent = "Erreur lors de l'actualisation : " + (err.message || err);
+      } finally {
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = "↻ Actualiser";
+      }
+    });
+
+    // ================= Fiche détail =================
+    function renderFieldRow(key, rawValue) {
+      const val = fieldValueToText(rawValue);
+      if (val === "" || val === "null" || val === "undefined") return "";
+      return `
+        <div class="field">
+          <span class="field-label">${escapeHtml(labelFor(key))}</span>
+          <span class="field-value">${escapeHtml(val)}</span>
+        </div>
+      `;
+    }
+
+    function renderSection(title, row, keys) {
+      const body = keys.map(k => renderFieldRow(k, row[k])).filter(Boolean).join("");
+      return `
+        <div class="section">
+          <div class="section-header"><span>${escapeHtml(title)}</span></div>
+          <div class="section-body">${body || `<div class="section-empty">Aucune donnée</div>`}</div>
+        </div>
+      `;
+    }
+
+    function openFiche(demandeurId) {
+      const d = allDossiers.find(x => x.demandeurId === demandeurId);
+      if (!d) return;
+
+      try { grist.setCursorPos({ tableId: DEMANDEURS_TABLE, rowId: demandeurId }); } catch (e) { /* facultatif */ }
+
+      listView.style.display = "none";
+      ficheView.style.display = "block";
+
+      const meta = stateMeta(d.state);
+      const header = `
+        <div class="fiche-header">
+          <div class="title">${escapeHtml(d.nom || "Dossier " + (d.dossier_number || ""))}</div>
+          <div class="sub">Dossier n° ${escapeHtml(d.dossier_number || "—")} · SIRET ${escapeHtml(d.siret || "—")}</div>
+          <div class="badges">
+            <span class="tag" style="background:${meta.bg};color:${meta.fg}">${escapeHtml(meta.label)}</span>
+            ${d.demandeur.Est_un_GAEC ? `<span class="tag tag-flag">GAEC</span>` : ""}
+            ${d.demandeur.AREA ? `<span class="tag tag-flag">Bénéficiaire AREA</span>` : ""}
+            ${d.demandeur.Liquidation ? `<span class="tag tag-warn">⚠ Liquidation judiciaire</span>` : ""}
+            ${d.supprime ? `<span class="tag tag-warn">Dossier supprimé côté Démarches Simplifiées</span>` : ""}
+          </div>
+        </div>
+      `;
+
+      const dossierKeys = ["state", "date_depot", "date_derniere_modification", "date_traitement", "date_expiration", "suivi_par", "motivation", "correction_instructeur", "label_names"];
+      const demandeurKeys = ["type", "usager_email", "siret", "siren", "raison_sociale", "nom_commercial", "forme_juridique", "naf", "libelle_naf", "etat_administratif", "date_creation", "street_address", "code_postal", "ville", "departement", "region"];
+      const computedKeys = ["Pacage_Report", "Surface_legume", "Est_un_GAEC", "Associes_GAEC", "AREA", "Liquidation"];
+
+      ficheContent.innerHTML = `
+        ${header}
+        <div class="fiche-layout">
+          <div class="fiche-main">
+            ${d.dossier ? renderSection("Instruction du dossier", d.dossier, dossierKeys) : `<div class="section"><div class="section-header"><span>Instruction du dossier</span></div><div class="section-body"><div class="section-empty">Aucun dossier "${escapeHtml(DOSSIERS_TABLE)}" ne correspond à ce n° de dossier.</div></div></div>`}
+            ${renderSection("Déclarant", d.demandeur, demandeurKeys)}
+            ${renderSection("Recoupements (formules)", d.demandeur, computedKeys)}
+          </div>
+        </div>
+      `;
+    }
+
+    backBtn.addEventListener("click", () => {
+      ficheView.style.display = "none";
+      listView.style.display = "block";
+    });
+
+    // ================= Initialisation Grist =================
+    grist.ready({
+      requiredAccess: "full" // nécessaire pour lire Demarche_155804_dossiers / Demarche_155804_demandeurs
+    });
+
+    (async function init() {
+      try {
+        await loadEverything();
+        renderAll();
+      } catch (err) {
+        console.error("Erreur chargement initial :", err);
+        metaEl.textContent = "Erreur lors du chargement.";
+        tableWrap.innerHTML = `<div class="empty">Échec du chargement (${escapeHtml(err.message || err)}).<br>Vérifie que les tables "${escapeHtml(DOSSIERS_TABLE)}" et "${escapeHtml(DEMANDEURS_TABLE)}" existent bien dans ce document et que le widget a l'accès complet.</div>`;
+      }
+    })();
+  </script>
+</body>
+</html>
