@@ -1,0 +1,928 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Fiche Établissement</title>
+
+  <!-- DSFR core CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@latest/dist/dsfr.min.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@latest/dist/utility/utility.min.css" />
+
+  <!-- Grist plugin API -->
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+
+  <style>
+    /* ================== Thème de couleurs (variables) ================== */
+    :root {
+      --accent: #000091;
+      --accent-soft: #E5E5FB;
+    }
+    html[data-accent="vert"]      { --accent: #18753C; --accent-soft: #E2F3E8; }
+    html[data-accent="bordeaux"]  { --accent: #A94645; --accent-soft: #F5DFDF; }
+    html[data-accent="ardoise"]   { --accent: #4A5568; --accent-soft: #E7E9EC; }
+    html[data-accent="ambre"]     { --accent: #B34000; --accent-soft: #FBE9DD; }
+
+    .section {
+      background-color: var(--background-contrast-grey);
+      border: 1px solid var(--border-plain-grey);
+      border-radius: 0.5rem;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      page-break-inside: avoid;
+    }
+    .section .title {
+      font-size: 1.25rem;
+      font-weight: bold;
+      margin-bottom: 1.25rem;
+      border-bottom: 3px solid var(--accent);
+      padding-bottom: 0.5rem;
+      color: var(--accent);
+    }
+    .grid-container { display: grid; gap: 1rem; }
+    .one-column  { grid-template-columns: 1fr; }
+    .two-columns { grid-template-columns: 1fr 1fr; }
+    .three-columns { grid-template-columns: 1fr 1fr 1fr; }
+    .four-columns { grid-template-columns: 1fr 1fr 1fr 1fr; }
+    @media (max-width: 700px) {
+      .two-columns, .three-columns, .four-columns { grid-template-columns: 1fr; }
+    }
+    .item .label { font-weight: bold; margin-bottom: 0.25rem; display: block; }
+    .item .value { display: block; }
+
+    /* --- Chips façon bouton gris --- */
+    .chip-list { display: flex; flex-wrap: wrap; gap: .5rem .5rem; }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      padding: .15rem .5rem;
+      border-radius: 999px;
+      background: var(--background-alt-grey);
+      color: var(--text-default-grey);
+      border: 1px solid var(--border-plain-grey);
+      font-size: .875rem;
+      line-height: 1.25rem;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .chip svg { width: 14px; height: 14px; opacity: .8; flex: 0 0 auto; }
+    .source-note {
+      font-style: italic;
+      color: var(--text-mention-grey);
+      margin-top: .5rem;
+      text-align: right;
+    }
+
+    /* --- Tableaux finances / évolution --- */
+    .finance-table td.fr-text--right,
+    .evo-table td.fr-text--right,
+    .fr-table td.fr-text--right { text-align: right; }
+    .finance-table .fr-table__wrapper,
+    .fr-table .fr-table__wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .finance-table table { min-width: 560px; width: 100%; }
+    .evo-table table, .finance-table table {
+      width: 100%; border-collapse: collapse;
+    }
+    .evo-table th, .evo-table td,
+    .finance-table th, .finance-table td {
+      padding: .4rem .6rem; border-bottom: 1px solid var(--border-plain-grey);
+      text-align: left; font-size: .9rem;
+    }
+
+    /* --- Effectifs / Évolution : tableau + graphique --- */
+    .eff-row, .evo-row {
+      display: grid; grid-template-columns: 1fr; gap: 1rem; margin-top: .5rem; align-items: stretch;
+    }
+    @media (min-width: 900px) {
+      .eff-row, .evo-row { grid-template-columns: 38% 62%; }
+    }
+    .eff-chart, .evo-chart {
+      display: flex; align-items: center; justify-content: center;
+      background: var(--background-alt-grey); border-radius: .5rem; padding: .75rem;
+    }
+    .eff-chart svg, .evo-chart svg { width: 100%; height: auto; }
+    .chart-bar { fill: var(--accent); }
+    .chart-axis { stroke: currentColor; stroke-opacity: .25; }
+    .chart-label, .chart-value { fill: currentColor; font-size: 11px; }
+
+    /* --- Organigramme par site (compact) --- */
+    .org-sites { display: grid; gap: 1rem; }
+    .org-site {
+      border: 1px solid var(--border-plain-grey);
+      border-radius: .5rem;
+      padding: .75rem 1rem;
+      background: var(--background-alt-grey);
+    }
+    .org-site-title {
+      font-weight: 800; margin: 0 0 .5rem 0; font-size: 1.05rem; color: var(--text-title-grey);
+    }
+    .org-list { display: grid; grid-template-columns: 1fr 1fr; gap: .35rem 1.25rem; }
+    @media (max-width: 900px) { .org-list { grid-template-columns: 1fr; } }
+    .org-row { display: flex; gap: .6rem; line-height: 1.25rem; font-size: .92rem; align-items: baseline; }
+    .org-role { font-weight: 700; white-space: nowrap; }
+    .org-name { opacity: .95; }
+
+    /* ================== Barre d'actions (impression / réglages) ================== */
+    #header-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+    .action-btn {
+      display: inline-flex; align-items: center; gap: .4rem;
+      background: #fff; color: var(--accent); border: 1px solid var(--accent);
+      border-radius: .3rem; padding: .5rem .9rem; font-weight: 600; font-size: .85rem;
+      cursor: pointer;
+    }
+    .action-btn:hover { background: var(--accent-soft); }
+
+    /* ================== Panneau de personnalisation ================== */
+    .settings-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.32); z-index: 1000;
+      opacity: 0; pointer-events: none; transition: opacity .18s ease;
+    }
+    .settings-overlay.open { opacity: 1; pointer-events: auto; }
+
+    .settings-drawer {
+      position: fixed; top: 0; right: 0; height: 100%; width: min(380px, 92vw);
+      background: #fff; z-index: 1001; box-shadow: -8px 0 24px rgba(0,0,0,.18);
+      transform: translateX(100%); transition: transform .2s ease;
+      display: flex; flex-direction: column;
+    }
+    .settings-drawer.open { transform: translateX(0); }
+    .settings-drawer-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1rem 1.25rem; border-bottom: 1px solid var(--border-plain-grey);
+    }
+    .settings-drawer-header h2 { margin: 0; }
+    .settings-drawer-body { flex: 1 1 auto; overflow-y: auto; padding: 1rem 1.25rem; }
+    .settings-drawer-footer { padding: 1rem 1.25rem; border-top: 1px solid var(--border-plain-grey); }
+    .settings-section { margin-bottom: 1.5rem; }
+    .settings-heading { font-weight: 700; margin-bottom: .5rem; }
+    .settings-hint { font-size: .8rem; color: var(--text-mention-grey); margin-bottom: .5rem; }
+
+    .accent-swatches { display: flex; gap: .6rem; flex-wrap: wrap; }
+    .swatch {
+      width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent;
+      cursor: pointer; background: var(--sw); padding: 0;
+    }
+    .swatch.is-active { border-color: var(--text-title-grey, #161616); box-shadow: 0 0 0 2px #fff inset; }
+
+    .scheme-options { display: flex; flex-direction: column; gap: .4rem; }
+    .scheme-options label { display: flex; align-items: center; gap: .5rem; cursor: pointer; }
+
+    .block-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .35rem; }
+    .block-row {
+      display: flex; align-items: center; gap: .5rem; padding: .5rem .6rem;
+      border: 1px solid var(--border-plain-grey); border-radius: .4rem;
+      background: var(--background-alt-grey); cursor: grab;
+    }
+    .block-row.dragging { opacity: .4; }
+    .block-row.is-hidden { opacity: .55; }
+    .drag-handle { color: var(--text-mention-grey); user-select: none; }
+    .block-toggle { display: flex; align-items: center; gap: .5rem; flex: 1; cursor: pointer; }
+
+    #print-footer.print-only { display: none; }
+
+    /* ================== IMPRESSION / PDF — VERSION COMPACTE ================== */
+    @media print {
+
+      .no-print, .settings-overlay, .settings-drawer { display: none !important; }
+
+      #print-footer.print-only {
+        display: block; margin-top: 1rem; font-size: 9px; color: #555; text-align: right;
+      }
+
+      body { font-size: 10px !important; line-height: 1.3 !important; }
+      p, li, td, th, span, div { font-size: 10px !important; line-height: 1.3 !important; }
+
+      h1, .fr-h1 { font-size: 17px !important; margin: 0 0 6px 0 !important; }
+      h2, .fr-h2 { font-size: 14px !important; margin: 0 0 4px 0 !important; }
+      h3, .fr-h3 { font-size: 12px !important; margin: 0 0 4px 0 !important; }
+      h4, .fr-h4 { font-size: 11px !important; margin: 0 0 3px 0 !important; }
+
+      .section { padding: 8px 10px !important; margin-bottom: 10px !important; border-radius: 4px !important; }
+      .section .title { font-size: 12px !important; margin-bottom: 6px !important; padding-bottom: 4px !important; border-bottom-width: 1px !important; }
+
+      .grid-container { gap: 6px !important; }
+      .item { margin-bottom: 2px !important; }
+      .item .label { font-size: 9.5px !important; margin-bottom: 1px !important; font-weight: 600; }
+      .item .value { font-size: 10px !important; }
+
+      table { font-size: 10px !important; }
+      th, td { padding: 3px 5px !important; vertical-align: top; }
+
+      svg { max-width: 100% !important; height: auto !important; }
+      svg text { font-size: 9px !important; }
+
+      .eff-chart, .evo-chart { padding: 4px 6px 6px 6px !important; }
+      .eff-row, .evo-row { gap: 6px !important; }
+
+      .evo-row {
+        display: grid !important;
+        grid-template-columns: 32% 68% !important;
+        gap: 8px !important;
+        align-items: stretch !important;
+      }
+      .evo-row .evo-table { height: 100% !important; margin: 0 !important; }
+      .evo-row .evo-chart { height: 100% !important; display: flex !important; align-items: stretch !important; padding: 4px 6px !important; }
+      .evo-row .evo-chart svg { width: 100% !important; height: 100% !important; max-height: 100% !important; }
+
+      .eff-row {
+        display: grid !important;
+        grid-template-columns: 32% 68% !important;
+        gap: 8px !important;
+        align-items: stretch !important;
+      }
+      .eff-row .fr-table { height: 100% !important; margin: 0 !important; }
+      .eff-row .eff-chart { height: 100% !important; display: flex !important; align-items: stretch !important; padding: 4px 6px !important; }
+      .eff-row .eff-chart svg { width: 100% !important; height: 100% !important; max-height: 100% !important; }
+
+      .finance-table table { table-layout: fixed; width: 100% !important; min-width: 100% !important; }
+      .finance-table th, .finance-table td { font-size: 9.5px !important; padding: 3px 5px !important; white-space: normal !important; }
+
+      @page { margin: 8mm; }
+    }
+  </style>
+</head>
+<body>
+  <header role="banner" class="fr-header">
+    <div class="fr-header__body">
+      <div class="fr-container">
+        <div class="fr-header__body-row" style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">
+          <div class="fr-header__brand">
+            <div class="fr-header__brand-top">
+              <div class="fr-header__logo" title="République Française">
+                <p class="fr-logo">République<br />Française</p>
+              </div>
+            </div>
+            <div class="fr-header__service">
+              <a class="fr-header__service-title" href="#">DRAAF Bretagne</a>
+              <p class="fr-header__service-tagline">Direction régionale de l’alimentation, de l’agriculture et de la forêt</p>
+            </div>
+          </div>
+
+          <div id="header-actions" class="fr-ml-auto no-print">
+            <button type="button" id="print-btn" class="action-btn" title="Imprimer ou exporter en PDF">🖶 Imprimer / PDF</button>
+            <button type="button" id="open-settings-btn" class="action-btn" title="Personnaliser l'ordre, l'affichage et le thème">⚙ Personnaliser</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main role="main" class="fr-container fr-pt-6w fr-pb-10w">
+    <section class="fr-mb-6w">
+      <h1 id="etab-title" class="fr-h1">Établissement</h1>
+      <h2 id="site-title" class="fr-h2 fr-mt-1w" style="display:none;"></h2>
+    </section>
+
+    <section class="fr-grid-row fr-grid-row--gutters">
+      <div class="fr-col-12 fr-col-md-12">
+        <div id="app" class="fr-mb-6w">
+          <p>Chargement des données...</p>
+        </div>
+        <div id="print-footer" class="print-only"></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="settings-overlay" class="settings-overlay no-print"></div>
+  <aside id="settings-drawer" class="settings-drawer no-print" aria-label="Personnalisation de la fiche">
+    <div class="settings-drawer-header">
+      <h2 class="fr-h4">Personnaliser la fiche</h2>
+      <button type="button" id="close-settings-btn" class="fr-btn fr-btn--tertiary-no-outline" aria-label="Fermer">✕</button>
+    </div>
+    <div class="settings-drawer-body">
+      <div class="settings-section">
+        <p class="settings-heading">Thème de couleurs</p>
+        <div class="accent-swatches" id="accent-swatches"></div>
+      </div>
+      <div class="settings-section">
+        <p class="settings-heading">Mode d'affichage</p>
+        <div class="scheme-options" id="scheme-options"></div>
+      </div>
+      <div class="settings-section">
+        <p class="settings-heading">Blocs affichés &amp; ordre</p>
+        <p class="settings-hint">Glissez-déposez pour réordonner, décochez pour masquer un bloc.</p>
+        <ul id="block-list" class="block-list"></ul>
+      </div>
+    </div>
+    <div class="settings-drawer-footer">
+      <button type="button" id="reset-settings" class="fr-btn fr-btn--secondary">Réinitialiser les réglages</button>
+    </div>
+  </aside>
+
+  <!-- DSFR JS (optionnel) -->
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@latest/dist/dsfr.module.min.js"></script>
+  <script nomodule src="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@latest/dist/dsfr.nomodule.min.js"></script>
+
+  <script>
+  (function () {
+    'use strict';
+
+    // ============================================================
+    // Utilitaires
+    // ============================================================
+    const nf = new Intl.NumberFormat('fr-FR');
+    function fmtNum(n) { return nf.format(Math.round(n)); }
+    function safeNum(v) {
+      const n = typeof v === 'number' ? v : parseFloat(v);
+      return Number.isFinite(n) ? n : null;
+    }
+    function escapeHtml(s) {
+      return (s === null || s === undefined ? '' : String(s))
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function splitLines(t) {
+      return (t || '').split(/\r?\n/).map(function (s) { return s.trim(); }).filter(Boolean);
+    }
+    function toList(v) {
+      if (Array.isArray(v)) {
+        if (v[0] === 'L') return v.slice(1).filter(Boolean);
+        return v.filter(Boolean);
+      }
+      if (typeof v === 'string' && v.trim()) return splitLines(v);
+      return [];
+    }
+    function normalizeUrl(u) {
+      u = String(u).trim();
+      return /^https?:\/\//i.test(u) ? u : 'https://' + u;
+    }
+
+    function barChartSVG(items) {
+      const w = 480, h = 220, padL = 34, padB = 34, padT = 14, padR = 12;
+      const values = items.map(function (i) { return safeNum(i.value) || 0; });
+      const max = Math.max(1, Math.max.apply(null, values));
+      const innerW = w - padL - padR, innerH = h - padT - padB;
+      const bw = items.length ? innerW / items.length : innerW;
+      const bars = items.map(function (it, i) {
+        const val = safeNum(it.value) || 0;
+        const bh = max ? (val / max) * innerH : 0;
+        const x = padL + i * bw + bw * 0.15;
+        const y = padT + (innerH - bh);
+        const bwidth = bw * 0.7;
+        return (
+          '<rect class="chart-bar" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + bwidth.toFixed(1) + '" height="' + Math.max(0, bh).toFixed(1) + '" rx="3"/>' +
+          '<text class="chart-value" x="' + (x + bwidth / 2).toFixed(1) + '" y="' + (y - 4).toFixed(1) + '" text-anchor="middle">' + escapeHtml(fmtNum(val)) + '</text>' +
+          '<text class="chart-label" x="' + (x + bwidth / 2).toFixed(1) + '" y="' + (h - padB + 16) + '" text-anchor="middle">' + escapeHtml(String(it.label)) + '</text>'
+        );
+      }).join('');
+      return (
+        '<svg viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="Graphique">' +
+        '<line class="chart-axis" x1="' + padL + '" y1="' + padT + '" x2="' + padL + '" y2="' + (h - padB) + '"/>' +
+        '<line class="chart-axis" x1="' + padL + '" y1="' + (h - padB) + '" x2="' + (w - padR) + '" y2="' + (h - padB) + '"/>' +
+        bars + '</svg>'
+      );
+    }
+
+    function block(id, title, bodyHtml) {
+      if (!bodyHtml) return '';
+      return '<section class="section" data-block="' + id + '"><h2 class="title">' + escapeHtml(title) + '</h2>' + bodyHtml + '</section>';
+    }
+
+    // ============================================================
+    // Parsers des champs texte structurés (formules Grist)
+    // ============================================================
+    function parseOrganigramme(text) {
+      const lines = (text || '').split(/\r?\n/);
+      const groups = [];
+      let current = null;
+      lines.forEach(function (raw) {
+        const line = raw.trim();
+        if (!line) return;
+        if (line.indexOf('## ') === 0) {
+          current = { title: line.slice(3).trim(), people: [] };
+          groups.push(current);
+        } else if (current) {
+          const idx = line.indexOf('|');
+          if (idx >= 0) current.people.push({ role: line.slice(0, idx).trim(), name: line.slice(idx + 1).trim() });
+          else current.people.push({ role: '', name: line });
+        }
+      });
+      return groups;
+    }
+
+    function parseExamens(text) {
+      const lines = (text || '').split(/\r?\n/).map(function (s) { return s.trim(); });
+      const groups = [];
+      let current = null;
+      lines.forEach(function (line) {
+        if (!line) return;
+        if (line.indexOf(':') === -1) {
+          current = { title: line, rows: [] };
+          groups.push(current);
+        } else {
+          if (!current) { current = { title: '', rows: [] }; groups.push(current); }
+          const idx = line.lastIndexOf(':');
+          current.rows.push({ label: line.slice(0, idx).trim(), value: line.slice(idx + 1).trim() });
+        }
+      });
+      return groups.filter(function (g) { return g.rows.length || (g.title && g.title !== 'Informations non disponibles'); });
+    }
+
+    function parseFinanceLines(text) {
+      return splitLines(text).map(function (line) {
+        const idx = line.lastIndexOf(':');
+        if (idx < 0) return { label: line, value: '' };
+        return { label: line.slice(0, idx).trim(), value: line.slice(idx + 1).trim() };
+      });
+    }
+
+    function parseHistorique(text) {
+      return splitLines(text).map(function (line) {
+        const m = line.match(/^(.*?)\s*-\s*(\d{4})\s*:\s*(.*)$/);
+        if (m) return { site: m[1], year: m[2], text: m[3] };
+        return { site: '', year: '', text: line };
+      }).sort(function (a, b) { return (b.year || '').localeCompare(a.year || ''); });
+    }
+
+    function parseEffectifs(text) {
+      const blocks = (text || '').split(/\n\s*\n/).map(function (b) { return b.trim(); }).filter(Boolean);
+      return blocks.map(function (b) {
+        const lines = b.split(/\r?\n/).map(function (s) { return s.trim(); }).filter(Boolean);
+        const title = lines[0] || '';
+        const rows = lines.slice(1).map(function (line) {
+          const idx = line.lastIndexOf(':');
+          if (idx < 0) return { label: line, value: 0 };
+          const label = line.slice(0, idx).trim();
+          const m = line.slice(idx + 1).match(/-?\d+([.,]\d+)?/);
+          return { label: label, value: m ? parseFloat(m[0].replace(',', '.')) : 0 };
+        });
+        return { title: title, rows: rows };
+      });
+    }
+
+    function pctFromRatio(ratio) {
+      const r = safeNum(ratio);
+      if (r === null) return null;
+      return ((r - 1) * 100).toFixed(2) + '%';
+    }
+    function formatPct(v) {
+      if (v === null || v === undefined || v === '') return 'Information non disponible';
+      const s = String(v);
+      return (s.indexOf('%') !== -1 || s.toLowerCase().indexOf('disponible') !== -1) ? s : s + '%';
+    }
+
+    // ============================================================
+    // Blocs de la fiche
+    // ============================================================
+    function renderIdentite(record, ctx) {
+      const site = ctx.displaySite;
+      const items = [];
+      function add(label, value) {
+        if (value !== null && value !== undefined && String(value).trim() !== '') items.push({ label: label, value: value });
+      }
+      add('Type d’établissement', site && site.Type);
+      add('Secteur', (site && site.Secteur) || record.Etablissement_niveau_1_Secteur);
+      add('Nature', site && site.Nature);
+      add('Régime / contrat', site && site.Contrat);
+      add('Affiliation', site && site.Affiliation);
+      add('Code DGER', record.CodeDGER_niveaux_inferieurs || record.Code_DGER);
+      add('Code Éducation nationale', site && site.Code_Education_nationale);
+      add('SIRET', site && site.Siret);
+      add('Date de création', record.Date_de_creation);
+      add('Regroupement', record.Regroupement);
+
+      const address = site ? [site.adressepostale_ligne1, site.adressepostale_ligne2, site.adressepostale_ligne3,
+        site.adressepostale_ligne4, site.adressepostale_ligne5, site.adressepostale_ligne6]
+        .filter(Boolean).map(escapeHtml).join('<br>') : '';
+
+      const contactLines = [];
+      if (site && site.Telephone) contactLines.push('☎ ' + escapeHtml(site.Telephone));
+      if (site && site.Mel) contactLines.push('✉ ' + escapeHtml(site.Mel));
+      if (site && site.Site_internet) {
+        contactLines.push('🌐 <a href="' + escapeHtml(normalizeUrl(site.Site_internet)) + '" target="_blank" rel="noopener">' + escapeHtml(site.Site_internet) + '</a>');
+      }
+
+      const badges = [];
+      function addBadge(label, val) { if (val && String(val).trim()) badges.push('<span class="chip">' + escapeHtml(label) + ' : ' + escapeHtml(val) + '</span>'); }
+      addBadge('Internat', site && site.Internat);
+      addBadge('Demi-pension', site && site.Demi_pension);
+      addBadge('Résidence élèves', site && site.Residence_eleves);
+
+      if (!items.length && !address && !contactLines.length && !badges.length) return '';
+
+      let html = '<div class="grid-container two-columns">';
+      html += items.map(function (it) {
+        return '<div class="item"><span class="label">' + escapeHtml(it.label) + '</span><span class="value">' + escapeHtml(String(it.value)) + '</span></div>';
+      }).join('');
+      if (address) html += '<div class="item"><span class="label">Adresse</span><span class="value">' + address + '</span></div>';
+      if (contactLines.length) html += '<div class="item"><span class="label">Contact</span><span class="value">' + contactLines.join('<br>') + '</span></div>';
+      html += '</div>';
+      if (badges.length) html += '<div class="chip-list fr-mt-2w">' + badges.join('') + '</div>';
+      return html;
+    }
+
+    function renderOrganigramme(record) {
+      const groups = parseOrganigramme(record.Organigramme);
+      if (!groups.length) return '';
+      return '<div class="org-sites">' + groups.map(function (g) {
+        const rows = g.people.map(function (p) {
+          return '<div class="org-row">' + (p.role ? '<span class="org-role">' + escapeHtml(p.role) + '</span>' : '') +
+            '<span class="org-name">' + escapeHtml(p.name) + '</span></div>';
+        }).join('');
+        return '<div class="org-site"><p class="org-site-title">' + escapeHtml(g.title) + '</p><div class="org-list">' + rows + '</div></div>';
+      }).join('') + '</div>';
+    }
+
+    function renderEffectifs(record) {
+      const total = safeNum(record.TotalEffectif);
+      const infos = record.Informations_sur_les_effectifs;
+      const parsed = parseEffectifs(record.Resume_Effectif);
+      let html = '';
+
+      if (total !== null) {
+        html += '<div class="grid-container one-column fr-mb-2w"><div class="item">' +
+          '<span class="label">Effectif total ' + escapeHtml(record.AnneeEncoursTexte || '') + '</span>' +
+          '<span class="value">' + fmtNum(total) + ' élèves</span></div></div>';
+      }
+      if (infos && infos.trim() && infos.trim() !== 'Informations non disponibles') {
+        html += '<div class="fr-mb-2w">' + splitLines(infos).map(function (l) { return '<div>' + escapeHtml(l) + '</div>'; }).join('') + '</div>';
+      }
+      if (parsed.length) {
+        const rows = [];
+        parsed.forEach(function (b) { b.rows.forEach(function (r) { rows.push({ site: b.title, label: r.label, value: r.value }); }); });
+        if (rows.length) {
+          const tableRows = rows.map(function (r) {
+            return '<tr><td>' + escapeHtml(r.site) + '</td><td>' + escapeHtml(r.label) + '</td><td class="fr-text--right">' + fmtNum(r.value) + '</td></tr>';
+          }).join('');
+          const chartItems = rows.slice(0, 8);
+          html += '<div class="eff-row">' +
+            '<div class="fr-table"><table><thead><tr><th>Site</th><th>Filière</th><th class="fr-text--right">Effectif</th></tr></thead><tbody>' + tableRows + '</tbody></table></div>' +
+            '<div class="eff-chart">' + barChartSVG(chartItems) + '</div></div>';
+        }
+      }
+      return html;
+    }
+
+    function renderEvolution(record) {
+      const anneeNum = parseInt(record.AnneeEncoursTexte, 10);
+      const labelFor = function (offset) { return Number.isFinite(anneeNum) ? String(anneeNum - offset) : ('N-' + offset); };
+      const vals = [
+        { label: labelFor(3), value: safeNum(record.TotalEffectif_N_3) },
+        { label: labelFor(2), value: safeNum(record.TotalEffectif_N_2) },
+        { label: labelFor(1), value: safeNum(record.TotalEffectif_N_1) },
+        { label: Number.isFinite(anneeNum) ? String(anneeNum) : 'N', value: safeNum(record.TotalEffectif) }
+      ];
+      if (!vals.some(function (v) { return v.value !== null; })) return '';
+
+      const variations = [
+        { period: vals[0].label + ' → ' + vals[1].label, pct: record.EffecitfN_2vN_3 },
+        { period: vals[1].label + ' → ' + vals[2].label, pct: record.EffecitfN_1vN_2 },
+        { period: vals[2].label + ' → ' + vals[3].label, pct: pctFromRatio(record.TotalEffectif_N_1_2) }
+      ];
+      const rows = vals.map(function (v) {
+        return '<tr><td>' + escapeHtml(v.label) + '</td><td class="fr-text--right">' + (v.value !== null ? fmtNum(v.value) : '—') + '</td></tr>';
+      }).join('');
+      const varRows = variations.map(function (v) {
+        return '<tr><td>' + escapeHtml(v.period) + '</td><td class="fr-text--right">' + escapeHtml(formatPct(v.pct)) + '</td></tr>';
+      }).join('');
+
+      return '<div class="evo-row"><div class="evo-table">' +
+        '<table><thead><tr><th>Année</th><th class="fr-text--right">Effectif</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+        '<table class="fr-mt-2w"><thead><tr><th>Évolution</th><th class="fr-text--right">Variation</th></tr></thead><tbody>' + varRows + '</tbody></table>' +
+        '</div><div class="evo-chart">' + barChartSVG(vals) + '</div></div>';
+    }
+
+    function renderFormations(record) {
+      const list = splitLines(record.Carte_de_formation);
+      if (!list.length) return '';
+      return '<div class="chip-list">' + list.map(function (x) { return '<span class="chip">' + escapeHtml(x) + '</span>'; }).join('') + '</div>';
+    }
+
+    function renderExamens(record) {
+      const groups = parseExamens(record.Reussite_aux_examens);
+      if (!groups.length) return '';
+      return '<div class="org-sites">' + groups.map(function (g) {
+        const rows = g.rows.map(function (r) {
+          return '<div class="org-row"><span class="org-name">' + escapeHtml(r.label) + '</span><span class="chip">' + escapeHtml(r.value) + '</span></div>';
+        }).join('');
+        return '<div class="org-site">' + (g.title ? '<p class="org-site-title">' + escapeHtml(g.title) + '</p>' : '') + '<div class="org-list">' + rows + '</div></div>';
+      }).join('') + '</div>';
+    }
+
+    function renderSites(record) {
+      const names = splitLines(record.Nom_des_sites);
+      const nb = safeNum(record.Nombre_de_site);
+      if (!names.length && nb === null) return '';
+      let html = '';
+      if (nb !== null) html += '<div class="grid-container one-column fr-mb-2w"><div class="item"><span class="label">Nombre de sites</span><span class="value">' + fmtNum(nb) + '</span></div></div>';
+      if (names.length) html += '<div class="chip-list">' + names.map(function (n) { return '<span class="chip">' + escapeHtml(n) + '</span>'; }).join('') + '</div>';
+      return html;
+    }
+
+    function renderClassement(record) {
+      const items = [];
+      function add(label, value) { if (value) items.push({ label: label, value: value }); }
+      add('Classement en cours', record.Classement_de_l_Etablissement_en_cours);
+      add('Classement précédent', record.Classement_de_l_Etablissement_precedent);
+      add('Tendance démographique du bassin', record.Tendance_demographie_scolaire_sur_le_bassin_de_recrutement);
+      const typologie = toList(record.Typologie_de_l_etablissement);
+      const aire = toList(record.Aire_de_recrutement);
+      let html = '';
+      if (items.length) {
+        html += '<div class="grid-container two-columns fr-mb-2w">' + items.map(function (it) {
+          return '<div class="item"><span class="label">' + escapeHtml(it.label) + '</span><span class="value">' + escapeHtml(it.value) + '</span></div>';
+        }).join('') + '</div>';
+      }
+      if (typologie.length) html += '<div class="item fr-mb-2w"><span class="label">Typologie</span><div class="chip-list">' + typologie.map(function (t) { return '<span class="chip">' + escapeHtml(t) + '</span>'; }).join('') + '</div></div>';
+      if (aire.length) html += '<div class="item"><span class="label">Aire de recrutement</span><div class="chip-list">' + aire.map(function (t) { return '<span class="chip">' + escapeHtml(t) + '</span>'; }).join('') + '</div></div>';
+      return html;
+    }
+
+    function renderPartenaires(record) {
+      const partenaires = splitLines(record.Partenaires_significatifs);
+      if (!partenaires.length) return '';
+      return '<div class="chip-list">' + partenaires.map(function (p) { return '<span class="chip">' + escapeHtml(p) + '</span>'; }).join('') + '</div>';
+    }
+
+    function renderProjets(record) {
+      const projets = splitLines(record.Projets);
+      if (!projets.length) return '';
+      return '<ul class="fr-ml-0 fr-pl-3w">' + projets.map(function (p) { return '<li>' + escapeHtml(p) + '</li>'; }).join('') + '</ul>';
+    }
+
+    function renderHistorique(record) {
+      const items = parseHistorique(record.Historique);
+      if (!items.length) return '';
+      return '<ul class="fr-ml-0 fr-pl-3w">' + items.map(function (it) {
+        return '<li><strong>' + escapeHtml(it.year || '') + '</strong> — ' + escapeHtml(it.text) +
+          (it.site ? ' <span class="chip">' + escapeHtml(it.site) + '</span>' : '') + '</li>';
+      }).join('') + '</ul>';
+    }
+
+    function renderPersonnel(record) {
+      const parts = [];
+      const cpe = splitLines(record.Nom_CPE).filter(function (x) { return x && x !== 'Informations non disponibles'; });
+      if (cpe.length) parts.push('<div class="item"><span class="label">CPE</span><span class="value">' + cpe.map(escapeHtml).join('<br>') + '</span></div>');
+      if (record.Etablissement_niveau_1_Secteur === 'Public' && record.Resume_ETP) {
+        const etp = splitLines(record.Resume_ETP);
+        if (etp.length) parts.push('<div class="item"><span class="label">Effectifs ETP (secteur public)</span><span class="value">' + etp.map(escapeHtml).join('<br>') + '</span></div>');
+      }
+      if (!parts.length) return '';
+      return '<div class="grid-container two-columns">' + parts.join('') + '</div>';
+    }
+
+    function renderFinances(record) {
+      const indicators = [
+        ['Résultat de fonctionnement', record.RESULTAT_DE_FONCTIONNEMENT],
+        ['Fonds de roulement net', record.FOND_DE_ROULEMENT_NET],
+        ['Variation du fonds de roulement brut', record.VARIATION_DU_FONDS_DE_ROULEMENT_BRUT],
+        ["Capacité d'autofinancement", record.CAPACITE_D_AUTOFINANCEMENT]
+      ];
+      const rows = [];
+      indicators.forEach(function (pair) {
+        const label = pair[0], text = pair[1];
+        if (!text || text === 'Non concerné') return;
+        parseFinanceLines(text).forEach(function (l) { rows.push({ indicateur: label, centre: l.label, montant: l.value }); });
+      });
+      if (!rows.length) return '';
+      const tableRows = rows.map(function (r) {
+        return '<tr><td>' + escapeHtml(r.indicateur) + '</td><td>' + escapeHtml(r.centre) + '</td><td class="fr-text--right">' + escapeHtml(r.montant) + '</td></tr>';
+      }).join('');
+      const yearNote = record.AnneeFinances ? '<p class="fr-mb-2w">Exercice de référence : <strong>' + escapeHtml(record.AnneeFinances) + '</strong></p>' : '';
+      return yearNote + '<div class="finance-table"><div class="fr-table"><table><thead><tr><th>Indicateur</th><th>Centre</th><th class="fr-text--right">Montant</th></tr></thead><tbody>' + tableRows + '</tbody></table></div></div>';
+    }
+
+    const BLOCKS = [
+      { id: 'identite', title: 'Identité de l’établissement', render: renderIdentite },
+      { id: 'organigramme', title: 'Organigramme', render: renderOrganigramme },
+      { id: 'effectifs', title: 'Effectifs', render: renderEffectifs },
+      { id: 'evolution', title: 'Évolution des effectifs', render: renderEvolution },
+      { id: 'formations', title: 'Carte des formations', render: renderFormations },
+      { id: 'examens', title: 'Réussite aux examens', render: renderExamens },
+      { id: 'sites', title: 'Sites de l’établissement', render: renderSites },
+      { id: 'classement', title: 'Classement & typologie', render: renderClassement },
+      { id: 'partenaires', title: 'Partenaires significatifs', render: renderPartenaires },
+      { id: 'projets', title: 'Projets en cours', render: renderProjets },
+      { id: 'historique', title: 'Historique de l’établissement', render: renderHistorique },
+      { id: 'personnel', title: 'Ressources humaines', render: renderPersonnel },
+      { id: 'finances', title: 'Situation financière', render: renderFinances }
+    ];
+    const ACCENTS = [
+      { id: 'bleu', label: 'Bleu Marianne', color: '#000091' },
+      { id: 'vert', label: 'Vert agriculture', color: '#18753C' },
+      { id: 'bordeaux', label: 'Bordeaux', color: '#A94645' },
+      { id: 'ardoise', label: 'Ardoise', color: '#4A5568' },
+      { id: 'ambre', label: 'Ambre', color: '#B34000' }
+    ];
+    const SCHEMES = [
+      { id: 'system', label: 'Système' },
+      { id: 'light', label: 'Clair' },
+      { id: 'dark', label: 'Sombre' }
+    ];
+
+    // ============================================================
+    // Préférences (ordre, visibilité, thème) — persistées via grist.setOption
+    // ============================================================
+    function defaultPrefs() {
+      return { order: BLOCKS.map(function (b) { return b.id; }), hidden: {}, theme: { accent: 'bleu', scheme: 'system' } };
+    }
+    function mergeDefaults(saved) {
+      const d = defaultPrefs();
+      if (!saved) return d;
+      return {
+        order: Array.isArray(saved.order) ? saved.order : d.order,
+        hidden: (saved.hidden && typeof saved.hidden === 'object') ? saved.hidden : d.hidden,
+        theme: Object.assign({}, d.theme, saved.theme || {})
+      };
+    }
+    function getOrder() {
+      const known = BLOCKS.map(function (b) { return b.id; });
+      const stored = (Array.isArray(prefs.order) ? prefs.order : []).filter(function (id) { return known.indexOf(id) !== -1; });
+      const missing = known.filter(function (id) { return stored.indexOf(id) === -1; });
+      return stored.concat(missing);
+    }
+
+    let prefs = defaultPrefs();
+    let currentRecord = null;
+    let sitesById = new Map();
+
+    function savePrefs() {
+      if (window.grist && grist.setOption) grist.setOption('fichePrefs', prefs);
+    }
+
+    function applyTheme() {
+      document.documentElement.setAttribute('data-accent', prefs.theme.accent || 'bleu');
+      if (prefs.theme.scheme === 'system') document.documentElement.removeAttribute('data-fr-theme');
+      else document.documentElement.setAttribute('data-fr-theme', prefs.theme.scheme);
+    }
+
+    // ============================================================
+    // Chargement des sites (pour l'adresse / contact / etc.)
+    // ============================================================
+    function loadSitesTable() {
+      if (!window.grist || !grist.docApi) return Promise.resolve();
+      return grist.docApi.fetchTable('TT_Sites_de_formation').then(function (data) {
+        sitesById = new Map();
+        const n = (data.id || []).length;
+        for (let i = 0; i < n; i++) {
+          const row = {};
+          for (const col in data) row[col] = data[col][i];
+          sitesById.set(data.id[i], row);
+        }
+      }).catch(function (e) { console.warn('Impossible de charger TT_Sites_de_formation', e); });
+    }
+
+    // ============================================================
+    // Rendu principal
+    // ============================================================
+    function renderHeaderTitles(record, ctx) {
+      const titleEl = document.getElementById('etab-title');
+      const subEl = document.getElementById('site-title');
+      const niveau1 = ctx.niveau1Site;
+      titleEl.textContent = (niveau1 && (niveau1.Libelle_public || niveau1.Libelle_administratif)) || 'Établissement';
+      const site = ctx.displaySite;
+      if (record.Site_niveaux_inferieurs && site && niveau1 && site.id !== niveau1.id) {
+        subEl.style.display = '';
+        subEl.textContent = site.Libelle_public || site.Libelle_administratif || '';
+      } else {
+        subEl.style.display = 'none';
+        subEl.textContent = '';
+      }
+    }
+
+    function renderPrintFooter(record) {
+      const el = document.getElementById('print-footer');
+      if (!el) return;
+      const dateStr = new Date().toLocaleDateString('fr-FR');
+      const code = record.CodeDGER_niveaux_inferieurs || record.Code_DGER || '';
+      el.textContent = 'Fiche établissement générée le ' + dateStr + (code ? ' — Code DGER ' + code : '');
+    }
+
+    function renderAll() {
+      const appEl = document.getElementById('app');
+      const record = currentRecord;
+      if (!record) {
+        appEl.innerHTML = '<p>Sélectionnez un établissement pour afficher sa fiche.</p>';
+        return;
+      }
+      const ctx = {
+        niveau1Site: sitesById.get(record.Etablissement_niveau_1),
+        displaySite: sitesById.get(record.Site_niveaux_inferieurs) || sitesById.get(record.Etablissement_niveau_1)
+      };
+      renderHeaderTitles(record, ctx);
+
+      const rendered = {};
+      BLOCKS.forEach(function (b) { rendered[b.id] = b.render(record, ctx); });
+
+      const html = getOrder()
+        .filter(function (id) { return !prefs.hidden[id]; })
+        .map(function (id) {
+          const b = BLOCKS.filter(function (x) { return x.id === id; })[0];
+          return block(id, b.title, rendered[id]);
+        })
+        .filter(Boolean)
+        .join('');
+
+      appEl.innerHTML = html || '<p>Aucune information disponible pour les blocs sélectionnés.</p>';
+      renderPrintFooter(record);
+    }
+
+    // ============================================================
+    // Panneau de personnalisation
+    // ============================================================
+    function renderThemeControls() {
+      const accentsEl = document.getElementById('accent-swatches');
+      const schemesEl = document.getElementById('scheme-options');
+      accentsEl.innerHTML = ACCENTS.map(function (a) {
+        return '<button type="button" class="swatch' + (prefs.theme.accent === a.id ? ' is-active' : '') + '" data-accent="' + a.id + '" style="--sw:' + a.color + '" title="' + escapeHtml(a.label) + '" aria-label="' + escapeHtml(a.label) + '"></button>';
+      }).join('');
+      schemesEl.innerHTML = SCHEMES.map(function (s) {
+        return '<label class="scheme-option"><input type="radio" name="scheme" value="' + s.id + '" ' + (prefs.theme.scheme === s.id ? 'checked' : '') + '> ' + escapeHtml(s.label) + '</label>';
+      }).join('');
+
+      Array.prototype.forEach.call(accentsEl.querySelectorAll('.swatch'), function (btn) {
+        btn.addEventListener('click', function () {
+          prefs.theme.accent = btn.getAttribute('data-accent');
+          applyTheme(); savePrefs(); renderThemeControls();
+        });
+      });
+      Array.prototype.forEach.call(schemesEl.querySelectorAll('input[name="scheme"]'), function (r) {
+        r.addEventListener('change', function () { prefs.theme.scheme = r.value; applyTheme(); savePrefs(); });
+      });
+    }
+
+    function renderSettingsDrawer() {
+      const listEl = document.getElementById('block-list');
+      const order = getOrder();
+      listEl.innerHTML = order.map(function (id) {
+        const b = BLOCKS.filter(function (x) { return x.id === id; })[0];
+        const hidden = !!prefs.hidden[id];
+        return '<li draggable="true" data-id="' + id + '" class="block-row' + (hidden ? ' is-hidden' : '') + '">' +
+          '<span class="drag-handle" aria-hidden="true">⠿</span>' +
+          '<label class="block-toggle"><input type="checkbox" ' + (hidden ? '' : 'checked') + ' data-toggle="' + id + '"><span>' + escapeHtml(b.title) + '</span></label>' +
+          '</li>';
+      }).join('');
+
+      Array.prototype.forEach.call(listEl.querySelectorAll('input[data-toggle]'), function (cb) {
+        cb.addEventListener('change', function () {
+          const id = cb.getAttribute('data-toggle');
+          prefs.hidden[id] = !cb.checked;
+          savePrefs(); renderAll(); renderSettingsDrawer();
+        });
+      });
+
+      let draggingEl = null;
+      Array.prototype.forEach.call(listEl.querySelectorAll('li'), function (li) {
+        li.addEventListener('dragstart', function () { draggingEl = li; li.classList.add('dragging'); });
+        li.addEventListener('dragend', function () {
+          li.classList.remove('dragging');
+          draggingEl = null;
+          prefs.order = Array.prototype.map.call(listEl.children, function (el) { return el.getAttribute('data-id'); });
+          savePrefs(); renderAll();
+        });
+        li.addEventListener('dragover', function (e) {
+          e.preventDefault();
+          if (!draggingEl || draggingEl === li) return;
+          const rect = li.getBoundingClientRect();
+          const before = (e.clientY - rect.top) < rect.height / 2;
+          listEl.insertBefore(draggingEl, before ? li : li.nextSibling);
+        });
+      });
+    }
+
+    // ============================================================
+    // Câblage UI
+    // ============================================================
+    const drawer = document.getElementById('settings-drawer');
+    const overlay = document.getElementById('settings-overlay');
+    function openDrawer() { drawer.classList.add('open'); overlay.classList.add('open'); }
+    function closeDrawer() { drawer.classList.remove('open'); overlay.classList.remove('open'); }
+    document.getElementById('open-settings-btn').addEventListener('click', openDrawer);
+    document.getElementById('close-settings-btn').addEventListener('click', closeDrawer);
+    overlay.addEventListener('click', closeDrawer);
+    document.getElementById('print-btn').addEventListener('click', function () { window.print(); });
+    document.getElementById('reset-settings').addEventListener('click', function () {
+      prefs = defaultPrefs();
+      applyTheme(); savePrefs(); renderThemeControls(); renderSettingsDrawer(); renderAll();
+    });
+
+    applyTheme();
+    renderThemeControls();
+    renderSettingsDrawer();
+
+    // ============================================================
+    // Intégration Grist
+    // ============================================================
+    grist.ready({ requiredAccess: 'read table' });
+
+    loadSitesTable().then(function () { if (currentRecord) renderAll(); });
+
+    grist.onRecord(function (record) {
+      currentRecord = record;
+      renderAll();
+    });
+
+    grist.onOptions(function (options) {
+      prefs = mergeDefaults(options && options.fichePrefs);
+      applyTheme();
+      renderThemeControls();
+      renderSettingsDrawer();
+      if (currentRecord) renderAll();
+    });
+
+  })();
+  </script>
+</body>
+</html>
