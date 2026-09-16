@@ -121,7 +121,6 @@
         <div class="search-row">
           <input id="searchInput" class="search-input" type="text" placeholder="Rechercher un nom, un SIRET, une commune...">
           <button type="button" class="btn btn-primary" id="checkAllBtn">🔎 Vérifier les dossiers visibles</button>
-          <button type="button" class="btn" id="refreshBtn">↻ Actualiser Grist</button>
         </div>
         <div class="chip-row" id="filterChips"></div>
         <div class="meta" id="meta">Chargement...</div>
@@ -222,7 +221,6 @@
     const ficheContent = document.getElementById("ficheContent");
     const backBtn = document.getElementById("backBtn");
     const checkAllBtn = document.getElementById("checkAllBtn");
-    const refreshBtn = document.getElementById("refreshBtn");
 
     async function loadEverything() {
       metaEl.textContent = "Chargement des dossiers...";
@@ -485,22 +483,6 @@
 
     searchInput.addEventListener("input", renderTable);
     checkAllBtn.addEventListener("click", checkAllVisible);
-    refreshBtn.addEventListener("click", async () => {
-      refreshBtn.disabled = true;
-      refreshBtn.textContent = "Actualisation...";
-      try {
-        const previous = new Map(allDossiers.map(d => [d.demandeurId, d.vigie]));
-        await loadEverything();
-        allDossiers.forEach(d => { if (previous.has(d.demandeurId) && previous.get(d.demandeurId).status !== "pending") d.vigie = previous.get(d.demandeurId); });
-        renderAll();
-      } catch (err) {
-        console.error("Erreur actualisation :", err);
-        metaEl.textContent = "Erreur lors de l'actualisation : " + (err.message || err);
-      } finally {
-        refreshBtn.disabled = false;
-        refreshBtn.textContent = "↻ Actualiser Grist";
-      }
-    });
 
     // ================= Fiche détail =================
     function renderFieldRow(key, rawValue) {
