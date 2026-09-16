@@ -141,6 +141,7 @@
     // ================= Constantes =================
     const DOSSIERS_TABLE = "Demarche_155804_dossiers";
     const DEMANDEURS_TABLE = "Demarche_155804_demandeurs";
+    const ANNOTATIONS_TABLE = "Demarche_155804_annotations";
     const RE_API = "https://recherche-entreprises.api.gouv.fr/search";
     const BODACC_API = "https://bodacc-datadila.opendatasoft.com/api/explore/v2.1/catalog/datasets/annonces-commerciales/records";
     const CACHE_PREFIX = "vigie-entreprise-cache:";
@@ -186,7 +187,10 @@
       dossier_number: "N° de dossier", state: "État du dossier", suivi_par: "Suivi par",
       siret: "SIRET", raison_sociale: "Raison sociale", nom_commercial: "Nom commercial",
       forme_juridique: "Forme juridique", etat_administratif: "État administratif (déclaré)",
-      ville: "Commune", code_postal: "Code postal", Liquidation: "Liquidation (Grist)", AREA: "Bénéficiaire AREA"
+      ville: "Commune", code_postal: "Code postal", AREA: "Bénéficiaire AREA", GAEC: "GAEC",
+      le_dossier_est_eligible: "Dossier éligible", dossier_accepte: "Dossier accepté",
+      motif_de_rejet: "Motif de rejet", critere_area_retenu_par_la_ddtm: "Critère AREA retenu (DDTM)",
+      l_exploitation_fait_elle_l_objet_d_une_procedure_de_liquidation_judiciaire: "Liquidation judiciaire (annotation)"
     };
     function labelFor(col) { return FIELD_LABELS[col] || String(col).replace(/_/g, " ").replace(/^./, c => c.toUpperCase()); }
 
@@ -222,9 +226,10 @@
 
     async function loadEverything() {
       metaEl.textContent = "Chargement des dossiers...";
-      const [dossiersRaw, demandeursRaw] = await Promise.all([
+      const [dossiersRaw, demandeursRaw, annotationsRaw] = await Promise.all([
         fetchTableRaw(DOSSIERS_TABLE),
-        fetchTableRaw(DEMANDEURS_TABLE)
+        fetchTableRaw(DEMANDEURS_TABLE),
+        fetchTableRaw(ANNOTATIONS_TABLE).catch(err => { console.warn("Table annotations indisponible :", err); return null; })
       ]);
       const dossiersCols = columnsFromRaw(dossiersRaw);
       const dossiersRows = rowsFromRaw(dossiersRaw, dossiersCols);
@@ -237,9 +242,19 @@
         if (key) dossiersByNumber.set(key, d);
       });
 
+      const annotationsByNumber = new Map();
+      if (annotationsRaw) {
+        const annotationsCols = columnsFromRaw(annotationsRaw);
+        rowsFromRaw(annotationsRaw, annotationsCols).forEach(a => {
+          const key = String(a.dossier_number || "").trim();
+          if (key) annotationsByNumber.set(key, a);
+        });
+      }
+
       allDossiers = demandeursRows.map(demandeur => {
         const key = String(demandeur.dossier_number || "").trim();
         const dossier = dossiersByNumber.get(key) || null;
+        const annotation = annotationsByNumber.get(key) || null;
         const siren = onlyDigits(demandeur.siret).slice(0, 9);
         return {
           demandeurId: demandeur.id,
@@ -251,6 +266,7 @@
           code_postal: demandeur.code_postal,
           demandeur,
           dossier,
+          annotation,
           vigie: siren ? (loadCachedVigie(siren) || { status: "pending" }) : { status: "no-siret" }
         };
       });
@@ -505,10 +521,9 @@
 
       const alerts = [];
       const entreprise = v.entreprise;
-      const grist = {
-        etatDeclare: d.demandeur.etat_administratif,
-        liquidationGrist: !!d.demandeur.Liquidation
-      };
+      // La case "liquidation judiciaire" n'est plus portée par Demarche_155804_demandeurs :
+      // c'est une annotation saisie par l'instructeur dans Demarche_155804_annotations.
+      const liquidationGrist = !!(d.annotation && d.annotation.l_exploitation_fait_elle_l_objet_d_une_procedure_de_liquidation_judiciaire);
 
       if (entreprise && entreprise.etat_administratif && entreprise.etat_administratif !== "A") {
         alerts.push({ level: "warn", text: `L'entreprise apparaît comme <b>cessée</b> (état administratif "${escapeHtml(entreprise.etat_administratif)}") dans l'annuaire officiel des entreprises.` });
@@ -516,11 +531,14 @@
       const insolvency = (v.bodacc || []).filter(r => r.natureKey && r.natureKey !== "cloture");
       if (insolvency.length) {
         alerts.push({ level: "alert", text: `${insolvency.length} annonce(s) BODACC évoquant une procédure collective (liquidation / redressement / sauvegarde) ont été trouvées pour ce SIREN.` });
-        if (!grist.liquidationGrist) {
-          alerts.push({ level: "alert", text: `⚠ Écart détecté : le champ "Liquidation" dans Grist n'est pas coché alors que le BODACC signale une procédure. À vérifier manuellement.` });
+        if (!liquidationGrist) {
+          alerts.push({ level: "alert", text: `⚠ Écart détecté : l'annotation "Liquidation judiciaire" n'est pas cochée dans Grist alors que le BODACC signale une procédure. À vérifier manuellement.` });
         }
-      } else if (grist.liquidationGrist) {
-        alerts.push({ level: "warn", text: `Le champ "Liquidation" dans Grist est coché, mais aucune procédure correspondante n'a été retrouvée au BODACC pour ce SIREN (peut être antérieure à la période indexée, ou saisie manuelle).` });
+      } else if (liquidationGrist) {
+        alerts.push({ level: "warn", text: `L'annotation "Liquidation judiciaire" est cochée dans Grist, mais aucune procédure correspondante n'a été retrouvée au BODACC pour ce SIREN (peut être antérieure à la période indexée, ou saisie manuelle).` });
+      }
+      if (!d.annotation) {
+        alerts.push({ level: "warn", text: `Aucune ligne d'annotation trouvée pour ce dossier dans "${escapeHtml(ANNOTATIONS_TABLE)}" — la comparaison avec la liquidation judiciaire déclarée n'a pas pu être faite.` });
       }
       if (v.entrepriseError) alerts.push({ level: "warn", text: `Recherche d'Entreprises indisponible : ${escapeHtml(v.entrepriseError)}` });
       if (v.bodaccError) alerts.push({ level: "warn", text: `BODACC indisponible : ${escapeHtml(v.bodaccError)}` });
@@ -575,20 +593,24 @@
       ficheView.style.display = "block";
 
       const meta = statusMeta(d.vigie ? d.vigie.status : "pending");
+      const liquidationGrist = !!(d.annotation && d.annotation.l_exploitation_fait_elle_l_objet_d_une_procedure_de_liquidation_judiciaire);
       const header = `
         <div class="fiche-header">
           <div class="title">${escapeHtml(d.nom || "Dossier " + (d.dossier_number || ""))}</div>
           <div class="sub">Dossier n° ${escapeHtml(d.dossier_number || "—")} · SIRET ${escapeHtml(d.siret || "—")}</div>
           <div class="badges">
             <span class="tag ${meta.cls}">${escapeHtml(meta.label)}</span>
-            ${d.demandeur.Est_un_GAEC ? `<span class="tag tag-flag">GAEC</span>` : ""}
+            ${d.demandeur.GAEC ? `<span class="tag tag-flag">GAEC</span>` : ""}
             ${d.demandeur.AREA ? `<span class="tag tag-flag">Bénéficiaire AREA</span>` : ""}
+            ${d.annotation && d.annotation.dossier_accepte ? `<span class="tag tag-ok">✓ Accepté (annotation)</span>` : ""}
+            ${liquidationGrist ? `<span class="tag tag-alert">⚠ Liquidation judiciaire (annotation)</span>` : ""}
           </div>
         </div>
       `;
 
-      const demandeurKeys = ["type", "usager_email", "siret", "siren", "raison_sociale", "nom_commercial", "forme_juridique", "etat_administratif", "street_address", "code_postal", "ville"];
+      const demandeurKeys = ["type", "usager_email", "siret", "siren", "raison_sociale", "nom_commercial", "forme_juridique", "etat_administratif", "street_address", "code_postal", "ville", "GAEC", "AREA"];
       const dossierKeys = ["state", "date_depot", "date_derniere_modification", "suivi_par"];
+      const annotationKeys = ["l_exploitation_fait_elle_l_objet_d_une_procedure_de_liquidation_judiciaire", "le_dossier_est_eligible", "dossier_accepte", "motif_de_rejet", "critere_area_retenu_par_la_ddtm"];
 
       ficheContent.innerHTML = `
         ${header}
@@ -596,6 +618,7 @@
           <div class="fiche-col">
             ${renderSection("Déclaré dans Grist", d.demandeur, demandeurKeys)}
             ${d.dossier ? renderSection("Dossier (Démarches Simplifiées)", d.dossier, dossierKeys) : ""}
+            ${d.annotation ? renderSection("Instruction (annotations)", d.annotation, annotationKeys) : `<div class="section"><div class="section-header">Instruction (annotations)</div><div class="section-body"><div class="section-empty">Aucune annotation "${escapeHtml(ANNOTATIONS_TABLE)}" pour ce dossier.</div></div></div>`}
           </div>
           <div class="fiche-col">
             ${renderVigieSection(d)}
