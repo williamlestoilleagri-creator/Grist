@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Matrice des droits</title>
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 16px; font-family: Arial, sans-serif; background: #f5f7fb; color: #1f2937; }
+    .container { width: 100%; max-width: 1100px; margin: 0 auto; }
+
+    h1 { font-size: 18px; font-weight: 700; color: #111827; margin: 0 0 4px; }
+    .subtitle { font-size: 12.5px; color: #6b7280; margin: 0 0 10px; }
+
+    .info-banner {
+      background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; border-radius: 12px;
+      padding: 10px 14px; font-size: 12px; line-height: 1.6; margin-bottom: 12px;
+    }
+    .info-banner b { color: #1e3a8a; }
+
+    .setup-card {
+      background: #fff; border: 1px dashed #d1d5db; border-radius: 14px; padding: 20px;
+      text-align: center; color: #374151;
+    }
+    .setup-card p { font-size: 13.5px; line-height: 1.6; margin: 0 0 14px; }
+    .btn {
+      border: 1px solid #d1d5db; background: #fff; color: #374151; border-radius: 10px;
+      padding: 9px 16px; font-size: 13px; font-weight: 700; cursor: pointer;
+    }
+    .btn:hover { border-color: #93c5fd; }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-primary { background: #2563eb; color: #fff; border-color: #2563eb; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-small { padding: 5px 10px; font-size: 12px; }
+
+    .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+    .view-toggle { display: flex; gap: 4px; background: #f3f4f6; border-radius: 999px; padding: 3px; }
+    .view-btn { border: none; background: transparent; color: #6b7280; font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 999px; cursor: pointer; }
+    .view-btn.active { background: #2563eb; color: #fff; }
+    .meta { font-size: 12px; color: #6b7280; }
+
+    /* ---------- Matrice ---------- */
+    .matrix-wrap { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; overflow: auto; }
+    table.matrix { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+    table.matrix th, table.matrix td { border-bottom: 1px solid #f0f1f4; border-right: 1px solid #f0f1f4; padding: 8px 10px; vertical-align: top; white-space: nowrap; }
+    table.matrix th { background: #f9fafb; font-weight: 700; color: #374151; text-align: left; position: sticky; top: 0; }
+    table.matrix td:first-child, table.matrix th:first-child {
+      position: sticky; left: 0; background: #f9fafb; font-weight: 700; color: #111827; z-index: 2;
+    }
+    table.matrix th:first-child { z-index: 3; }
+    .dept-col-header { display: flex; align-items: center; gap: 4px; }
+
+    .cell-rights { display: flex; gap: 3px; flex-wrap: wrap; }
+    .right-toggle {
+      width: 22px; height: 22px; border-radius: 6px; border: 1px solid #e5e7eb; background: #f9fafb;
+      font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #9ca3af;
+    }
+    .right-toggle.on { background: #dcfce7; border-color: #86efac; color: #166534; }
+    .right-toggle:hover { border-color: #93c5fd; }
+    .cell-add-btn {
+      font-size: 11px; color: #2563eb; background: #eff6ff; border: 1px dashed #bfdbfe; border-radius: 6px;
+      padding: 3px 8px; cursor: pointer;
+    }
+    .cell-add-btn:hover { background: #dbeafe; }
+    .role-row-actions { display: flex; gap: 4px; margin-top: 4px; }
+    .icon-link { background: none; border: none; color: #9ca3af; font-size: 11px; cursor: pointer; padding: 0; }
+    .icon-link:hover { color: #b91c1c; }
+
+    /* ---------- Vue liste ---------- */
+    .rule-card {
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px 14px; margin-bottom: 8px;
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start;
+    }
+    .rule-field { display: flex; flex-direction: column; gap: 3px; }
+    .rule-field label { font-size: 10.5px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.03em; }
+    .rule-field input[type="text"], .rule-field textarea {
+      font-family: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 8px;
+      outline: none; background: #fff; color: #1f2937;
+    }
+    .rule-field textarea { min-height: 36px; resize: vertical; width: 220px; }
+    .rule-checks { display: flex; gap: 10px; align-items: center; padding-top: 16px; }
+    .rule-check-item { display: flex; align-items: center; gap: 4px; font-size: 12px; color: #374151; }
+    .rule-delete { margin-left: auto; align-self: center; }
+
+    .empty { background: #fff; border: 1px dashed #d1d5db; border-radius: 14px; padding: 20px; text-align: center; color: #6b7280; }
+
+    .footer-note { font-size: 11px; color: #9ca3af; margin-top: 12px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔐 Matrice des droits par rôle et périmètre</h1>
+    <p class="subtitle">Définit qui (rôle) peut faire quoi, éventuellement limité à un département — stocké dans une vraie table Grist</p>
+
+    <div class="info-banner">
+      <b>Important :</b> ce widget ne peut pas, à lui seul, empêcher un utilisateur de voir ou modifier des données ailleurs dans le document —
+      un widget custom n'a pas ce pouvoir. Il sert à <b>définir et documenter</b> la matrice de droits voulue, dans une table Grist normale.
+      Pour une application réelle, il faut ensuite configurer les <b>Access Rules</b> natives de Grist (Paramètres du document → Règles d'accès)
+      avec une formule qui consulte cette table selon l'utilisateur connecté (ex. via son rôle ou son email) et le département de la ligne concernée.
+      Dis-moi les noms de rôles réels et comment ils sont rattachés à chaque utilisateur (email, groupe...) et je peux t'aider à rédiger la formule exacte.
+    </div>
+
+    <div id="setupView"></div>
+
+    <div id="mainView" style="display:none;">
+      <div class="toolbar">
+        <div class="view-toggle" id="viewToggle">
+          <button type="button" class="view-btn active" data-mode="matrix">Vue matrice</button>
+          <button type="button" class="view-btn" data-mode="list">Vue liste (détail)</button>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span class="meta" id="meta"></span>
+          <button type="button" class="btn btn-small" id="addRoleBtn">+ Ajouter un rôle</button>
+          <button type="button" class="btn btn-small" id="refreshBtn">↻ Actualiser</button>
+        </div>
+      </div>
+      <div id="content"></div>
+      <div class="footer-note" id="legendNote"></div>
+    </div>
+  </div>
+
+  <script>
+    // ================= Constantes =================
+    const DEMANDEURS_TABLE = "Demarche_155804_demandeurs";
+    const RIGHTS_TABLE_NAME = "Droits_Acces";
+    const DEFAULT_DEPT_KEY = ""; // ligne "Tous les départements"
+
+    const RIGHTS_FIELDS = [
+      { key: "Peut_Voir", label: "Voir les dossiers", icon: "👁" },
+      { key: "Peut_Modifier_Suivi", label: "Modifier le suivi (Suivi_dossier)", icon: "✎" },
+      { key: "Peut_Changer_Statut", label: "Changer le statut du pipeline", icon: "🔀" },
+      { key: "Peut_Exporter", label: "Exporter les données", icon: "⬇" }
+    ];
+
+    // ================= Utilitaires =================
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+    function stripAccents(str) { return String(str ?? "").normalize("NFD").replace(/[̀-ͯ]/g, ""); }
+    function normalize(value) { return stripAccents(String(value ?? "")).toLowerCase().trim(); }
+
+    async function fetchTableRaw(tableId) { return await grist.docApi.fetchTable(tableId); }
+    function columnsFromRaw(raw) { return Object.keys(raw).filter(c => c !== "id" && !c.startsWith("gristHelper")); }
+    function rowsFromRaw(raw, cols) {
+      const ids = raw.id || [];
+      return ids.map((id, i) => {
+        const row = { id };
+        cols.forEach(c => (row[c] = raw[c][i]));
+        return row;
+      });
+    }
+
+    // ================= État global =================
+    let rightsTableId = null;
+    let rightsRows = [];
+    let departements = [];
+    let viewMode = "matrix";
+
+    const setupView = document.getElementById("setupView");
+    const mainView = document.getElementById("mainView");
+    const contentEl = document.getElementById("content");
+    const metaEl = document.getElementById("meta");
+    const legendNoteEl = document.getElementById("legendNote");
+    const viewToggleEl = document.getElementById("viewToggle");
+    const addRoleBtn = document.getElementById("addRoleBtn");
+    const refreshBtn = document.getElementById("refreshBtn");
+
+    function isRightsTableId(tableId) {
+      const n = stripAccents(tableId).toLowerCase().replace(/[^a-z]/g, "");
+      return n.includes("droit");
+    }
+
+    async function detectRightsTable() {
+      const tableIds = await grist.docApi.listTables();
+      return tableIds.find(isRightsTableId) || null;
+    }
+
+    async function createRightsTable() {
+      await grist.docApi.applyUserActions([
+        ["AddTable", RIGHTS_TABLE_NAME, [
+          { id: "Role", type: "Text" },
+          { id: "Departement", type: "Text" },
+          { id: "Peut_Voir", type: "Bool" },
+          { id: "Peut_Modifier_Suivi", type: "Bool" },
+          { id: "Peut_Changer_Statut", type: "Bool" },
+          { id: "Peut_Exporter", type: "Bool" },
+          { id: "Commentaire", type: "Text" }
+        ]]
+      ]);
+    }
+
+    async function loadDepartements() {
+      try {
+        const raw = await fetchTableRaw(DEMANDEURS_TABLE);
+        const cols = columnsFromRaw(raw);
+        const rows = rowsFromRaw(raw, cols);
+        const set = new Set(rows.map(r => String(r.departement || "").trim()).filter(Boolean));
+        departements = [...set].sort((a, b) => a.localeCompare(b, "fr"));
+      } catch (e) {
+        console.warn("Impossible de lire les départements depuis", DEMANDEURS_TABLE, e);
+        departements = [];
+      }
+    }
+
+    async function loadRights() {
+      const raw = await fetchTableRaw(rightsTableId);
+      const cols = columnsFromRaw(raw);
+      rightsRows = rowsFromRaw(raw, cols);
+    }
+
+    function getRoles() {
+      return [...new Set(rightsRows.map(r => r.Role).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), "fr"));
+    }
+    function findRule(role, dept) {
+      return rightsRows.find(r => r.Role === role && String(r.Departement || "") === dept);
+    }
+
+    async function toggleRight(role, dept, fieldKey) {
+      const existing = findRule(role, dept);
+      try {
+        if (existing) {
+          await grist.docApi.applyUserActions([["UpdateRecord", rightsTableId, existing.id, { [fieldKey]: !existing[fieldKey] }]]);
+        } else {
+          const fields = { Role: role, Departement: dept };
+          RIGHTS_FIELDS.forEach(f => (fields[f.key] = f.key === fieldKey));
+          await grist.docApi.applyUserActions([["AddRecord", rightsTableId, null, fields]]);
+        }
+        await loadRights();
+        render();
+      } catch (err) {
+        console.error("Erreur mise à jour du droit :", err);
+        alert("Impossible de mettre à jour ce droit (" + (err.message || err) + ").");
+      }
+    }
+
+    async function addOverride(role, dept) {
+      const defaultRule = findRule(role, DEFAULT_DEPT_KEY);
+      const fields = { Role: role, Departement: dept };
+      RIGHTS_FIELDS.forEach(f => (fields[f.key] = defaultRule ? !!defaultRule[f.key] : false));
+      try {
+        await grist.docApi.applyUserActions([["AddRecord", rightsTableId, null, fields]]);
+        await loadRights();
+        render();
+      } catch (err) {
+        console.error("Erreur création de l'exception :", err);
+        alert("Impossible de créer cette exception (" + (err.message || err) + ").");
+      }
+    }
+
+    async function addRole() {
+      const name = prompt("Nom du nouveau rôle (ex. \"Instructeur DDTM\", \"Responsable régional\", \"Lecture seule\")");
+      if (!name || !name.trim()) return;
+      const role = name.trim();
+      if (getRoles().includes(role)) { alert("Ce rôle existe déjà."); return; }
+      try {
+        const fields = { Role: role, Departement: DEFAULT_DEPT_KEY };
+        RIGHTS_FIELDS.forEach(f => (fields[f.key] = false));
+        await grist.docApi.applyUserActions([["AddRecord", rightsTableId, null, fields]]);
+        await loadRights();
+        render();
+      } catch (err) {
+        console.error("Erreur création du rôle :", err);
+        alert("Impossible de créer ce rôle (" + (err.message || err) + ").");
+      }
+    }
+
+    async function deleteRule(id) {
+      if (!confirm("Supprimer cette règle ?")) return;
+      try {
+        await grist.docApi.applyUserActions([["RemoveRecord", rightsTableId, id]]);
+        await loadRights();
+        render();
+      } catch (err) {
+        console.error("Erreur suppression :", err);
+        alert("Impossible de supprimer cette règle (" + (err.message || err) + ").");
+      }
+    }
+
+    async function updateRuleField(id, fieldKey, value) {
+      try {
+        await grist.docApi.applyUserActions([["UpdateRecord", rightsTableId, id, { [fieldKey]: value }]]);
+        const row = rightsRows.find(r => r.id === id);
+        if (row) row[fieldKey] = value;
+      } catch (err) {
+        console.error("Erreur mise à jour :", err);
+        alert("Impossible d'enregistrer (" + (err.message || err) + ").");
+      }
+    }
+
+    // ================= Rendu : vue matrice =================
+    function renderMatrixView() {
+      const roles = getRoles();
+      if (!roles.length) {
+        contentEl.innerHTML = `<div class="empty">Aucun rôle défini pour l'instant. Cliquez sur "+ Ajouter un rôle" pour commencer.</div>`;
+        return;
+      }
+
+      const deptColumns = [{ key: DEFAULT_DEPT_KEY, label: "Tous (défaut)" }, ...departements.map(d => ({ key: d, label: d }))];
+
+      const headHtml = deptColumns.map(c => `<th>${escapeHtml(c.label)}</th>`).join("");
+      const bodyHtml = roles.map(role => {
+        const cells = deptColumns.map(c => {
+          const rule = findRule(role, c.key);
+          if (!rule) {
+            if (c.key === DEFAULT_DEPT_KEY) return `<td><span class="cell-rights">${RIGHTS_FIELDS.map(f => rightToggleHtml(role, c.key, f, false)).join("")}</span></td>`;
+            return `<td><button type="button" class="cell-add-btn" data-role="${escapeHtml(role)}" data-dept="${escapeHtml(c.key)}">+ exception</button></td>`;
+          }
+          const toggles = RIGHTS_FIELDS.map(f => rightToggleHtml(role, c.key, f, !!rule[f.key])).join("");
+          const del = c.key !== DEFAULT_DEPT_KEY ? `<div class="role-row-actions"><button type="button" class="icon-link rule-del-btn" data-id="${rule.id}">supprimer l'exception</button></div>` : "";
+          return `<td><span class="cell-rights">${toggles}</span>${del}</td>`;
+        }).join("");
+        return `<tr><td>${escapeHtml(role)}</td>${cells}</tr>`;
+      }).join("");
+
+      contentEl.innerHTML = `
+        <div class="matrix-wrap">
+          <table class="matrix">
+            <thead><tr><th>Rôle</th>${headHtml}</tr></thead>
+            <tbody>${bodyHtml}</tbody>
+          </table>
+        </div>
+      `;
+
+      contentEl.querySelectorAll(".right-toggle").forEach(btn => {
+        btn.addEventListener("click", () => toggleRight(btn.dataset.role, btn.dataset.dept, btn.dataset.field));
+      });
+      contentEl.querySelectorAll(".cell-add-btn").forEach(btn => {
+        btn.addEventListener("click", () => addOverride(btn.dataset.role, btn.dataset.dept));
+      });
+      contentEl.querySelectorAll(".rule-del-btn").forEach(btn => {
+        btn.addEventListener("click", () => deleteRule(Number(btn.dataset.id)));
+      });
+
+      legendNoteEl.textContent = RIGHTS_FIELDS.map(f => `${f.icon} = ${f.label}`).join("  ·  ") + ". Cliquez une icône pour l'activer/désactiver. \"+ exception\" crée une règle spécifique à ce département (sinon la colonne \"Tous\" s'applique).";
+    }
+
+    function rightToggleHtml(role, dept, field, on) {
+      return `<button type="button" class="right-toggle ${on ? "on" : ""}" title="${escapeHtml(field.label)}" data-role="${escapeHtml(role)}" data-dept="${escapeHtml(dept)}" data-field="${field.key}">${field.icon}</button>`;
+    }
+
+    // ================= Rendu : vue liste =================
+    function renderListView() {
+      const sorted = rightsRows.slice().sort((a, b) => {
+        const r = String(a.Role || "").localeCompare(String(b.Role || ""), "fr");
+        if (r !== 0) return r;
+        return String(a.Departement || "").localeCompare(String(b.Departement || ""), "fr");
+      });
+      if (!sorted.length) {
+        contentEl.innerHTML = `<div class="empty">Aucune règle pour l'instant. Cliquez sur "+ Ajouter un rôle" pour commencer.</div>`;
+        return;
+      }
+      contentEl.innerHTML = sorted.map(r => `
+        <div class="rule-card" data-id="${r.id}">
+          <div class="rule-field">
+            <label>Rôle</label>
+            <input type="text" value="${escapeHtml(r.Role || "")}" data-field="Role">
+          </div>
+          <div class="rule-field">
+            <label>Département (vide = tous)</label>
+            <input type="text" value="${escapeHtml(r.Departement || "")}" data-field="Departement" placeholder="Tous">
+          </div>
+          <div class="rule-checks">
+            ${RIGHTS_FIELDS.map(f => `
+              <label class="rule-check-item">
+                <input type="checkbox" data-field="${f.key}" ${r[f.key] ? "checked" : ""}>
+                ${escapeHtml(f.icon)} ${escapeHtml(f.label)}
+              </label>
+            `).join("")}
+          </div>
+          <div class="rule-field">
+            <label>Commentaire</label>
+            <textarea data-field="Commentaire" placeholder="Note libre...">${escapeHtml(r.Commentaire || "")}</textarea>
+          </div>
+          <button type="button" class="btn btn-small rule-delete" data-id="${r.id}">🗑 Supprimer</button>
+        </div>
+      `).join("");
+
+      contentEl.querySelectorAll(".rule-card").forEach(card => {
+        const id = Number(card.dataset.id);
+        card.querySelectorAll('input[type="text"], textarea').forEach(input => {
+          input.addEventListener("change", () => updateRuleField(id, input.dataset.field, input.value.trim()));
+        });
+        card.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+          cb.addEventListener("change", () => updateRuleField(id, cb.dataset.field, cb.checked));
+        });
+      });
+      contentEl.querySelectorAll(".rule-delete").forEach(btn => {
+        btn.addEventListener("click", () => deleteRule(Number(btn.dataset.id)));
+      });
+
+      legendNoteEl.textContent = "Vue détaillée, une ligne = une règle (un rôle, pour tous les départements ou un seul). Les modifications s'enregistrent au changement de champ.";
+    }
+
+    function render() {
+      metaEl.textContent = `${rightsRows.length} règle(s) sur ${getRoles().length} rôle(s), ${departements.length} département(s) détecté(s) dans ${DEMANDEURS_TABLE}.`;
+      if (viewMode === "matrix") renderMatrixView(); else renderListView();
+    }
+
+    viewToggleEl.querySelectorAll(".view-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        viewMode = btn.dataset.mode;
+        viewToggleEl.querySelectorAll(".view-btn").forEach(b => b.classList.toggle("active", b === btn));
+        render();
+      });
+    });
+    addRoleBtn.addEventListener("click", addRole);
+    refreshBtn.addEventListener("click", async () => {
+      refreshBtn.disabled = true;
+      try {
+        await loadDepartements();
+        await loadRights();
+        render();
+      } finally {
+        refreshBtn.disabled = false;
+      }
+    });
+
+    // ================= Initialisation =================
+    async function boot() {
+      rightsTableId = await detectRightsTable();
+      if (!rightsTableId) {
+        setupView.innerHTML = `
+          <div class="setup-card">
+            <p>Aucune table de droits détectée dans ce document (nom technique attendu contenant "droit", ex. "${escapeHtml(RIGHTS_TABLE_NAME)}").<br>
+            Créer la table maintenant avec les colonnes Role, Departement, Peut_Voir, Peut_Modifier_Suivi, Peut_Changer_Statut, Peut_Exporter, Commentaire ?</p>
+            <button type="button" class="btn btn-primary" id="createTableBtn">Créer la table "${escapeHtml(RIGHTS_TABLE_NAME)}"</button>
+          </div>
+        `;
+        document.getElementById("createTableBtn").addEventListener("click", async (e) => {
+          e.target.disabled = true;
+          e.target.textContent = "Création...";
+          try {
+            await createRightsTable();
+            rightsTableId = await detectRightsTable();
+            if (!rightsTableId) throw new Error("Table créée mais introuvable au redémarrage de la détection.");
+            setupView.innerHTML = "";
+            mainView.style.display = "block";
+            await loadDepartements();
+            await loadRights();
+            render();
+          } catch (err) {
+            console.error("Erreur création table :", err);
+            e.target.disabled = false;
+            e.target.textContent = "Créer la table \"" + RIGHTS_TABLE_NAME + "\"";
+            alert("Échec de la création (" + (err.message || err) + "). Tu peux aussi créer la table manuellement dans Grist avec ce nom et ces colonnes, le widget la détectera automatiquement.");
+          }
+        });
+        return;
+      }
+      mainView.style.display = "block";
+      await loadDepartements();
+      await loadRights();
+      render();
+    }
+
+    grist.ready({ requiredAccess: "full" });
+    boot().catch(err => {
+      console.error("Erreur d'initialisation :", err);
+      setupView.innerHTML = `<div class="empty">Erreur au chargement (${escapeHtml(err.message || err)}). Vérifie que le widget a l'accès complet au document.</div>`;
+    });
+  </script>
+</body>
+</html>
