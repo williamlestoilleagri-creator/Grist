@@ -21,16 +21,33 @@
 
     .toolbar-wrap { position: sticky; top: 0; z-index: 10; background: #f5f7fb; padding-bottom: 10px; }
 
-    .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
-    .tab {
-      flex: 1 1 130px; min-width: 130px; text-align: left; cursor: pointer;
-      background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 10px 12px;
-      transition: all 0.15s ease;
+    .criteria-panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 10px 12px; margin-bottom: 10px; }
+    .criteria-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+    .criteria-title { font-size: 12.5px; font-weight: 700; color: #374151; }
+    .combo-toggle { display: flex; gap: 4px; background: #f3f4f6; border-radius: 999px; padding: 3px; }
+    .combo-btn {
+      border: none; background: transparent; color: #6b7280; font-size: 11.5px; font-weight: 700;
+      padding: 5px 11px; border-radius: 999px; cursor: pointer;
     }
-    .tab:hover { border-color: #93c5fd; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-    .tab.active { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12); }
-    .tab .num { font-size: 22px; font-weight: 700; line-height: 1.1; }
-    .tab .lbl { font-size: 11.5px; font-weight: 600; margin-top: 2px; }
+    .combo-btn.active { background: #2563eb; color: #fff; }
+    .reset-link { background: none; border: none; color: #2563eb; font-size: 11.5px; font-weight: 700; cursor: pointer; padding: 4px 2px; }
+    .reset-link:hover { text-decoration: underline; }
+
+    .criteria-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .crit-chip {
+      display: inline-flex; align-items: center; gap: 6px; border: 1px solid #d1d5db; background: #fff;
+      border-radius: 999px; padding: 5px 6px 5px 10px; font-size: 12px; cursor: pointer; user-select: none;
+    }
+    .crit-chip:hover { border-color: #93c5fd; }
+    .crit-chip.checked { background: #eff6ff; border-color: #2563eb; color: #1d4ed8; font-weight: 700; }
+    .crit-chip input { accent-color: #2563eb; cursor: pointer; }
+    .crit-chip .crit-kind { font-size: 10px; opacity: 0.6; }
+    .crit-chip .crit-count {
+      font-size: 10.5px; font-weight: 700; background: #f3f4f6; color: #6b7280;
+      border-radius: 999px; padding: 1px 7px;
+    }
+    .crit-chip.checked .crit-count { background: #dbeafe; color: #1d4ed8; }
+    .criteria-empty { font-size: 12px; color: #9ca3af; font-style: italic; }
 
     .search-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
     .search-input { flex: 1; padding: 10px 13px; border: 1px solid #d1d5db; border-radius: 14px; font-size: 14px; outline: none; background: #fff; }
@@ -103,7 +120,19 @@
       <div class="warn-banner" id="msaWarnBanner">⚠ Les colonnes "MSA" / "Date_MSA" sont introuvables dans Demarche_155804_demandeurs pour l'instant — l'onglet MSA restera vide tant qu'elles n'existent pas ou que la table n'a pas été resynchronisée.</div>
 
       <div class="toolbar-wrap">
-        <div class="tabs" id="tabs"></div>
+        <div class="criteria-panel">
+          <div class="criteria-header">
+            <span class="criteria-title">Critères (cochez-en un ou plusieurs)</span>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div class="combo-toggle" id="comboToggle">
+                <button type="button" class="combo-btn" data-mode="or">Au moins un (OU)</button>
+                <button type="button" class="combo-btn" data-mode="and">Tous (ET)</button>
+              </div>
+              <button type="button" class="reset-link" id="resetCriteriaBtn">Tout décocher</button>
+            </div>
+          </div>
+          <div class="criteria-list" id="criteriaList"></div>
+        </div>
         <div class="search-row">
           <input id="searchInput" class="search-input" type="text" placeholder="Rechercher un nom, un SIRET, une commune...">
           <button type="button" class="refresh-btn" id="refreshBtn">↻ Actualiser</button>
@@ -127,14 +156,10 @@
     const AREA_TABLE = "DATA_AREA";
     const ASSOCIES_TABLE = "Associes";
 
-    const TAB_META = {
-      all: { label: "Tous les dossiers", cls: "" },
-      area: { label: "AREA", cls: "tag-area" },
-      gaec: { label: "GAEC", cls: "tag-gaec" },
-      msa: { label: "MSA", cls: "tag-msa" },
-      legumes: { label: "Surface légumes", cls: "tag-legumes" }
-    };
-    const TAB_ORDER = ["all", "area", "gaec", "msa", "legumes"];
+    // Colonnes à présenter en priorité dans le panneau de critères si elles sont détectées
+    // (les autres colonnes détectées automatiquement suivent, dans l'ordre de la table).
+    const CRITERIA_PRIORITY = ["AREA", "Est_un_GAEC", "MSA", "Date_MSA", "Surface_legume", "Liquidation"];
+    const YES_NO_TEXT_VALUES = new Set(["oui", "non", "vrai", "faux", "true", "false", "1", "0", "x"]);
 
     // ================= Utilitaires =================
     function escapeHtml(value) {
@@ -192,7 +217,7 @@
       street_address: "Adresse", ville: "Commune", code_postal: "Code postal",
       departement: "Département", region: "Région",
       Liquidation: "Liquidation judiciaire", AREA: "Bénéficiaire AREA", MSA: "Suivi MSA", Date_MSA: "Date MSA",
-      Pacage_Report: "N° PACAGE", Est_un_GAEC: "GAEC", Surface_legume: "Surface légumes (DATA_SURFACE_MAR, ha)",
+      Pacage_Report: "N° PACAGE", Est_un_GAEC: "GAEC", Surface_legume: "Surface légumes (ha)",
       Montant_d_aide_total: "Montant d'aide total (AREA)", Beneficiaire_audit: "Bénéficiaire audit",
       Beneficiaire_aide_restructuration: "Bénéficiaire aide restructuration",
       Date_AE_AUDIT: "Date AE audit", Date_AE_AREA: "Date AE AREA",
@@ -219,12 +244,16 @@
     let associesByPacage = new Map();
     let msaColumnsPresent = false;
     let dataLoaded = false;
-    let activeTab = "all";
+    let criteria = [];               // critères détectés automatiquement sur Demarche_155804_demandeurs
+    let activeCriteriaKeys = new Set(); // vide = aucun filtre (tous les dossiers)
+    let combinator = "or";           // "or" = au moins un critère coché, "and" = tous les critères cochés
 
     const searchInput = document.getElementById("searchInput");
     const metaEl = document.getElementById("meta");
     const tableWrap = document.getElementById("tableWrap");
-    const tabsEl = document.getElementById("tabs");
+    const criteriaListEl = document.getElementById("criteriaList");
+    const comboToggleEl = document.getElementById("comboToggle");
+    const resetCriteriaBtn = document.getElementById("resetCriteriaBtn");
     const msaWarnBanner = document.getElementById("msaWarnBanner");
     const listView = document.getElementById("listView");
     const ficheView = document.getElementById("ficheView");
@@ -302,47 +331,107 @@
         };
       });
 
+      criteria = inferCriteria(demandeursCols, demandeursRows);
+      activeCriteriaKeys = new Set([...activeCriteriaKeys].filter(k => criteria.some(c => c.key === k)));
+
       dataLoaded = true;
     }
 
-    // ================= Filtrage / rendu =================
-    function matchesTab(d, tab) {
-      if (tab === "all") return true;
-      if (tab === "area") return d.isArea;
-      if (tab === "gaec") return d.isGaec;
-      if (tab === "msa") return d.isMsa;
-      if (tab === "legumes") return d.hasLegumes;
-      return true;
-    }
+    // Détecte automatiquement, sur Demarche_155804_demandeurs, les colonnes exploitables comme
+    // critères de filtre : booléens (ou texte Oui/Non), colonnes "date" (par le nom), et colonnes
+    // numériques (y compris une RecordSet lookupRecords() de nombres, comme Surface_legume).
+    // Une colonne nouvellement ajoutée (ex. MSA / Date_MSA) devient donc un critère disponible
+    // sans avoir besoin de modifier ce widget.
+    function inferCriteria(cols, demandeursRows) {
+      const found = [];
+      cols.forEach(col => {
+        // Une colonne "date" (par son nom) est proposée même si personne ne l'a encore
+        // renseignée : c'est le cas typique d'une colonne tout juste ajoutée (ex. Date_MSA).
+        const looksDate = /date/.test(stripAccents(col).toLowerCase());
+        if (looksDate) {
+          found.push({
+            key: col, col, kind: "date", label: labelFor(col) + " renseignée",
+            test: d => isTruthy(d.demandeur[col]),
+            display: d => formatAnyDate(d.demandeur[col])
+          });
+          return;
+        }
 
-    function tabCounts() {
-      const counts = { all: allDossiers.length, area: 0, gaec: 0, msa: 0, legumes: 0 };
-      allDossiers.forEach(d => {
-        if (d.isArea) counts.area++;
-        if (d.isGaec) counts.gaec++;
-        if (d.isMsa) counts.msa++;
-        if (d.hasLegumes) counts.legumes++;
+        // Les autres types (booléen, numérique) ne peuvent être déduits qu'à partir de
+        // valeurs réellement présentes : une colonne entièrement vide est ignorée.
+        const nonEmpty = demandeursRows.map(r => r[col]).filter(v => v !== null && v !== undefined && v !== "");
+        if (!nonEmpty.length) return;
+
+        const allBool = nonEmpty.every(v => typeof v === "boolean");
+        const allYesNoText = !allBool && nonEmpty.every(v => typeof v === "string" && YES_NO_TEXT_VALUES.has(normalize(v)));
+        const allNumericish = !allBool && !allYesNoText && nonEmpty.every(v => {
+          if (typeof v === "number") return true;
+          if (!Array.isArray(v)) return false;
+          const items = v[0] === "L" ? v.slice(1) : v;
+          return items.length > 0 && items.every(x => typeof x === "number");
+        });
+
+        if (allBool || allYesNoText) {
+          found.push({
+            key: col, col, kind: "bool", label: labelFor(col),
+            test: d => isTruthy(d.demandeur[col]),
+            display: d => (isTruthy(d.demandeur[col]) ? "Oui" : "—")
+          });
+        } else if (allNumericish) {
+          found.push({
+            key: col, col, kind: "numeric", label: labelFor(col) + " > 0",
+            test: d => numericSum(d.demandeur[col]) > 0,
+            display: d => { const n = numericSum(d.demandeur[col]); return n ? n.toLocaleString("fr-FR") : "—"; }
+          });
+        }
       });
-      return counts;
+      found.sort((a, b) => {
+        const pa = CRITERIA_PRIORITY.indexOf(a.col), pb = CRITERIA_PRIORITY.indexOf(b.col);
+        return (pa === -1 ? 999 : pa) - (pb === -1 ? 999 : pb);
+      });
+      return found;
     }
 
-    function renderTabs() {
-      const counts = tabCounts();
-      tabsEl.innerHTML = TAB_ORDER.map(key => `
-        <div class="tab ${activeTab === key ? "active" : ""}" data-tab="${key}">
-          <div class="num">${counts[key]}</div>
-          <div class="lbl">${escapeHtml(TAB_META[key].label)}</div>
-        </div>
-      `).join("");
-      tabsEl.querySelectorAll(".tab").forEach(el => {
-        el.addEventListener("click", () => { activeTab = el.dataset.tab; renderTable(); renderTabs(); });
+    // ================= Filtrage / rendu =================
+    function activeCriteriaList() { return criteria.filter(c => activeCriteriaKeys.has(c.key)); }
+
+    function renderCriteriaPanel() {
+      comboToggleEl.querySelectorAll(".combo-btn").forEach(btn => btn.classList.toggle("active", btn.dataset.mode === combinator));
+      if (!criteria.length) {
+        criteriaListEl.innerHTML = `<div class="criteria-empty">Aucun critère exploitable détecté sur ${escapeHtml(DEMANDEURS_TABLE)}.</div>`;
+        return;
+      }
+      criteriaListEl.innerHTML = criteria.map(c => {
+        const count = allDossiers.filter(d => c.test(d)).length;
+        const checked = activeCriteriaKeys.has(c.key);
+        const kindIcon = c.kind === "bool" ? "✓" : c.kind === "date" ? "📅" : "#";
+        return `
+          <label class="crit-chip ${checked ? "checked" : ""}">
+            <input type="checkbox" data-key="${escapeHtml(c.key)}" ${checked ? "checked" : ""}>
+            <span class="crit-kind">${kindIcon}</span>
+            <span>${escapeHtml(c.label)}</span>
+            <span class="crit-count">${count}</span>
+          </label>
+        `;
+      }).join("");
+      criteriaListEl.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.addEventListener("change", () => {
+          if (cb.checked) activeCriteriaKeys.add(cb.dataset.key);
+          else activeCriteriaKeys.delete(cb.dataset.key);
+          renderCriteriaPanel();
+          renderTable();
+        });
       });
     }
 
     function getFiltered() {
       const q = normalize(searchInput.value.trim());
+      const activeCrits = activeCriteriaList();
       return allDossiers.filter(d => {
-        if (!matchesTab(d, activeTab)) return false;
+        if (activeCrits.length) {
+          const matches = combinator === "and" ? activeCrits.every(c => c.test(d)) : activeCrits.some(c => c.test(d));
+          if (!matches) return false;
+        }
         if (!q) return true;
         const hay = normalize([d.nom, d.siret, d.ville, d.code_postal, d.dossier_number].join(" "));
         return hay.includes(q);
@@ -350,39 +439,30 @@
     }
 
     function extraColumnHtml(d) {
-      if (activeTab === "area") {
-        const montant = d.areaRows.reduce((sum, r) => sum + numericSum(r.Montant_d_aide_total), 0);
-        return `<td>${montant ? escapeHtml(montant.toLocaleString("fr-FR")) + " €" : "—"}</td>`;
+      const activeCrits = activeCriteriaList();
+      if (activeCrits.length === 1) {
+        return `<td>${escapeHtml(activeCrits[0].display(d))}</td>`;
       }
-      if (activeTab === "gaec") {
-        return `<td>${d.associesRows.length ? d.associesRows.length + " associé(s)" : "—"}</td>`;
-      }
-      if (activeTab === "msa") {
-        return `<td>${escapeHtml(formatAnyDate(d.demandeur.Date_MSA))}</td>`;
-      }
-      if (activeTab === "legumes") {
-        return `<td>${d.surfaceLegume ? escapeHtml(d.surfaceLegume.toLocaleString("fr-FR")) + " ha" : "—"}</td>`;
-      }
-      const flags = [];
-      if (d.isArea) flags.push(`<span class="tag tag-area">AREA</span>`);
-      if (d.isGaec) flags.push(`<span class="tag tag-gaec">GAEC</span>`);
-      if (d.isMsa) flags.push(`<span class="tag tag-msa">MSA</span>`);
-      if (d.hasLegumes) flags.push(`<span class="tag tag-legumes">Légumes</span>`);
-      return `<td>${flags.join(" ") || "—"}</td>`;
+      const matched = criteria.filter(c => c.test(d));
+      if (!matched.length) return `<td>—</td>`;
+      const shown = matched.slice(0, 4);
+      const extra = matched.length - shown.length;
+      const pills = shown.map(c => `<span class="tag tag-flag">${escapeHtml(c.label.replace(/ renseignée$| > 0$/, ""))}</span>`).join(" ");
+      return `<td>${pills}${extra > 0 ? ` <span class="tag tag-flag">+${extra}</span>` : ""}</td>`;
     }
 
     function extraColumnLabel() {
-      if (activeTab === "area") return "Montant d'aide (AREA)";
-      if (activeTab === "gaec") return "Associés";
-      if (activeTab === "msa") return "Date MSA";
-      if (activeTab === "legumes") return "Surface légumes";
-      return "Profils";
+      const activeCrits = activeCriteriaList();
+      if (activeCrits.length === 1) return activeCrits[0].label;
+      return "Critères correspondants";
     }
 
     function renderTable() {
       const filtered = getFiltered();
       const limited = filtered.slice(0, 300);
-      metaEl.textContent = `${filtered.length} dossier(s)${filtered.length > limited.length ? " (300 premiers affichés)" : ""} sur ${allDossiers.length} au total — onglet "${TAB_META[activeTab].label}".`;
+      const activeCrits = activeCriteriaList();
+      const filterNote = activeCrits.length ? ` — ${activeCrits.length} critère(s) actif(s) (${combinator === "and" ? "ET" : "OU"})` : "";
+      metaEl.textContent = `${filtered.length} dossier(s)${filtered.length > limited.length ? " (300 premiers affichés)" : ""} sur ${allDossiers.length} au total${filterNote}.`;
 
       if (!limited.length) {
         tableWrap.innerHTML = `<div class="empty">Aucun dossier ne correspond à ces critères</div>`;
@@ -416,9 +496,22 @@
 
     function renderAll() {
       if (!dataLoaded) return;
-      renderTabs();
+      renderCriteriaPanel();
       renderTable();
     }
+
+    comboToggleEl.querySelectorAll(".combo-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        combinator = btn.dataset.mode;
+        renderCriteriaPanel();
+        renderTable();
+      });
+    });
+    resetCriteriaBtn.addEventListener("click", () => {
+      activeCriteriaKeys.clear();
+      renderCriteriaPanel();
+      renderTable();
+    });
 
     searchInput.addEventListener("input", renderTable);
     refreshBtn.addEventListener("click", async () => {
