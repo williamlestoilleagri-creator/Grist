@@ -165,6 +165,7 @@
           <div class="view-toggle" id="viewToggle">
             <button type="button" class="view-btn active" data-mode="dossier">Par dossier</button>
             <button type="button" class="view-btn" data-mode="commune">Par commune</button>
+            <button type="button" class="view-btn" data-mode="departement">Par département</button>
           </div>
           <div class="chip-row" id="categoryChips"></div>
           <div class="chip-row">
@@ -194,6 +195,7 @@
     // ================= Constantes =================
     const DOSSIERS_TABLE = "Demarche_155804_dossiers";
     const DEMANDEURS_TABLE = "Demarche_155804_demandeurs";
+    const ANNOTATIONS_TABLE = "Demarche_155804_annotations";
     const GEOCODE_SEARCH_URL = "https://data.geopf.fr/geocodage/search";
     const CACHE_PREFIX = "ban-geocode-cache:";
     const FRANCE_VIEW = { center: [46.6, 2.2], zoom: 6 };
@@ -253,8 +255,14 @@
       raison_sociale: "Raison sociale", nom_commercial: "Nom commercial", forme_juridique: "Forme juridique",
       street_address: "Adresse", ville: "Commune", code_postal: "Code postal",
       departement: "Département", region: "Région",
-      Liquidation: "Liquidation judiciaire", AREA: "Bénéficiaire AREA",
-      Pacage_Report: "N° PACAGE", Est_un_GAEC: "GAEC", Surface_legume: "Surface légumes"
+      AREA: "Bénéficiaire AREA", AREA_Restructuration: "AREA restructuration (DATA_PAC)",
+      PACAGE: "N° PACAGE", GAEC: "GAEC", NB_ASSOC_GAEC: "Nb associés GAEC", SURF_LEG: "Surface légumes",
+      le_dossier_est_eligible: "Dossier éligible (annotation)", dossier_accepte: "Dossier accepté (annotation)",
+      motif_de_rejet: "Motif de rejet", niveau_de_priorite_retenu_au_regard_des_difficultes_financieres: "Niveau de priorité (difficultés financières)",
+      info_montant_de_l_aide_calcule_dans_grist: "Montant d'aide calculé", critere_area_retenu_par_la_ddtm: "Critère AREA retenu (DDTM)",
+      nombre_d_associes_gaec_retenu_par_la_ddtm: "Associés GAEC retenus (DDTM)",
+      critere_nouvel_installe_retenu_par_l_instructeur: "Nouvel installé retenu (instructeur)",
+      l_exploitation_fait_elle_l_objet_d_une_procedure_de_liquidation_judiciaire: "Liquidation judiciaire (annotation)"
     };
     function labelFor(col) { return FIELD_LABELS[col] || String(col).replace(/_/g, " ").replace(/^./, c => c.toUpperCase()); }
 
@@ -294,9 +302,10 @@
 
     async function loadEverything() {
       metaEl.textContent = "Chargement des dossiers...";
-      const [dossiersRaw, demandeursRaw] = await Promise.all([
+      const [dossiersRaw, demandeursRaw, annotationsRaw] = await Promise.all([
         fetchTableRaw(DOSSIERS_TABLE),
-        fetchTableRaw(DEMANDEURS_TABLE)
+        fetchTableRaw(DEMANDEURS_TABLE),
+        fetchTableRaw(ANNOTATIONS_TABLE).catch(err => { console.warn("Table annotations indisponible :", err); return null; })
       ]);
       const dossiersCols = columnsFromRaw(dossiersRaw);
       const dossiersRows = rowsFromRaw(dossiersRaw, dossiersCols);
@@ -309,9 +318,19 @@
         if (key) dossiersByNumber.set(key, d);
       });
 
+      const annotationsByNumber = new Map();
+      if (annotationsRaw) {
+        const annotationsCols = columnsFromRaw(annotationsRaw);
+        rowsFromRaw(annotationsRaw, annotationsCols).forEach(a => {
+          const key = String(a.dossier_number || "").trim();
+          if (key) annotationsByNumber.set(key, a);
+        });
+      }
+
       allDossiers = demandeursRows.map(demandeur => {
         const key = String(demandeur.dossier_number || "").trim();
         const dossier = dossiersByNumber.get(key) || null;
+        const annotation = annotationsByNumber.get(key) || null;
         const nom = demandeur.nom_commercial || demandeur.raison_sociale || "";
         const addressParts = [demandeur.street_address, demandeur.code_postal, demandeur.ville].filter(Boolean);
         return {
@@ -322,13 +341,16 @@
           siret: demandeur.siret,
           ville: demandeur.ville,
           code_postal: demandeur.code_postal,
+          departement: demandeur.departement,
           addressText: addressParts.join(", "),
           state: dossier ? dossier.state : null,
           cat: stateCategory(dossier ? dossier.state : null),
           supprime: dossier ? !!dossier.dossiers_supprimes_DN : false,
+          liquidation: annotation ? !!annotation.l_exploitation_fait_elle_l_objet_d_une_procedure_de_liquidation_judiciaire : false,
           geo: null, // rempli par le géocodage : {lat, lon} | 'NOTFOUND' | null (pas encore tenté)
           demandeur,
-          dossier
+          dossier,
+          annotation
         };
       });
 
@@ -440,11 +462,12 @@
     function renderLegend() {
       const panel = document.getElementById("legendPanel");
       if (!panel) return;
-      if (viewMode === "commune") {
-        const groups = computeCommuneGroups();
+      if (viewMode === "commune" || viewMode === "departement") {
+        const groups = viewMode === "commune" ? computeCommuneGroups() : computeDepartementGroups();
         const maxCount = groups.length ? Math.max(...groups.map(g => g.dossiers.length)) : 0;
+        const title = viewMode === "commune" ? "Dossiers par commune" : "Dossiers par département";
         panel.innerHTML = `
-          <div class="panel-title">Dossiers par commune</div>
+          <div class="panel-title">${escapeHtml(title)}</div>
           <div class="legend-item"><span class="legend-dot" style="background:#3b82f6;width:8px;height:8px;"></span><span>Peu de dossiers</span></div>
           <div class="legend-item"><span class="legend-dot" style="background:#3b82f6;width:18px;height:18px;"></span><span>Beaucoup de dossiers</span></div>
           <div class="legend-item">Maximum observé : ${maxCount} dossier(s)</div>
@@ -466,6 +489,7 @@
       markersLayer.clearLayers();
       Object.keys(markerByKey).forEach(k => delete markerByKey[k]);
       if (viewMode === "commune") renderCommuneMarkers();
+      else if (viewMode === "departement") renderDepartementMarkers();
       else renderDossierMarkers();
       renderLegend();
     }
@@ -516,6 +540,43 @@
         marker.addTo(markersLayer);
         markerByKey[g.key] = marker;
       });
+    }
+
+    function renderDepartementMarkers() {
+      const groups = computeDepartementGroups();
+      const maxCount = groups.length ? Math.max(...groups.map(g => g.dossiers.length)) : 1;
+      groups.forEach(g => {
+        const centroid = departementCentroid(g);
+        if (!centroid) return;
+        const marker = L.circleMarker([centroid.lat, centroid.lon], {
+          radius: bubbleRadius(g.dossiers.length, maxCount),
+          color: "#1d4ed8", weight: 2, fillColor: "#3b82f6", fillOpacity: 0.5
+        });
+        marker.bindPopup(departementPopupHtml(g));
+        marker.on("popupopen", () => {
+          g.communes.forEach(c => {
+            const el = document.querySelector(".pop-commune-item[data-communekey='" + cssEscape(c.key) + "']");
+            if (el) el.addEventListener("click", () => {
+              const geo = communeGeo.get(c.key);
+              if (geo && geo.lat) map.setView([geo.lat, geo.lon], 12);
+            });
+          });
+        });
+        marker.addTo(markersLayer);
+        markerByKey[g.key] = marker;
+      });
+    }
+
+    function departementPopupHtml(g) {
+      const topCommunes = g.communes.slice().sort((a, b) => b.dossiers.length - a.dossiers.length).slice(0, 6);
+      const items = topCommunes.map(c => `<div class="pop-commune-item" data-communekey="${escapeHtml(c.key)}">${escapeHtml(c.ville || "—")} (${c.dossiers.length})</div>`).join("");
+      const extra = g.communes.length - topCommunes.length;
+      return `
+        <div class="pop-nom">${escapeHtml(g.departement || "Département inconnu")}</div>
+        <div class="pop-adr">${g.dossiers.length} dossier(s) · ${g.communes.length} commune(s)</div>
+        ${items}
+        ${extra > 0 ? `<div class="pop-commune-more">+ ${extra} autre(s) commune(s)</div>` : ""}
+      `;
     }
 
     function cssEscape(s) { return String(s).replace(/'/g, "\\'"); }
@@ -590,15 +651,76 @@
       getFiltered().forEach(d => {
         const key = communeKeyOf(d);
         if (!key) return;
-        if (!map.has(key)) map.set(key, { key, ville: d.ville, code_postal: d.code_postal, queryText: communeQueryText(d), dossiers: [] });
+        if (!map.has(key)) map.set(key, { key, ville: d.ville, code_postal: d.code_postal, departement: d.departement, queryText: communeQueryText(d), dossiers: [] });
         map.get(key).dossiers.push(d);
       });
       return [...map.values()].sort((a, b) => b.dossiers.length - a.dossiers.length);
     }
 
+    // La vue "par département" n'a pas besoin de son propre géocodage : elle regroupe les
+    // communes déjà géocodées (vue commune) et place un point au centre de gravité de leurs
+    // positions, pondéré par le nombre de dossiers de chaque commune.
+    function computeDepartementGroups() {
+      const byDept = new Map();
+      computeCommuneGroups().forEach(g => {
+        const deptKey = normalize(g.departement || "");
+        if (!deptKey) return;
+        if (!byDept.has(deptKey)) byDept.set(deptKey, { key: "DEP:" + deptKey, departement: g.departement, dossiers: [], communes: [] });
+        const entry = byDept.get(deptKey);
+        entry.dossiers.push(...g.dossiers);
+        entry.communes.push(g);
+      });
+      return [...byDept.values()].sort((a, b) => b.dossiers.length - a.dossiers.length);
+    }
+
+    function departementCentroid(entry) {
+      let sumLat = 0, sumLon = 0, weight = 0;
+      entry.communes.forEach(g => {
+        const geo = communeGeo.get(g.key);
+        if (!geo || geo === "NOTFOUND") return;
+        const w = g.dossiers.length;
+        sumLat += geo.lat * w;
+        sumLon += geo.lon * w;
+        weight += w;
+      });
+      return weight ? { lat: sumLat / weight, lon: sumLon / weight } : null;
+    }
+
     function renderList() {
       if (viewMode === "commune") { renderCommuneList(); return; }
+      if (viewMode === "departement") { renderDepartementList(); return; }
       renderDossierList();
+    }
+
+    function renderDepartementList() {
+      const groups = computeDepartementGroups();
+      const totalDossiers = groups.reduce((sum, g) => sum + g.dossiers.length, 0);
+      const pendingCommunes = computeCommuneGroups().filter(g => !communeGeo.has(g.key)).length;
+
+      recordCountEl.textContent = `${totalDossiers} dossier(s)`;
+      metaEl.textContent = pendingCommunes
+        ? `Géocodage des communes en cours (${pendingCommunes} restante(s))...`
+        : `${groups.length} département(s) affiché(s).`;
+
+      if (!groups.length) {
+        listEl.innerHTML = `<div class="list-empty">Aucun dossier ne correspond à ces critères (ou le champ "departement" est vide sur les dossiers filtrés).</div>`;
+        return;
+      }
+
+      listEl.innerHTML = groups.map(g => `
+        <div class="row ${selectedKey === g.key ? "active" : ""}" data-deptkey="${escapeHtml(g.key)}">
+          <span class="dot" style="background:#2563eb"></span>
+          <div class="body">
+            <div class="nom">${escapeHtml(g.departement || "Département inconnu")}</div>
+            <div class="adr">${g.communes.length} commune(s)</div>
+            <div class="state-lbl" style="color:#2563eb">${g.dossiers.length} dossier(s)</div>
+          </div>
+        </div>
+      `).join("");
+
+      listEl.querySelectorAll(".row").forEach(row => {
+        row.addEventListener("click", () => focusDepartement(row.dataset.deptkey));
+      });
     }
 
     function renderCommuneList() {
@@ -703,6 +825,16 @@
       }
     }
 
+    function focusDepartement(key) {
+      selectedKey = key;
+      renderList();
+      const marker = markerByKey[key];
+      if (marker) {
+        map.setView(marker.getLatLng(), Math.max(map.getZoom(), 9));
+        marker.openPopup();
+      }
+    }
+
     function renderAll() {
       if (!dataLoaded) return;
       renderCategoryChips();
@@ -717,7 +849,7 @@
         selectedKey = null;
         viewToggleEl.querySelectorAll(".view-btn").forEach(b => b.classList.toggle("active", b === btn));
         renderAll();
-        if (viewMode === "commune") await geocodeCommunesAll();
+        if (viewMode === "commune" || viewMode === "departement") await geocodeCommunesAll();
       });
     });
 
@@ -741,7 +873,7 @@
         allDossiers.forEach(d => { if (d.geo === "NOTFOUND") d.geo = null; });
         communeGeo.forEach((v, k) => { if (v === "NOTFOUND") communeGeo.delete(k); });
         renderAll();
-        if (viewMode === "commune") await geocodeCommunesAll();
+        if (viewMode === "commune" || viewMode === "departement") await geocodeCommunesAll();
         else await geocodeAll();
       } finally {
         geocodeBtn.disabled = false;
@@ -774,9 +906,10 @@
           <div class="sub">Dossier n° ${escapeHtml(d.dossier_number || "—")} · SIRET ${escapeHtml(d.siret || "—")}</div>
           <div class="badges">
             <span class="tag" style="background:${categoryColor(d.cat)}20;color:${categoryColor(d.cat)}">${escapeHtml(categoryLabel(d.cat, d.state))}</span>
-            ${d.demandeur.Est_un_GAEC ? `<span class="tag tag-flag">GAEC</span>` : ""}
+            ${d.demandeur.GAEC ? `<span class="tag tag-flag">GAEC</span>` : ""}
             ${d.demandeur.AREA ? `<span class="tag tag-flag">Bénéficiaire AREA</span>` : ""}
-            ${d.demandeur.Liquidation ? `<span class="tag tag-warn">⚠ Liquidation judiciaire</span>` : ""}
+            ${d.annotation && d.annotation.dossier_accepte ? `<span class="tag tag-flag">✓ Accepté (annotation)</span>` : ""}
+            ${d.liquidation ? `<span class="tag tag-warn">⚠ Liquidation judiciaire</span>` : ""}
             ${d.geo === "NOTFOUND" || d.geo === "NO_ADDRESS" ? `<span class="tag tag-warn">Non géolocalisé</span>` : ""}
           </div>
         </div>
@@ -784,13 +917,19 @@
 
       const dossierKeys = ["state", "date_depot", "date_derniere_modification", "date_traitement", "suivi_par", "motivation"];
       const demandeurKeys = ["type", "usager_email", "siret", "siren", "raison_sociale", "nom_commercial", "forme_juridique", "street_address", "code_postal", "ville", "departement", "region"];
-      const computedKeys = ["Pacage_Report", "Surface_legume", "Est_un_GAEC", "AREA", "Liquidation"];
+      const computedKeys = ["PACAGE", "SURF_LEG", "GAEC", "NB_ASSOC_GAEC", "AREA", "AREA_Restructuration"];
+      const annotationKeys = [
+        "l_exploitation_fait_elle_l_objet_d_une_procedure_de_liquidation_judiciaire", "le_dossier_est_eligible", "dossier_accepte", "motif_de_rejet",
+        "critere_area_retenu_par_la_ddtm", "nombre_d_associes_gaec_retenu_par_la_ddtm", "critere_nouvel_installe_retenu_par_l_instructeur",
+        "niveau_de_priorite_retenu_au_regard_des_difficultes_financieres", "info_montant_de_l_aide_calcule_dans_grist"
+      ];
 
       ficheContent.innerHTML = `
         ${header}
         ${d.dossier ? renderSection("Instruction du dossier", d.dossier, dossierKeys) : `<div class="section"><div class="section-header">Instruction du dossier</div><div class="section-body"><div class="section-empty">Aucun dossier "${escapeHtml(DOSSIERS_TABLE)}" ne correspond à ce n° de dossier.</div></div></div>`}
         ${renderSection("Déclarant", d.demandeur, demandeurKeys)}
         ${renderSection("Recoupements (formules)", d.demandeur, computedKeys)}
+        ${d.annotation ? renderSection("Éligibilité / instruction (annotations)", d.annotation, annotationKeys) : `<div class="section"><div class="section-header">Éligibilité / instruction (annotations)</div><div class="section-body"><div class="section-empty">Aucune annotation "${escapeHtml(ANNOTATIONS_TABLE)}" pour ce dossier.</div></div></div>`}
       `;
     }
 
