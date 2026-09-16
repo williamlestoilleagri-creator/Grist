@@ -330,13 +330,15 @@
     min: 'Minimum',
     max: 'Maximum',
     countTrue: 'Nombre de "Oui"',
-    percentTrue: 'Taux de "Oui" (%)'
+    percentTrue: 'Taux de "Oui" (%)',
+    countFalse: 'Nombre de "Non"',
+    percentFalse: 'Taux de "Non" (%)'
   };
 
   function aggOptionsForKind(kind){
     switch(kind){
       case 'number': return ['count', 'nonEmpty', 'sum', 'avg', 'min', 'max', 'countDistinct'];
-      case 'bool': return ['count', 'countTrue', 'percentTrue'];
+      case 'bool': return ['count', 'countTrue', 'countFalse', 'percentTrue', 'percentFalse'];
       case 'list': return ['count', 'nonEmpty', 'countDistinct'];
       default: return ['count', 'nonEmpty', 'countDistinct'];
     }
@@ -348,7 +350,9 @@
       case 'count': return values.length;
       case 'nonEmpty': return nonEmpty.length;
       case 'countTrue': return values.filter(v => v === true).length;
+      case 'countFalse': return values.filter(v => v === false).length;
       case 'percentTrue': return values.length ? Math.round((values.filter(v => v === true).length / values.length) * 100) : null;
+      case 'percentFalse': return values.length ? Math.round((values.filter(v => v === false).length / values.length) * 100) : null;
       case 'countDistinct': {
         const set = new Set();
         nonEmpty.forEach(v => { if (Array.isArray(v)) listValues(v).forEach(x => set.add(x)); else set.add(v); });
@@ -376,7 +380,7 @@
 
   function formatAggregateValue(value, agg){
     if (value === null || value === undefined) return '—';
-    if (agg === 'percentTrue') return fmt(value) + ' %';
+    if (agg === 'percentTrue' || agg === 'percentFalse') return fmt(value) + ' %';
     return fmt(value);
   }
 
