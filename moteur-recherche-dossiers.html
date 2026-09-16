@@ -18,6 +18,9 @@
 
     .container { width: 100%; }
 
+    .app-title { font-size: 18px; font-weight: 700; color: #111827; margin: 0 0 4px; }
+    .app-subtitle { font-size: 12.5px; color: #6b7280; margin: 0 0 12px; }
+
     /* ---------- Recherche ---------- */
     .search-wrap {
       position: sticky;
@@ -113,6 +116,19 @@
       cursor: pointer;
     }
     .open-fiche-btn:hover { background: #dbeafe; }
+
+    .expand-fields-btn {
+      display: block;
+      margin-top: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #2563eb;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 2px 0;
+    }
+    .expand-fields-btn:hover { text-decoration: underline; }
 
     /* ---------- Panneau de diagnostic ---------- */
     .debug-panel {
@@ -287,6 +303,8 @@
   <div class="container">
     <!-- Vue recherche -->
     <div id="searchView">
+      <h1 class="app-title">🔎 Moteur de recherche unifié</h1>
+      <p class="app-subtitle">PACAGE, SIRET, adresse, téléphone ou type d'aide — recherché dans toutes les tables du document</p>
       <div class="search-wrap">
         <input
           id="searchInput"
@@ -340,9 +358,11 @@
       if (/siret/.test(n)) cats.push("siret");
       // "adresse electronique" / "adresse mail" doivent rester dans les emails, pas dans l'adresse postale
       const isMailLike = /mail|courriel|email|electronique|site|url/.test(n);
-      if (!isMailLike && /adresse|^commune$|code.?postal|codepostal/.test(n)) cats.push("adresse");
+      if (!isMailLike && /adresse|^commune$|^ville$|code.?postal|codepostal/.test(n)) cats.push("adresse");
       if (/telephone|mobile|portable|gsm|(^|_)tel(_|$)/.test(n)) cats.push("telephone");
-      if (/dispositif|typeaide|type.*aide|aide.*type|nature.*aide|nature.*dispositif/.test(n)) cats.push("typeAide");
+      // Couvre aussi les tables d'aides PAC dont les colonnes commencent par "Aide_..." /
+      // "Etat_aide_..." (ex. DATA_MRC22) sans contenir littéralement "type" ou "dispositif".
+      if (/dispositif|typeaide|type.*aide|aide.*type|nature.*aide|nature.*dispositif|^aide_|^etat.*aide/.test(n)) cats.push("typeAide");
       return cats;
     }
 
@@ -456,6 +476,34 @@
         } catch (e) { return String(value); }
       }
       return value ? String(value) : "—";
+    }
+
+    // Les colonnes Grist de type Date/DateTime renvoient un horodatage Unix brut (ex. 1751328000)
+    // via fetchTable : sans ça, elles s'affichaient telles quelles dans les fiches. On les détecte
+    // par leur nom (accent/casse insensible) et une plage de valeurs plausible (années 2000-2100).
+    function looksLikeDateColumn(col) { return /date|derniere.?mise.?a.?jour/.test(normCol(col)); }
+    function formatIfDateLike(col, val) {
+      if (typeof val !== "number" || !looksLikeDateColumn(col)) return null;
+      if (val < 946684800 || val > 4102444800) return null;
+      try {
+        const d = new Date(val * 1000);
+        if (isNaN(d.getTime())) return null;
+        const hasTime = (val % 86400) !== 0;
+        return hasTime
+          ? d.toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })
+          : d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
+      } catch (e) { return null; }
+    }
+
+    // Les colonnes Grist de type Pièces jointes (ex. "RIB") renvoient une liste d'identifiants
+    // internes (ex. [3, 7]) : on affiche un résumé plutôt que ces nombres bruts, sans prétendre
+    // pouvoir télécharger le fichier depuis ce widget.
+    function looksLikeAttachmentColumn(col) { return /^rib$|piece.?jointe|justificatif|document.*joint/.test(normCol(col)); }
+    function formatIfAttachmentLike(col, val) {
+      if (!Array.isArray(val) || !val.length || !looksLikeAttachmentColumn(col)) return null;
+      const items = val[0] === "L" ? val.slice(1) : val;
+      if (!items.length || !items.every(x => typeof x === "number")) return null;
+      return `📎 ${items.length} pièce(s) jointe(s) (voir dans Grist)`;
     }
 
     function badgeColorForStatus(status) {
@@ -858,7 +906,7 @@
     }
 
     function renderFieldRow(key, rawValue) {
-      const text = fieldValueToText(rawValue);
+      const text = formatIfDateLike(key, rawValue) || formatIfAttachmentLike(key, rawValue) || fieldValueToText(rawValue);
       const label = labelFor(key);
       const cats = classifyColumn(key);
       const critBadges = cats.map(c => `<span class="crit-dot ${CRITERIA[c].cls}">${escapeHtml(CRITERIA[c].label)}</span>`).join("");
@@ -879,12 +927,28 @@
       `;
     }
 
+    // Certaines tables (ex. DATA_MRC22) comptent 80+ colonnes : les lister toutes par défaut
+    // rendrait la fiche illisible. Au-delà de ROW_FIELD_CAP champs renseignés, le surplus est
+    // replié derrière un bouton "+N champs supplémentaires".
+    const ROW_FIELD_CAP = 14;
+    let genericRowCounter = 0;
     function renderGenericRow(row, skip = []) {
       const parts = Object.keys(row)
         .filter(k => k !== "id" && !k.startsWith("gristHelper") && !skip.includes(k))
         .filter(k => row[k] !== null && row[k] !== undefined && row[k] !== "")
         .map(k => renderFieldRow(k, row[k]));
-      return parts.join("") || `<div class="section-empty">Aucune donnée</div>`;
+      if (!parts.length) return `<div class="section-empty">Aucune donnée</div>`;
+      if (parts.length <= ROW_FIELD_CAP) return parts.join("");
+
+      const rowId = "gen-row-" + (genericRowCounter++);
+      const visible = parts.slice(0, ROW_FIELD_CAP).join("");
+      const extra = parts.length - ROW_FIELD_CAP;
+      const hidden = parts.slice(ROW_FIELD_CAP).join("");
+      return `
+        ${visible}
+        <div class="hidden-fields" id="${rowId}" style="display:none;">${hidden}</div>
+        <button type="button" class="expand-fields-btn" data-target="${rowId}" data-extra="${extra}">+ ${extra} champ(s) supplémentaire(s)</button>
+      `;
     }
 
     function renderSection(title, rows, skip = []) {
@@ -1292,6 +1356,18 @@
       ficheView.style.display = "none";
       searchView.style.display = "block";
       currentIdentity = null;
+    });
+
+    // Délégation d'événement unique pour les boutons "+N champs supplémentaires" générés
+    // dynamiquement dans les fiches (tables très larges comme DATA_MRC22).
+    document.addEventListener("click", (e) => {
+      const btn = e.target.closest(".expand-fields-btn");
+      if (!btn) return;
+      const target = document.getElementById(btn.dataset.target);
+      if (!target) return;
+      const show = target.style.display === "none";
+      target.style.display = show ? "block" : "none";
+      btn.textContent = show ? "▲ Réduire" : `+ ${btn.dataset.extra} champ(s) supplémentaire(s)`;
     });
 
     // ================= Initialisation Grist =================
