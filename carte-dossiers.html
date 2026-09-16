@@ -39,6 +39,13 @@
     }
     .search-input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12); background: #fff; }
 
+    .view-toggle { display: flex; gap: 4px; background: #f3f4f6; border-radius: 999px; padding: 3px; margin-bottom: 8px; }
+    .view-btn {
+      flex: 1; border: none; background: transparent; color: #6b7280; font-size: 11.5px; font-weight: 700;
+      padding: 6px 8px; border-radius: 999px; cursor: pointer;
+    }
+    .view-btn.active { background: #2563eb; color: #fff; }
+
     .chip-row { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
     .chip {
       border: 1px solid #d1d5db; background: #fff; color: #374151;
@@ -108,6 +115,12 @@
       border: 1px solid #bfdbfe; border-radius: 8px; padding: 5px 9px; cursor: pointer;
     }
     .leaflet-popup-content .pop-btn:hover { background: #dbeafe; }
+    .leaflet-popup-content .pop-commune-item {
+      font-size: 12px; color: #2563eb; padding: 3px 0; cursor: pointer; border-bottom: 1px dashed #eef0f3;
+    }
+    .leaflet-popup-content .pop-commune-item:last-child { border-bottom: none; }
+    .leaflet-popup-content .pop-commune-item:hover { text-decoration: underline; }
+    .leaflet-popup-content .pop-commune-more { font-size: 11px; color: #9ca3af; margin-top: 4px; font-style: italic; }
 
     /* ---------- Fiche détail (partagée avec les autres widgets de ce Grist) ---------- */
     .back-btn {
@@ -149,6 +162,10 @@
       <aside class="sidebar">
         <div class="sidebar-top">
           <input type="text" id="searchInput" class="search-input" placeholder="Rechercher un nom, un SIRET, une commune...">
+          <div class="view-toggle" id="viewToggle">
+            <button type="button" class="view-btn active" data-mode="dossier">Par dossier</button>
+            <button type="button" class="view-btn" data-mode="commune">Par commune</button>
+          </div>
           <div class="chip-row" id="categoryChips"></div>
           <div class="chip-row">
             <button type="button" class="chip" id="hideDeletedChip">Masquer supprimés</button>
@@ -259,11 +276,14 @@
     let activeCategories = new Set(); // catégories actuellement affichées sur la carte/liste
     let hideDeleted = true;
     let selectedKey = null;
+    let viewMode = "dossier"; // "dossier" | "commune"
+    let communeGeo = new Map(); // clé commune -> {lat, lon} | "NOTFOUND"
 
     const searchInput = document.getElementById("searchInput");
     const metaEl = document.getElementById("meta");
     const recordCountEl = document.getElementById("record-count");
     const listEl = document.getElementById("list");
+    const viewToggleEl = document.getElementById("viewToggle");
     const categoryChipsEl = document.getElementById("categoryChips");
     const hideDeletedChip = document.getElementById("hideDeletedChip");
     const geocodeBtn = document.getElementById("geocodeBtn");
@@ -378,6 +398,23 @@
       renderAll();
     }
 
+    // Géocode une seule fois par commune (code postal + nom), plutôt qu'adresse par adresse :
+    // beaucoup moins d'appels, et un point unique représentatif de la commune pour la vue bulles.
+    async function geocodeCommunesAll() {
+      const groups = computeCommuneGroups();
+      const toGeocode = groups.filter(g => !communeGeo.has(g.key));
+      if (!toGeocode.length) { renderAll(); return; }
+      metaEl.textContent = `Géocodage de ${toGeocode.length} commune(s)...`;
+      let done = 0;
+      await runQueue(toGeocode, async (g) => {
+        const geo = await geocodeAddress(g.queryText);
+        communeGeo.set(g.key, geo || "NOTFOUND");
+        done++;
+        if (done % 5 === 0) renderAll();
+      }, 4);
+      renderAll();
+    }
+
     // ================= Carte Leaflet =================
     const map = L.map("map", { zoomControl: true }).setView(FRANCE_VIEW.center, FRANCE_VIEW.zoom);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -403,6 +440,17 @@
     function renderLegend() {
       const panel = document.getElementById("legendPanel");
       if (!panel) return;
+      if (viewMode === "commune") {
+        const groups = computeCommuneGroups();
+        const maxCount = groups.length ? Math.max(...groups.map(g => g.dossiers.length)) : 0;
+        panel.innerHTML = `
+          <div class="panel-title">Dossiers par commune</div>
+          <div class="legend-item"><span class="legend-dot" style="background:#3b82f6;width:8px;height:8px;"></span><span>Peu de dossiers</span></div>
+          <div class="legend-item"><span class="legend-dot" style="background:#3b82f6;width:18px;height:18px;"></span><span>Beaucoup de dossiers</span></div>
+          <div class="legend-item">Maximum observé : ${maxCount} dossier(s)</div>
+        `;
+        return;
+      }
       const counts = {};
       allDossiers.forEach(d => { if (!hideDeleted || !d.supprime) counts[d.cat] = (counts[d.cat] || 0) + 1; });
       const items = Object.keys(counts).map(cat => `
@@ -417,6 +465,12 @@
     function renderMarkers() {
       markersLayer.clearLayers();
       Object.keys(markerByKey).forEach(k => delete markerByKey[k]);
+      if (viewMode === "commune") renderCommuneMarkers();
+      else renderDossierMarkers();
+      renderLegend();
+    }
+
+    function renderDossierMarkers() {
       getFiltered().forEach(d => {
         if (!d.geo || d.geo === "NOTFOUND" || d.geo === "NO_ADDRESS") return;
         const color = categoryColor(d.cat);
@@ -431,7 +485,37 @@
         marker.addTo(markersLayer);
         markerByKey[d.key] = marker;
       });
-      renderLegend();
+    }
+
+    // Rayon proportionnel à la racine carrée du nombre de dossiers (aire du cercle ~
+    // proportionnelle au compte), plutôt qu'un rayon linéaire qui exagérerait les écarts.
+    function bubbleRadius(count, maxCount) {
+      const MIN_R = 8, MAX_R = 38;
+      if (maxCount <= 1) return MIN_R;
+      const scale = Math.sqrt(count) / Math.sqrt(maxCount);
+      return MIN_R + (MAX_R - MIN_R) * scale;
+    }
+
+    function renderCommuneMarkers() {
+      const groups = computeCommuneGroups();
+      const maxCount = groups.length ? Math.max(...groups.map(g => g.dossiers.length)) : 1;
+      groups.forEach(g => {
+        const geo = communeGeo.get(g.key);
+        if (!geo || geo === "NOTFOUND") return;
+        const marker = L.circleMarker([geo.lat, geo.lon], {
+          radius: bubbleRadius(g.dossiers.length, maxCount),
+          color: "#1d4ed8", weight: 2, fillColor: "#3b82f6", fillOpacity: 0.55
+        });
+        marker.bindPopup(communePopupHtml(g));
+        marker.on("popupopen", () => {
+          g.dossiers.forEach(d => {
+            const el = document.querySelector(".pop-commune-item[data-key='" + cssEscape(d.key) + "']");
+            if (el) el.addEventListener("click", () => openFiche(d.key));
+          });
+        });
+        marker.addTo(markersLayer);
+        markerByKey[g.key] = marker;
+      });
     }
 
     function cssEscape(s) { return String(s).replace(/'/g, "\\'"); }
@@ -442,6 +526,18 @@
         <span class="pop-badge" style="background:${categoryColor(d.cat)}20;color:${categoryColor(d.cat)}">${escapeHtml(categoryLabel(d.cat, d.state))}</span>
         <div class="pop-adr">${escapeHtml(d.addressText || "Adresse inconnue")}</div>
         <button type="button" class="pop-btn" data-key="${escapeHtml(d.key)}">Voir la fiche complète →</button>
+      `;
+    }
+
+    function communePopupHtml(g) {
+      const shown = g.dossiers.slice(0, 8);
+      const extra = g.dossiers.length - shown.length;
+      const items = shown.map(d => `<div class="pop-commune-item" data-key="${escapeHtml(d.key)}">${escapeHtml(d.nom || d.dossier_number || "Sans nom")}</div>`).join("");
+      return `
+        <div class="pop-nom">${escapeHtml(g.ville || "Commune inconnue")}${g.code_postal ? " (" + escapeHtml(String(g.code_postal)) + ")" : ""}</div>
+        <div class="pop-adr">${g.dossiers.length} dossier(s)</div>
+        ${items}
+        ${extra > 0 ? `<div class="pop-commune-more">+ ${extra} autre(s)</div>` : ""}
       `;
     }
 
@@ -478,7 +574,65 @@
       });
     }
 
+    // Regroupe les dossiers actuellement filtrés par commune (code postal + nom de commune :
+    // on n'a pas le code INSEE dans ce Grist, donc deux communes homonymes de départements
+    // différents restent bien séparées, mais un même code postal partagé par plusieurs communes
+    // pourrait les confondre — cas marginal, à garder en tête).
+    function communeKeyOf(d) {
+      const villeNorm = normalize(d.ville || "");
+      if (!villeNorm) return null;
+      return String(d.code_postal || "").trim() + "|" + villeNorm;
+    }
+    function communeQueryText(d) { return [d.ville, d.code_postal].filter(Boolean).join(" "); }
+
+    function computeCommuneGroups() {
+      const map = new Map();
+      getFiltered().forEach(d => {
+        const key = communeKeyOf(d);
+        if (!key) return;
+        if (!map.has(key)) map.set(key, { key, ville: d.ville, code_postal: d.code_postal, queryText: communeQueryText(d), dossiers: [] });
+        map.get(key).dossiers.push(d);
+      });
+      return [...map.values()].sort((a, b) => b.dossiers.length - a.dossiers.length);
+    }
+
     function renderList() {
+      if (viewMode === "commune") { renderCommuneList(); return; }
+      renderDossierList();
+    }
+
+    function renderCommuneList() {
+      const groups = computeCommuneGroups();
+      const totalDossiers = groups.reduce((sum, g) => sum + g.dossiers.length, 0);
+      const pending = groups.filter(g => !communeGeo.has(g.key));
+
+      recordCountEl.textContent = `${totalDossiers} dossier(s)`;
+      metaEl.textContent = pending.length
+        ? `${groups.length - pending.length} commune(s) localisée(s), ${pending.length} en cours de géocodage...`
+        : `${groups.length} commune(s) affichée(s).`;
+
+      if (!groups.length) {
+        listEl.innerHTML = `<div class="list-empty">Aucun dossier ne correspond à ces critères</div>`;
+        return;
+      }
+
+      listEl.innerHTML = groups.map(g => `
+        <div class="row ${selectedKey === g.key ? "active" : ""}" data-communekey="${escapeHtml(g.key)}">
+          <span class="dot" style="background:#2563eb"></span>
+          <div class="body">
+            <div class="nom">${escapeHtml(g.ville || "Commune inconnue")}</div>
+            <div class="adr">${escapeHtml(String(g.code_postal || ""))}</div>
+            <div class="state-lbl" style="color:#2563eb">${g.dossiers.length} dossier(s)</div>
+          </div>
+        </div>
+      `).join("");
+
+      listEl.querySelectorAll(".row").forEach(row => {
+        row.addEventListener("click", () => focusCommune(row.dataset.communekey));
+      });
+    }
+
+    function renderDossierList() {
       const filtered = getFiltered();
       const geocoded = filtered.filter(d => d.geo && d.geo !== "NOTFOUND" && d.geo !== "NO_ADDRESS");
       const notGeocodable = filtered.filter(d => d.geo === "NOTFOUND" || d.geo === "NO_ADDRESS");
@@ -538,12 +692,34 @@
       }
     }
 
+    function focusCommune(key) {
+      selectedKey = key;
+      renderList();
+      const marker = markerByKey[key];
+      const geo = communeGeo.get(key);
+      if (marker && geo && geo.lat) {
+        map.setView([geo.lat, geo.lon], Math.max(map.getZoom(), 12));
+        marker.openPopup();
+      }
+    }
+
     function renderAll() {
       if (!dataLoaded) return;
       renderCategoryChips();
       renderList();
       renderMarkers();
     }
+
+    viewToggleEl.querySelectorAll(".view-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (btn.dataset.mode === viewMode) return;
+        viewMode = btn.dataset.mode;
+        selectedKey = null;
+        viewToggleEl.querySelectorAll(".view-btn").forEach(b => b.classList.toggle("active", b === btn));
+        renderAll();
+        if (viewMode === "commune") await geocodeCommunesAll();
+      });
+    });
 
     searchInput.addEventListener("input", renderAll);
     hideDeletedChip.addEventListener("click", () => {
@@ -561,10 +737,12 @@
       geocodeBtn.textContent = "Géocodage...";
       try {
         await loadEverything();
-        // force un nouveau géocodage des adresses non trouvées la dernière fois
+        // force un nouveau géocodage des adresses (et communes) non trouvées la dernière fois
         allDossiers.forEach(d => { if (d.geo === "NOTFOUND") d.geo = null; });
+        communeGeo.forEach((v, k) => { if (v === "NOTFOUND") communeGeo.delete(k); });
         renderAll();
-        await geocodeAll();
+        if (viewMode === "commune") await geocodeCommunesAll();
+        else await geocodeAll();
       } finally {
         geocodeBtn.disabled = false;
         geocodeBtn.textContent = "↻ Géocoder";
