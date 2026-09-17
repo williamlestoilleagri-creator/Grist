@@ -40,6 +40,11 @@
     .co-row.active { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.10); }
     .cell-name { font-weight: 600; color: #111827; }
     .cell-sub { font-size: 12px; color: #6b7280; margin-top: 2px; }
+    .consent-badge {
+      display: inline-block; font-size: 10.5px; font-weight: 700; padding: 2px 7px;
+      border-radius: 999px; margin-left: 6px; vertical-align: middle;
+      color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca;
+    }
     .co-placeholder { background: #fff; border: 1px dashed #d1d5db; border-radius: 14px; padding: 28px 16px; text-align: center; color: #6b7280; font-size: 13.5px; }
     .co-block { margin-bottom: 10px; }
     .co-block:last-child { margin-bottom: 0; }
@@ -183,7 +188,8 @@
       n_telephone: "Téléphone déclaré", precisez_ici_votre_adresse_electronique: "Email déclaré",
       le_dossier_est_eligible: "Dossier éligible", dossier_accepte: "Dossier accepté", motif_de_rejet: "Motif de rejet",
       critere_area_retenu_par_la_ddtm: "Critère AREA retenu (DDTM)",
-      l_exploitation_fait_elle_l_objet_d_une_procedure_de_liquidation_judiciaire: "Liquidation judiciaire déclarée"
+      l_exploitation_fait_elle_l_objet_d_une_procedure_de_liquidation_judiciaire: "Liquidation judiciaire déclarée",
+      autorisez_vous_l_acces_aux_donnees_de_votre_dossier_pac_2026_afin_de_simplifier_votre_demande: "Autorisation d'accès aux données PAC"
     };
     function humanizeSlug(col) {
       let s = String(col).replace(/_/g, " ").trim();
@@ -275,6 +281,10 @@
         const pacageKey = normalizeCode(demandeur.PACAGE);
         const pac = pacBySiret.get(siretKey) || pacByPacage.get(pacageKey) || null;
         const associes = associesByPacage.get(pacageKey) || [];
+        // Consentement explicite du demandeur (formulaire DS) pour l'accès aux données de son
+        // dossier PAC : sans ce champ coché, les données issues de PAC (DATA_PAC, DATA_ASSOCIES,
+        // DATA_AREA, DATA_MRC22) ne doivent pas être affichées, même si une correspondance existe.
+        const pacConsent = !!(champs && champs.autorisez_vous_l_acces_aux_donnees_de_votre_dossier_pac_2026_afin_de_simplifier_votre_demande);
         return {
           demandeurId: demandeur.id,
           dossier_number: demandeur.dossier_number,
@@ -285,7 +295,7 @@
           code_postal: demandeur.code_postal,
           departement: demandeur.departement,
           code_departement: demandeur.code_departement,
-          demandeur, dossier, champs, pac, associes
+          demandeur, dossier, champs, pac, associes, pacConsent
         };
       });
 
@@ -356,7 +366,7 @@
       listWrap.innerHTML = limited.map(d => `
         <div class="co-row ${d.demandeurId === selectedDemandeurId ? "active" : ""}" data-demandeurid="${d.demandeurId}">
           <div class="cell-name">${escapeHtml(d.nom || "—")}</div>
-          <div class="cell-sub">Dossier n° ${escapeHtml(d.dossier_number || "—")} · ${escapeHtml([d.code_postal, d.ville].filter(Boolean).join(" ") || "—")}</div>
+          <div class="cell-sub">Dossier n° ${escapeHtml(d.dossier_number || "—")} · ${escapeHtml([d.code_postal, d.ville].filter(Boolean).join(" ") || "—")}${!d.pacConsent ? '<span class="consent-badge">🔒 PAC non autorisé</span>' : ""}</div>
         </div>
       `).join("");
 
@@ -463,7 +473,7 @@
       panelEl.innerHTML = `
         <div class="fiche-header">
           <div class="title">${escapeHtml(d.nom || "Dossier " + (d.dossier_number || ""))}</div>
-          <div class="sub">Dossier n° ${escapeHtml(d.dossier_number || "—")} · SIRET ${escapeHtml(d.siret || "—")} · PACAGE ${escapeHtml(d.pacage || "—")}</div>
+          <div class="sub">Dossier n° ${escapeHtml(d.dossier_number || "—")} · SIRET ${escapeHtml(d.siret || "—")} · PACAGE ${escapeHtml(d.pacage || "—")}${!d.pacConsent ? '<span class="consent-badge">🔒 Accès aux données PAC non autorisé</span>' : ""}</div>
         </div>
 
         <div class="section">
@@ -487,22 +497,24 @@
         <div class="section">
           <div class="section-header">📇 Coordonnées PAC (DATA_PAC)</div>
           <div class="section-body">
-            ${pac ? `
-              <div class="co-block">
-                <div class="co-block-title">☎ Contact</div>
-                ${contactLine("Téléphone mobile", pac.Telephone_mobile, "tel")}
-                ${contactLine("Téléphone fixe", pac.Telephone_fixe, "tel")}
-                ${contactLine("Email", pac.Adresse_mail, "mail")}
-              </div>
-              <div class="co-block">
-                <div class="co-block-title">📍 Localisation</div>
-                ${contactLine("Adresse", pac.Adresse)}
-              </div>
-            ` : `<div class="section-empty">Aucune correspondance trouvée dans DATA_PAC pour ce SIRET / PACAGE.</div>`}
+            ${!d.pacConsent
+              ? `<div class="section-empty">🔒 Ce demandeur n'a pas autorisé l'accès aux données de son dossier PAC (case "${escapeHtml(labelFor("autorisez_vous_l_acces_aux_donnees_de_votre_dossier_pac_2026_afin_de_simplifier_votre_demande"))}" non cochée) — les coordonnées DATA_PAC ne sont pas affichées.</div>`
+              : (pac ? `
+                <div class="co-block">
+                  <div class="co-block-title">☎ Contact</div>
+                  ${contactLine("Téléphone mobile", pac.Telephone_mobile, "tel")}
+                  ${contactLine("Téléphone fixe", pac.Telephone_fixe, "tel")}
+                  ${contactLine("Email", pac.Adresse_mail, "mail")}
+                </div>
+                <div class="co-block">
+                  <div class="co-block-title">📍 Localisation</div>
+                  ${contactLine("Adresse", pac.Adresse)}
+                </div>
+              ` : `<div class="section-empty">Aucune correspondance trouvée dans DATA_PAC pour ce SIRET / PACAGE.</div>`)}
           </div>
         </div>
 
-        ${d.associes.length ? `
+        ${(d.pacConsent && d.associes.length) ? `
           <div class="section">
             <div class="section-header"><span>👥 Associés GAEC (DATA_ASSOCIES)</span><span class="section-count">${d.associes.length}</span></div>
             <div class="section-body">${associesHtml}</div>
@@ -549,10 +561,12 @@
         ${renderSection("Réponses du formulaire (Demarche_155804_champs)", d.champs ? [d.champs] : [], null, true)}
 
         <div class="section-title-big">🗄 Informations base Grist</div>
-        ${renderSection("DATA_PAC", d.pac ? [d.pac] : [], null)}
-        ${renderSection("Associés GAEC (DATA_ASSOCIES)", d.associes, null)}
-        ${renderSection("DATA_AREA", areaRows, null)}
-        ${renderSection("DATA_MRC22", mrc22Rows, null)}
+        ${d.pacConsent ? `
+          ${renderSection("DATA_PAC", d.pac ? [d.pac] : [], null)}
+          ${renderSection("Associés GAEC (DATA_ASSOCIES)", d.associes, null)}
+          ${renderSection("DATA_AREA", areaRows, null)}
+          ${renderSection("DATA_MRC22", mrc22Rows, null)}
+        ` : `<div class="section"><div class="section-header">Données PAC (DATA_PAC / DATA_ASSOCIES / DATA_AREA / DATA_MRC22)</div><div class="section-body"><div class="section-empty">🔒 Ce demandeur n'a pas autorisé l'accès aux données de son dossier PAC — non affichées.</div></div></div>`}
         ${renderSection("Instruction (Demarche_155804_annotations)", annotation ? [annotation] : [], null, true)}
       `;
     }
