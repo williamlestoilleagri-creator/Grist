@@ -589,16 +589,20 @@
       '(un bandeau « Autoriser l’accès » apparaît en général en haut de la fiche lors du premier chargement), puis rechargez la page.</p>';
     function fetchYearsList() {
       return fetchRawTable('TR_Annee').then(function (res) {
+        yearsById = new Map();
+        res.rows.forEach(function (r) { yearsById.set(r.id, r.Annee); });
         return res.rows.map(function (r) { return r.Annee; }).filter(Boolean)
           .filter(function (v, i, arr) { return arr.indexOf(v) === i; })
           .sort(function (a, b) { return parseInt(b, 10) - parseInt(a, 10); });
       });
     }
-    function siteCodesForNiveau1(niveau1Code) {
-      const set = new Set();
-      sitesById.forEach(function (s) { if (s.UAI_NIVEAU1 === niveau1Code) set.add(s.Code_DGER); });
-      return set;
-    }
+    // NOTE: several tables carry a "CodeDGERTexte" / "AnneeTexte" column that is a Grist
+    // *trigger/default* formula (_default_...): it only fills in once when a row is created
+    // through the UI/API and is NOT recomputed live, so it is commonly left blank on rows
+    // created by a bulk/API import (e.g. the opendatasoft sync) -- matching on it silently
+    // finds nothing. We instead always resolve the real Reference field (Code_Dger,
+    // UAI_Elem_DGER_Code_, Exercice, ...) through sitesById / yearsById, exactly like the
+    // underlying Python formulas do (rec.Code_Dger.Code_DGER, rec.Exercice.Annee).
 
     function computeEffectifsForYear(record, ctx, year) {
       return fetchRawTable('TT_Effectifs2').then(function (res) {
@@ -606,17 +610,20 @@
         const rows = res.rows;
         const niveau1Code = ctx.niveau1Site && ctx.niveau1Site.Code_DGER;
         if (!niveau1Code || !year) return { ok: true, data: null };
-        const codes = siteCodesForNiveau1(niveau1Code);
-        const filtered = rows.filter(function (r) { return codes.has(r.CodeDGERTexte) && String(r.Annee_scolaire_Annee) === String(year); });
+        const filtered = rows.filter(function (r) {
+          const site = sitesById.get(r.Code_Dger);
+          const rowYear = r.Annee_scolaire_Annee || yearsById.get(r.Annee_scolaire);
+          return site && site.UAI_NIVEAU1 === niveau1Code && String(rowYear) === String(year);
+        });
         if (!filtered.length) return { ok: true, data: null };
         let total = 0;
         const grouped = new Map();
         filtered.forEach(function (r) {
           const v = safeNum(r.Eleves_presents) || 0;
           total += v;
-          const site = sitesByCode.get(r.CodeDGERTexte);
-          const siteLabel = (site && site.Libelle_administratif) || r.CodeDGERTexte;
-          const key = siteLabel + '' + (r.Filiere || '—');
+          const site = sitesById.get(r.Code_Dger);
+          const siteLabel = (site && site.Libelle_administratif) || 'Site inconnu';
+          const key = siteLabel + '' + (r.Filiere || 'Non renseigné');
           grouped.set(key, (grouped.get(key) || 0) + v);
         });
         const rowsOut = Array.from(grouped.entries()).map(function (e) {
@@ -654,11 +661,13 @@
         const niveau1Code = ctx.niveau1Site && ctx.niveau1Site.Code_DGER;
         const n = parseInt(yearN, 10);
         if (!niveau1Code || !Number.isFinite(n)) return { ok: true, data: null };
-        const codes = siteCodesForNiveau1(niveau1Code);
         const totals = [3, 2, 1, 0].map(function (offset) {
           const y = String(n - offset);
-          const sum = rows.filter(function (r) { return codes.has(r.CodeDGERTexte) && String(r.Annee_scolaire_Annee) === y; })
-            .reduce(function (s, r) { return s + (safeNum(r.Eleves_presents) || 0); }, 0);
+          const sum = rows.filter(function (r) {
+            const site = sitesById.get(r.Code_Dger);
+            const rowYear = r.Annee_scolaire_Annee || yearsById.get(r.Annee_scolaire);
+            return site && site.UAI_NIVEAU1 === niveau1Code && String(rowYear) === y;
+          }).reduce(function (s, r) { return s + (safeNum(r.Eleves_presents) || 0); }, 0);
           return { label: y, value: sum };
         });
         if (!totals.some(function (t) { return t.value > 0; })) return { ok: true, data: null };
@@ -687,14 +696,16 @@
         const rows = res.rows;
         const niveau1Code = ctx.niveau1Site && ctx.niveau1Site.Code_DGER;
         if (!niveau1Code || !year) return { ok: true, data: null };
-        const codes = siteCodesForNiveau1(niveau1Code);
         const filtered = rows.filter(function (r) {
-          return codes.has(r.CodeDGERTexte) && String(r.Annee_Scolaire_Annee) === String(year) && r.Tauxdereussite;
+          const site = sitesById.get(r.UAI_Elem_DGER_Code_);
+          const rowYear = r.Annee_Scolaire_Annee || yearsById.get(r.Annee_Scolaire);
+          return site && site.UAI_NIVEAU1 === niveau1Code && String(rowYear) === String(year) && r.Tauxdereussite;
         });
         if (!filtered.length) return { ok: true, data: null };
         const groups = new Map();
         filtered.forEach(function (r) {
-          const label = r.UAI_Elem_DGER_Code__Libelle_public || r.UAI_Elem_Lib_principal_ || r.CodeDGERTexte;
+          const site = sitesById.get(r.UAI_Elem_DGER_Code_);
+          const label = (site && (site.Libelle_public || site.Libelle_administratif)) || r.UAI_Elem_Lib_principal_ || 'Etablissement';
           if (!groups.has(label)) groups.set(label, []);
           groups.get(label).push(String(r.Tauxdereussite));
         });
@@ -726,7 +737,9 @@
         if (!niveau1Code || !year) return { ok: true, data: null };
         const labels = ['Résultat de fonctionnement', 'FOND DE ROULEMENT NET', 'Variation du fonds de roulement BRUT', "CAPACITE D'AUTOFINANCEMENT"];
         const filtered = rows.filter(function (r) {
-          return r.Code_DGER_Code_DGER === niveau1Code && String(r.AnneeTexte) === String(year) && labels.indexOf(r.Ligne_libelle) !== -1;
+          const site = sitesById.get(r.Code_DGER);
+          const rowYear = r.AnneeTexte || yearsById.get(r.Exercice);
+          return site && site.Code_DGER === niveau1Code && String(rowYear) === String(year) && labels.indexOf(r.Ligne_libelle) !== -1;
         });
         const out = filtered.map(function (r) {
           const montant = safeNum(r.Montant_annuel_realise);
@@ -803,8 +816,8 @@
     let prefs = defaultPrefs();
     let currentRecord = null;
     let sitesById = new Map();
-    let sitesByCode = new Map();
     let sitesLoadFailed = false;
+    let yearsById = new Map();
 
     function savePrefs() {
       if (window.grist && grist.setOption) grist.setOption('fichePrefs', prefs);
@@ -823,14 +836,12 @@
       if (!window.grist || !grist.docApi) { sitesLoadFailed = true; return Promise.resolve(); }
       return grist.docApi.fetchTable('TT_Sites_de_formation').then(function (data) {
         sitesById = new Map();
-        sitesByCode = new Map();
         sitesLoadFailed = false;
         const n = (data.id || []).length;
         for (let i = 0; i < n; i++) {
           const row = {};
           for (const col in data) row[col] = data[col][i];
           sitesById.set(data.id[i], row);
-          if (row.Code_DGER) sitesByCode.set(row.Code_DGER, row);
         }
       }).catch(function (e) {
         console.warn('Impossible de charger TT_Sites_de_formation', e);
