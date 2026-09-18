@@ -1,0 +1,1496 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-scheme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tableau de bord 2.0 — instruction DRAAF</title>
+
+<!-- Système de Design de l'État (DSFR) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr/dist/dsfr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr/dist/utility/icons/icons.min.css">
+
+<!-- API du widget Grist -->
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+
+<style>
+/* =====================================================================
+   Jetons de couleur — palette catégorielle validée (contraste + daltonisme),
+   posée sur les codes DSFR pour le reste de l'habillage.
+   ===================================================================== */
+:root{
+  --surface-1:      #ffffff;
+  --surface-2:      #f6f6f6;
+  --surface-3:      #eeeeee;
+  --border-1:       #ddd;
+  --text-primary:   #161616;
+  --text-secondary: #3a3a3a;
+  --text-muted:     #666666;
+
+  --series-1: #2a78d6; /* bleu */
+  --series-2: #eb6834; /* orange */
+  --series-3: #1baf7a; /* turquoise */
+  --series-4: #eda100; /* jaune */
+  --series-5: #e87ba4; /* magenta */
+  --series-6: #008300; /* vert */
+  --series-7: #4a3aa7; /* violet */
+  --series-8: #e34948; /* rouge */
+  --series-other: #929292;
+
+  --seq-1: #cde2fb;
+  --seq-2: #9ec5f4;
+  --seq-3: #5598e7;
+  --seq-4: #2a78d6;
+  --seq-5: #1c5cab;
+  --seq-6: #104281;
+  --seq-7: #0d366b;
+
+  --status-good:     #0ca30c;
+  --status-warning:  #c98500;
+  --status-serious:  #d9622e;
+  --status-critical: #d03b3b;
+  --status-neutral:  #757575;
+
+  --focus: #0a76f6;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --surface-1: #1a1a19;
+    --surface-2: #262625;
+    --surface-3: #313130;
+    --border-1: #3a3a38;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #9a9990;
+
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+    --series-5: #d55181; --series-6: #2fae2f; --series-7: #9085e9; --series-8: #e66767;
+    --series-other: #8a8a86;
+
+    --status-good:#2fae2f; --status-warning:#e0a530; --status-serious:#e0855f; --status-critical:#e66767; --status-neutral:#9a9990;
+  }
+}
+
+body{ background-color: var(--surface-1); color: var(--text-primary); }
+.sr-only{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+
+.mast{ padding: 1.25rem 0; border-bottom: 1px solid var(--border-1); }
+.mast h1{ color: var(--text-primary); }
+
+/* --- barre de filtre globale --- */
+.filter-row{
+  display:flex; align-items:flex-end; gap:1.25rem; flex-wrap:wrap;
+  padding: 0.75rem 1rem; margin-bottom: 1.5rem;
+  background: var(--surface-2); border-radius: 0.5rem; border: 1px solid var(--border-1);
+}
+.filter-row .fr-select-group{ margin-bottom:0; min-width: 220px; }
+.filter-row .fr-label{ font-size:0.75rem; margin-bottom:0.25rem; }
+.filter-hint{ font-size:0.75rem; color: var(--text-muted); margin:0; padding-bottom:0.6rem; }
+
+/* --- cartes KPI --- */
+.kpi-card{
+  position:relative; height:100%; padding:1rem 1rem 0.85rem;
+  border:1px solid var(--border-1); border-left: 4px solid var(--series-1);
+  border-radius: 0.25rem; background: var(--surface-1);
+}
+.kpi-card .kpi-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem; }
+.kpi-value{ font-weight:700; font-size: 1.75rem; line-height:1.1; color: var(--text-primary); margin: 0.15rem 0 0.2rem; }
+.kpi-label{ font-size:0.85rem; margin-bottom:0; color: var(--text-secondary); }
+.kpi-delta{ font-size:0.75rem; margin:0.35rem 0 0; display:flex; align-items:center; gap:0.25rem; }
+.kpi-delta.up{ color: var(--status-good); }
+.kpi-delta.down{ color: var(--status-critical); }
+.kpi-delta.flat{ color: var(--text-muted); }
+.kpi-hint{ font-size:0.72rem; color: var(--text-muted); margin:0.15rem 0 0; }
+
+/* --- cartes graphiques --- */
+.chart-card{
+  border:1px solid var(--border-1); border-radius:0.25rem; background: var(--surface-1);
+  padding: 1rem 1.1rem 1.1rem; height:100%; display:flex; flex-direction:column;
+}
+.chart-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:0.75rem; margin-bottom:0.85rem; flex-wrap:wrap; }
+.chart-title-wrap{ display:flex; align-items:center; gap:0.4rem; }
+.chart-title{ font-size:1rem; font-weight:700; margin:0; color: var(--text-primary); }
+.chart-controls{ display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; }
+.chart-controls select.fr-select{ font-size:0.8rem; padding: 0.3rem 2rem 0.3rem 0.6rem; min-height:auto; width:auto; }
+.chart-body{ flex:1; min-height: 0; }
+.chart-foot{ margin-top:0.6rem; }
+.chart-foot details summary{ cursor:pointer; font-size:0.78rem; color: var(--text-muted); }
+.chart-foot details summary:hover{ color: var(--text-primary); }
+
+/* --- bouton d'aide + popover --- */
+.help-btn{
+  all:unset; cursor:pointer; display:inline-flex; align-items:center; justify-content:center;
+  width:1.4rem; height:1.4rem; border-radius:50%; color: var(--series-1);
+  background: color-mix(in srgb, var(--series-1) 12%, transparent);
+  flex-shrink:0;
+}
+.help-btn:hover{ background: color-mix(in srgb, var(--series-1) 22%, transparent); }
+.help-btn:focus-visible{ outline: 2px solid var(--focus); outline-offset:2px; }
+.help-btn .fr-icon-information-line{ font-size:1rem; }
+.help-btn .fr-icon-information-line::before{ --icon-size:1rem; }
+
+.help-panel{
+  position:absolute; z-index:50; width: min(320px, 86vw);
+  background: var(--surface-1); color: var(--text-primary);
+  border:1px solid var(--border-1); border-radius:0.35rem;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.18); padding:0.85rem 0.95rem;
+  font-size:0.82rem; line-height:1.4;
+}
+.help-panel h3{ font-size:0.85rem; margin:0 0 0.35rem; }
+.help-panel p{ margin:0 0 0.5rem; }
+.help-panel p:last-child{ margin-bottom:0; }
+.help-panel .help-choice{ margin:0.15rem 0; padding-left:0.9rem; position:relative; }
+.help-panel .help-choice::before{ content:"–"; position:absolute; left:0; }
+.help-panel[hidden]{ display:none; }
+
+/* --- barres horizontales (état / géo) --- */
+.bar-list{ display:flex; flex-direction:column; gap:0.65rem; }
+.bar-row{ display:grid; grid-template-columns: 152px 1fr 3.5rem; align-items:center; gap:0.6rem; }
+.bar-row-label{
+  font-size:0.8rem; color: var(--text-secondary); display:flex; align-items:center; gap:0.4rem;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.bar-dot{ width:0.55rem; height:0.55rem; border-radius:50%; flex-shrink:0; }
+.bar-track{
+  position:relative; height: 0.85rem; border-radius:4px; background: var(--surface-2); overflow:hidden;
+}
+.bar-fill{
+  position:absolute; inset:0 auto 0 0; height:100%; border-radius:4px;
+  transition: width 0.4s ease; cursor:default;
+}
+.bar-value{ font-size:0.82rem; font-weight:600; text-align:right; font-variant-numeric: tabular-nums; }
+.bar-row:hover .bar-track{ box-shadow: 0 0 0 1px var(--border-1) inset; }
+
+/* --- donut --- */
+.donut-wrap{ display:flex; gap:1.25rem; align-items:center; flex-wrap:wrap; }
+.donut-svg-holder{ position:relative; width:150px; height:150px; flex-shrink:0; }
+.donut-svg-holder svg{ width:100%; height:100%; }
+.donut-center{
+  position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  pointer-events:none;
+}
+.donut-center strong{ font-size:1.3rem; line-height:1; color: var(--text-primary); }
+.donut-center span{ font-size:0.68rem; color: var(--text-muted); }
+.donut-legend{ flex:1; min-width:160px; display:flex; flex-direction:column; gap:0.4rem; }
+.legend-row{ display:flex; align-items:center; gap:0.5rem; font-size:0.8rem; cursor:default; }
+.legend-swatch{ width:0.65rem; height:0.65rem; border-radius:2px; flex-shrink:0; }
+.legend-label{ color: var(--text-secondary); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.legend-value{ font-weight:600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.legend-pct{ font-size:0.72rem; color: var(--text-muted); width:2.6rem; text-align:right; }
+
+/* --- ligne / tendance --- */
+.trend-svg-holder{ position:relative; width:100%; }
+.trend-svg-holder svg{ width:100%; height:auto; display:block; overflow:visible; }
+.trend-crosshair{ stroke: var(--border-1); stroke-width:1; }
+.trend-point{ cursor:default; }
+
+/* --- tooltip flottant partagé --- */
+#floatTooltip{
+  position:fixed; z-index:80; pointer-events:none; background: var(--text-primary); color: var(--surface-1);
+  font-size:0.75rem; padding:0.4rem 0.55rem; border-radius:0.3rem; max-width:220px; line-height:1.35;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.25); opacity:0; transform: translate(-9999px,-9999px);
+}
+#floatTooltip strong{ display:block; font-size:0.8rem; }
+
+/* --- jauges --- */
+.meter-grid{ display:grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap:1rem; }
+.meter-block{ display:flex; flex-direction:column; gap:0.4rem; }
+.meter-top{ display:flex; justify-content:space-between; align-items:baseline; }
+.meter-value{ font-size:1.4rem; font-weight:700; font-variant-numeric: tabular-nums; }
+.meter-track{ height:0.9rem; border-radius:5px; overflow:hidden; }
+.meter-fill{ height:100%; border-radius:5px; transition: width 0.5s ease; }
+.meter-caption{ font-size:0.75rem; color: var(--text-muted); display:flex; align-items:center; gap:0.35rem; }
+.status-dot{ width:0.6rem; height:0.6rem; border-radius:50%; display:inline-block; }
+
+/* --- table d'action --- */
+.action-tabs{ display:flex; gap:0.4rem; flex-wrap:wrap; margin-bottom:0.85rem; }
+.action-tab{
+  all:unset; cursor:pointer; font-size:0.8rem; padding:0.35rem 0.75rem; border-radius:1rem;
+  border:1px solid var(--border-1); color: var(--text-secondary);
+}
+.action-tab[aria-pressed="true"]{ background: var(--series-1); border-color: var(--series-1); color:#fff; font-weight:600; }
+.action-tab:focus-visible{ outline:2px solid var(--focus); outline-offset:2px; }
+#actionTableWrap{ overflow-x:auto; }
+.anomaly-badge{ display:inline-block; font-size:0.68rem; padding:0.1rem 0.45rem; border-radius:0.8rem; margin:0.1rem 0.2rem 0.1rem 0; white-space:nowrap; }
+.badge-critical{ background: color-mix(in srgb, var(--status-critical) 16%, transparent); color: var(--status-critical); }
+.badge-serious{ background: color-mix(in srgb, var(--status-serious) 16%, transparent); color: var(--status-serious); }
+.action-empty{ padding:1.25rem 0; text-align:center; color: var(--text-muted); font-size:0.85rem; }
+.dept-tag{ display:inline-block; font-size:0.7rem; padding:0.05rem 0.4rem; border-radius:0.7rem; background: var(--surface-2); color: var(--text-secondary); }
+
+/* --- grille de section --- */
+.section-title{ display:flex; align-items:center; gap:0.6rem; margin: 0 0 1rem; }
+.section-title h2{ margin:0; }
+
+#noticeZone > * + *{ margin-top: 0.75rem; }
+.fr-table td, .fr-table th{ vertical-align: middle; }
+.tv-table{ width:100%; border-collapse:collapse; font-size:0.78rem; }
+.tv-table th, .tv-table td{ text-align:left; padding:0.3rem 0.5rem; border-bottom:1px solid var(--border-1); }
+.tv-table td:last-child, .tv-table th:last-child{ text-align:right; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 48em){
+  .bar-row{ grid-template-columns: 108px 1fr 3rem; }
+}
+</style>
+</head>
+<body>
+
+<div class="fr-container fr-py-4w">
+
+  <!-- En-tête -->
+  <div class="mast fr-mb-3w">
+    <div class="fr-grid-row fr-grid-row--gutters fr-grid-row--middle">
+      <div class="fr-col-12 fr-col-md-8">
+        <p class="fr-badge fr-badge--sm fr-badge--info fr-mb-2w">Démarche Simplifiée n°149963</p>
+        <h1 class="fr-h3 fr-mb-1v">Suivi de campagne reliquats — v2.0</h1>
+        <p class="fr-text--sm fr-mb-0" style="color:var(--text-muted)">Instruction DRAAF Bretagne</p>
+      </div>
+      <div class="fr-col-12 fr-col-md-4" style="text-align:right">
+        <p class="fr-text--sm fr-mb-1w" id="syncLabel">Connexion à Grist…</p>
+        <button type="button" class="fr-btn fr-btn--secondary fr-btn--icon-left fr-icon-refresh-line" id="refreshBtn">
+          Rafraîchir
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filtre global (s'applique à tous les indicateurs ci-dessous) -->
+  <div class="filter-row">
+    <div class="fr-select-group">
+      <label class="fr-label" for="deptFilter">Département</label>
+      <select class="fr-select" id="deptFilter">
+        <option value="all">Tous les départements</option>
+      </select>
+    </div>
+    <p class="filter-hint">Ce filtre s'applique à l'ensemble des indicateurs et graphiques de la page.</p>
+  </div>
+
+  <!-- Indicateurs clés -->
+  <div class="fr-grid-row fr-grid-row--gutters fr-mb-4w" id="kpiRow">
+
+    <div class="fr-col-12 fr-col-sm-6 fr-col-md-4 fr-col-lg-2">
+      <div class="kpi-card">
+        <div class="kpi-top">
+          <p class="kpi-label fr-mb-0">Dossiers reçus</p>
+          <button class="help-btn" type="button" data-help="kpi-dossiers" aria-label="Aide sur cet indicateur">
+            <span class="fr-icon-information-line" aria-hidden="true"></span>
+          </button>
+        </div>
+        <p class="kpi-value" id="kpiDossiers">—</p>
+        <p class="kpi-delta flat" id="kpiDossiersDelta"></p>
+      </div>
+    </div>
+
+    <div class="fr-col-12 fr-col-sm-6 fr-col-md-4 fr-col-lg-2">
+      <div class="kpi-card">
+        <div class="kpi-top">
+          <p class="kpi-label fr-mb-0">Exploitants recensés</p>
+          <button class="help-btn" type="button" data-help="kpi-exploitants" aria-label="Aide sur cet indicateur">
+            <span class="fr-icon-information-line" aria-hidden="true"></span>
+          </button>
+        </div>
+        <p class="kpi-value" id="kpiExploitants">—</p>
+        <p class="kpi-hint" id="kpiExploitantsHint"></p>
+      </div>
+    </div>
+
+    <div class="fr-col-12 fr-col-sm-6 fr-col-md-4 fr-col-lg-2">
+      <div class="kpi-card">
+        <div class="kpi-top">
+          <p class="kpi-label fr-mb-0">Taux de dépôt</p>
+          <button class="help-btn" type="button" data-help="kpi-taux" aria-label="Aide sur cet indicateur">
+            <span class="fr-icon-information-line" aria-hidden="true"></span>
+          </button>
+        </div>
+        <p class="kpi-value" id="kpiTaux">—</p>
+        <p class="kpi-hint" id="kpiTauxHint"></p>
+      </div>
+    </div>
+
+    <div class="fr-col-12 fr-col-sm-6 fr-col-md-4 fr-col-lg-2">
+      <div class="kpi-card">
+        <div class="kpi-top">
+          <p class="kpi-label fr-mb-0">Dossiers finalisés</p>
+          <button class="help-btn" type="button" data-help="kpi-finalises" aria-label="Aide sur cet indicateur">
+            <span class="fr-icon-information-line" aria-hidden="true"></span>
+          </button>
+        </div>
+        <p class="kpi-value" id="kpiFinalises">—</p>
+        <p class="kpi-hint" id="kpiFinalisesHint"></p>
+      </div>
+    </div>
+
+    <div class="fr-col-12 fr-col-sm-6 fr-col-md-4 fr-col-lg-2">
+      <div class="kpi-card" style="border-left-color:var(--status-serious)">
+        <div class="kpi-top">
+          <p class="kpi-label fr-mb-0">Anomalies à corriger</p>
+          <button class="help-btn" type="button" data-help="kpi-anomalies" aria-label="Aide sur cet indicateur">
+            <span class="fr-icon-information-line" aria-hidden="true"></span>
+          </button>
+        </div>
+        <p class="kpi-value" id="kpiAnomalies">—</p>
+        <p class="kpi-hint" id="kpiAnomaliesHint"></p>
+      </div>
+    </div>
+
+    <div class="fr-col-12 fr-col-sm-6 fr-col-md-4 fr-col-lg-2">
+      <div class="kpi-card">
+        <div class="kpi-top">
+          <p class="kpi-label fr-mb-0">Appels enregistrés</p>
+          <button class="help-btn" type="button" data-help="kpi-appels" aria-label="Aide sur cet indicateur">
+            <span class="fr-icon-information-line" aria-hidden="true"></span>
+          </button>
+        </div>
+        <p class="kpi-value" id="kpiAppels">—</p>
+        <p class="kpi-hint" id="kpiAppelsHint"></p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Graphiques -->
+  <div class="fr-grid-row fr-grid-row--gutters fr-mb-4w">
+
+    <div class="fr-col-12 fr-col-lg-6">
+      <div class="chart-card">
+        <div class="chart-head">
+          <div class="chart-title-wrap">
+            <p class="chart-title">État d'avancement des dossiers</p>
+            <button class="help-btn" type="button" data-help="chart-etat" aria-label="Aide sur ce graphique"><span class="fr-icon-information-line" aria-hidden="true"></span></button>
+          </div>
+          <div class="chart-controls">
+            <label class="sr-only" for="etatDim">Regrouper par</label>
+            <select class="fr-select" id="etatDim">
+              <option value="etat" selected>Par état d'avancement</option>
+              <option value="dept">Par département</option>
+            </select>
+          </div>
+        </div>
+        <div class="chart-body"><div class="bar-list" id="chartEtat"></div></div>
+        <div class="chart-foot"><details><summary>Voir les données</summary><div id="chartEtatTable"></div></details></div>
+      </div>
+    </div>
+
+    <div class="fr-col-12 fr-col-lg-6">
+      <div class="chart-card">
+        <div class="chart-head">
+          <div class="chart-title-wrap">
+            <p class="chart-title">Appels enregistrés</p>
+            <button class="help-btn" type="button" data-help="chart-appels" aria-label="Aide sur ce graphique"><span class="fr-icon-information-line" aria-hidden="true"></span></button>
+          </div>
+          <div class="chart-controls">
+            <label class="sr-only" for="appelsDim">Regrouper par</label>
+            <select class="fr-select" id="appelsDim">
+              <option value="traitement" selected>Par traitement</option>
+              <option value="type">Par type d'appel</option>
+              <option value="statut">Par statut FAQ</option>
+            </select>
+          </div>
+        </div>
+        <div class="chart-body">
+          <div class="donut-wrap">
+            <div class="donut-svg-holder">
+              <svg viewBox="0 0 42 42" id="donutSvg"></svg>
+              <div class="donut-center"><strong id="donutTotal">—</strong><span>appels</span></div>
+            </div>
+            <div class="donut-legend" id="donutLegend"></div>
+          </div>
+        </div>
+        <div class="chart-foot"><details><summary>Voir les données</summary><div id="chartAppelsTable"></div></details></div>
+      </div>
+    </div>
+
+    <div class="fr-col-12 fr-col-lg-6">
+      <div class="chart-card">
+        <div class="chart-head">
+          <div class="chart-title-wrap">
+            <p class="chart-title">Dépôts de dossiers dans le temps</p>
+            <button class="help-btn" type="button" data-help="chart-trend" aria-label="Aide sur ce graphique"><span class="fr-icon-information-line" aria-hidden="true"></span></button>
+          </div>
+          <div class="chart-controls">
+            <label class="sr-only" for="trendMode">Mode d'affichage</label>
+            <select class="fr-select" id="trendMode">
+              <option value="period" selected>Dépôts par mois</option>
+              <option value="cumul">Cumul des dépôts</option>
+            </select>
+          </div>
+        </div>
+        <div class="chart-body"><div class="trend-svg-holder"><svg id="trendSvg" viewBox="0 0 600 220" preserveAspectRatio="none"></svg></div></div>
+        <div class="chart-foot"><details><summary>Voir les données</summary><div id="chartTrendTable"></div></details></div>
+      </div>
+    </div>
+
+    <div class="fr-col-12 fr-col-lg-6">
+      <div class="chart-card">
+        <div class="chart-head">
+          <div class="chart-title-wrap">
+            <p class="chart-title">Répartition géographique</p>
+            <button class="help-btn" type="button" data-help="chart-geo" aria-label="Aide sur ce graphique"><span class="fr-icon-information-line" aria-hidden="true"></span></button>
+          </div>
+          <div class="chart-controls">
+            <label class="sr-only" for="geoMetric">Indicateur</label>
+            <select class="fr-select" id="geoMetric">
+              <option value="exploitants" selected>Exploitants</option>
+              <option value="dossiers">Dossiers déposés</option>
+              <option value="anomalies">Anomalies signalées</option>
+            </select>
+          </div>
+        </div>
+        <div class="chart-body"><div class="bar-list" id="chartGeo"></div></div>
+        <div class="chart-foot"><details><summary>Voir les données</summary><div id="chartGeoTable"></div></details></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Jauges -->
+  <div class="fr-mb-4w">
+    <div class="section-title">
+      <h2 class="fr-h5 fr-mb-0">Taux de conformité</h2>
+    </div>
+    <div class="chart-card">
+      <div class="meter-grid">
+
+        <div class="meter-block">
+          <div class="chart-title-wrap">
+            <p class="chart-title" style="font-size:0.85rem">Taux de dossiers finalisés</p>
+            <button class="help-btn" type="button" data-help="meter-finalises" aria-label="Aide sur cet indicateur"><span class="fr-icon-information-line" aria-hidden="true"></span></button>
+          </div>
+          <div class="meter-top"><span class="meter-value" id="meterFinalisesValue">—</span></div>
+          <div class="meter-track" style="background:var(--surface-2)"><div class="meter-fill" id="meterFinalisesFill" style="width:0%"></div></div>
+          <p class="meter-caption" id="meterFinalisesCaption"><span class="status-dot" id="meterFinalisesDot"></span><span>—</span></p>
+        </div>
+
+        <div class="meter-block">
+          <div class="chart-title-wrap">
+            <p class="chart-title" style="font-size:0.85rem">Conformité des parcelles saisies</p>
+            <button class="help-btn" type="button" data-help="meter-parcelles" aria-label="Aide sur cet indicateur"><span class="fr-icon-information-line" aria-hidden="true"></span></button>
+          </div>
+          <div class="meter-top"><span class="meter-value" id="meterParcellesValue">—</span></div>
+          <div class="meter-track" style="background:var(--surface-2)"><div class="meter-fill" id="meterParcellesFill" style="width:0%"></div></div>
+          <p class="meter-caption" id="meterParcellesCaption"><span class="status-dot" id="meterParcellesDot"></span><span>—</span></p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Table d'action -->
+  <div class="fr-mb-4w">
+    <div class="section-title">
+      <div class="chart-title-wrap">
+        <h2 class="fr-h5 fr-mb-0">Dossiers nécessitant une action</h2>
+        <button class="help-btn" type="button" data-help="table-action" aria-label="Aide sur ce tableau"><span class="fr-icon-information-line" aria-hidden="true"></span></button>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="action-tabs" role="tablist" aria-label="Filtrer les dossiers à traiter">
+        <button class="action-tab" type="button" data-tab="anomalies" aria-pressed="true">Anomalies détectées</button>
+        <button class="action-tab" type="button" data-tab="association" aria-pressed="false">Association à faire</button>
+        <button class="action-tab" type="button" data-tab="valider" aria-pressed="false">À valider sur DN</button>
+      </div>
+      <div id="actionTableWrap">
+        <div class="fr-table fr-table--bordered">
+          <table>
+            <caption class="fr-hidden">Dossiers nécessitant une action</caption>
+            <thead>
+              <tr>
+                <th scope="col">N° dossier</th>
+                <th scope="col">Raison sociale</th>
+                <th scope="col">PACAGE</th>
+                <th scope="col">Dépt.</th>
+                <th scope="col">Motif</th>
+                <th scope="col"></th>
+              </tr>
+            </thead>
+            <tbody id="actionTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <p class="fr-hint-text fr-mb-0" id="actionTableMore"></p>
+    </div>
+  </div>
+
+  <!-- Zone d'alertes dynamiques (données manquantes, erreurs) -->
+  <div id="noticeZone"></div>
+
+  <p class="fr-text--sm fr-mt-4w" style="color:var(--text-muted)" id="footNote">Chargement des données…</p>
+
+</div>
+
+<div id="floatTooltip" role="tooltip"></div>
+
+<script>
+(function(){
+
+  /* =====================================================================
+     Utilitaires génériques
+     ===================================================================== */
+  const el = id => document.getElementById(id);
+  const fmt = n => (n === null || n === undefined || Number.isNaN(n)) ? '—' : n.toLocaleString('fr-FR');
+  const fmtPct = n => (n === null || n === undefined || Number.isNaN(n)) ? '—' : Math.round(n) + ' %';
+
+  function listValues(cell){
+    if (Array.isArray(cell)){
+      if (cell[0] === 'L') return cell.slice(1);
+      return cell.filter(v => v !== null && v !== undefined && v !== '');
+    }
+    if (cell === null || cell === undefined || cell === '') return [];
+    return [cell];
+  }
+
+  function toDate(raw){
+    if (raw === null || raw === undefined || raw === '') return null;
+    if (typeof raw === 'number'){
+      const d = new Date(raw * 1000);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    let d = new Date(raw);
+    if (!isNaN(d.getTime())) return d;
+    const n = Number(raw);
+    if (!isNaN(n)){
+      d = new Date(n * 1000);
+      if (!isNaN(d.getTime())) return d;
+    }
+    return null;
+  }
+
+  function formatDept(code){
+    if (!code) return 'Non renseigné';
+    return String(code).replace(/^0+/, '') || code;
+  }
+
+  function rateToStatus(rate){
+    if (rate === null || rate === undefined || Number.isNaN(rate)) return 'neutral';
+    if (rate >= 80) return 'good';
+    if (rate >= 50) return 'warning';
+    return 'critical';
+  }
+  const statusVar = { good:'--status-good', warning:'--status-warning', serious:'--status-serious', critical:'--status-critical', neutral:'--status-neutral' };
+  const statusLabel = { good:'Bon niveau', warning:'À surveiller', serious:'À corriger', critical:'Priorité d’action', neutral:'Non évaluable' };
+  function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+  async function safeFetchTable(name){
+    try{
+      return await grist.docApi.fetchTable(name);
+    }catch(e){
+      console.warn('Table indisponible :', name, e);
+      return null;
+    }
+  }
+
+  function renderAlert(kind, title, message){
+    const wrap = document.createElement('div');
+    wrap.className = 'fr-alert fr-alert--' + kind + ' fr-alert--sm';
+    wrap.setAttribute('role', 'alert');
+    const t = document.createElement('p');
+    t.className = 'fr-alert__title';
+    t.textContent = title;
+    const m = document.createElement('p');
+    m.textContent = message;
+    if (title) wrap.appendChild(t);
+    wrap.appendChild(m);
+    return wrap;
+  }
+  function clearNotices(){ el('noticeZone').innerHTML = ''; }
+  function pushNotice(node){ el('noticeZone').appendChild(node); }
+
+  /* =====================================================================
+     Tooltip flottant partagé (survol des barres / segments / points)
+     ===================================================================== */
+  const tooltipEl = el('floatTooltip');
+  function showTooltip(x, y, titleText, bodyText){
+    tooltipEl.innerHTML = '';
+    const strong = document.createElement('strong');
+    strong.textContent = titleText;
+    tooltipEl.appendChild(strong);
+    if (bodyText){
+      const span = document.createElement('span');
+      span.textContent = bodyText;
+      tooltipEl.appendChild(span);
+    }
+    const pad = 12;
+    let left = x + pad, top = y + pad;
+    tooltipEl.style.transform = 'translate(' + left + 'px,' + top + 'px)';
+    tooltipEl.style.opacity = '1';
+    requestAnimationFrame(() => {
+      const rect = tooltipEl.getBoundingClientRect();
+      if (rect.right > window.innerWidth) left = x - rect.width - pad;
+      if (rect.bottom > window.innerHeight) top = y - rect.height - pad;
+      tooltipEl.style.transform = 'translate(' + left + 'px,' + top + 'px)';
+    });
+  }
+  function hideTooltip(){ tooltipEl.style.opacity = '0'; tooltipEl.style.transform = 'translate(-9999px,-9999px)'; }
+
+  /* =====================================================================
+     Popovers d'aide au choix (un par graphique / indicateur)
+     ===================================================================== */
+  const HELP_CONTENT = {
+    'kpi-dossiers': {
+      title: 'Dossiers reçus',
+      body: [
+        'Nombre de dossiers uniques déposés sur la démarche 149963 (table Demarche_149963_demandeurs, champ dossier_number).',
+        'La variation affichée compare les 7 derniers jours aux 7 jours précédents : elle signale un afflux ou un ralentissement des dépôts.'
+      ]
+    },
+    'kpi-exploitants': {
+      title: 'Exploitants recensés',
+      body: ['Nombre d’exploitants ciblés par la campagne, tels qu’importés dans la table DATA_Exploitants (un exploitant = un PACAGE sélectionné).']
+    },
+    'kpi-taux': {
+      title: 'Taux de dépôt',
+      body: ['Part des exploitants recensés ayant au moins un dossier déposé sur la démarche (dossiers reçus / exploitants recensés). Un taux bas indique un besoin de relance.']
+    },
+    'kpi-finalises': {
+      title: 'Dossiers finalisés',
+      body: ['Exploitants dont l’état d’avancement (DATA_Exploitants.Etat_d_avancement) vaut « Dossier finalisé » : parcelles saisies conformes et sans anomalie bloquante.']
+    },
+    'kpi-anomalies': {
+      title: 'Anomalies à corriger',
+      body: ['Exploitants pour lesquels au moins une anomalie a été détectée automatiquement (doublon de parcelle, nombre de parcelles insuffisant…). Ce sont les dossiers à recontacter en priorité.']
+    },
+    'kpi-appels': {
+      title: 'Appels enregistrés',
+      body: ['Nombre total d’évènements consignés dans DATA_Evenements (appels entrants, relances, courriers…). Le sous-texte indique combien restent à rappeler.']
+    },
+    'chart-etat': {
+      title: 'État d’avancement des dossiers',
+      body: ['Répartit les exploitants recensés selon leur avancement dans la démarche, calculé par la formule Etat_d_avancement.'],
+      choices: [
+        ['Par état d’avancement', 'vue par défaut, utile pour piloter l’instruction au quotidien (quels dossiers valider, relancer, corriger).'],
+        ['Par département', 'utile pour identifier les territoires où concentrer les relances.']
+      ]
+    },
+    'chart-appels': {
+      title: 'Appels enregistrés',
+      body: ['Répartition des évènements du journal des appels (DATA_Evenements).'],
+      choices: [
+        ['Par traitement', 'montre comment les appels ont été traités (répondu, sans suite, à recontacter…).'],
+        ['Par type d’appel', 'montre la nature des sollicitations (information, réclamation, technique…).'],
+        ['Par statut FAQ', 'montre si les questions posées sont déjà couvertes par la foire aux questions.']
+      ]
+    },
+    'chart-trend': {
+      title: 'Dépôts de dossiers dans le temps',
+      body: ['Nombre de dossiers déposés par mois, d’après la date de dépôt (Depose_le).'],
+      choices: [
+        ['Dépôts par mois', 'utile pour repérer les pics et anticiper la charge d’instruction.'],
+        ['Cumul des dépôts', 'utile pour suivre la progression globale de la campagne par rapport à l’objectif.']
+      ]
+    },
+    'chart-geo': {
+      title: 'Répartition géographique',
+      body: ['Compare les départements bretons sur l’indicateur sélectionné (code du département déduit du PACAGE).'],
+      choices: [
+        ['Exploitants', 'où se trouvent les exploitants ciblés par la campagne.'],
+        ['Dossiers déposés', 'où la dynamique de dépôt est la plus forte ou la plus faible.'],
+        ['Anomalies signalées', 'où concentrer l’effort de correction et de relance.']
+      ]
+    },
+    'meter-finalises': {
+      title: 'Taux de dossiers finalisés',
+      body: ['Part des exploitants ayant déjà déposé une déclaration numérique (Nb_DN > 0) dont le dossier est finalisé, sans anomalie ni parcelle manquante.']
+    },
+    'meter-parcelles': {
+      title: 'Conformité des parcelles saisies',
+      body: ['Part des dossiers déposés dont le nombre de parcelles saisies correspond exactement au nombre de parcelles attendues (écart = 0).']
+    },
+    'table-action': {
+      title: 'Dossiers nécessitant une action',
+      body: ['Liste nominative des dossiers qui bloquent l’instruction, à traiter en priorité.'],
+      choices: [
+        ['Anomalies détectées', 'dossiers avec une anomalie de saisie (doublon, parcelles manquantes ou en trop).'],
+        ['Association à faire', 'dossiers déposés qui n’ont pas encore été rattachés à un exploitant de la base.'],
+        ['À valider sur DN', 'dossiers complets, en attente de validation dans Démarches Numériques.']
+      ]
+    }
+  };
+
+  let openPopover = null;
+  function closePopover(){
+    if (openPopover){
+      openPopover.panel.remove();
+      openPopover.btn.setAttribute('aria-expanded', 'false');
+      openPopover = null;
+    }
+  }
+  function buildHelpPanel(key){
+    const data = HELP_CONTENT[key];
+    const panel = document.createElement('div');
+    panel.className = 'help-panel';
+    panel.setAttribute('role', 'dialog');
+    if (!data) return panel;
+    const h3 = document.createElement('h3');
+    h3.textContent = data.title;
+    panel.appendChild(h3);
+    (data.body || []).forEach(t => {
+      const p = document.createElement('p');
+      p.textContent = t;
+      panel.appendChild(p);
+    });
+    if (data.choices && data.choices.length){
+      const intro = document.createElement('p');
+      intro.style.fontWeight = '600';
+      intro.style.margin = '0.5rem 0 0.15rem';
+      intro.textContent = 'Comment choisir :';
+      panel.appendChild(intro);
+      data.choices.forEach(([label, why]) => {
+        const p = document.createElement('p');
+        p.className = 'help-choice';
+        const strong = document.createElement('strong');
+        strong.textContent = label + ' — ';
+        p.appendChild(strong);
+        p.appendChild(document.createTextNode(why));
+        panel.appendChild(p);
+      });
+    }
+    return panel;
+  }
+  document.addEventListener('click', (evt) => {
+    const btn = evt.target.closest('.help-btn');
+    if (!btn){
+      if (openPopover && !evt.target.closest('.help-panel')) closePopover();
+      return;
+    }
+    const key = btn.getAttribute('data-help');
+    if (openPopover && openPopover.btn === btn){ closePopover(); return; }
+    closePopover();
+    const panel = buildHelpPanel(key);
+    document.body.appendChild(panel);
+    const r = btn.getBoundingClientRect();
+    const top = window.scrollY + r.bottom + 6;
+    let left = window.scrollX + r.left;
+    panel.style.position = 'absolute';
+    panel.style.top = top + 'px';
+    panel.style.left = left + 'px';
+    requestAnimationFrame(() => {
+      const pr = panel.getBoundingClientRect();
+      if (pr.right > window.innerWidth - 8){
+        left = window.scrollX + window.innerWidth - pr.width - 8;
+        panel.style.left = Math.max(8, left) + 'px';
+      }
+    });
+    btn.setAttribute('aria-expanded', 'true');
+    openPopover = { btn, panel };
+  });
+  document.addEventListener('keydown', (evt) => { if (evt.key === 'Escape') closePopover(); });
+  window.addEventListener('scroll', closePopover, { passive:true });
+  window.addEventListener('resize', closePopover);
+
+  /* =====================================================================
+     État applicatif
+     ===================================================================== */
+  const state = {
+    demandeurs: null,
+    exploitants: null,
+    evenements: null,
+    syncMeta: null,
+    dept: 'all',
+    etatDim: 'etat',
+    appelsDim: 'traitement',
+    trendMode: 'period',
+    geoMetric: 'exploitants',
+    actionTab: 'anomalies',
+    expById: new Map()
+  };
+
+  const ETAT_ORDER = ['En attente de DN', 'En attente du retour de l’agri', 'Anomalies à corriger', 'Dossier à valider sur DN', 'Dossier finalisé'];
+  const ETAT_STATUS = {
+    'En attente de DN': 'critical',
+    'En attente du retour de l’agri': 'neutral',
+    'Anomalies à corriger': 'serious',
+    'Dossier à valider sur DN': 'warning',
+    'Dossier finalisé': 'good',
+    'Non renseigné': 'neutral'
+  };
+  const SEQ_STEPS = ['--seq-1','--seq-2','--seq-3','--seq-4','--seq-5','--seq-6','--seq-7'];
+  const CAT_SLOTS = ['--series-1','--series-2','--series-3','--series-4','--series-5','--series-6','--series-7','--series-8'];
+
+  function maskFor(codeDptArray){
+    if (state.dept === 'all') return codeDptArray.map(() => true);
+    return codeDptArray.map(c => c === state.dept);
+  }
+
+  function buildDeptOptions(){
+    const set = new Set();
+    if (state.exploitants && state.exploitants.Code_dpt){
+      state.exploitants.Code_dpt.forEach(c => { if (c) set.add(c); });
+    }
+    if (state.demandeurs && state.demandeurs.Code_dpt){
+      state.demandeurs.Code_dpt.forEach(c => { if (c) set.add(c); });
+    }
+    const sorted = Array.from(set).sort();
+    const sel = el('deptFilter');
+    const current = sel.value || 'all';
+    sel.innerHTML = '<option value="all">Tous les départements</option>' +
+      sorted.map(c => '<option value="' + c + '">' + formatDept(c) + '</option>').join('');
+    sel.value = sorted.includes(current) ? current : 'all';
+    state.dept = sel.value;
+  }
+
+  /* =====================================================================
+     Composants de rendu — barres horizontales
+     ===================================================================== */
+  function renderBarList(containerId, tableContainerId, items, opts){
+    opts = opts || {};
+    const container = el(containerId);
+    container.innerHTML = '';
+    if (!items.length){
+      container.innerHTML = '<p class="action-empty">Aucune donnée pour ce filtre.</p>';
+      if (tableContainerId) el(tableContainerId).innerHTML = '';
+      return;
+    }
+    const max = Math.max(...items.map(i => i.value), 1);
+    items.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'bar-row';
+
+      const label = document.createElement('div');
+      label.className = 'bar-row-label';
+      label.title = item.label;
+      const dot = document.createElement('span');
+      dot.className = 'bar-dot';
+      dot.style.background = item.color;
+      label.appendChild(dot);
+      label.appendChild(document.createTextNode(item.label));
+      row.appendChild(label);
+
+      const track = document.createElement('div');
+      track.className = 'bar-track';
+      const fill = document.createElement('div');
+      fill.className = 'bar-fill';
+      fill.style.background = item.color;
+      fill.style.width = Math.round(item.value / max * 100) + '%';
+      track.appendChild(fill);
+      track.tabIndex = 0;
+      track.setAttribute('role', 'img');
+      track.setAttribute('aria-label', item.label + ' : ' + fmt(item.value));
+      const showTip = (evt) => showTooltip(evt.clientX, evt.clientY, item.label, fmt(item.value) + (opts.unit ? ' ' + opts.unit : '') + (item.pct !== undefined ? ' (' + Math.round(item.pct) + ' %)' : ''));
+      track.addEventListener('pointermove', showTip);
+      track.addEventListener('pointerenter', showTip);
+      track.addEventListener('pointerleave', hideTooltip);
+      track.addEventListener('focus', (evt) => showTooltip(track.getBoundingClientRect().right, track.getBoundingClientRect().top, item.label, fmt(item.value)));
+      track.addEventListener('blur', hideTooltip);
+      row.appendChild(track);
+
+      const value = document.createElement('div');
+      value.className = 'bar-value';
+      value.textContent = fmt(item.value);
+      row.appendChild(value);
+
+      container.appendChild(row);
+    });
+    if (tableContainerId) renderTableView(tableContainerId, items, opts.dimLabel || 'Catégorie');
+  }
+
+  function renderTableView(containerId, items, dimLabel){
+    const c = el(containerId);
+    if (!c) return;
+    c.innerHTML = '';
+    const table = document.createElement('table');
+    table.className = 'tv-table';
+    const thead = document.createElement('thead');
+    thead.innerHTML = '<tr><th scope="col">' + dimLabel + '</th><th scope="col">Valeur</th></tr>';
+    table.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    items.forEach(i => {
+      const tr = document.createElement('tr');
+      const td1 = document.createElement('td'); td1.textContent = i.label;
+      const td2 = document.createElement('td'); td2.textContent = fmt(i.value);
+      tr.appendChild(td1); tr.appendChild(td2);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    c.appendChild(table);
+  }
+
+  /* =====================================================================
+     Composant de rendu — donut
+     ===================================================================== */
+  function renderDonut(items, total){
+    const svg = el('donutSvg');
+    svg.innerHTML = '';
+    el('donutTotal').textContent = fmt(total);
+    const legend = el('donutLegend');
+    legend.innerHTML = '';
+
+    if (!total){
+      const p = document.createElement('p');
+      p.className = 'action-empty';
+      p.textContent = 'Aucune donnée pour ce filtre.';
+      legend.appendChild(p);
+      return;
+    }
+
+    const r = 15.9155, cx = 21, cy = 21, strokeW = 7;
+    let offset = 0;
+    const ns = 'http://www.w3.org/2000/svg';
+    items.forEach(item => {
+      const frac = item.value / total;
+      const circle = document.createElementNS(ns, 'circle');
+      circle.setAttribute('cx', cx); circle.setAttribute('cy', cy); circle.setAttribute('r', r);
+      circle.setAttribute('fill', 'transparent');
+      circle.setAttribute('stroke', item.color);
+      circle.setAttribute('stroke-width', strokeW);
+      const circumference = 2 * Math.PI * r;
+      const dash = Math.max(frac * circumference - 0.6, 0);
+      circle.setAttribute('stroke-dasharray', dash + ' ' + (circumference - dash));
+      circle.setAttribute('stroke-dashoffset', (-offset * circumference).toFixed(3));
+      circle.setAttribute('transform', 'rotate(-90 ' + cx + ' ' + cy + ')');
+      circle.style.cursor = 'default';
+      circle.addEventListener('pointermove', (evt) => showTooltip(evt.clientX, evt.clientY, item.label, fmt(item.value) + ' (' + Math.round(frac * 100) + ' %)'));
+      circle.addEventListener('pointerleave', hideTooltip);
+      svg.appendChild(circle);
+      offset += frac;
+    });
+
+    items.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'legend-row';
+      const sw = document.createElement('span'); sw.className = 'legend-swatch'; sw.style.background = item.color;
+      const lab = document.createElement('span'); lab.className = 'legend-label'; lab.textContent = item.label;
+      const val = document.createElement('span'); val.className = 'legend-value'; val.textContent = fmt(item.value);
+      const pct = document.createElement('span'); pct.className = 'legend-pct'; pct.textContent = Math.round(item.value / total * 100) + ' %';
+      row.appendChild(sw); row.appendChild(lab); row.appendChild(val); row.appendChild(pct);
+      legend.appendChild(row);
+    });
+  }
+
+  /* =====================================================================
+     Composant de rendu — ligne / tendance
+     ===================================================================== */
+  function renderTrend(points, opts){
+    opts = opts || {};
+    const svg = el('trendSvg');
+    svg.innerHTML = '';
+    if (!points.length){
+      el('chartTrendTable').innerHTML = '';
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('x', 300); text.setAttribute('y', 110); text.setAttribute('text-anchor','middle');
+      text.setAttribute('fill', cssVar('--text-muted') || '#666');
+      text.textContent = 'Aucune donnée pour ce filtre.';
+      svg.appendChild(text);
+      return;
+    }
+    const ns = 'http://www.w3.org/2000/svg';
+    const W = 600, H = 220, padL = 34, padR = 12, padT = 14, padB = 26;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const maxV = Math.max(...points.map(p => p.value), 1);
+    const stepX = points.length > 1 ? plotW / (points.length - 1) : 0;
+    const x = i => padL + i * stepX;
+    const y = v => padT + plotH - (v / maxV) * plotH;
+    const color = cssVar('--series-1') || '#2a78d6';
+
+    // gridlines (hairline, recessive)
+    const gridColor = cssVar('--border-1') || '#ddd';
+    [0, 0.5, 1].forEach(f => {
+      const gy = padT + plotH * (1 - f);
+      const line = document.createElementNS(ns, 'line');
+      line.setAttribute('x1', padL); line.setAttribute('x2', W - padR);
+      line.setAttribute('y1', gy); line.setAttribute('y2', gy);
+      line.setAttribute('stroke', gridColor); line.setAttribute('stroke-width', 1);
+      svg.appendChild(line);
+      const label = document.createElementNS(ns, 'text');
+      label.setAttribute('x', padL - 6); label.setAttribute('y', gy + 3); label.setAttribute('text-anchor', 'end');
+      label.setAttribute('font-size', '9'); label.setAttribute('fill', cssVar('--text-muted') || '#666');
+      label.textContent = fmt(Math.round(maxV * f));
+      svg.appendChild(label);
+    });
+
+    // area fill (10% opacity)
+    let areaPath = 'M ' + x(0) + ' ' + y(0);
+    points.forEach((p, i) => { areaPath += ' L ' + x(i) + ' ' + y(p.value); });
+    areaPath += ' L ' + x(points.length - 1) + ' ' + (padT + plotH) + ' L ' + x(0) + ' ' + (padT + plotH) + ' Z';
+    const area = document.createElementNS(ns, 'path');
+    area.setAttribute('d', areaPath); area.setAttribute('fill', color); area.setAttribute('opacity', '0.1');
+    svg.appendChild(area);
+
+    // line (2px)
+    let linePath = 'M ' + x(0) + ' ' + y(points[0].value);
+    points.forEach((p, i) => { if (i > 0) linePath += ' L ' + x(i) + ' ' + y(p.value); });
+    const line = document.createElementNS(ns, 'path');
+    line.setAttribute('d', linePath); line.setAttribute('fill', 'none'); line.setAttribute('stroke', color);
+    line.setAttribute('stroke-width', 2); line.setAttribute('stroke-linejoin', 'round'); line.setAttribute('stroke-linecap', 'round');
+    svg.appendChild(line);
+
+    // x-axis labels (sparse to avoid collision)
+    const labelEvery = Math.ceil(points.length / 8);
+    points.forEach((p, i) => {
+      if (i % labelEvery !== 0 && i !== points.length - 1) return;
+      const label = document.createElementNS(ns, 'text');
+      label.setAttribute('x', x(i)); label.setAttribute('y', H - 8); label.setAttribute('text-anchor', 'middle');
+      label.setAttribute('font-size', '9'); label.setAttribute('fill', cssVar('--text-muted') || '#666');
+      label.textContent = p.label;
+      svg.appendChild(label);
+    });
+
+    // points + hit areas
+    points.forEach((p, i) => {
+      const dot = document.createElementNS(ns, 'circle');
+      dot.setAttribute('cx', x(i)); dot.setAttribute('cy', y(p.value)); dot.setAttribute('r', i === points.length - 1 ? 4 : 3);
+      dot.setAttribute('fill', color); dot.setAttribute('stroke', cssVar('--surface-1') || '#fff'); dot.setAttribute('stroke-width', 2);
+      svg.appendChild(dot);
+
+      const hit = document.createElementNS(ns, 'circle');
+      hit.setAttribute('cx', x(i)); hit.setAttribute('cy', y(p.value)); hit.setAttribute('r', 12);
+      hit.setAttribute('fill', 'transparent'); hit.classList.add('trend-point');
+      hit.addEventListener('pointermove', (evt) => showTooltip(evt.clientX, evt.clientY, p.label, fmt(p.value) + (opts.unit || ' dossier(s)')));
+      hit.addEventListener('pointerleave', hideTooltip);
+      svg.appendChild(hit);
+    });
+
+    // end value label
+    const endLabel = document.createElementNS(ns, 'text');
+    endLabel.setAttribute('x', x(points.length - 1) - 4); endLabel.setAttribute('y', y(points[points.length - 1].value) - 8);
+    endLabel.setAttribute('text-anchor', 'end'); endLabel.setAttribute('font-size', '10'); endLabel.setAttribute('font-weight', '700');
+    endLabel.setAttribute('fill', cssVar('--text-primary') || '#161616');
+    endLabel.textContent = fmt(points[points.length - 1].value);
+    svg.appendChild(endLabel);
+
+    renderTableView('chartTrendTable', points, 'Période');
+  }
+
+  /* =====================================================================
+     Agrégations
+     ===================================================================== */
+  function buildExpMap(){
+    const map = new Map();
+    if (!state.exploitants) return map;
+    const e = state.exploitants;
+    for (let i = 0; i < e.id.length; i++){
+      map.set(e.id[i], {
+        Etat_d_avancement: e.Etat_d_avancement ? e.Etat_d_avancement[i] : null,
+        PacageREF: e.PacageREF ? e.PacageREF[i] : null,
+        Nom_Raison_sociale: e.Nom_Raison_sociale ? e.Nom_Raison_sociale[i] : null,
+        Code_dpt: e.Code_dpt ? e.Code_dpt[i] : null
+      });
+    }
+    return map;
+  }
+
+  function computeEtatChart(){
+    const e = state.exploitants;
+    if (!e || !e.id) return { items: [], missing: true };
+    const mask = maskFor(e.Code_dpt || e.id.map(() => null));
+
+    if (state.etatDim === 'dept'){
+      const counts = new Map();
+      for (let i = 0; i < e.id.length; i++){
+        if (!mask[i]) continue;
+        const d = e.Code_dpt ? e.Code_dpt[i] : null;
+        const key = d || 'Non renseigné';
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+      const arr = Array.from(counts.entries()).map(([k, v]) => ({ key: k, label: k === 'Non renseigné' ? k : 'Dépt. ' + formatDept(k), value: v }))
+        .sort((a, b) => b.value - a.value);
+      arr.forEach((item, i) => { item.color = cssVar(SEQ_STEPS[Math.max(SEQ_STEPS.length - 1 - i, 0)]) || '#2a78d6'; });
+      return { items: arr, dimLabel: 'Département' };
+    }
+
+    const counts = new Map(ETAT_ORDER.map(k => [k, 0]));
+    let none = 0;
+    for (let i = 0; i < e.id.length; i++){
+      if (!mask[i]) continue;
+      const s = e.Etat_d_avancement ? e.Etat_d_avancement[i] : null;
+      if (s && counts.has(s)) counts.set(s, counts.get(s) + 1);
+      else none++;
+    }
+    const arr = Array.from(counts.entries()).map(([k, v]) => ({ key: k, label: k, value: v, color: cssVar(statusVar[ETAT_STATUS[k]]) }));
+    if (none > 0) arr.push({ key: 'Non renseigné', label: 'Non renseigné', value: none, color: cssVar(statusVar.neutral) });
+    return { items: arr, dimLabel: 'État' };
+  }
+
+  function computeAppelsChart(){
+    const ev = state.evenements;
+    if (!ev || !ev.id) return { items: [], total: 0 };
+    const mask = maskFor(ev.Code_dpt || ev.id.map(() => null));
+    const counts = new Map();
+    let total = 0;
+    for (let i = 0; i < ev.id.length; i++){
+      if (!mask[i]) continue;
+      let values;
+      if (state.appelsDim === 'type') values = listValues(ev.Type ? ev.Type[i] : null);
+      else if (state.appelsDim === 'statut') values = ev.Statut && ev.Statut[i] ? [ev.Statut[i]] : [];
+      else values = ev.Traitement && ev.Traitement[i] ? [ev.Traitement[i]] : [];
+      if (!values.length) values = ['Non renseigné'];
+      values.forEach(v => { counts.set(v, (counts.get(v) || 0) + 1); total++; });
+    }
+    let arr = Array.from(counts.entries()).map(([k, v]) => ({ label: k, value: v })).sort((a, b) => b.value - a.value);
+    let other = null;
+    if (arr.length > 6){
+      other = { label: 'Autres', value: arr.slice(5).reduce((s, i) => s + i.value, 0), other: true };
+      arr = arr.slice(0, 5);
+    }
+    // Couleur assignée par ordre alphabétique du libellé (identité stable),
+    // jamais par rang de valeur : sinon changer le filtre repeindrait les catégories.
+    const colorOrder = arr.map(i => i.label).slice().sort((a, b) => a.localeCompare(b, 'fr'));
+    const colorMap = new Map(colorOrder.map((label, i) => [label, cssVar(CAT_SLOTS[i]) || '#2a78d6']));
+    arr.forEach(item => { item.color = colorMap.get(item.label); });
+    if (other){ other.color = cssVar('--series-other') || '#929292'; arr.push(other); }
+    return { items: arr, total };
+  }
+
+  function computeTrend(){
+    const d = state.demandeurs;
+    if (!d || !d.id) return [];
+    const mask = maskFor(d.Code_dpt || d.id.map(() => null));
+    const byMonth = new Map();
+    for (let i = 0; i < d.id.length; i++){
+      if (!mask[i]) continue;
+      const date = toDate(d.Depose_le ? d.Depose_le[i] : null);
+      if (!date) continue;
+      const key = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0');
+      byMonth.set(key, (byMonth.get(key) || 0) + 1);
+    }
+    const keys = Array.from(byMonth.keys()).sort();
+    const monthFmt = new Intl.DateTimeFormat('fr-FR', { month: 'short', year: '2-digit' });
+    let running = 0;
+    return keys.map(k => {
+      const [y, m] = k.split('-').map(Number);
+      running += byMonth.get(k);
+      return {
+        label: monthFmt.format(new Date(y, m - 1, 1)),
+        value: state.trendMode === 'cumul' ? running : byMonth.get(k)
+      };
+    });
+  }
+
+  function computeGeoChart(){
+    const counts = new Map();
+    if (state.geoMetric === 'dossiers'){
+      const d = state.demandeurs;
+      if (!d || !d.id) return { items: [] };
+      const seen = new Set();
+      for (let i = 0; i < d.id.length; i++){
+        const dn = d.dossier_number ? d.dossier_number[i] : null;
+        if (!dn || seen.has(dn)) continue;
+        seen.add(dn);
+        const key = d.Code_dpt ? (d.Code_dpt[i] || 'Non renseigné') : 'Non renseigné';
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+    } else {
+      const e = state.exploitants;
+      if (!e || !e.id) return { items: [] };
+      for (let i = 0; i < e.id.length; i++){
+        if (state.geoMetric === 'anomalies' && e.Etat_d_avancement && e.Etat_d_avancement[i] !== 'Anomalies à corriger') continue;
+        const key = e.Code_dpt ? (e.Code_dpt[i] || 'Non renseigné') : 'Non renseigné';
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+    }
+    const arr = Array.from(counts.entries()).map(([k, v]) => ({ label: k === 'Non renseigné' ? k : 'Dépt. ' + formatDept(k), value: v }))
+      .sort((a, b) => b.value - a.value);
+    arr.forEach((item, i) => { item.color = cssVar(SEQ_STEPS[Math.max(SEQ_STEPS.length - 1 - i, 0)]) || '#2a78d6'; });
+    return { items: arr };
+  }
+
+  /* =====================================================================
+     Table d'action
+     ===================================================================== */
+  function computeActionRows(){
+    const d = state.demandeurs;
+    if (!d || !d.id) return [];
+    const mask = maskFor(d.Code_dpt || d.id.map(() => null));
+    const rows = [];
+    for (let i = 0; i < d.id.length; i++){
+      if (!mask[i]) continue;
+      const assocId = d.Association ? d.Association[i] : 0;
+      const exp = assocId ? state.expById.get(assocId) : null;
+      const anomalies = listValues(d.Anomalies ? d.Anomalies[i] : null);
+      rows.push({
+        dossier_number: d.dossier_number ? d.dossier_number[i] : '',
+        raison_sociale: (d.raison_sociale && d.raison_sociale[i]) || (exp && exp.Nom_Raison_sociale) || '—',
+        pacage: (exp && exp.PacageREF) || '—',
+        dept: (exp && exp.Code_dpt) || (d.Code_dpt ? d.Code_dpt[i] : null),
+        anomalies,
+        hasAssociation: !!assocId,
+        etat: exp ? exp.Etat_d_avancement : null,
+        depose_le: toDate(d.Depose_le ? d.Depose_le[i] : null)
+      });
+    }
+    let filtered;
+    if (state.actionTab === 'association') filtered = rows.filter(r => !r.hasAssociation);
+    else if (state.actionTab === 'valider') filtered = rows.filter(r => r.etat === 'Dossier à valider sur DN');
+    else filtered = rows.filter(r => r.anomalies.length > 0);
+    filtered.sort((a, b) => (b.depose_le ? b.depose_le.getTime() : 0) - (a.depose_le ? a.depose_le.getTime() : 0));
+    return filtered;
+  }
+
+  function renderActionTable(){
+    const rows = computeActionRows();
+    const tbody = el('actionTableBody');
+    tbody.innerHTML = '';
+    const cap = 25;
+    if (!rows.length){
+      tbody.innerHTML = '<tr><td colspan="6" class="action-empty">Aucun dossier dans cette catégorie pour ce filtre.</td></tr>';
+      el('actionTableMore').textContent = '';
+      return;
+    }
+    rows.slice(0, cap).forEach(r => {
+      const tr = document.createElement('tr');
+
+      const tdDn = document.createElement('td');
+      const link = document.createElement('a');
+      link.className = 'fr-link';
+      link.target = '_blank'; link.rel = 'noopener';
+      link.href = 'https://www.demarches-simplifiees.fr/procedures/149963/dossiers/' + encodeURIComponent(r.dossier_number);
+      link.textContent = 'N° ' + r.dossier_number;
+      tdDn.appendChild(link);
+
+      const tdRaison = document.createElement('td'); tdRaison.textContent = r.raison_sociale;
+      const tdPacage = document.createElement('td'); tdPacage.textContent = r.pacage;
+      const tdDept = document.createElement('td');
+      const tag = document.createElement('span'); tag.className = 'dept-tag'; tag.textContent = formatDept(r.dept);
+      tdDept.appendChild(tag);
+
+      const tdMotif = document.createElement('td');
+      if (state.actionTab === 'association'){
+        const badge = document.createElement('span'); badge.className = 'anomaly-badge badge-critical'; badge.textContent = 'Association à faire';
+        tdMotif.appendChild(badge);
+      } else if (state.actionTab === 'valider'){
+        const badge = document.createElement('span'); badge.className = 'anomaly-badge badge-serious'; badge.textContent = 'À valider sur DN';
+        tdMotif.appendChild(badge);
+      } else if (r.anomalies.length){
+        r.anomalies.forEach(a => {
+          const badge = document.createElement('span'); badge.className = 'anomaly-badge badge-serious'; badge.textContent = a;
+          tdMotif.appendChild(badge);
+        });
+      } else {
+        tdMotif.textContent = '—';
+      }
+
+      const tdSpacer = document.createElement('td');
+
+      tr.appendChild(tdDn); tr.appendChild(tdRaison); tr.appendChild(tdPacage); tr.appendChild(tdDept); tr.appendChild(tdMotif); tr.appendChild(tdSpacer);
+      tbody.appendChild(tr);
+    });
+    el('actionTableMore').textContent = rows.length > cap ? ('+ ' + fmt(rows.length - cap) + ' autre(s) dossier(s) dans cette catégorie.') : '';
+  }
+
+  /* =====================================================================
+     Jauges
+     ===================================================================== */
+  function renderMeter(prefix, rate, captionText){
+    const status = rateToStatus(rate);
+    const color = cssVar(statusVar[status]) || '#757575';
+    el(prefix + 'Value').textContent = rate === null ? '—' : fmtPct(rate);
+    el(prefix + 'Fill').style.width = (rate === null ? 0 : Math.max(0, Math.min(100, rate))) + '%';
+    el(prefix + 'Fill').style.background = color;
+    el(prefix + 'Dot').style.background = color;
+    el(prefix + 'Caption').lastElementChild.textContent = captionText + (rate !== null ? ' — ' + statusLabel[status] : '');
+  }
+
+  /* =====================================================================
+     Rendu principal
+     ===================================================================== */
+  function renderKPIs(){
+    const d = state.demandeurs, e = state.exploitants, ev = state.evenements;
+    const missing = [];
+
+    let nDossiers = null, deltaTxt = '';
+    if (d && d.id){
+      const mask = maskFor(d.Code_dpt || d.id.map(() => null));
+      const seen = new Set();
+      let last7 = 0, prev7 = 0;
+      const now = Date.now();
+      for (let i = 0; i < d.id.length; i++){
+        if (!mask[i]) continue;
+        const dn = d.dossier_number ? d.dossier_number[i] : null;
+        if (dn && !seen.has(dn)){ seen.add(dn); }
+        const date = toDate(d.Depose_le ? d.Depose_le[i] : null);
+        if (date){
+          const ageDays = (now - date.getTime()) / 86400000;
+          if (ageDays >= 0 && ageDays < 7) last7++;
+          else if (ageDays >= 7 && ageDays < 14) prev7++;
+        }
+      }
+      nDossiers = seen.size;
+      if (last7 || prev7){
+        const diff = last7 - prev7;
+        const cls = diff > 0 ? 'up' : (diff < 0 ? 'down' : 'flat');
+        const arrow = diff > 0 ? '▲' : (diff < 0 ? '▼' : '–');
+        deltaTxt = { cls, text: arrow + ' ' + fmt(last7) + ' cette semaine (' + (diff >= 0 ? '+' : '') + diff + ')' };
+      }
+    } else missing.push('Demarche_149963_demandeurs');
+    el('kpiDossiers').textContent = fmt(nDossiers);
+    const deltaEl = el('kpiDossiersDelta');
+    if (deltaTxt){ deltaEl.className = 'kpi-delta ' + deltaTxt.cls; deltaEl.textContent = deltaTxt.text; }
+    else { deltaEl.textContent = ''; }
+
+    let nExploitants = null;
+    if (e && e.id){
+      const mask = maskFor(e.Code_dpt || e.id.map(() => null));
+      nExploitants = mask.filter(Boolean).length;
+      el('kpiExploitantsHint').textContent = state.dept === 'all' ? 'ensemble de la campagne' : 'sur le département sélectionné';
+    } else missing.push('DATA_Exploitants');
+    el('kpiExploitants').textContent = fmt(nExploitants);
+
+    if (nDossiers !== null && nExploitants){
+      const tx = nDossiers / nExploitants * 100;
+      el('kpiTaux').textContent = fmtPct(tx);
+      el('kpiTauxHint').textContent = fmt(nDossiers) + ' / ' + fmt(nExploitants);
+    } else { el('kpiTaux').textContent = '—'; el('kpiTauxHint').textContent = ''; }
+
+    let nFinalises = 0, nConcernes = 0, nAnomalies = 0;
+    if (e && e.id){
+      const mask = maskFor(e.Code_dpt || e.id.map(() => null));
+      for (let i = 0; i < e.id.length; i++){
+        if (!mask[i]) continue;
+        if (e.Etat_d_avancement && e.Etat_d_avancement[i] === 'Dossier finalisé') nFinalises++;
+        if (e.Etat_d_avancement && e.Etat_d_avancement[i] === 'Anomalies à corriger') nAnomalies++;
+        if (e.Nb_DN && e.Nb_DN[i] > 0) nConcernes++;
+      }
+      el('kpiFinalises').textContent = fmt(nFinalises);
+      el('kpiFinalisesHint').textContent = nConcernes ? Math.round(nFinalises / nConcernes * 100) + ' % des dossiers avec DN' : '';
+      el('kpiAnomalies').textContent = fmt(nAnomalies);
+      el('kpiAnomaliesHint').textContent = nExploitants ? Math.round(nAnomalies / nExploitants * 100) + ' % des exploitants recensés' : '';
+    } else { el('kpiFinalises').textContent = '—'; el('kpiAnomalies').textContent = '—'; }
+
+    let nAppels = null, nRappels = 0;
+    if (ev && ev.id){
+      const mask = maskFor(ev.Code_dpt || ev.id.map(() => null));
+      nAppels = 0;
+      for (let i = 0; i < ev.id.length; i++){
+        if (!mask[i]) continue;
+        nAppels++;
+        if (ev.Rappel_par_la_DRAAF && ev.Rappel_par_la_DRAAF[i]) nRappels++;
+      }
+      el('kpiAppelsHint').textContent = nRappels ? fmt(nRappels) + ' à rappeler' : 'aucun rappel en attente';
+    } else missing.push('DATA_Evenements');
+    el('kpiAppels').textContent = fmt(nAppels);
+
+    return missing;
+  }
+
+  function renderCharts(){
+    const etat = computeEtatChart();
+    renderBarList('chartEtat', 'chartEtatTable', etat.items, { dimLabel: etat.dimLabel });
+
+    const appels = computeAppelsChart();
+    renderDonut(appels.items, appels.total);
+    renderTableView('chartAppelsTable', appels.items, 'Catégorie');
+
+    const trend = computeTrend();
+    renderTrend(trend, { unit: state.trendMode === 'cumul' ? ' cumulés' : ' dépôt(s)' });
+
+    const geo = computeGeoChart();
+    renderBarList('chartGeo', 'chartGeoTable', geo.items, { dimLabel: 'Département' });
+  }
+
+  function renderMeters(){
+    const e = state.exploitants, d = state.demandeurs;
+    if (e && e.id){
+      const mask = maskFor(e.Code_dpt || e.id.map(() => null));
+      let concernes = 0, finalises = 0;
+      for (let i = 0; i < e.id.length; i++){
+        if (!mask[i]) continue;
+        if (e.Nb_DN && e.Nb_DN[i] > 0){
+          concernes++;
+          if (e.Etat_d_avancement && e.Etat_d_avancement[i] === 'Dossier finalisé') finalises++;
+        }
+      }
+      const rate = concernes ? finalises / concernes * 100 : null;
+      renderMeter('meterFinalises', rate, concernes ? fmt(finalises) + ' / ' + fmt(concernes) + ' dossiers avec DN' : 'aucun dossier avec DN pour ce filtre');
+    }
+    if (d && d.id){
+      const mask = maskFor(d.Code_dpt || d.id.map(() => null));
+      let total = 0, ok = 0;
+      for (let i = 0; i < d.id.length; i++){
+        if (!mask[i]) continue;
+        if (!(d.Dossier_valide && d.Dossier_valide[i])) continue;
+        total++;
+        if (d.Ecart_parcelles && d.Ecart_parcelles[i] === 0) ok++;
+      }
+      const rate = total ? ok / total * 100 : null;
+      renderMeter('meterParcelles', rate, total ? fmt(ok) + ' / ' + fmt(total) + ' dossiers valides' : 'aucun dossier valide pour ce filtre');
+    }
+  }
+
+  function renderSyncLabel(){
+    const meta = state.syncMeta;
+    if (meta && meta.last_sync_at && meta.last_sync_at.length){
+      let latest = null;
+      meta.last_sync_at.forEach(raw => {
+        const d = toDate(raw);
+        if (d && (!latest || d.getTime() > latest.getTime())) latest = d;
+      });
+      el('syncLabel').innerHTML = 'Dernière synchro DN : <strong>' + (latest ? latest.toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—') + '</strong>';
+      return null;
+    }
+    el('syncLabel').textContent = 'Synchronisation inconnue';
+    return 'Sync_metadata';
+  }
+
+  function renderAll(){
+    clearNotices();
+    const missing = renderKPIs();
+    renderCharts();
+    renderMeters();
+    renderActionTable();
+    const syncMissing = renderSyncLabel();
+    if (syncMissing) missing.push(syncMissing);
+
+    if (missing.length){
+      pushNotice(renderAlert('warning', 'Données incomplètes', 'Tables ou colonnes indisponibles : ' + missing.join(', ') + '. Vérifiez le nom des tables ou les droits d’accès du widget.'));
+    }
+    el('footNote').textContent = 'Source : document Grist DRAAF Bretagne — dernière actualisation locale : ' + new Date().toLocaleTimeString('fr-FR');
+  }
+
+  /* =====================================================================
+     Chargement des données
+     ===================================================================== */
+  async function loadAll(){
+    el('refreshBtn').disabled = true;
+    el('syncLabel').textContent = 'Actualisation…';
+
+    const [demandeurs, exploitants, evenements, syncMeta] = await Promise.all([
+      safeFetchTable('Demarche_149963_demandeurs'),
+      safeFetchTable('DATA_Exploitants'),
+      safeFetchTable('DATA_Evenements'),
+      safeFetchTable('Sync_metadata'),
+    ]);
+
+    state.demandeurs = demandeurs;
+    state.exploitants = exploitants;
+    state.evenements = evenements;
+    state.syncMeta = syncMeta;
+    state.expById = buildExpMap();
+
+    buildDeptOptions();
+    renderAll();
+    el('refreshBtn').disabled = false;
+  }
+
+  /* =====================================================================
+     Écouteurs
+     ===================================================================== */
+  el('refreshBtn').addEventListener('click', () => loadAll().catch(reportError));
+  el('deptFilter').addEventListener('change', (e) => { state.dept = e.target.value; renderAll(); });
+  el('etatDim').addEventListener('change', (e) => { state.etatDim = e.target.value; renderCharts(); });
+  el('appelsDim').addEventListener('change', (e) => { state.appelsDim = e.target.value; renderCharts(); });
+  el('trendMode').addEventListener('change', (e) => { state.trendMode = e.target.value; renderCharts(); });
+  el('geoMetric').addEventListener('change', (e) => { state.geoMetric = e.target.value; renderCharts(); });
+  document.querySelectorAll('.action-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.action-tab').forEach(b => b.setAttribute('aria-pressed', 'false'));
+      btn.setAttribute('aria-pressed', 'true');
+      state.actionTab = btn.getAttribute('data-tab');
+      renderActionTable();
+    });
+  });
+
+  function reportError(e){
+    console.error(e);
+    pushNotice(renderAlert('error', 'Erreur', 'Impossible de charger les données : ' + e.message));
+  }
+
+  if (window.grist){
+    grist.ready({ requiredAccess: 'full' });
+    grist.onRecords(() => loadAll().catch(reportError));
+    loadAll().catch(reportError);
+  } else {
+    pushNotice(renderAlert('info', 'Widget hors de Grist', 'Ouvrez cette page en tant que widget personnalisé dans Grist (avec accès complet au document) pour afficher les données.'));
+    el('footNote').textContent = 'API Grist non détectée.';
+  }
+})();
+</script>
+
+</body>
+</html>
