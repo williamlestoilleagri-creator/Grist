@@ -178,16 +178,19 @@
 (function(){
   'use strict';
 
-  var STATE_ORDER = ['Traité', 'En attente de paiement', 'En attente des résultats'];
+  var REAL_STATES = ['Traité', 'En attente de paiement', 'En attente des résultats'];
+  var STATE_ORDER = REAL_STATES.concat(['Autre']);
   var STATE_COLOR = {
     'Traité': 'var(--good)',
     'En attente de paiement': 'var(--warning)',
-    'En attente des résultats': 'var(--serious)'
+    'En attente des résultats': 'var(--serious)',
+    'Autre': 'var(--text-muted)'
   };
-  var STATE_ICON = {
-    'Traité': '✓',
-    'En attente de paiement': '€',
-    'En attente des résultats': '⏳'
+  var STATE_LABEL = {
+    'Traité': 'Traité',
+    'En attente de paiement': 'En attente de paiement',
+    'En attente des résultats': 'En attente des résultats',
+    'Autre': 'Non classé (vérifier le mapping « Etat »)'
   };
 
   var state = {
@@ -261,8 +264,8 @@
       b.count++;
       var m = r.Montant;
       if (typeof m === 'number' && isFinite(m)) b.montant += m;
-      var etat = r.Etat;
-      if (etat && STATE_ORDER.indexOf(etat) !== -1) b.etats[etat]++;
+      var etat = (r.Etat == null ? '' : String(r.Etat)).trim().normalize('NFC');
+      if (etat && REAL_STATES.indexOf(etat) !== -1) b.etats[etat]++;
       else b.etats['Autre']++;
     });
 
@@ -446,7 +449,8 @@
       svg += '<line class="grid-line" x1="' + ML + '" x2="' + (W - MR) + '" y1="' + y + '" y2="' + y + '"/>';
     });
 
-    var order = STATE_ORDER; // Traité (bas), En attente de paiement, En attente des résultats (haut)
+    var hasAutre = data.some(function(b){ return b.etats['Autre'] > 0; });
+    var order = hasAutre ? STATE_ORDER : REAL_STATES; // Traité (bas) -> Attente paiement -> Attente résultats (-> Autre) (haut)
     data.forEach(function(b, i){
       var x = ML + slot * i + (slot - barW) / 2;
       var yCursor = MT + plotH;
@@ -459,7 +463,7 @@
         var isTop = (si === order.length - 1) || (order.slice(si + 1).every(function(s){ return !b.etats[s]; }));
         var path = isTop ? roundedTopPath(x, y, barW, h, 4) : ('M' + x + ',' + y + ' h' + barW + ' v' + h + ' h' + (-barW) + ' Z');
         svg += '<path d="' + path + '" fill="' + STATE_COLOR[stateName] + '"/>';
-        tipParts.push(STATE_ICON[stateName] + ' ' + stateName + ': ' + fmtInt(v));
+        tipParts.push(STATE_LABEL[stateName] + ': ' + fmtInt(v));
         yCursor = y - gap;
       });
       svg += '<rect class="bar-group bar-hit" data-label="' + escapeHtml(b.key) + '" data-value="' + escapeHtml(tipParts.join(' · ')) + '" x="' + (ML + slot * i) + '" y="' + MT + '" width="' + slot + '" height="' + plotH + '" fill="transparent"/>';
@@ -471,8 +475,11 @@
     svg += '</svg>';
 
     var legend = '<div class="legend">' + order.map(function(s){
-      return '<div class="item"><span class="dot" style="background:' + STATE_COLOR[s] + '"></span>' + STATE_ICON[s] + ' ' + escapeHtml(s) + '</div>';
+      return '<div class="item"><span class="dot" style="background:' + STATE_COLOR[s] + '"></span>' + escapeHtml(STATE_LABEL[s]) + '</div>';
     }).join('') + '</div>';
+    if (hasAutre){
+      legend += '<div class="note">Des dossiers n\'ont pas d\'état reconnu (« Non classé ») : vérifie que le champ <strong>Etat</strong> du widget est bien mappé sur la colonne « État du dossier ».</div>';
+    }
 
     return '<div class="chart-box">' + svg + '<div class="tooltip"></div></div>' + legend;
   }
