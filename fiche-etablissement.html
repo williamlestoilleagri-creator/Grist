@@ -624,6 +624,10 @@
       if (!diag) return html;
       const items = [];
       items.push('Code DGER recherché (établissement niveau 1) : ' + (diag.niveau1Code ? escapeHtml(diag.niveau1Code) : '<em>introuvable</em>'));
+      if (!diag.niveau1Code) {
+        items.push('Valeur brute reçue de Grist pour Etablissement_niveau_1 : ' + escapeHtml(JSON.stringify(diag.rawNiveau1Ref)) + ' (type ' + escapeHtml(typeof diag.rawNiveau1Ref) + ')');
+        items.push('Sites chargés dans TT_Sites_de_formation : ' + diag.sitesLoaded);
+      }
       if (diag.totalRows !== undefined) items.push('Lignes brutes chargées dans la table source : ' + diag.totalRows);
       if (diag.matchedSiteCount !== undefined) items.push('Lignes rattachées à cet établissement (tous sites confondus) : ' + diag.matchedSiteCount);
       if (diag.yearsFound !== undefined) items.push('Années disponibles pour cet établissement : ' + (diag.yearsFound.length ? diag.yearsFound.map(escapeHtml).join(', ') : '<em>aucune</em>'));
@@ -638,7 +642,7 @@
         if (!res.ok || sitesLoadFailed) return { ok: false, data: null };
         const rows = res.rows;
         const niveau1Code = ctx.niveau1Site && ctx.niveau1Site.Code_DGER;
-        if (!niveau1Code || !year) return { ok: true, data: null, diag: { niveau1Code: niveau1Code, totalRows: rows.length } };
+        if (!niveau1Code || !year) return { ok: true, data: null, diag: { niveau1Code: niveau1Code, totalRows: rows.length, rawNiveau1Ref: ctx.rawNiveau1Ref, sitesLoaded: ctx.sitesLoaded } };
         const withSite = rows.map(function (r) { return { r: r, site: sitesById.get(r.Code_Dger) }; });
         const matchedSite = withSite.filter(function (x) { return x.site && x.site.UAI_NIVEAU1 === niveau1Code; });
         const filtered = matchedSite.filter(function (x) {
@@ -694,7 +698,7 @@
         const rows = res.rows;
         const niveau1Code = ctx.niveau1Site && ctx.niveau1Site.Code_DGER;
         const n = parseInt(yearN, 10);
-        if (!niveau1Code || !Number.isFinite(n)) return { ok: true, data: null, diag: { niveau1Code: niveau1Code, totalRows: rows.length } };
+        if (!niveau1Code || !Number.isFinite(n)) return { ok: true, data: null, diag: { niveau1Code: niveau1Code, totalRows: rows.length, rawNiveau1Ref: ctx.rawNiveau1Ref, sitesLoaded: ctx.sitesLoaded } };
         const withSite = rows.map(function (r) { return { r: r, site: sitesById.get(r.Code_Dger) }; });
         const matchedSite = withSite.filter(function (x) { return x.site && x.site.UAI_NIVEAU1 === niveau1Code; });
         const totals = [3, 2, 1, 0].map(function (offset) {
@@ -734,7 +738,7 @@
         if (!res.ok || sitesLoadFailed) return { ok: false, data: null };
         const rows = res.rows;
         const niveau1Code = ctx.niveau1Site && ctx.niveau1Site.Code_DGER;
-        if (!niveau1Code || !year) return { ok: true, data: null, diag: { niveau1Code: niveau1Code, totalRows: rows.length } };
+        if (!niveau1Code || !year) return { ok: true, data: null, diag: { niveau1Code: niveau1Code, totalRows: rows.length, rawNiveau1Ref: ctx.rawNiveau1Ref, sitesLoaded: ctx.sitesLoaded } };
         const withSite = rows.map(function (r) { return { r: r, site: sitesById.get(r.UAI_Elem_DGER_Code_) }; });
         const matchedSite = withSite.filter(function (x) { return x.site && x.site.UAI_NIVEAU1 === niveau1Code; });
         const filtered = matchedSite.filter(function (x) {
@@ -778,7 +782,7 @@
         const rows = results[0].rows, centres = centresRes.rows;
         const centreById = new Map(centres.map(function (c) { return [c.id, c.Centre]; }));
         const niveau1Code = ctx.niveau1Site && ctx.niveau1Site.Code_DGER;
-        if (!niveau1Code || !year) return { ok: true, data: null, diag: { niveau1Code: niveau1Code, totalRows: rows.length } };
+        if (!niveau1Code || !year) return { ok: true, data: null, diag: { niveau1Code: niveau1Code, totalRows: rows.length, rawNiveau1Ref: ctx.rawNiveau1Ref, sitesLoaded: ctx.sitesLoaded } };
         const labels = ['Résultat de fonctionnement', 'FOND DE ROULEMENT NET', 'Variation du fonds de roulement BRUT', "CAPACITE D'AUTOFINANCEMENT"];
         const withSite = rows.map(function (r) { return { r: r, site: sitesById.get(r.Code_DGER) }; });
         const matchedSite = withSite.filter(function (x) { return x.site && x.site.Code_DGER === niveau1Code; });
@@ -953,7 +957,9 @@
       }
       const ctx = {
         niveau1Site: sitesById.get(record.Etablissement_niveau_1),
-        displaySite: sitesById.get(record.Site_niveaux_inferieurs) || sitesById.get(record.Etablissement_niveau_1)
+        displaySite: sitesById.get(record.Site_niveaux_inferieurs) || sitesById.get(record.Etablissement_niveau_1),
+        rawNiveau1Ref: record.Etablissement_niveau_1,
+        sitesLoaded: sitesById.size
       };
       renderHeaderTitles(record, ctx);
 
