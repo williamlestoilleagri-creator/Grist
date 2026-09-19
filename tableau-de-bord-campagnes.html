@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tableau de bord · Campagnes</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<style>
+  :root{
+    color-scheme: light;
+    --surface-1: #fcfcfb;
+    --plane:     #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --grid:      #e1e0d9;
+    --baseline:  #c3c2b7;
+    --border:    rgba(11,11,11,0.10);
+    --series-1:  #2a78d6;  /* bleu — dossiers */
+    --series-2:  #eb6834;  /* orange — montant */
+    --good:      #0ca30c;
+    --warning:   #fab219;
+    --serious:   #ec835a;
+    --success-text: #006300;
+    --critical-text: #d03b3b;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:where(:not([data-theme="light"])){
+      color-scheme: dark;
+      --surface-1: #1a1a19;
+      --plane:     #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --grid:      #2c2c2a;
+      --baseline:  #383835;
+      --border:    rgba(255,255,255,0.10);
+      --series-1:  #3987e5;
+      --series-2:  #d95926;
+      --good:      #0ca30c;
+      --warning:   #fab219;
+      --serious:   #ec835a;
+      --success-text: #0ca30c;
+      --critical-text: #e66767;
+    }
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; }
+  body{
+    background:var(--plane); color:var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size:13.5px; line-height:1.45;
+  }
+  .wrap{ max-width:1180px; margin:0 auto; padding:16px 16px 40px; }
+
+  /* ---------- header ---------- */
+  header.top{
+    display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between;
+    gap:10px; margin-bottom:16px;
+  }
+  header.top h1{ font-size:19px; font-weight:700; margin:0 0 3px; }
+  header.top .sub{ font-size:12px; color:var(--text-secondary); }
+  .controls{ display:flex; align-items:center; gap:8px; }
+  .controls label{ font-size:11.5px; color:var(--text-secondary); }
+  .controls select{
+    font: inherit; font-size:12.5px; padding:6px 9px; border-radius:7px;
+    border:1px solid var(--border); background:var(--surface-1); color:var(--text-primary);
+  }
+  .count-pill{
+    font-size:11.5px; color:var(--text-secondary); background:var(--surface-1);
+    border:1px solid var(--border); border-radius:999px; padding:4px 11px; white-space:nowrap;
+  }
+
+  /* ---------- cards ---------- */
+  .card{
+    background:var(--surface-1); border:1px solid var(--border); border-radius:12px;
+    padding:16px; margin-bottom:16px;
+  }
+  .card h2{ font-size:13.5px; font-weight:700; margin:0 0 2px; }
+  .card .card-sub{ font-size:11.5px; color:var(--text-secondary); margin-bottom:12px; }
+
+  /* ---------- KPI row ---------- */
+  .kpi-row{ display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-bottom:16px; }
+  @media (max-width:760px){ .kpi-row{ grid-template-columns:repeat(2,1fr); } }
+  .kpi{
+    background:var(--surface-1); border:1px solid var(--border); border-radius:12px; padding:14px 15px;
+  }
+  .kpi .label{ font-size:11px; color:var(--text-secondary); margin-bottom:6px; }
+  .kpi .value{ font-size:22px; font-weight:700; font-variant-numeric:proportional-nums; }
+  .kpi .delta{ font-size:11.5px; margin-top:5px; color:var(--text-secondary); }
+  .kpi .delta.up.good{ color:var(--success-text); }
+  .kpi .delta.up.bad{ color:var(--critical-text); }
+  .kpi .delta.down.good{ color:var(--success-text); }
+  .kpi .delta.down.bad{ color:var(--critical-text); }
+  .kpi .delta.neutral{ color:var(--text-secondary); }
+
+  /* ---------- charts grid ---------- */
+  .charts-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:820px){ .charts-grid{ grid-template-columns:1fr; } }
+
+  .chart-box{ position:relative; }
+  svg.chart{ width:100%; height:auto; display:block; overflow:visible; }
+  .axis-label{ font-size:9.5px; fill:var(--text-muted); }
+  .value-label{ font-size:10px; font-weight:700; fill:var(--text-primary); }
+  .grid-line{ stroke:var(--grid); stroke-width:1; }
+  .baseline{ stroke:var(--baseline); stroke-width:1; }
+  bar-hit{ fill:transparent; }
+
+  .tooltip{
+    position:absolute; pointer-events:none; z-index:5;
+    background:var(--text-primary); color:var(--surface-1);
+    font-size:11.5px; padding:6px 9px; border-radius:7px;
+    transform:translate(-50%,-110%); white-space:nowrap; opacity:0; transition:opacity .08s;
+  }
+  .tooltip.show{ opacity:1; }
+  .tooltip .t-title{ font-weight:700; margin-bottom:2px; }
+
+  .legend{ display:flex; flex-wrap:wrap; gap:14px; margin-top:10px; }
+  .legend .item{ display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--text-secondary); }
+  .legend .dot{ width:9px; height:9px; border-radius:2px; flex:0 0 auto; }
+
+  .note{
+    font-size:11.5px; color:var(--text-secondary); background:var(--plane);
+    border:1px dashed var(--border); border-radius:8px; padding:8px 11px; margin-top:10px;
+  }
+
+  /* ---------- table ---------- */
+  table.detail{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.detail th, table.detail td{
+    padding:8px 10px; text-align:right; border-bottom:1px solid var(--border);
+    font-variant-numeric:tabular-nums;
+  }
+  table.detail th:first-child, table.detail td:first-child{ text-align:left; font-variant-numeric:normal; }
+  table.detail thead th{
+    font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted);
+    font-weight:600; border-bottom:1px solid var(--baseline);
+  }
+  table.detail tbody tr:hover{ background:var(--plane); }
+  table.detail tbody tr.current{ background:color-mix(in srgb, var(--series-1) 10%, transparent); }
+  table.detail .tag{
+    display:inline-block; font-size:10px; font-weight:700; padding:2px 7px; border-radius:999px; color:#fff;
+  }
+
+  .empty-state{ text-align:center; padding:60px 20px; color:var(--text-secondary); }
+  .empty-state .big{ font-size:30px; margin-bottom:10px; }
+
+  footer.foot{ font-size:10.5px; color:var(--text-muted); text-align:center; margin-top:8px; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="top">
+    <div>
+      <h1>Tableau de bord — Campagnes</h1>
+      <div class="sub" id="subtitle">Suivi semestriel des dossiers · une campagne tous les 6 mois (S1 : janv.–juin, S2 : juil.–déc.)</div>
+    </div>
+    <div class="controls">
+      <label for="period-select">Période</label>
+      <select id="period-select">
+        <option value="4">4 dernières campagnes</option>
+        <option value="8" selected>8 dernières campagnes</option>
+        <option value="12">12 dernières campagnes</option>
+        <option value="all">Toutes les campagnes</option>
+      </select>
+      <span class="count-pill" id="record-count">0 dossier</span>
+    </div>
+  </header>
+
+  <div id="app"></div>
+
+  <footer class="foot">Widget Grist — regroupement calculé à partir de la colonne « Campagne ».</footer>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  var STATE_ORDER = ['Traité', 'En attente de paiement', 'En attente des résultats'];
+  var STATE_COLOR = {
+    'Traité': 'var(--good)',
+    'En attente de paiement': 'var(--warning)',
+    'En attente des résultats': 'var(--serious)'
+  };
+  var STATE_ICON = {
+    'Traité': '✓',
+    'En attente de paiement': '€',
+    'En attente des résultats': '⏳'
+  };
+
+  var state = {
+    records: [],
+    colMap: null,
+    periodLimit: 8
+  };
+
+  // ============================================================
+  // Utils
+  // ============================================================
+  function escapeHtml(s){
+    return (s === null || s === undefined ? '' : String(s))
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function fmtInt(n){ return (n||0).toLocaleString('fr-FR'); }
+  function fmtEUR(n, decimals){
+    return (n||0).toLocaleString('fr-FR', { style:'currency', currency:'EUR', minimumFractionDigits: decimals||0, maximumFractionDigits: decimals||0 });
+  }
+  function fmtPct(n){ return Math.round(n) + ' %'; }
+  function niceMax(v){
+    if (v <= 0) return 1;
+    var pow = Math.pow(10, Math.floor(Math.log10(v)));
+    var n = v / pow;
+    var step = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10;
+    return step * pow;
+  }
+  function shortLabel(campagne){
+    var m = /^\s*(\d{4})\s*-\s*Campagne N°(\d+)\s*$/.exec(campagne || '');
+    if (m) return 'S' + m[2] + ' ' + m[1];
+    return (campagne || '').length > 14 ? (campagne.slice(0, 13) + '…') : (campagne || '—');
+  }
+
+  // ============================================================
+  // Grist
+  // ============================================================
+  grist.ready({
+    requiredAccess: 'read table',
+    columns: [
+      { name: 'Campagne', title: 'Campagne', type: 'Text' },
+      { name: 'Etat', title: 'État du dossier', type: 'Text', optional: true },
+      { name: 'Montant', title: 'Montant remboursable (€)', type: 'Numeric', optional: true }
+    ]
+  });
+
+  grist.onRecords(function(records, mappings){
+    state.colMap = mappings;
+    state.records = grist.mapColumnNames(records, mappings) || records;
+    render();
+  });
+
+  document.getElementById('period-select').addEventListener('change', function(e){
+    state.periodLimit = e.target.value === 'all' ? Infinity : parseInt(e.target.value, 10);
+    render();
+  });
+
+  // ============================================================
+  // Agrégation par campagne
+  // ============================================================
+  function aggregate(){
+    var buckets = Object.create(null);
+    var unclassified = 0;
+
+    state.records.forEach(function(r){
+      var campagne = (r.Campagne || '').toString().trim();
+      if (!campagne){ unclassified++; return; }
+      if (!buckets[campagne]){
+        buckets[campagne] = { key: campagne, count: 0, montant: 0, etats: { 'Traité':0, 'En attente de paiement':0, 'En attente des résultats':0, 'Autre':0 } };
+      }
+      var b = buckets[campagne];
+      b.count++;
+      var m = r.Montant;
+      if (typeof m === 'number' && isFinite(m)) b.montant += m;
+      var etat = r.Etat;
+      if (etat && STATE_ORDER.indexOf(etat) !== -1) b.etats[etat]++;
+      else b.etats['Autre']++;
+    });
+
+    var keys = Object.keys(buckets).sort(); // format "YYYY - Campagne N°X" trie chronologiquement en texte
+    var all = keys.map(function(k){ return buckets[k]; });
+    var limited = isFinite(state.periodLimit) ? all.slice(Math.max(0, all.length - state.periodLimit)) : all;
+
+    return { all: all, limited: limited, unclassified: unclassified };
+  }
+
+  // ============================================================
+  // Rendu principal
+  // ============================================================
+  var appEl = document.getElementById('app');
+
+  function render(){
+    document.getElementById('record-count').textContent =
+      fmtInt(state.records.length) + (state.records.length > 1 ? ' dossiers' : ' dossier');
+
+    if (!state.records.length){
+      appEl.innerHTML = '<div class="card empty-state"><div class="big">🗂️</div>' +
+        'Aucun dossier pour le moment.<br>Le tableau de bord s\'affichera dès qu\'une campagne aura des dossiers déposés.</div>';
+      return;
+    }
+
+    var agg = aggregate();
+    if (!agg.all.length){
+      appEl.innerHTML = '<div class="card empty-state"><div class="big">📅</div>' +
+        'Aucun dossier n\'est encore rattaché à une campagne.<br>Vérifiez que la colonne « Campagne » est correctement calculée.</div>';
+      return;
+    }
+
+    var data = agg.limited;
+    var current = data[data.length - 1];
+    var previous = data.length > 1 ? data[data.length - 2] : null;
+
+    var html = '';
+    html += renderKPIs(current, previous, agg.unclassified);
+    html += '<div class="charts-grid">';
+    html += renderCard('chart-count', 'Dossiers par campagne', 'Nombre de dossiers déposés, par campagne semestrielle', renderColumnChart(data, function(b){ return b.count; }, 'var(--series-1)', fmtInt));
+    html += renderCard('chart-montant', 'Montant remboursé par campagne', 'Total des indemnisations calculées, par campagne', renderColumnChart(data, function(b){ return b.montant; }, 'var(--series-2)', function(v){ return fmtEUR(v, 0); }));
+    html += '</div>';
+    html += renderCard('chart-etats', 'État des dossiers par campagne', 'Répartition des dossiers traités / en attente, par campagne', renderStackedChart(data));
+    html += renderTable(agg.all, current.key);
+
+    appEl.innerHTML = html;
+    attachTooltips();
+  }
+
+  function renderCard(id, title, sub, body){
+    return '<div class="card" id="' + id + '"><h2>' + escapeHtml(title) + '</h2>' +
+      '<div class="card-sub">' + escapeHtml(sub) + '</div>' + body + '</div>';
+  }
+
+  // ============================================================
+  // KPI
+  // ============================================================
+  function deltaHtml(currVal, prevVal, opts){
+    opts = opts || {};
+    if (prevVal === null || prevVal === undefined){
+      return '<div class="delta neutral">Première campagne enregistrée</div>';
+    }
+    var diff = currVal - prevVal;
+    var pct = prevVal !== 0 ? (diff / Math.abs(prevVal)) * 100 : (diff === 0 ? 0 : 100);
+    var arrow = diff > 0 ? '▲' : diff < 0 ? '▼' : '▬';
+    var dir = diff > 0 ? 'up' : diff < 0 ? 'down' : 'neutral';
+    var sense = 'neutral';
+    if (dir !== 'neutral' && opts.goodDirection){
+      sense = (dir === opts.goodDirection) ? 'good' : 'bad';
+    }
+    var cls = dir + ' ' + sense;
+    var pctTxt = (diff === 0) ? '0 %' : (Math.abs(pct) < 1000 ? Math.abs(pct).toFixed(0) + ' %' : '99+ %');
+    return '<div class="delta ' + cls + '">' + arrow + ' ' + pctTxt + ' vs campagne précédente</div>';
+  }
+
+  function renderKPIs(current, previous, unclassified){
+    var traitesCur = current.etats['Traité'];
+    var traitesPct = current.count ? (traitesCur / current.count) * 100 : 0;
+    var traitesPrevPct = previous && previous.count ? (previous.etats['Traité'] / previous.count) * 100 : null;
+
+    var attenteCur = current.etats['En attente de paiement'] + current.etats['En attente des résultats'];
+    var attentePrev = previous ? (previous.etats['En attente de paiement'] + previous.etats['En attente des résultats']) : null;
+
+    var html = '<div class="kpi-row">';
+
+    html += '<div class="kpi"><div class="label">Dossiers — ' + escapeHtml(shortLabel(current.key)) + '</div>' +
+      '<div class="value">' + fmtInt(current.count) + '</div>' +
+      deltaHtml(current.count, previous ? previous.count : null, {}) + '</div>';
+
+    html += '<div class="kpi"><div class="label">Montant remboursé — ' + escapeHtml(shortLabel(current.key)) + '</div>' +
+      '<div class="value">' + fmtEUR(current.montant, 0) + '</div>' +
+      deltaHtml(current.montant, previous ? previous.montant : null, {}) + '</div>';
+
+    html += '<div class="kpi"><div class="label">Dossiers traités</div>' +
+      '<div class="value">' + fmtPct(traitesPct) + '</div>' +
+      deltaHtml(traitesPct, traitesPrevPct, { goodDirection: 'up' }) + '</div>';
+
+    html += '<div class="kpi"><div class="label">Dossiers en attente</div>' +
+      '<div class="value">' + fmtInt(attenteCur) + '</div>' +
+      deltaHtml(attenteCur, attentePrev, { goodDirection: 'down' }) + '</div>';
+
+    html += '</div>';
+
+    if (unclassified > 0){
+      html += '<div class="note">' + fmtInt(unclassified) + ' dossier' + (unclassified > 1 ? 's' : '') +
+        ' sans campagne déterminée (date de dépôt manquante) — exclu' + (unclassified > 1 ? 's' : '') + ' des graphiques ci-dessous.</div>';
+    }
+    return html;
+  }
+
+  // ============================================================
+  // Graphique en colonnes (une série)
+  // ============================================================
+  function roundedTopPath(x, y, w, h, r){
+    r = Math.min(r, h, w / 2);
+    if (r <= 0) return 'M' + x + ',' + y + ' h' + w + ' v' + h + ' h' + (-w) + ' Z';
+    return 'M' + x + ',' + (y + h) +
+      ' L' + x + ',' + (y + r) +
+      ' Q' + x + ',' + y + ' ' + (x + r) + ',' + y +
+      ' L' + (x + w - r) + ',' + y +
+      ' Q' + (x + w) + ',' + y + ' ' + (x + w) + ',' + (y + r) +
+      ' L' + (x + w) + ',' + (y + h) + ' Z';
+  }
+
+  function renderColumnChart(data, valueFn, color, fmt){
+    var W = 560, H = 260, ML = 8, MR = 8, MT = 26, MB = 30;
+    var plotW = W - ML - MR, plotH = H - MT - MB;
+    var values = data.map(valueFn);
+    var max = niceMax(Math.max.apply(null, values.concat([1])));
+    var n = data.length;
+    var slot = plotW / n;
+    var barW = Math.max(6, Math.min(28, slot * 0.55));
+
+    var svg = '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Graphique en colonnes">';
+
+    // gridlines (0%, 33%, 66%, 100%)
+    [0, 1/3, 2/3, 1].forEach(function(f){
+      var y = MT + plotH * (1 - f);
+      svg += '<line class="grid-line" x1="' + ML + '" x2="' + (W - MR) + '" y1="' + y + '" y2="' + y + '"/>';
+    });
+
+    var bars = '';
+    data.forEach(function(b, i){
+      var v = values[i];
+      var h = max > 0 ? (v / max) * plotH : 0;
+      var x = ML + slot * i + (slot - barW) / 2;
+      var y = MT + plotH - h;
+      var isLast = (i === n - 1);
+      bars += '<g class="bar-group" data-label="' + escapeHtml(b.key) + '" data-value="' + escapeHtml(fmt(v)) + '">';
+      bars += '<path d="' + roundedTopPath(x, y, barW, Math.max(h, 1), 4) + '" fill="' + color + '"/>';
+      bars += '<rect class="bar-hit" x="' + (ML + slot * i) + '" y="' + MT + '" width="' + slot + '" height="' + plotH + '" fill="transparent"/>';
+      if (isLast){
+        bars += '<text class="value-label" x="' + (x + barW / 2) + '" y="' + (y - 8) + '" text-anchor="middle">' + escapeHtml(fmt(v)) + '</text>';
+      }
+      bars += '<text class="axis-label" x="' + (x + barW / 2) + '" y="' + (H - MB + 16) + '" text-anchor="middle">' + escapeHtml(shortLabel(b.key)) + '</text>';
+      bars += '</g>';
+    });
+    svg += bars;
+    svg += '<line class="baseline" x1="' + ML + '" x2="' + (W - MR) + '" y1="' + (MT + plotH) + '" y2="' + (MT + plotH) + '"/>';
+    svg += '</svg>';
+
+    return '<div class="chart-box">' + svg + '<div class="tooltip"></div></div>';
+  }
+
+  // ============================================================
+  // Graphique empilé (répartition par état)
+  // ============================================================
+  function renderStackedChart(data){
+    var W = 1120, H = 260, ML = 8, MR = 8, MT = 26, MB = 30;
+    var plotW = W - ML - MR, plotH = H - MT - MB;
+    var totals = data.map(function(b){ return b.count; });
+    var max = niceMax(Math.max.apply(null, totals.concat([1])));
+    var n = data.length;
+    var slot = plotW / n;
+    var barW = Math.max(10, Math.min(40, slot * 0.55));
+    var gap = 2;
+
+    var svg = '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Répartition des dossiers par état, par campagne">';
+    [0, 1/3, 2/3, 1].forEach(function(f){
+      var y = MT + plotH * (1 - f);
+      svg += '<line class="grid-line" x1="' + ML + '" x2="' + (W - MR) + '" y1="' + y + '" y2="' + y + '"/>';
+    });
+
+    var order = STATE_ORDER; // Traité (bas), En attente de paiement, En attente des résultats (haut)
+    data.forEach(function(b, i){
+      var x = ML + slot * i + (slot - barW) / 2;
+      var yCursor = MT + plotH;
+      var tipParts = [];
+      order.forEach(function(stateName, si){
+        var v = b.etats[stateName] || 0;
+        var h = max > 0 ? (v / max) * plotH : 0;
+        if (h > 0) h = Math.max(h - gap, 1);
+        var y = yCursor - h - (si > 0 ? 0 : 0);
+        var isTop = (si === order.length - 1) || (order.slice(si + 1).every(function(s){ return !b.etats[s]; }));
+        var path = isTop ? roundedTopPath(x, y, barW, h, 4) : ('M' + x + ',' + y + ' h' + barW + ' v' + h + ' h' + (-barW) + ' Z');
+        svg += '<path d="' + path + '" fill="' + STATE_COLOR[stateName] + '"/>';
+        tipParts.push(STATE_ICON[stateName] + ' ' + stateName + ': ' + fmtInt(v));
+        yCursor = y - gap;
+      });
+      svg += '<rect class="bar-group bar-hit" data-label="' + escapeHtml(b.key) + '" data-value="' + escapeHtml(tipParts.join(' · ')) + '" x="' + (ML + slot * i) + '" y="' + MT + '" width="' + slot + '" height="' + plotH + '" fill="transparent"/>';
+      svg += '<text class="value-label" x="' + (x + barW / 2) + '" y="' + (MT + plotH - (max > 0 ? (b.count / max) * plotH : 0) - 8) + '" text-anchor="middle">' + fmtInt(b.count) + '</text>';
+      svg += '<text class="axis-label" x="' + (x + barW / 2) + '" y="' + (H - MB + 16) + '" text-anchor="middle">' + escapeHtml(shortLabel(b.key)) + '</text>';
+    });
+
+    svg += '<line class="baseline" x1="' + ML + '" x2="' + (W - MR) + '" y1="' + (MT + plotH) + '" y2="' + (MT + plotH) + '"/>';
+    svg += '</svg>';
+
+    var legend = '<div class="legend">' + order.map(function(s){
+      return '<div class="item"><span class="dot" style="background:' + STATE_COLOR[s] + '"></span>' + STATE_ICON[s] + ' ' + escapeHtml(s) + '</div>';
+    }).join('') + '</div>';
+
+    return '<div class="chart-box">' + svg + '<div class="tooltip"></div></div>' + legend;
+  }
+
+  // ============================================================
+  // Tooltips (survol des groupes de barres)
+  // ============================================================
+  function attachTooltips(){
+    document.querySelectorAll('.chart-box').forEach(function(box){
+      var tip = box.querySelector('.tooltip');
+      var svg = box.querySelector('svg');
+      if (!tip || !svg) return;
+
+      box.querySelectorAll('.bar-group, .bar-hit').forEach(function(el){
+        el.addEventListener('mouseenter', function(){ showTip(el); });
+        el.addEventListener('mousemove', function(e){ positionTip(e); });
+        el.addEventListener('mouseleave', function(){ tip.classList.remove('show'); });
+      });
+
+      function showTip(el){
+        var label = el.getAttribute('data-label');
+        var value = el.getAttribute('data-value');
+        if (label === null) return;
+        tip.innerHTML = '<div class="t-title">' + escapeHtml(shortLabel(label)) + '</div>' + escapeHtml(value);
+        tip.classList.add('show');
+      }
+      function positionTip(e){
+        var rect = box.getBoundingClientRect();
+        tip.style.left = (e.clientX - rect.left) + 'px';
+        tip.style.top = (e.clientY - rect.top) + 'px';
+      }
+    });
+  }
+
+  // ============================================================
+  // Table détaillée
+  // ============================================================
+  function renderTable(all, currentKey){
+    var rows = all.slice().reverse(); // plus récent en premier
+    var head = '<thead><tr>' +
+      '<th>Campagne</th><th>Dossiers</th><th>Montant total</th><th>Montant moyen</th>' +
+      '<th>Traités</th><th>Attente paiement</th><th>Attente résultats</th>' +
+      '</tr></thead>';
+    var body = '<tbody>' + rows.map(function(b){
+      var moyen = b.count ? b.montant / b.count : 0;
+      var isCurrent = b.key === currentKey;
+      return '<tr' + (isCurrent ? ' class="current"' : '') + '>' +
+        '<td>' + escapeHtml(b.key) + (isCurrent ? ' <span class="tag" style="background:var(--series-1)">en cours</span>' : '') + '</td>' +
+        '<td>' + fmtInt(b.count) + '</td>' +
+        '<td>' + fmtEUR(b.montant, 2) + '</td>' +
+        '<td>' + fmtEUR(moyen, 2) + '</td>' +
+        '<td>' + fmtInt(b.etats['Traité']) + '</td>' +
+        '<td>' + fmtInt(b.etats['En attente de paiement']) + '</td>' +
+        '<td>' + fmtInt(b.etats['En attente des résultats']) + '</td>' +
+        '</tr>';
+    }).join('') + '</tbody>';
+
+    return '<div class="card" id="detail-table"><h2>Détail par campagne</h2>' +
+      '<div class="card-sub">Historique complet, campagne la plus récente en tête</div>' +
+      '<div style="overflow-x:auto"><table class="detail">' + head + body + '</table></div></div>';
+  }
+
+})();
+</script>
+</body>
+</html>
