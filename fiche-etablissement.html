@@ -641,7 +641,7 @@
       return fetchRawTable('TT_Effectifs2').then(function (res) {
         if (!res.ok || sitesLoadFailed) return { ok: false, data: null };
         const rows = res.rows;
-        const niveau1Code = ctx.niveau1Site && ctx.niveau1Site.Code_DGER;
+        const niveau1Code = record.Code_DGER;
         if (!niveau1Code || !year) return { ok: true, data: null, diag: { niveau1Code: niveau1Code, totalRows: rows.length, rawNiveau1Ref: ctx.rawNiveau1Ref, sitesLoaded: ctx.sitesLoaded } };
         const withSite = rows.map(function (r) { return { r: r, site: sitesById.get(r.Code_Dger) }; });
         const matchedSite = withSite.filter(function (x) { return x.site && x.site.UAI_NIVEAU1 === niveau1Code; });
@@ -696,7 +696,7 @@
       return fetchRawTable('TT_Effectifs2').then(function (res) {
         if (!res.ok || sitesLoadFailed) return { ok: false, data: null };
         const rows = res.rows;
-        const niveau1Code = ctx.niveau1Site && ctx.niveau1Site.Code_DGER;
+        const niveau1Code = record.Code_DGER;
         const n = parseInt(yearN, 10);
         if (!niveau1Code || !Number.isFinite(n)) return { ok: true, data: null, diag: { niveau1Code: niveau1Code, totalRows: rows.length, rawNiveau1Ref: ctx.rawNiveau1Ref, sitesLoaded: ctx.sitesLoaded } };
         const withSite = rows.map(function (r) { return { r: r, site: sitesById.get(r.Code_Dger) }; });
@@ -737,7 +737,7 @@
       return fetchRawTable('TR_Reussite_Examens').then(function (res) {
         if (!res.ok || sitesLoadFailed) return { ok: false, data: null };
         const rows = res.rows;
-        const niveau1Code = ctx.niveau1Site && ctx.niveau1Site.Code_DGER;
+        const niveau1Code = record.Code_DGER;
         if (!niveau1Code || !year) return { ok: true, data: null, diag: { niveau1Code: niveau1Code, totalRows: rows.length, rawNiveau1Ref: ctx.rawNiveau1Ref, sitesLoaded: ctx.sitesLoaded } };
         const withSite = rows.map(function (r) { return { r: r, site: sitesById.get(r.UAI_Elem_DGER_Code_) }; });
         const matchedSite = withSite.filter(function (x) { return x.site && x.site.UAI_NIVEAU1 === niveau1Code; });
@@ -781,7 +781,7 @@
         if (!results[0].ok || !centresRes.ok || sitesLoadFailed) return { ok: false, data: null };
         const rows = results[0].rows, centres = centresRes.rows;
         const centreById = new Map(centres.map(function (c) { return [c.id, c.Centre]; }));
-        const niveau1Code = ctx.niveau1Site && ctx.niveau1Site.Code_DGER;
+        const niveau1Code = record.Code_DGER;
         if (!niveau1Code || !year) return { ok: true, data: null, diag: { niveau1Code: niveau1Code, totalRows: rows.length, rawNiveau1Ref: ctx.rawNiveau1Ref, sitesLoaded: ctx.sitesLoaded } };
         const labels = ['Résultat de fonctionnement', 'FOND DE ROULEMENT NET', 'Variation du fonds de roulement BRUT', "CAPACITE D'AUTOFINANCEMENT"];
         const withSite = rows.map(function (r) { return { r: r, site: sitesById.get(r.Code_DGER) }; });
@@ -870,6 +870,7 @@
     let prefs = defaultPrefs();
     let currentRecord = null;
     let sitesById = new Map();
+    let sitesByCode = new Map();
     let sitesLoadFailed = false;
     let yearsById = new Map();
 
@@ -890,12 +891,14 @@
       if (!window.grist || !grist.docApi) { sitesLoadFailed = true; return Promise.resolve(); }
       return grist.docApi.fetchTable('TT_Sites_de_formation').then(function (data) {
         sitesById = new Map();
+        sitesByCode = new Map();
         sitesLoadFailed = false;
         const n = (data.id || []).length;
         for (let i = 0; i < n; i++) {
           const row = {};
           for (const col in data) row[col] = data[col][i];
           sitesById.set(data.id[i], row);
+          if (row.Code_DGER) sitesByCode.set(row.Code_DGER, row);
         }
       }).catch(function (e) {
         console.warn('Impossible de charger TT_Sites_de_formation', e);
@@ -955,9 +958,14 @@
         appEl.innerHTML = '<p>Sélectionnez un établissement pour afficher sa fiche.</p>';
         return;
       }
+      // NOTE: grist.onRecord() delivers Reference columns (Etablissement_niveau_1,
+      // Site_niveaux_inferieurs) as their FORMATTED display string, not a row id — unlike
+      // grist.docApi.fetchTable(), which is raw. So sites are looked up by the reliable
+      // Text formula fields (record.Code_DGER / record.CodeDGER_niveaux_inferieurs) via
+      // sitesByCode, never by resolving the Reference field itself.
       const ctx = {
-        niveau1Site: sitesById.get(record.Etablissement_niveau_1),
-        displaySite: sitesById.get(record.Site_niveaux_inferieurs) || sitesById.get(record.Etablissement_niveau_1),
+        niveau1Site: sitesByCode.get(record.Code_DGER),
+        displaySite: sitesByCode.get(record.CodeDGER_niveaux_inferieurs) || sitesByCode.get(record.Code_DGER),
         rawNiveau1Ref: record.Etablissement_niveau_1,
         sitesLoaded: sitesById.size
       };
