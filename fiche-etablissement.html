@@ -604,18 +604,52 @@
     // UAI_Elem_DGER_Code_, Exercice, ...) through sitesById / yearsById, exactly like the
     // underlying Python formulas do (rec.Code_Dger.Code_DGER, rec.Exercice.Annee).
 
+    // When a year-scoped block finds nothing, this builds a small diagnostic (row counts at
+    // each filter stage, plus which years ARE present for this établissement) so a dead end
+    // is visible and actionable in the UI instead of a bare "no data" that looks identical
+    // whether the year is genuinely empty or a filter/matching mismatch is at fault.
+    function buildDiag(allRows, matchedSite, niveau1Code, getYear) {
+      const yearsFound = Array.from(new Set(matchedSite.map(function (x) { return String(getYear(x.r) || '').trim(); })))
+        .filter(Boolean)
+        .sort(function (a, b) { return parseInt(b, 10) - parseInt(a, 10); });
+      return {
+        niveau1Code: niveau1Code,
+        totalRows: allRows.length,
+        matchedSiteCount: matchedSite.length,
+        yearsFound: yearsFound
+      };
+    }
+    function renderDiagHtml(diag, label) {
+      let html = '<p class="fr-mb-1w">Aucune donnée disponible pour ' + escapeHtml(label) + '.</p>';
+      if (!diag) return html;
+      const items = [];
+      items.push('Code DGER recherché (établissement niveau 1) : ' + (diag.niveau1Code ? escapeHtml(diag.niveau1Code) : '<em>introuvable</em>'));
+      if (diag.totalRows !== undefined) items.push('Lignes brutes chargées dans la table source : ' + diag.totalRows);
+      if (diag.matchedSiteCount !== undefined) items.push('Lignes rattachées à cet établissement (tous sites confondus) : ' + diag.matchedSiteCount);
+      if (diag.yearsFound !== undefined) items.push('Années disponibles pour cet établissement : ' + (diag.yearsFound.length ? diag.yearsFound.map(escapeHtml).join(', ') : '<em>aucune</em>'));
+      html += '<details class="fr-mb-0"><summary style="cursor:pointer;font-size:.8rem;color:var(--text-mention-grey);">Diagnostic technique</summary>' +
+        '<ul style="font-size:.8rem;color:var(--text-mention-grey);margin:.4rem 0 0;">' +
+        items.map(function (t) { return '<li>' + t + '</li>'; }).join('') + '</ul></details>';
+      return html;
+    }
+
     function computeEffectifsForYear(record, ctx, year) {
       return fetchRawTable('TT_Effectifs2').then(function (res) {
         if (!res.ok || sitesLoadFailed) return { ok: false, data: null };
         const rows = res.rows;
         const niveau1Code = ctx.niveau1Site && ctx.niveau1Site.Code_DGER;
-        if (!niveau1Code || !year) return { ok: true, data: null };
-        const filtered = rows.filter(function (r) {
-          const site = sitesById.get(r.Code_Dger);
-          const rowYear = r.Annee_scolaire_Annee || yearsById.get(r.Annee_scolaire);
-          return site && site.UAI_NIVEAU1 === niveau1Code && String(rowYear) === String(year);
-        });
-        if (!filtered.length) return { ok: true, data: null };
+        if (!niveau1Code || !year) return { ok: true, data: null, diag: { niveau1Code: niveau1Code, totalRows: rows.length } };
+        const withSite = rows.map(function (r) { return { r: r, site: sitesById.get(r.Code_Dger) }; });
+        const matchedSite = withSite.filter(function (x) { return x.site && x.site.UAI_NIVEAU1 === niveau1Code; });
+        const filtered = matchedSite.filter(function (x) {
+          const rowYear = x.r.Annee_scolaire_Annee || yearsById.get(x.r.Annee_scolaire);
+          return String(rowYear) === String(year);
+        }).map(function (x) { return x.r; });
+        if (!filtered.length) {
+          return { ok: true, data: null, diag: buildDiag(rows, matchedSite, niveau1Code, function (r) {
+            return r.Annee_scolaire_Annee || yearsById.get(r.Annee_scolaire);
+          }) };
+        }
         let total = 0;
         const grouped = new Map();
         filtered.forEach(function (r) {
@@ -636,7 +670,7 @@
     function renderEffectifsBody(result) {
       if (!result.ok) return ACCESS_ERROR_HTML;
       const data = result.data;
-      if (!data) return '<p class="fr-mb-0">Aucune donnée disponible pour l’année sélectionnée.</p>';
+      if (!data) return renderDiagHtml(result.diag, 'l’effectif');
       const tableRows = data.rows.map(function (r) {
         return '<tr><td>' + escapeHtml(r.site) + '</td><td>' + escapeHtml(r.label) + '</td><td class="fr-text--right">' + fmtNum(r.value) + '</td></tr>';
       }).join('');
@@ -660,24 +694,29 @@
         const rows = res.rows;
         const niveau1Code = ctx.niveau1Site && ctx.niveau1Site.Code_DGER;
         const n = parseInt(yearN, 10);
-        if (!niveau1Code || !Number.isFinite(n)) return { ok: true, data: null };
+        if (!niveau1Code || !Number.isFinite(n)) return { ok: true, data: null, diag: { niveau1Code: niveau1Code, totalRows: rows.length } };
+        const withSite = rows.map(function (r) { return { r: r, site: sitesById.get(r.Code_Dger) }; });
+        const matchedSite = withSite.filter(function (x) { return x.site && x.site.UAI_NIVEAU1 === niveau1Code; });
         const totals = [3, 2, 1, 0].map(function (offset) {
           const y = String(n - offset);
-          const sum = rows.filter(function (r) {
-            const site = sitesById.get(r.Code_Dger);
-            const rowYear = r.Annee_scolaire_Annee || yearsById.get(r.Annee_scolaire);
-            return site && site.UAI_NIVEAU1 === niveau1Code && String(rowYear) === y;
-          }).reduce(function (s, r) { return s + (safeNum(r.Eleves_presents) || 0); }, 0);
+          const sum = matchedSite.filter(function (x) {
+            const rowYear = x.r.Annee_scolaire_Annee || yearsById.get(x.r.Annee_scolaire);
+            return String(rowYear) === y;
+          }).reduce(function (s, x) { return s + (safeNum(x.r.Eleves_presents) || 0); }, 0);
           return { label: y, value: sum };
         });
-        if (!totals.some(function (t) { return t.value > 0; })) return { ok: true, data: null };
+        if (!totals.some(function (t) { return t.value > 0; })) {
+          return { ok: true, data: null, diag: buildDiag(rows, matchedSite, niveau1Code, function (r) {
+            return r.Annee_scolaire_Annee || yearsById.get(r.Annee_scolaire);
+          }) };
+        }
         return { ok: true, data: { totals: totals, variations: computeVariations(totals) } };
       });
     }
     function renderEvolutionBody(result) {
       if (!result.ok) return ACCESS_ERROR_HTML;
       const data = result.data;
-      if (!data) return '<p class="fr-mb-0">Aucune donnée disponible pour cette période.</p>';
+      if (!data) return renderDiagHtml(result.diag, 'cette période');
       const rows = data.totals.map(function (v) {
         return '<tr><td>' + escapeHtml(v.label) + '</td><td class="fr-text--right">' + fmtNum(v.value) + '</td></tr>';
       }).join('');
@@ -695,13 +734,18 @@
         if (!res.ok || sitesLoadFailed) return { ok: false, data: null };
         const rows = res.rows;
         const niveau1Code = ctx.niveau1Site && ctx.niveau1Site.Code_DGER;
-        if (!niveau1Code || !year) return { ok: true, data: null };
-        const filtered = rows.filter(function (r) {
-          const site = sitesById.get(r.UAI_Elem_DGER_Code_);
-          const rowYear = r.Annee_Scolaire_Annee || yearsById.get(r.Annee_Scolaire);
-          return site && site.UAI_NIVEAU1 === niveau1Code && String(rowYear) === String(year) && r.Tauxdereussite;
-        });
-        if (!filtered.length) return { ok: true, data: null };
+        if (!niveau1Code || !year) return { ok: true, data: null, diag: { niveau1Code: niveau1Code, totalRows: rows.length } };
+        const withSite = rows.map(function (r) { return { r: r, site: sitesById.get(r.UAI_Elem_DGER_Code_) }; });
+        const matchedSite = withSite.filter(function (x) { return x.site && x.site.UAI_NIVEAU1 === niveau1Code; });
+        const filtered = matchedSite.filter(function (x) {
+          const rowYear = x.r.Annee_Scolaire_Annee || yearsById.get(x.r.Annee_Scolaire);
+          return String(rowYear) === String(year) && x.r.Tauxdereussite;
+        }).map(function (x) { return x.r; });
+        if (!filtered.length) {
+          return { ok: true, data: null, diag: buildDiag(rows, matchedSite, niveau1Code, function (r) {
+            return r.Annee_Scolaire_Annee || yearsById.get(r.Annee_Scolaire);
+          }) };
+        }
         const groups = new Map();
         filtered.forEach(function (r) {
           const site = sitesById.get(r.UAI_Elem_DGER_Code_);
@@ -715,7 +759,7 @@
     function renderExamensBody(result) {
       if (!result.ok) return ACCESS_ERROR_HTML;
       const groups = result.data;
-      if (!groups || !groups.length) return '<p class="fr-mb-0">Aucune donnée disponible pour l’année sélectionnée.</p>';
+      if (!groups || !groups.length) return renderDiagHtml(result.diag, 'l’année sélectionnée');
       return '<div class="org-sites">' + groups.map(function (g) {
         const rows = g.lines.map(function (line) {
           const idx = line.lastIndexOf(':');
@@ -734,24 +778,30 @@
         const rows = results[0].rows, centres = centresRes.rows;
         const centreById = new Map(centres.map(function (c) { return [c.id, c.Centre]; }));
         const niveau1Code = ctx.niveau1Site && ctx.niveau1Site.Code_DGER;
-        if (!niveau1Code || !year) return { ok: true, data: null };
+        if (!niveau1Code || !year) return { ok: true, data: null, diag: { niveau1Code: niveau1Code, totalRows: rows.length } };
         const labels = ['Résultat de fonctionnement', 'FOND DE ROULEMENT NET', 'Variation du fonds de roulement BRUT', "CAPACITE D'AUTOFINANCEMENT"];
-        const filtered = rows.filter(function (r) {
-          const site = sitesById.get(r.Code_DGER);
-          const rowYear = r.AnneeTexte || yearsById.get(r.Exercice);
-          return site && site.Code_DGER === niveau1Code && String(rowYear) === String(year) && labels.indexOf(r.Ligne_libelle) !== -1;
-        });
+        const withSite = rows.map(function (r) { return { r: r, site: sitesById.get(r.Code_DGER) }; });
+        const matchedSite = withSite.filter(function (x) { return x.site && x.site.Code_DGER === niveau1Code; });
+        const filtered = matchedSite.filter(function (x) {
+          const rowYear = x.r.AnneeTexte || yearsById.get(x.r.Exercice);
+          return String(rowYear) === String(year) && labels.indexOf(x.r.Ligne_libelle) !== -1;
+        }).map(function (x) { return x.r; });
         const out = filtered.map(function (r) {
           const montant = safeNum(r.Montant_annuel_realise);
           return { indicateur: r.Ligne_libelle, centre: centreById.get(r.Centre_libelle) || ('Centre ' + r.Centre_code), montant: montant };
         }).filter(function (r) { return r.montant !== null && Math.abs(r.montant) >= 0.005; });
-        return { ok: true, data: out.length ? out : null };
+        if (!out.length) {
+          return { ok: true, data: null, diag: buildDiag(rows, matchedSite, niveau1Code, function (r) {
+            return r.AnneeTexte || yearsById.get(r.Exercice);
+          }) };
+        }
+        return { ok: true, data: out };
       });
     }
     function renderFinancesBody(result) {
       if (!result.ok) return ACCESS_ERROR_HTML;
       const rows = result.data;
-      if (!rows) return '<p class="fr-mb-0">Aucune donnée disponible pour l’année sélectionnée.</p>';
+      if (!rows) return renderDiagHtml(result.diag, 'l’année sélectionnée');
       const tableRows = rows.map(function (r) {
         return '<tr><td>' + escapeHtml(r.indicateur) + '</td><td>' + escapeHtml(r.centre) + '</td><td class="fr-text--right">' + escapeHtml(fmtEuro(r.montant)) + '</td></tr>';
       }).join('');
