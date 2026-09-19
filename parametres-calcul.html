@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Paramètres de calcul</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<style>
+  :root{
+    color-scheme: light;
+    --surface-1: #fcfcfb;
+    --plane:     #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --baseline:  #c3c2b7;
+    --border:    rgba(11,11,11,0.10);
+    --series-1:  #2a78d6;
+    --good:      #0ca30c;
+    --critical:  #d03b3b;
+    --good-soft: #e5f6e5;
+    --critical-soft: #fbe9e8;
+    --info-soft: #e7f0fb;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:where(:not([data-theme="light"])){
+      color-scheme: dark;
+      --surface-1: #1a1a19;
+      --plane:     #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --baseline:  #383835;
+      --border:    rgba(255,255,255,0.10);
+      --series-1:  #3987e5;
+      --good:      #0ca30c;
+      --critical:  #e66767;
+      --good-soft: rgba(12,163,12,0.16);
+      --critical-soft: rgba(230,103,103,0.16);
+      --info-soft: rgba(57,135,229,0.16);
+    }
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; }
+  body{
+    background:var(--plane); color:var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size:13.5px; line-height:1.45;
+  }
+  .wrap{ max-width:1100px; margin:0 auto; padding:16px 16px 40px; }
+
+  header.top h1{ font-size:19px; font-weight:700; margin:0 0 3px; }
+  header.top .sub{ font-size:12px; color:var(--text-secondary); max-width:760px; margin-bottom:16px; }
+
+  .card{
+    background:var(--surface-1); border:1px solid var(--border); border-radius:12px;
+    padding:16px; margin-bottom:16px;
+  }
+  .card h2{ font-size:13.5px; font-weight:700; margin:0 0 2px; }
+  .card .card-sub{ font-size:11.5px; color:var(--text-secondary); margin-bottom:12px; }
+
+  /* ---------- cartes paramètres ---------- */
+  .param-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); gap:12px; }
+  .param-card{
+    background:var(--surface-1); border:1px solid var(--border); border-radius:12px; padding:13px 14px;
+    display:flex; flex-direction:column; gap:6px;
+  }
+  .param-card .p-label{ font-size:12px; font-weight:600; }
+  .param-card .p-value{ font-size:20px; font-weight:700; font-variant-numeric:proportional-nums; }
+  .param-card .p-value.empty{ color:var(--text-muted); font-size:13px; font-weight:500; }
+  .param-card .p-since{ font-size:11px; color:var(--text-secondary); }
+  .param-card .p-future{
+    font-size:11px; color:var(--series-1); background:var(--info-soft);
+    border-radius:6px; padding:4px 7px; margin-top:2px;
+  }
+  .param-card .p-edit{
+    align-self:flex-start; margin-top:4px; border:1px solid var(--border); background:transparent;
+    color:var(--text-secondary); font-size:11px; font-weight:600; padding:4px 10px; border-radius:999px;
+    cursor:pointer;
+  }
+  .param-card .p-edit:hover{ border-color:var(--series-1); color:var(--series-1); }
+
+  /* ---------- formulaire ---------- */
+  .form-grid{ display:grid; grid-template-columns:1.4fr 1fr 1fr auto; gap:10px; align-items:end; }
+  @media (max-width:720px){ .form-grid{ grid-template-columns:1fr 1fr; } }
+  .field label{ display:block; font-size:11px; font-weight:600; color:var(--text-secondary); margin-bottom:4px; }
+  .field input, .field select{
+    width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:7px;
+    background:var(--plane); color:var(--text-primary); font:inherit; font-size:13px;
+  }
+  .field input:focus, .field select:focus{ outline:2px solid var(--info-soft); border-color:var(--series-1); }
+  .quick-dates{ display:flex; gap:6px; margin-top:6px; grid-column:1 / -1; }
+  .quick-dates button{
+    border:1px solid var(--border); background:transparent; color:var(--text-secondary);
+    font-size:11px; padding:5px 10px; border-radius:999px; cursor:pointer;
+  }
+  .quick-dates button:hover{ border-color:var(--series-1); color:var(--series-1); }
+  .btn{
+    border:none; border-radius:7px; padding:9px 16px; font-weight:700; font-size:13px;
+    cursor:pointer; background:var(--series-1); color:#fff; white-space:nowrap;
+  }
+  .btn:disabled{ opacity:.5; cursor:default; }
+  .btn:not(:disabled):hover{ filter:brightness(1.1); }
+
+  .feedback{
+    margin-top:10px; font-size:12px; padding:8px 11px; border-radius:8px; display:none;
+  }
+  .feedback.show{ display:block; }
+  .feedback.error{ background:var(--critical-soft); color:var(--critical); }
+  .feedback.success{ background:var(--good-soft); color:var(--good); }
+
+  /* ---------- historique ---------- */
+  table.hist{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.hist th, table.hist td{ padding:7px 9px; border-bottom:1px solid var(--border); text-align:left; }
+  table.hist td:nth-child(2){ text-align:right; font-variant-numeric:tabular-nums; }
+  table.hist thead th{
+    font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted);
+    font-weight:600; border-bottom:1px solid var(--baseline);
+  }
+  table.hist tbody tr.past{ color:var(--text-secondary); }
+  .badge{
+    display:inline-block; font-size:10px; font-weight:700; padding:2px 8px; border-radius:999px;
+  }
+  .badge.actif{ background:var(--good-soft); color:var(--good); }
+  .badge.avenir{ background:var(--info-soft); color:var(--series-1); }
+  .badge.passe{ background:var(--plane); color:var(--text-muted); border:1px solid var(--border); }
+
+  .empty-state{ text-align:center; padding:30px 20px; color:var(--text-secondary); font-size:12.5px; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Paramètres de calcul</h1>
+    <div class="sub">
+      Chaque paramètre est versionné par date d'effet : un dossier utilise toujours la valeur en vigueur
+      à sa date de prélèvement. Enregistrer une nouvelle valeur ne modifie donc jamais le calcul des
+      anciennes campagnes — seules les campagnes à venir utilisent la nouvelle valeur.
+    </div>
+  </header>
+
+  <div class="card">
+    <h2>Valeurs actuelles</h2>
+    <div class="card-sub">Valeur appliquée aujourd'hui pour chaque paramètre du calcul d'indemnisation</div>
+    <div class="param-grid" id="param-grid"></div>
+  </div>
+
+  <div class="card">
+    <h2>Enregistrer une nouvelle valeur</h2>
+    <div class="card-sub">La version actuellement en vigueur est automatiquement clôturée à la date d'effet choisie</div>
+    <form id="param-form">
+      <div class="form-grid">
+        <div class="field">
+          <label for="param-select">Paramètre</label>
+          <select id="param-select"></select>
+        </div>
+        <div class="field">
+          <label for="custom-name">Nom du paramètre</label>
+          <input type="text" id="custom-name" placeholder="ex. AMV" disabled>
+        </div>
+        <div class="field">
+          <label for="value-input">Nouvelle valeur</label>
+          <input type="text" inputmode="decimal" id="value-input" placeholder="ex. 14,18">
+        </div>
+        <div class="field">
+          <label for="date-input">Date d'effet</label>
+          <input type="date" id="date-input">
+        </div>
+        <div class="quick-dates">
+          <button type="button" id="btn-current-campaign"></button>
+          <button type="button" id="btn-next-campaign"></button>
+        </div>
+        <button type="submit" class="btn" id="submit-btn" style="grid-column:1/-1; justify-self:start;">Enregistrer cette valeur</button>
+      </div>
+      <div class="feedback" id="feedback"></div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Historique complet</h2>
+    <div class="card-sub">Toutes les versions enregistrées, par paramètre</div>
+    <div id="history-wrap" style="overflow-x:auto"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  var PARAM_META = {
+    'AMV': { label: 'AMV (Acte Médical Vétérinaire)', unit: '€' },
+    'coefficient_rate': { label: 'Coefficient — prélèvement Rate', unit: '× AMV' },
+    'coefficient_sang_bovins': { label: 'Coefficient — Sang (Bovins / Cervidés)', unit: '× AMV' },
+    'coefficient_sang_autres': { label: 'Coefficient — Sang (autres espèces)', unit: '× AMV' },
+    'coefficient_fdd': { label: 'Coefficient FDD (déplacement)', unit: '× AMV/km' },
+    'tarif_km_cv_5': { label: 'Tarif kilométrique — véhicule < 5 CV', unit: '€/km' },
+    'tarif_km_cv_6-7': { label: 'Tarif kilométrique — véhicule 6-7 CV', unit: '€/km' },
+    'tarif_km_cv_sup_8': { label: 'Tarif kilométrique — véhicule ≥ 8 CV', unit: '€/km' }
+  };
+  var PARAM_ORDER = Object.keys(PARAM_META);
+
+  var state = { records: [], colMap: null };
+
+  // ============================================================
+  // Utils dates (colonnes Date Grist = secondes UTC, minuit)
+  // ============================================================
+  function todaySec(){
+    var d = new Date();
+    return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 1000);
+  }
+  function dateInputToSec(str){
+    if (!str) return null;
+    var p = str.split('-');
+    return Math.floor(Date.UTC(+p[0], +p[1] - 1, +p[2]) / 1000);
+  }
+  function secToDateInput(sec){
+    var d = new Date(sec * 1000);
+    return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
+  }
+  function fmtDateSec(sec){
+    if (sec === null || sec === undefined) return null;
+    var d = new Date(sec * 1000);
+    return String(d.getUTCDate()).padStart(2, '0') + '/' + String(d.getUTCMonth() + 1).padStart(2, '0') + '/' + d.getUTCFullYear();
+  }
+  function campaignStartSec(sec){
+    var d = new Date(sec * 1000);
+    var y = d.getUTCFullYear();
+    return d.getUTCMonth() <= 5 ? Math.floor(Date.UTC(y, 0, 1) / 1000) : Math.floor(Date.UTC(y, 6, 1) / 1000);
+  }
+  function nextCampaignStartSec(sec){
+    var cur = campaignStartSec(sec);
+    var d = new Date(cur * 1000);
+    return d.getUTCMonth() === 0 ? Math.floor(Date.UTC(d.getUTCFullYear(), 6, 1) / 1000) : Math.floor(Date.UTC(d.getUTCFullYear() + 1, 0, 1) / 1000);
+  }
+  function campaignLabelSec(sec){
+    var d = new Date(sec * 1000);
+    var sem = d.getUTCMonth() <= 5 ? 1 : 2;
+    return 'S' + sem + ' ' + d.getUTCFullYear();
+  }
+  function addDaysSec(sec, days){ return sec + days * 86400; }
+
+  function escapeHtml(s){
+    return (s === null || s === undefined ? '' : String(s))
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function fmtValue(v, unit){
+    if (v === null || v === undefined || !isFinite(v)) return null;
+    var n = v.toLocaleString('fr-FR', { maximumFractionDigits: 4 });
+    return unit === '€' ? n + ' €' : n + ' ' + unit;
+  }
+
+  // ============================================================
+  // Grist
+  // ============================================================
+  grist.ready({
+    requiredAccess: 'full',
+    columns: [
+      { name: 'Parametre', title: 'Nom du paramètre', type: 'Text' },
+      { name: 'Valeur', title: 'Valeur', type: 'Numeric' },
+      { name: 'DateDebut', title: 'Date de début', type: 'Date' },
+      { name: 'DateFin', title: 'Date de fin', type: 'Date' }
+    ]
+  });
+
+  grist.onRecords(function(records, mappings){
+    state.colMap = mappings;
+    state.records = grist.mapColumnNames(records, mappings) || records;
+    render();
+  });
+
+  // ============================================================
+  // Regroupement par paramètre
+  // ============================================================
+  function groupByParam(){
+    var groups = Object.create(null);
+    state.records.forEach(function(r){
+      var name = (r.Parametre || '').toString().trim();
+      if (!name) return;
+      if (!groups[name]) groups[name] = [];
+      groups[name].push({ id: r.id, valeur: r.Valeur, date_debut: r.DateDebut, date_fin: r.DateFin });
+    });
+    return groups;
+  }
+  function pickCurrentAndFuture(rows, today){
+    var current = null, future = [];
+    rows.forEach(function(r){
+      if (r.date_debut === null || r.date_debut === undefined) return;
+      if (r.date_debut <= today && (r.date_fin === null || r.date_fin === undefined || r.date_fin >= today)) current = r;
+      else if (r.date_debut > today) future.push(r);
+    });
+    future.sort(function(a, b){ return a.date_debut - b.date_debut; });
+    return { current: current, future: future };
+  }
+
+  // ============================================================
+  // Rendu — cartes des valeurs actuelles
+  // ============================================================
+  function render(){
+    var groups = groupByParam();
+    var today = todaySec();
+    var allKeys = PARAM_ORDER.concat(Object.keys(groups).filter(function(k){ return PARAM_ORDER.indexOf(k) === -1; }).sort());
+
+    var grid = document.getElementById('param-grid');
+    if (!state.records.length){
+      grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1">Aucun paramètre enregistré pour le moment. Utilise le formulaire ci-dessous pour saisir les premières valeurs.</div>';
+    } else {
+      grid.innerHTML = allKeys.map(function(key){
+        var meta = PARAM_META[key] || { label: key, unit: '' };
+        var rows = groups[key] || [];
+        var pf = pickCurrentAndFuture(rows, today);
+        var valueHtml = pf.current
+          ? '<div class="p-value">' + escapeHtml(fmtValue(pf.current.valeur, meta.unit)) + '</div>' +
+            '<div class="p-since">En vigueur depuis le ' + fmtDateSec(pf.current.date_debut) + ' (' + campaignLabelSec(pf.current.date_debut) + ')</div>'
+          : '<div class="p-value empty">Non défini</div>';
+        var futureHtml = pf.future.length
+          ? '<div class="p-future">À partir du ' + fmtDateSec(pf.future[0].date_debut) + ' (' + campaignLabelSec(pf.future[0].date_debut) + ') : ' + escapeHtml(fmtValue(pf.future[0].valeur, meta.unit)) + '</div>'
+          : '';
+        return '<div class="param-card">' +
+          '<div class="p-label">' + escapeHtml(meta.label) + '</div>' +
+          valueHtml + futureHtml +
+          '<button type="button" class="p-edit" data-param="' + escapeHtml(key) + '">Modifier</button>' +
+          '</div>';
+      }).join('');
+    }
+
+    renderHistory(groups, allKeys, today);
+    populateSelect(allKeys);
+    setQuickDateLabels();
+
+    grid.querySelectorAll('.p-edit').forEach(function(btn){
+      btn.addEventListener('click', function(){ selectParam(btn.getAttribute('data-param')); });
+    });
+  }
+
+  function renderHistory(groups, allKeys, today){
+    var wrap = document.getElementById('history-wrap');
+    var rows = [];
+    allKeys.forEach(function(key){
+      (groups[key] || []).slice().sort(function(a, b){ return (b.date_debut || 0) - (a.date_debut || 0); })
+        .forEach(function(r){ rows.push({ key: key, row: r }); });
+    });
+    if (!rows.length){
+      wrap.innerHTML = '<div class="empty-state">Aucun historique pour le moment.</div>';
+      return;
+    }
+    var body = rows.map(function(item){
+      var meta = PARAM_META[item.key] || { label: item.key, unit: '' };
+      var r = item.row;
+      var status, cls;
+      if (r.date_debut > today){ status = 'À venir'; cls = 'avenir past'; }
+      else if (r.date_fin !== null && r.date_fin !== undefined && r.date_fin < today){ status = 'Terminé'; cls = 'passe past'; }
+      else { status = 'Actif'; cls = 'actif'; }
+      var periode = 'depuis le ' + fmtDateSec(r.date_debut) + (r.date_fin !== null && r.date_fin !== undefined ? ' jusqu\'au ' + fmtDateSec(r.date_fin) : ' (en cours)');
+      return '<tr class="' + (cls.indexOf('past') !== -1 ? 'past' : '') + '">' +
+        '<td>' + escapeHtml(meta.label) + '</td>' +
+        '<td>' + escapeHtml(fmtValue(r.valeur, meta.unit) || '—') + '</td>' +
+        '<td>' + escapeHtml(periode) + '</td>' +
+        '<td><span class="badge ' + cls.split(' ')[0] + '">' + status + '</span></td>' +
+        '</tr>';
+    }).join('');
+    wrap.innerHTML = '<table class="hist"><thead><tr><th>Paramètre</th><th>Valeur</th><th>Période</th><th>Statut</th></tr></thead><tbody>' + body + '</tbody></table>';
+  }
+
+  // ============================================================
+  // Formulaire
+  // ============================================================
+  var selectEl = document.getElementById('param-select');
+  var customNameEl = document.getElementById('custom-name');
+  var valueEl = document.getElementById('value-input');
+  var dateEl = document.getElementById('date-input');
+  var feedbackEl = document.getElementById('feedback');
+  var formEl = document.getElementById('param-form');
+  var btnCurrentCampaign = document.getElementById('btn-current-campaign');
+  var btnNextCampaign = document.getElementById('btn-next-campaign');
+
+  function populateSelect(allKeys){
+    var prevValue = selectEl.value;
+    selectEl.innerHTML = allKeys.map(function(k){
+      var meta = PARAM_META[k] || { label: k };
+      return '<option value="' + escapeHtml(k) + '">' + escapeHtml(meta.label) + '</option>';
+    }).join('') + '<option value="__custom__">Autre paramètre…</option>';
+    if (prevValue && (allKeys.indexOf(prevValue) !== -1 || prevValue === '__custom__')) selectEl.value = prevValue;
+    toggleCustomName();
+  }
+  function toggleCustomName(){
+    var isCustom = selectEl.value === '__custom__';
+    customNameEl.disabled = !isCustom;
+    if (!isCustom) customNameEl.value = '';
+  }
+  selectEl.addEventListener('change', toggleCustomName);
+
+  function selectParam(key){
+    if (PARAM_ORDER.indexOf(key) === -1 && !Array.prototype.some.call(selectEl.options, function(o){ return o.value === key; })){
+      var opt = document.createElement('option');
+      opt.value = key; opt.textContent = key;
+      selectEl.insertBefore(opt, selectEl.lastElementChild);
+    }
+    selectEl.value = key;
+    toggleCustomName();
+    valueEl.focus();
+    window.scrollTo({ top: formEl.getBoundingClientRect().top + window.scrollY - 20, behavior: 'smooth' });
+  }
+
+  function setQuickDateLabels(){
+    var today = todaySec();
+    btnCurrentCampaign.textContent = 'Campagne en cours (' + campaignLabelSec(campaignStartSec(today)) + ')';
+    btnNextCampaign.textContent = 'Prochaine campagne (' + campaignLabelSec(nextCampaignStartSec(today)) + ')';
+  }
+  btnCurrentCampaign.addEventListener('click', function(){ dateEl.value = secToDateInput(campaignStartSec(todaySec())); });
+  btnNextCampaign.addEventListener('click', function(){ dateEl.value = secToDateInput(nextCampaignStartSec(todaySec())); });
+
+  // valeur par défaut à l'ouverture : prochaine campagne
+  dateEl.value = secToDateInput(nextCampaignStartSec(todaySec()));
+
+  function showFeedback(msg, kind){
+    feedbackEl.textContent = msg;
+    feedbackEl.className = 'feedback show ' + kind;
+  }
+  function hideFeedback(){ feedbackEl.className = 'feedback'; }
+
+  formEl.addEventListener('submit', function(e){
+    e.preventDefault();
+    hideFeedback();
+
+    var paramName = selectEl.value === '__custom__' ? customNameEl.value.trim() : selectEl.value;
+    if (!paramName){ showFeedback('Indique le nom du paramètre.', 'error'); return; }
+
+    var rawValue = valueEl.value.trim().replace(',', '.');
+    var valeur = parseFloat(rawValue);
+    if (!rawValue || !isFinite(valeur)){ showFeedback('Indique une valeur numérique valide.', 'error'); return; }
+
+    var newDebut = dateInputToSec(dateEl.value);
+    if (newDebut === null){ showFeedback('Indique une date d\'effet.', 'error'); return; }
+
+    if (!state.colMap){ showFeedback('Le widget n\'est pas encore prêt, réessaie dans un instant.', 'error'); return; }
+
+    var groups = groupByParam();
+    var existing = groups[paramName] || [];
+    var openRows = existing.filter(function(r){ return r.date_fin === null || r.date_fin === undefined; });
+    var blocking = openRows.find(function(r){ return r.date_debut >= newDebut; });
+    if (blocking){
+      showFeedback('La date d\'effet doit être postérieure à la version en cours (en vigueur depuis le ' + fmtDateSec(blocking.date_debut) + ').', 'error');
+      return;
+    }
+
+    var submitBtn = document.getElementById('submit-btn');
+    submitBtn.disabled = true;
+
+    var closeSec = addDaysSec(newDebut, -1);
+    var updates = openRows.map(function(r){
+      var fields = {}; fields[state.colMap.DateFin] = closeSec;
+      return { id: r.id, fields: fields };
+    });
+
+    var createFields = {};
+    createFields[state.colMap.Parametre] = paramName;
+    createFields[state.colMap.Valeur] = valeur;
+    createFields[state.colMap.DateDebut] = newDebut;
+
+    Promise.resolve()
+      .then(function(){ return updates.length ? grist.selectedTable.update(updates) : null; })
+      .then(function(){ return grist.selectedTable.create({ fields: createFields }); })
+      .then(function(){
+        showFeedback('Nouvelle valeur enregistrée pour « ' + paramName + ' », effective à partir du ' + fmtDateSec(newDebut) + '.', 'success');
+        valueEl.value = '';
+      })
+      .catch(function(err){
+        showFeedback('Erreur lors de l\'enregistrement : ' + (err && err.message ? err.message : err), 'error');
+      })
+      .finally(function(){ submitBtn.disabled = false; });
+  });
+
+})();
+</script>
+</body>
+</html>
