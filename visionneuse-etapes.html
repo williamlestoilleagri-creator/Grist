@@ -326,9 +326,21 @@
     ]
   });
 
+  // Colonnes optionnelles pour lesquelles on accepte une correspondance directe
+  // (même nom de colonne dans la table) si le mapping n'a pas été explicitement
+  // renseigné dans les réglages du widget — utile quand la colonne (ex. Titre)
+  // a été ajoutée à la table après la configuration initiale du widget.
+  var OPTIONAL_FALLBACK_COLUMNS = ['Titre', 'Categorie'];
+
   grist.onRecords(function (records, mappings) {
     state.colMap = mappings;
     var mapped = grist.mapColumnNames(records, mappings) || records;
+    mapped.forEach(function (r, i) {
+      var raw = records[i] || {};
+      OPTIONAL_FALLBACK_COLUMNS.forEach(function (key) {
+        if ((r[key] === undefined || r[key] === null) && raw[key] !== undefined) r[key] = raw[key];
+      });
+    });
     state.records = mapped;
     refreshCategorieFilter();
     renderSidebar();
