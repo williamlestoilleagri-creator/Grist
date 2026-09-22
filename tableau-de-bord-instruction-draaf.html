@@ -101,21 +101,6 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
 .kpi-delta.flat{ color: var(--text-muted); }
 .kpi-hint{ font-size:0.72rem; color: var(--text-muted); margin:0.15rem 0 0; }
 
-.kpi-value-tag{ margin: 0.3rem 0 0.25rem; line-height:1.1; }
-.kpi-tag{
-  display:inline-block; max-width:100%;
-  background: var(--series-1); color:#fff; font-weight:600;
-  padding:0.28rem 0.6rem; border-radius:0.35rem;
-  line-height:1.25; word-break:break-word;
-  font-size:1rem;
-}
-.kpi-tag.kpi-tag--empty{ background: var(--surface-2); color: var(--text-muted); font-weight:500; }
-.kpi-tag[data-len-tier="xs"]{ font-size:1.1rem; }
-.kpi-tag[data-len-tier="sm"]{ font-size:0.95rem; }
-.kpi-tag[data-len-tier="md"]{ font-size:0.82rem; }
-.kpi-tag[data-len-tier="lg"]{ font-size:0.74rem; }
-.kpi-tag[data-len-tier="xl"]{ font-size:0.66rem; }
-
 /* --- cartes graphiques --- */
 .chart-card{
   border:1px solid var(--border-1); border-radius:0.25rem; background: var(--surface-1);
@@ -361,75 +346,49 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
 
   </div>
 
-  <!-- Journal des appels — détail (table DATA_Evenements, libellés normalisés) -->
+  <!-- Relance téléphonique (vue RELANCE TEL, table DATA_Exploitants, libellés normalisés) -->
   <div class="fr-mb-4w">
     <div class="section-title">
-      <h2 class="fr-h5 fr-mb-0">Journal des appels — détail</h2>
+      <h2 class="fr-h5 fr-mb-0">Relance téléphonique</h2>
     </div>
-    <div class="fr-grid-row fr-grid-row--gutters" id="kpiRowAppels">
+    <div class="fr-grid-row fr-grid-row--gutters" id="kpiRowRelanceTel">
 
-      <div class="fr-col-12 fr-col-sm-6 fr-col-md-4 fr-col-lg-2">
+      <div class="fr-col-12 fr-col-sm-6 fr-col-md-4">
         <div class="kpi-card">
           <div class="kpi-top">
-            <p class="kpi-label fr-mb-0">Type de courrier reçu</p>
-            <button class="help-btn" type="button" data-help="kpi-typecourrier" aria-label="Aide sur cet indicateur">
+            <p class="kpi-label fr-mb-0">Ont contacté le numéro vert</p>
+            <button class="help-btn" type="button" data-help="kpi-numerovert" aria-label="Aide sur cet indicateur">
               <span class="fr-icon-information-line" aria-hidden="true"></span>
             </button>
           </div>
-          <p class="kpi-value-tag"><span class="kpi-tag" id="kpiTypeCourrier">—</span></p>
-          <p class="kpi-hint" id="kpiTypeCourrierHint"></p>
+          <p class="kpi-value" id="kpiNumeroVert">—</p>
+          <p class="kpi-hint" id="kpiNumeroVertHint"></p>
         </div>
       </div>
 
-      <div class="fr-col-12 fr-col-sm-6 fr-col-md-4 fr-col-lg-2">
+      <div class="fr-col-12 fr-col-sm-6 fr-col-md-4">
         <div class="kpi-card">
           <div class="kpi-top">
-            <p class="kpi-label fr-mb-0">Traitement dominant</p>
-            <button class="help-btn" type="button" data-help="kpi-traitement" aria-label="Aide sur cet indicateur">
+            <p class="kpi-label fr-mb-0">Relancés par téléphone</p>
+            <button class="help-btn" type="button" data-help="kpi-relancetel" aria-label="Aide sur cet indicateur">
               <span class="fr-icon-information-line" aria-hidden="true"></span>
             </button>
           </div>
-          <p class="kpi-value-tag"><span class="kpi-tag" id="kpiTraitement">—</span></p>
-          <p class="kpi-hint" id="kpiTraitementHint"></p>
+          <p class="kpi-value" id="kpiRelanceTel">—</p>
+          <p class="kpi-hint" id="kpiRelanceTelHint"></p>
         </div>
       </div>
 
-      <div class="fr-col-12 fr-col-sm-6 fr-col-md-4 fr-col-lg-2">
-        <div class="kpi-card">
+      <div class="fr-col-12 fr-col-sm-6 fr-col-md-4">
+        <div class="kpi-card" style="border-left-color:var(--status-serious)">
           <div class="kpi-top">
-            <p class="kpi-label fr-mb-0">Type d'appel dominant</p>
-            <button class="help-btn" type="button" data-help="kpi-typeappel" aria-label="Aide sur cet indicateur">
+            <p class="kpi-label fr-mb-0">Refus de rendez-vous</p>
+            <button class="help-btn" type="button" data-help="kpi-refusrdd" aria-label="Aide sur cet indicateur">
               <span class="fr-icon-information-line" aria-hidden="true"></span>
             </button>
           </div>
-          <p class="kpi-value-tag"><span class="kpi-tag" id="kpiTypeAppel">—</span></p>
-          <p class="kpi-hint" id="kpiTypeAppelHint"></p>
-        </div>
-      </div>
-
-      <div class="fr-col-12 fr-col-sm-6 fr-col-md-4 fr-col-lg-2">
-        <div class="kpi-card" style="border-left-color:var(--status-warning)">
-          <div class="kpi-top">
-            <p class="kpi-label fr-mb-0">Rappels DRAAF</p>
-            <button class="help-btn" type="button" data-help="kpi-rappelsdraaf" aria-label="Aide sur cet indicateur">
-              <span class="fr-icon-information-line" aria-hidden="true"></span>
-            </button>
-          </div>
-          <p class="kpi-value" id="kpiRappelsDraaf">—</p>
-          <p class="kpi-hint" id="kpiRappelsDraafHint"></p>
-        </div>
-      </div>
-
-      <div class="fr-col-12 fr-col-sm-6 fr-col-md-4 fr-col-lg-2">
-        <div class="kpi-card">
-          <div class="kpi-top">
-            <p class="kpi-label fr-mb-0">Suivi complémentaire renseigné</p>
-            <button class="help-btn" type="button" data-help="kpi-traitement2" aria-label="Aide sur cet indicateur">
-              <span class="fr-icon-information-line" aria-hidden="true"></span>
-            </button>
-          </div>
-          <p class="kpi-value" id="kpiTraitement2">—</p>
-          <p class="kpi-hint" id="kpiTraitement2Hint"></p>
+          <p class="kpi-value" id="kpiRefusRdd">—</p>
+          <p class="kpi-hint" id="kpiRefusRddHint"></p>
         </div>
       </div>
 
@@ -472,7 +431,6 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
               <option value="traitement" selected>Par traitement</option>
               <option value="type">Par type d'appel</option>
               <option value="statut">Par statut FAQ</option>
-              <option value="courrier">Par type de courrier reçu</option>
             </select>
           </div>
         </div>
@@ -619,22 +577,6 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
   const fmt = n => (n === null || n === undefined || Number.isNaN(n)) ? '—' : n.toLocaleString('fr-FR');
   const fmtPct = n => (n === null || n === undefined || Number.isNaN(n)) ? '—' : Math.round(n) + ' %';
 
-  // Affiche une valeur catégorielle sous forme de pastille (fond bleu, texte blanc),
-  // avec une taille de police qui diminue au fur et à mesure que le libellé s'allonge
-  // pour éviter qu'un intitulé long ne déborde ou ne casse la mise en page de la carte.
-  function setKpiTag(id, text){
-    const node = el(id);
-    const empty = !text || text === '—';
-    node.textContent = empty ? '—' : text;
-    node.classList.toggle('kpi-tag--empty', empty);
-    const len = empty ? 0 : text.length;
-    let tier = 'xs';
-    if (len > 28) tier = 'xl';
-    else if (len > 18) tier = 'lg';
-    else if (len > 11) tier = 'md';
-    else if (len > 4) tier = 'sm';
-    node.setAttribute('data-len-tier', tier);
-  }
 
   function listValues(cell){
     if (Array.isArray(cell)){
@@ -759,31 +701,17 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
       title: 'Appels enregistrés',
       body: ['Nombre total d’évènements consignés dans DATA_Evenements (appels entrants, relances, courriers…). Le sous-texte indique combien restent à rappeler.']
     },
-    'kpi-typecourrier': {
-      title: 'Type de courrier reçu',
-      body: [
-        'Nature de courrier la plus fréquente parmi les évènements du journal des appels (DATA_Evenements, champ TypeCourrier).',
-        'Le sous-texte indique combien d’évènements portent ce type de courrier, sur le total des évènements où un type de courrier a été renseigné.'
-      ]
+    'kpi-numerovert': {
+      title: 'Ont contacté le numéro vert',
+      body: ['Nombre d’exploitants recensés ayant déjà contacté le numéro vert (DATA_Exploitants, champ Ont_ils_deja_contacte_le_numero_vert_ — calculé automatiquement dès qu’un évènement existe pour leur PACAGE dans le journal des appels).']
     },
-    'kpi-traitement': {
-      title: 'Traitement dominant',
-      body: [
-        'Modalité de traitement la plus fréquente parmi les appels du journal (DATA_Evenements, champ Traitement).',
-        'Utile pour voir d’un coup d’œil comment la majorité des appels sont pris en charge (répondu, sans suite, à recontacter…).'
-      ]
+    'kpi-relancetel': {
+      title: 'Relancés par téléphone',
+      body: ['Nombre d’exploitants recensés ayant été relancés par téléphone (DATA_Exploitants, champ A_ete_relance_par_tel_).']
     },
-    'kpi-typeappel': {
-      title: 'Type d’appel dominant',
-      body: ['Nature de sollicitation la plus fréquente parmi les appels du journal (DATA_Evenements, champ Type — plusieurs types possibles par appel).']
-    },
-    'kpi-rappelsdraaf': {
-      title: 'Rappels DRAAF',
-      body: ['Nombre d’évènements du journal des appels marqués « Rappel par la DRAAF » (DATA_Evenements, champ Rappel_par_la_DRAAF). Ce sont les rappels à effectuer par les services de la DRAAF.']
-    },
-    'kpi-traitement2': {
-      title: 'Suivi complémentaire renseigné',
-      body: ['Nombre d’évènements du journal des appels pour lesquels une note de suivi complémentaire a été saisie (DATA_Evenements, champ traitement2).']
+    'kpi-refusrdd': {
+      title: 'Refus de rendez-vous',
+      body: ['Nombre d’exploitants recensés ayant refusé le rendez-vous proposé (DATA_Exploitants, champ Refuse_RDD_). Ce sont les dossiers à recontacter en priorité pour lever le refus ou documenter le motif.']
     },
     'chart-etat': {
       title: 'État d’avancement des dossiers',
@@ -799,8 +727,7 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
       choices: [
         ['Par traitement', 'montre comment les appels ont été traités (répondu, sans suite, à recontacter…).'],
         ['Par type d’appel', 'montre la nature des sollicitations (information, réclamation, technique…).'],
-        ['Par statut FAQ', 'montre si les questions posées sont déjà couvertes par la foire aux questions.'],
-        ['Par type de courrier reçu', 'montre la nature des courriers reçus (relance, convocation, réponse…), utile pour dimensionner les envois postaux.']
+        ['Par statut FAQ', 'montre si les questions posées sont déjà couvertes par la foire aux questions.']
       ]
     },
     'chart-trend': {
@@ -1201,26 +1128,6 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
     return map;
   }
 
-  // Catégorie la plus fréquente d'un champ (Choice ou ChoiceList) sur les lignes
-  // masquées par le filtre en cours. Sert à donner, dans une carte KPI compacte,
-  // un libellé métier lisible plutôt que le nom technique de la colonne Grist.
-  function computeTopCategory(rows, mask, fieldName, isList){
-    const values = rows[fieldName];
-    const counts = new Map();
-    let total = 0;
-    for (let i = 0; i < rows.id.length; i++){
-      if (!mask[i]) continue;
-      const raw = values ? values[i] : null;
-      const vals = isList ? listValues(raw) : (raw ? [raw] : []);
-      if (!vals.length) continue;
-      vals.forEach(v => counts.set(v, (counts.get(v) || 0) + 1));
-      total++;
-    }
-    if (!counts.size) return null;
-    const [label, count] = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0];
-    return { label, count, total, pct: total ? count / total * 100 : null };
-  }
-
   function computeEtatChart(){
     const e = state.exploitants;
     if (!e || !e.id) return { items: [], missing: true };
@@ -1264,7 +1171,6 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
       let values;
       if (state.appelsDim === 'type') values = listValues(ev.Type ? ev.Type[i] : null);
       else if (state.appelsDim === 'statut') values = ev.Statut && ev.Statut[i] ? [ev.Statut[i]] : [];
-      else if (state.appelsDim === 'courrier') values = ev.TypeCourrier && ev.TypeCourrier[i] ? [ev.TypeCourrier[i]] : [];
       else values = ev.Traitement && ev.Traitement[i] ? [ev.Traitement[i]] : [];
       if (!values.length) values = ['Non renseigné'];
       values.forEach(v => { counts.set(v, (counts.get(v) || 0) + 1); total++; });
@@ -1487,56 +1393,46 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
     let nFinalises = 0, nConcernes = 0, nAnomalies = 0;
     if (e && e.id){
       const mask = maskFor(e.Code_dpt || e.id.map(() => null));
+      let nMasked = 0, nNumeroVert = 0, nRelanceTel = 0, nRefusRdd = 0;
       for (let i = 0; i < e.id.length; i++){
         if (!mask[i]) continue;
         if (e.Etat_d_avancement && e.Etat_d_avancement[i] === 'Dossier finalisé') nFinalises++;
         if (e.Etat_d_avancement && e.Etat_d_avancement[i] === 'Anomalies à corriger') nAnomalies++;
         if (e.Nb_DN && e.Nb_DN[i] > 0) nConcernes++;
+        nMasked++;
+        if (e.Ont_ils_deja_contacte_le_numero_vert_ && e.Ont_ils_deja_contacte_le_numero_vert_[i]) nNumeroVert++;
+        if (e.A_ete_relance_par_tel_ && e.A_ete_relance_par_tel_[i]) nRelanceTel++;
+        if (e.Refuse_RDD_ && e.Refuse_RDD_[i]) nRefusRdd++;
       }
       el('kpiFinalises').textContent = fmt(nFinalises);
       el('kpiFinalisesHint').textContent = nConcernes ? Math.round(nFinalises / nConcernes * 100) + ' % des dossiers avec DN' : '';
       el('kpiAnomalies').textContent = fmt(nAnomalies);
       el('kpiAnomaliesHint').textContent = nExploitants ? Math.round(nAnomalies / nExploitants * 100) + ' % des exploitants recensés' : '';
-    } else { el('kpiFinalises').textContent = '—'; el('kpiAnomalies').textContent = '—'; }
+
+      // Relance téléphonique — vue RELANCE TEL (libellés normalisés plutôt que noms de colonnes Grist)
+      el('kpiNumeroVert').textContent = fmt(nNumeroVert);
+      el('kpiNumeroVertHint').textContent = nMasked ? Math.round(nNumeroVert / nMasked * 100) + ' % des exploitants recensés' : '';
+      el('kpiRelanceTel').textContent = fmt(nRelanceTel);
+      el('kpiRelanceTelHint').textContent = nMasked ? Math.round(nRelanceTel / nMasked * 100) + ' % des exploitants recensés' : '';
+      el('kpiRefusRdd').textContent = fmt(nRefusRdd);
+      el('kpiRefusRddHint').textContent = nMasked ? Math.round(nRefusRdd / nMasked * 100) + ' % des exploitants recensés' : '';
+    } else {
+      el('kpiFinalises').textContent = '—'; el('kpiAnomalies').textContent = '—';
+      ['kpiNumeroVert','kpiRelanceTel','kpiRefusRdd'].forEach(id => { el(id).textContent = '—'; });
+      ['kpiNumeroVertHint','kpiRelanceTelHint','kpiRefusRddHint'].forEach(id => { el(id).textContent = ''; });
+    }
 
     let nAppels = null, nRappels = 0;
     if (ev && ev.id){
       const mask = maskFor(ev.Code_dpt || ev.id.map(() => null));
       nAppels = 0;
-      let nEvMasked = 0, nRappelsDraaf = 0, nTraitement2 = 0;
       for (let i = 0; i < ev.id.length; i++){
         if (!mask[i]) continue;
         nAppels++;
-        nEvMasked++;
-        if (ev.Rappel_par_la_DRAAF && ev.Rappel_par_la_DRAAF[i]){ nRappels++; nRappelsDraaf++; }
-        if (ev.traitement2 && ev.traitement2[i]) nTraitement2++;
+        if (ev.Rappel_par_la_DRAAF && ev.Rappel_par_la_DRAAF[i]) nRappels++;
       }
       el('kpiAppelsHint').textContent = nRappels ? fmt(nRappels) + ' à rappeler' : 'aucun rappel en attente';
-
-      // Journal des appels — indicateurs normalisés (libellés métier plutôt que noms de colonnes Grist)
-      const courrier = computeTopCategory(ev, mask, 'TypeCourrier', false);
-      setKpiTag('kpiTypeCourrier', courrier ? courrier.label : '—');
-      el('kpiTypeCourrierHint').textContent = courrier ? fmt(courrier.count) + ' / ' + fmt(courrier.total) + ' courriers (' + Math.round(courrier.pct) + ' %)' : 'aucun courrier renseigné';
-
-      const traitement = computeTopCategory(ev, mask, 'Traitement', false);
-      setKpiTag('kpiTraitement', traitement ? traitement.label : '—');
-      el('kpiTraitementHint').textContent = traitement ? fmt(traitement.count) + ' / ' + fmt(traitement.total) + ' appels traités (' + Math.round(traitement.pct) + ' %)' : 'aucun traitement renseigné';
-
-      const typeAppel = computeTopCategory(ev, mask, 'Type', true);
-      setKpiTag('kpiTypeAppel', typeAppel ? typeAppel.label : '—');
-      el('kpiTypeAppelHint').textContent = typeAppel ? fmt(typeAppel.count) + ' occurrence(s) sur ' + fmt(typeAppel.total) + ' appel(s) qualifié(s)' : 'aucun type renseigné';
-
-      el('kpiRappelsDraaf').textContent = fmt(nRappelsDraaf);
-      el('kpiRappelsDraafHint').textContent = nEvMasked ? Math.round(nRappelsDraaf / nEvMasked * 100) + ' % des appels' : '';
-
-      el('kpiTraitement2').textContent = fmt(nTraitement2);
-      el('kpiTraitement2Hint').textContent = nEvMasked ? Math.round(nTraitement2 / nEvMasked * 100) + ' % des appels' : '';
-    } else {
-      missing.push('DATA_Evenements');
-      ['kpiTypeCourrier','kpiTraitement','kpiTypeAppel'].forEach(id => setKpiTag(id, '—'));
-      ['kpiRappelsDraaf','kpiTraitement2'].forEach(id => { el(id).textContent = '—'; });
-      ['kpiTypeCourrierHint','kpiTraitementHint','kpiTypeAppelHint','kpiRappelsDraafHint','kpiTraitement2Hint'].forEach(id => { el(id).textContent = ''; });
-    }
+    } else missing.push('DATA_Evenements');
     el('kpiAppels').textContent = fmt(nAppels);
 
     return missing;
