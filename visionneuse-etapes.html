@@ -113,6 +113,11 @@
   }
   .badge.none{ background:var(--bg); color:var(--ink-soft); border:1px solid var(--border); }
 
+  .detail-title{
+    font-family:var(--font-body); font-weight:700; font-size:26px; line-height:1.3;
+    color:var(--ink); margin:0 0 14px;
+  }
+
   /* Encart "mise en avant" (composant DSFR) : fond blanc, liseré bleu à gauche, pas d'ombre. */
   .detail-desc-card{
     background:var(--surface); border-left:4px solid var(--primary);
@@ -314,6 +319,7 @@
   grist.ready({
     requiredAccess: 'read table',
     columns: [
+      { name: 'Titre', title: 'Titre', type: 'Text', optional: true },
       { name: 'Description', title: 'Description', type: 'Text' },
       { name: 'Screenshot', title: 'Screenshot', type: 'Attachments' },
       { name: 'Categorie', title: 'Catégorie', type: 'Text', optional: true }
@@ -439,7 +445,8 @@
       var index = all.indexOf(r);
       var isSel = r.id === state.selectedId;
       var cat = (r.Categorie || '').toString().trim();
-      var firstLine = (r.Description || '').toString().replace(/\r\n?/g, '\n').split('\n')[0].trim() || '(Pas de description)';
+      var titre = (r.Titre || '').toString().trim();
+      var firstLine = titre || (r.Description || '').toString().replace(/\r\n?/g, '\n').split('\n')[0].trim() || '(Pas de description)';
       return (
         '<div class="list-item' + (isSel ? ' selected' : '') + '" data-id="' + r.id + '">' +
           '<span class="li-num">' + (index + 1) + '</span>' +
@@ -507,12 +514,14 @@
     var badge = r.Categorie
       ? '<span class="badge" style="background:' + hexToRgba(color, .12) + ';color:' + color + '">' + escapeHtml(r.Categorie) + '</span>'
       : '<span class="badge none">Sans catégorie</span>';
+    var titre = (r.Titre || '').toString().trim();
 
     detailEl.innerHTML =
       '<div class="detail-head">' +
         '<span class="step-index">Étape ' + (index + 1) + ' / ' + state.records.length + '</span>' +
         badge +
       '</div>' +
+      (titre ? '<h2 class="detail-title">' + escapeHtml(titre) + '</h2>' : '') +
       '<div class="detail-desc-card"><div class="detail-desc">' + renderDescription(r.Description) + '</div></div>' +
       '<div class="detail-image" data-shot="' + r.id + '"><div class="shot-placeholder">Chargement de la capture…</div></div>' +
       '<div class="detail-extra" data-extra="' + r.id + '"></div>';
