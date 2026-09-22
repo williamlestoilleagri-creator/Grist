@@ -101,6 +101,21 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
 .kpi-delta.flat{ color: var(--text-muted); }
 .kpi-hint{ font-size:0.72rem; color: var(--text-muted); margin:0.15rem 0 0; }
 
+.kpi-value-tag{ margin: 0.3rem 0 0.25rem; line-height:1.1; }
+.kpi-tag{
+  display:inline-block; max-width:100%;
+  background: var(--series-1); color:#fff; font-weight:600;
+  padding:0.28rem 0.6rem; border-radius:0.35rem;
+  line-height:1.25; word-break:break-word;
+  font-size:1rem;
+}
+.kpi-tag.kpi-tag--empty{ background: var(--surface-2); color: var(--text-muted); font-weight:500; }
+.kpi-tag[data-len-tier="xs"]{ font-size:1.1rem; }
+.kpi-tag[data-len-tier="sm"]{ font-size:0.95rem; }
+.kpi-tag[data-len-tier="md"]{ font-size:0.82rem; }
+.kpi-tag[data-len-tier="lg"]{ font-size:0.74rem; }
+.kpi-tag[data-len-tier="xl"]{ font-size:0.66rem; }
+
 /* --- cartes graphiques --- */
 .chart-card{
   border:1px solid var(--border-1); border-radius:0.25rem; background: var(--surface-1);
@@ -361,7 +376,7 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
               <span class="fr-icon-information-line" aria-hidden="true"></span>
             </button>
           </div>
-          <p class="kpi-value" id="kpiTypeCourrier">—</p>
+          <p class="kpi-value-tag"><span class="kpi-tag" id="kpiTypeCourrier">—</span></p>
           <p class="kpi-hint" id="kpiTypeCourrierHint"></p>
         </div>
       </div>
@@ -374,7 +389,7 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
               <span class="fr-icon-information-line" aria-hidden="true"></span>
             </button>
           </div>
-          <p class="kpi-value" id="kpiTraitement">—</p>
+          <p class="kpi-value-tag"><span class="kpi-tag" id="kpiTraitement">—</span></p>
           <p class="kpi-hint" id="kpiTraitementHint"></p>
         </div>
       </div>
@@ -387,7 +402,7 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
               <span class="fr-icon-information-line" aria-hidden="true"></span>
             </button>
           </div>
-          <p class="kpi-value" id="kpiTypeAppel">—</p>
+          <p class="kpi-value-tag"><span class="kpi-tag" id="kpiTypeAppel">—</span></p>
           <p class="kpi-hint" id="kpiTypeAppelHint"></p>
         </div>
       </div>
@@ -603,6 +618,23 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
   const el = id => document.getElementById(id);
   const fmt = n => (n === null || n === undefined || Number.isNaN(n)) ? '—' : n.toLocaleString('fr-FR');
   const fmtPct = n => (n === null || n === undefined || Number.isNaN(n)) ? '—' : Math.round(n) + ' %';
+
+  // Affiche une valeur catégorielle sous forme de pastille (fond bleu, texte blanc),
+  // avec une taille de police qui diminue au fur et à mesure que le libellé s'allonge
+  // pour éviter qu'un intitulé long ne déborde ou ne casse la mise en page de la carte.
+  function setKpiTag(id, text){
+    const node = el(id);
+    const empty = !text || text === '—';
+    node.textContent = empty ? '—' : text;
+    node.classList.toggle('kpi-tag--empty', empty);
+    const len = empty ? 0 : text.length;
+    let tier = 'xs';
+    if (len > 28) tier = 'xl';
+    else if (len > 18) tier = 'lg';
+    else if (len > 11) tier = 'md';
+    else if (len > 4) tier = 'sm';
+    node.setAttribute('data-len-tier', tier);
+  }
 
   function listValues(cell){
     if (Array.isArray(cell)){
@@ -1483,15 +1515,15 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
 
       // Journal des appels — indicateurs normalisés (libellés métier plutôt que noms de colonnes Grist)
       const courrier = computeTopCategory(ev, mask, 'TypeCourrier', false);
-      el('kpiTypeCourrier').textContent = courrier ? courrier.label : '—';
+      setKpiTag('kpiTypeCourrier', courrier ? courrier.label : '—');
       el('kpiTypeCourrierHint').textContent = courrier ? fmt(courrier.count) + ' / ' + fmt(courrier.total) + ' courriers (' + Math.round(courrier.pct) + ' %)' : 'aucun courrier renseigné';
 
       const traitement = computeTopCategory(ev, mask, 'Traitement', false);
-      el('kpiTraitement').textContent = traitement ? traitement.label : '—';
+      setKpiTag('kpiTraitement', traitement ? traitement.label : '—');
       el('kpiTraitementHint').textContent = traitement ? fmt(traitement.count) + ' / ' + fmt(traitement.total) + ' appels traités (' + Math.round(traitement.pct) + ' %)' : 'aucun traitement renseigné';
 
       const typeAppel = computeTopCategory(ev, mask, 'Type', true);
-      el('kpiTypeAppel').textContent = typeAppel ? typeAppel.label : '—';
+      setKpiTag('kpiTypeAppel', typeAppel ? typeAppel.label : '—');
       el('kpiTypeAppelHint').textContent = typeAppel ? fmt(typeAppel.count) + ' occurrence(s) sur ' + fmt(typeAppel.total) + ' appel(s) qualifié(s)' : 'aucun type renseigné';
 
       el('kpiRappelsDraaf').textContent = fmt(nRappelsDraaf);
@@ -1501,7 +1533,8 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
       el('kpiTraitement2Hint').textContent = nEvMasked ? Math.round(nTraitement2 / nEvMasked * 100) + ' % des appels' : '';
     } else {
       missing.push('DATA_Evenements');
-      ['kpiTypeCourrier','kpiTraitement','kpiTypeAppel','kpiRappelsDraaf','kpiTraitement2'].forEach(id => { el(id).textContent = '—'; });
+      ['kpiTypeCourrier','kpiTraitement','kpiTypeAppel'].forEach(id => setKpiTag(id, '—'));
+      ['kpiRappelsDraaf','kpiTraitement2'].forEach(id => { el(id).textContent = '—'; });
       ['kpiTypeCourrierHint','kpiTraitementHint','kpiTypeAppelHint','kpiRappelsDraafHint','kpiTraitement2Hint'].forEach(id => { el(id).textContent = ''; });
     }
     el('kpiAppels').textContent = fmt(nAppels);
