@@ -24,17 +24,17 @@
     font-weight:700; font-style:normal; font-display:swap;
   }
 
+  /* Jetons de couleur repris du Système de Design de l'État (DSFR) :
+     Bleu France (option 113) en primaire, gris DSFR pour le reste. */
   :root{
-    --bg: #F5F4F0;
+    --bg: #EEEEEE;
     --surface: #FFFFFF;
-    --ink: #000000;
-    --ink-soft: #4A4A4F;
-    --ink-faint: #8B8B90;
-    --border: #DDDBD3;
+    --ink: #161616;
+    --ink-soft: #666666;
+    --ink-faint: #929292;
+    --border: #DDDDDD;
     --primary: #000091;
-    --primary-soft: #E5E5FB;
-    --radius-card: 10px;
-    --shadow: 0 1px 2px rgba(20,20,30,.06), 0 8px 24px -16px rgba(20,20,30,.25);
+    --primary-hover: #1212FF;
     --font-body: 'Marianne', Arial, 'Segoe UI', -apple-system, BlinkMacSystemFont, Helvetica, sans-serif;
   }
   *{ box-sizing:border-box; }
@@ -55,12 +55,14 @@
   .app-header .sub{ font-size:12.5px; opacity:.8; margin-top:1px; }
   .controls{ display:flex; gap:8px; flex-wrap:wrap; }
   .controls select, .controls input[type="search"]{
-    border:1px solid rgba(255,255,255,.35); background:rgba(255,255,255,.12); color:#fff;
-    border-radius:7px; padding:6px 9px; font-size:13.5px; outline:none;
+    border:none; background:#FFFFFF; color:var(--ink);
+    border-radius:0; padding:7px 10px; font-size:13.5px; outline:none;
   }
   .controls select option{ color:#111; }
-  .controls input[type="search"]::placeholder{ color:rgba(255,255,255,.75); }
-  .controls select:focus, .controls input[type="search"]:focus{ background:rgba(255,255,255,.22); }
+  .controls input[type="search"]::placeholder{ color:var(--ink-soft); }
+  .controls select:focus, .controls input[type="search"]:focus{
+    outline:2px solid #FFFFFF; outline-offset:2px; box-shadow:0 0 0 2px var(--primary) inset;
+  }
 
   /* ---------- body layout: liste + détail ---------- */
   .app-body{ display:flex; flex:1 1 auto; min-height:0; }
@@ -71,18 +73,18 @@
   }
   .list-empty{ margin:24px 10px; text-align:center; color:var(--ink-faint); font-size:12px; line-height:1.6; }
   .list-item{
-    display:flex; gap:8px; align-items:center; padding:7px 8px; border-radius:8px; cursor:pointer;
-    border:1px solid transparent;
+    display:flex; gap:8px; align-items:center; padding:8px 9px; cursor:pointer;
+    border-left:3px solid transparent;
   }
-  .list-item:hover{ background:#F6F5F0; }
-  .list-item.selected{ background:var(--primary-soft); border-color:var(--primary); }
+  .list-item:hover{ background:var(--bg); }
+  .list-item.selected{ background:var(--bg); border-left-color:var(--primary); }
   .li-num{
     flex:0 0 auto; width:20px; height:20px; border-radius:50%; background:var(--ink-faint); color:#fff;
     font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center;
   }
   .list-item.selected .li-num{ background:var(--primary); }
   .li-thumb{
-    flex:0 0 auto; width:38px; height:38px; border-radius:6px; overflow:hidden; background:#EDEBE3;
+    flex:0 0 auto; width:38px; height:38px; border-radius:0; overflow:hidden; background:var(--bg);
     display:flex; align-items:center; justify-content:center; border:1px solid var(--border);
   }
   .li-thumb img{ width:100%; height:100%; object-fit:cover; }
@@ -103,33 +105,20 @@
   }
   .detail-empty .icon{ font-size:30px; margin-bottom:10px; }
 
-  .detail-head{ display:flex; align-items:center; gap:10px; flex:0 0 auto; margin-bottom:12px; flex-wrap:wrap; }
+  .detail-head{ display:flex; align-items:center; gap:10px; flex:0 0 auto; margin-bottom:14px; flex-wrap:wrap; }
   .step-index{ font-size:13.5px; color:var(--ink-soft); font-weight:600; }
   .badge{
-    font-size:12.5px; font-weight:700; padding:5px 12px; border-radius:999px; color:#fff;
-    letter-spacing:.02em; white-space:nowrap;
+    font-size:12.5px; font-weight:700; padding:4px 11px; border-radius:999px;
+    letter-spacing:.01em; white-space:nowrap; display:inline-block;
   }
-  .badge.none{ background:var(--ink-faint); }
+  .badge.none{ background:var(--bg); color:var(--ink-soft); border:1px solid var(--border); }
 
-  .detail-image{
-    flex:1 1 auto; min-height:260px; display:flex; align-items:center; justify-content:center;
-    background:#EDEBE3; border-radius:12px; border:1px solid var(--border); overflow:hidden; margin-bottom:14px;
-  }
-  .detail-image img{
-    max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; cursor:zoom-in; display:block;
-  }
-  .shot-placeholder{ color:var(--ink-faint); font-size:12.5px; text-align:center; padding:20px; }
-
-  .detail-extra{ display:flex; gap:8px; flex-wrap:wrap; margin:-6px 0 14px; flex:0 0 auto; }
-  .detail-extra img{
-    width:64px; height:64px; object-fit:cover; border-radius:7px; border:1px solid var(--border); cursor:zoom-in;
-  }
-
+  /* Encart "mise en avant" (composant DSFR) : fond blanc, liseré bleu à gauche, pas d'ombre. */
   .detail-desc-card{
-    background:var(--surface); border-radius:var(--radius-card); border:1px solid var(--border);
-    box-shadow:var(--shadow); padding:18px 22px; flex:0 0 auto;
+    background:var(--surface); border-left:4px solid var(--primary);
+    padding:18px 22px; margin-bottom:20px; flex:0 0 auto;
   }
-  .detail-desc{ font-size:18px; line-height:1.65; color:#000000; }
+  .detail-desc{ font-size:18px; line-height:1.65; color:var(--ink); }
   .detail-desc p{ margin:0 0 12px; }
   .detail-desc p:last-child{ margin-bottom:0; }
   .detail-desc ul, .detail-desc ol{ margin:0 0 12px 22px; padding:0; }
@@ -137,16 +126,30 @@
   .detail-desc a{ color:var(--primary); font-weight:600; }
   .detail-desc .empty-desc{ color:var(--ink-faint); font-style:italic; }
 
+  .detail-image{
+    flex:1 1 auto; min-height:220px; display:flex; align-items:center; justify-content:center;
+    background:var(--bg); border:1px solid var(--border); overflow:hidden; margin-bottom:10px;
+  }
+  .detail-image img{
+    max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; cursor:zoom-in; display:block;
+  }
+  .shot-placeholder{ color:var(--ink-faint); font-size:12.5px; text-align:center; padding:20px; }
+
+  .detail-extra{ display:flex; gap:8px; flex-wrap:wrap; margin:0 0 4px; flex:0 0 auto; }
+  .detail-extra img{
+    width:64px; height:64px; object-fit:cover; border:1px solid var(--border); cursor:zoom-in;
+  }
+
   /* ---------- lightbox ---------- */
   .lightbox{
     position:fixed; inset:0; background:rgba(15,15,18,.9); display:none;
     align-items:center; justify-content:center; z-index:1000; padding:30px;
   }
   .lightbox.open{ display:flex; }
-  .lightbox img{ max-width:100%; max-height:100%; border-radius:6px; box-shadow:0 20px 60px rgba(0,0,0,.5); }
+  .lightbox img{ max-width:100%; max-height:100%; box-shadow:0 20px 60px rgba(0,0,0,.5); }
   .lightbox-close{
     position:absolute; top:16px; right:18px; background:rgba(255,255,255,.12); border:none; color:#fff;
-    width:34px; height:34px; border-radius:50%; font-size:18px; cursor:pointer; line-height:1;
+    width:36px; height:36px; border-radius:0; font-size:18px; cursor:pointer; line-height:1;
   }
   .lightbox-close:hover{ background:rgba(255,255,255,.24); }
 </style>
@@ -209,6 +212,13 @@
       categoryColorCache[key] = CATEGORY_PALETTE[n % CATEGORY_PALETTE.length];
     }
     return categoryColorCache[key];
+  }
+
+  // Tag DSFR : fond teinté clair + texte de la couleur, plutôt qu'une pastille pleine.
+  function hexToRgba(hex, alpha) {
+    var h = (hex || '').replace('#', '');
+    var r = parseInt(h.substring(0, 2), 16), g = parseInt(h.substring(2, 4), 16), b = parseInt(h.substring(4, 6), 16);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
   }
 
   function normalize(s) {
@@ -495,7 +505,7 @@
 
     var color = colorForCategorie(r.Categorie);
     var badge = r.Categorie
-      ? '<span class="badge" style="background:' + (color || '#666') + '">' + escapeHtml(r.Categorie) + '</span>'
+      ? '<span class="badge" style="background:' + hexToRgba(color, .12) + ';color:' + color + '">' + escapeHtml(r.Categorie) + '</span>'
       : '<span class="badge none">Sans catégorie</span>';
 
     detailEl.innerHTML =
@@ -503,9 +513,9 @@
         '<span class="step-index">Étape ' + (index + 1) + ' / ' + state.records.length + '</span>' +
         badge +
       '</div>' +
+      '<div class="detail-desc-card"><div class="detail-desc">' + renderDescription(r.Description) + '</div></div>' +
       '<div class="detail-image" data-shot="' + r.id + '"><div class="shot-placeholder">Chargement de la capture…</div></div>' +
-      '<div class="detail-extra" data-extra="' + r.id + '"></div>' +
-      '<div class="detail-desc-card"><div class="detail-desc">' + renderDescription(r.Description) + '</div></div>';
+      '<div class="detail-extra" data-extra="' + r.id + '"></div>';
 
     var ids = attachmentIds(r.Screenshot);
     var shotEl = detailEl.querySelector('.detail-image[data-shot="' + r.id + '"]');
