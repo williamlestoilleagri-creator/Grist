@@ -126,6 +126,7 @@
     <div class="actions">
       <button id="btn-one" disabled>Reconvertir la ligne sélectionnée</button>
       <button id="btn-all" class="secondary" disabled>Synchroniser toutes les lignes visibles</button>
+      <button id="btn-dedupe" class="secondary" disabled>Retirer les doublons de la destination</button>
       <button id="btn-stop" class="danger" hidden>Interrompre le traitement en cours</button>
     </div>
     <progress id="progress" value="0" max="1" hidden></progress>
@@ -152,7 +153,8 @@
     mappings: null,
     tableId: null,
     auth: null,
-    meta: Object.create(null),      // id de PJ -> { name, t } (t = date de dépôt, en secondes)
+    meta: Object.create(null),      // id de PJ -> { name, t, size } (t = date de dépôt, en ms)
+    done: Object.create(null),      // PJ d'origine -> PDF déjà produit dans cette session
     realPdf: Object.create(null),   // PJ sans extension .pdf mais qui sont en fait des PDF
     failed: Object.create(null),    // PJ en échec : pas de nouvel essai automatique
     auto: true,
@@ -220,6 +222,7 @@
     var btnAll = document.getElementById('btn-all');
     btnAll.disabled = !ready || !state.records.length;
     btnAll.textContent = 'Synchroniser toutes les lignes visibles (' + state.records.length + ')';
+    document.getElementById('btn-dedupe').disabled = !ready || !state.records.length;
   }
 
   function renderMapping(raw) {
@@ -280,7 +283,11 @@
     try {
       var t = await grist.docApi.fetchTable('_grist_Attachments');
       for (var i = 0; i < t.id.length; i++) {
-        state.meta[t.id[i]] = { name: t.fileName[i], t: t.timeUploaded ? (t.timeUploaded[i] || 0) : 0 };
+        state.meta[t.id[i]] = {
+          name: t.fileName[i],
+          t: t.timeUploaded ? (t.timeUploaded[i] || 0) : 0,   // Grist stocke des millisecondes
+          size: t.fileSize ? t.fileSize[i] : null
+        };
       }
       return true;
     } catch (e) {
@@ -300,7 +307,7 @@
         var r = await fetch(a.baseUrl + '/attachments/' + id + '?auth=' + encodeURIComponent(a.token));
         if (r.ok) {
           var m = await r.json();
-          state.meta[id] = { name: m.fileName, t: m.timeUploaded ? Date.parse(m.timeUploaded) / 1000 : 0 };
+          state.meta[id] = { name: m.fileName, t: m.timeUploaded ? Date.parse(m.timeUploaded) : 0, size: m.fileSize };
         }
       } catch (e) { /* ignore */ }
     }
@@ -329,7 +336,7 @@
     });
     if (!r.ok) throw new Error('envoi impossible (HTTP ' + r.status + ')');
     var ids = await r.json();
-    state.meta[ids[0]] = { name: name, t: Date.now() / 1000 };
+    state.meta[ids[0]] = { name: name, t: Date.now(), size: blob.size };
     return ids[0];
   }
 
@@ -477,7 +484,10 @@
       var m = metaOf(id), target = baseName(m.name) + '.pdf';
       var k = -1;
       for (var i = 0; i < pool.length; i++) {
-        if (pool[i].name === target && pool[i].t >= m.t) { k = i; break; }
+        if (pool[i].id === state.done[id]) { k = i; break; }
+      }
+      for (i = 0; k < 0 && i < pool.length; i++) {
+        if (pool[i].name === target && pool[i].t >= m.t) k = i;
       }
       if (k >= 0) steps.push({ src: id, use: pool.splice(k, 1)[0].id });
       else steps.push({ src: id, convert: true });
@@ -527,6 +537,7 @@
         if (newId === st.src) {             // c'était en fait un PDF
           if (out.indexOf(newId) < 0) { out.push(newId); copied++; }
         } else if (newId) {
+          state.done[st.src] = newId;
           if (st.use) out[out.indexOf(st.use)] = newId;
           else out.push(newId);
           converted++;
@@ -631,6 +642,46 @@
     if (!mappingOk(false)) return;
     state.failed = Object.create(null); // on retente aussi les fichiers en échec
     runPass(state.records, false, 'Synchronisation');
+  });
+
+  // Doublon = même pièce jointe deux fois, ou même nom et même taille qu'une PJ précédente
+  // de la cellule. On garde la première occurrence.
+  function dedupeIds(ids) {
+    var seen = Object.create(null);
+    return ids.filter(function (id) {
+      var m = state.meta[id];
+      var key = m && m.size != null ? m.name + '|' + m.size : '#' + id;
+      if (seen['#' + id] || seen[key]) return false;
+      seen['#' + id] = seen[key] = true;
+      return true;
+    });
+  }
+
+  document.getElementById('btn-dedupe').addEventListener('click', async function () {
+    if (!mappingOk(false)) return;
+    setBusy(true);
+    try {
+      state.meta = Object.create(null);
+      await loadAttachmentMeta();
+      var actions = [], removed = 0;
+      state.records.forEach(function (r) {
+        var ids = toIds(r.Destination), kept = dedupeIds(ids);
+        if (kept.length < ids.length) {
+          var fields = {};
+          fields[state.mappings.Destination] = ['L'].concat(kept);
+          actions.push(['UpdateRecord', state.tableId, r.id, fields]);
+          removed += ids.length - kept.length;
+        }
+      });
+      if (!actions.length) { log('Aucun doublon trouvé.', 'ok'); return; }
+      if (!confirm('Retirer ' + removed + ' doublon(s) sur ' + actions.length + ' ligne(s) ?')) return;
+      await grist.docApi.applyUserActions(actions);
+      log(removed + ' doublon(s) retiré(s) sur ' + actions.length + ' ligne(s).', 'ok');
+    } catch (e) {
+      log('Retrait des doublons : ' + e.message, 'err');
+    } finally {
+      setBusy(false);
+    }
   });
 
   document.getElementById('btn-sync').addEventListener('click', function () {
