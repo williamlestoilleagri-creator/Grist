@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Convertisseur PJ vers PDF</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+<style>
+  :root {
+    --bg: #f7f6f2;
+    --panel: #ffffff;
+    --ink: #23281f;
+    --ink-soft: #6b7263;
+    --line: #e2e0d8;
+    --accent: #2f6f4f;
+    --accent-soft: #e7f0ea;
+    --warn: #a86b12;
+    --danger: #b3442f;
+    --radius: 10px;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: var(--sans);
+    font-size: 13.5px;
+    color: var(--ink);
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+  }
+  header .dot { width: 8px; height: 8px; border-radius: 50%; background: #c8c5ba; flex: 0 0 auto; }
+  header .dot.ok { background: var(--accent); }
+  header .title { font-weight: 600; font-size: 13px; }
+  header .ctx { color: var(--ink-soft); font-size: 11.5px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  main { flex: 1; overflow: auto; padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
+  .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-soft); margin-bottom: 8px; }
+
+  .mapping { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 12.5px; }
+  .mapping b { font-family: var(--mono); font-weight: 600; }
+  .hint { color: var(--ink-soft); font-size: 12px; margin-top: 6px; }
+  .missing { color: var(--danger); }
+
+  ul.files { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+  ul.files li { display: flex; gap: 8px; align-items: center; font-size: 12.5px; }
+  ul.files li .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .badge { font-size: 10.5px; padding: 1px 6px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); flex: 0 0 auto; }
+  .badge.conv { background: #fdf1dc; color: var(--warn); }
+  .badge.ko { background: #f8e3de; color: var(--danger); }
+
+  .options { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+  .options label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  button {
+    border: 1px solid var(--accent); background: var(--accent); color: #fff;
+    border-radius: 6px; padding: 6px 12px; font-size: 12.5px; cursor: pointer;
+  }
+  button.secondary { background: transparent; color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+
+  progress { width: 100%; height: 8px; accent-color: var(--accent); }
+  #log {
+    font-family: var(--mono); font-size: 11.5px; line-height: 1.5;
+    white-space: pre-wrap; max-height: 260px; overflow: auto; color: var(--ink-soft);
+  }
+  #log .ok { color: var(--accent); }
+  #log .warn { color: var(--warn); }
+  #log .err { color: var(--danger); }
+</style>
+</head>
+<body>
+<header>
+  <span class="dot" id="dot"></span>
+  <span class="title">PJ → PDF</span>
+  <span class="ctx" id="ctx">En attente de Grist…</span>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Colonnes</h2>
+    <div class="mapping">
+      <span>Origine</span><b id="map-src">—</b>
+      <span>Destination</span><b id="map-dst">—</b>
+    </div>
+    <p class="hint">Choisissez les colonnes dans le panneau de droite du widget
+      (« Configuration du widget »). Les deux doivent être de type <b>Pièces jointes</b>.</p>
+  </section>
+
+  <section class="card">
+    <h2>Ligne sélectionnée</h2>
+    <ul class="files" id="current-files"><li class="hint">Aucune ligne sélectionnée.</li></ul>
+  </section>
+
+  <section class="card">
+    <h2>Options</h2>
+    <div class="options">
+      <label><input type="checkbox" id="opt-keep-pdf" checked>
+        Recopier aussi les PDF d'origine dans la colonne de destination</label>
+      <label><input type="checkbox" id="opt-skip-done" checked>
+        Ignorer les lignes dont la colonne de destination est déjà remplie (traitement en masse)</label>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="actions">
+      <button id="btn-one" disabled>Convertir la ligne sélectionnée</button>
+      <button id="btn-all" class="secondary" disabled>Convertir toutes les lignes visibles</button>
+    </div>
+    <progress id="progress" value="0" max="1" hidden></progress>
+  </section>
+
+  <section class="card">
+    <h2>Journal</h2>
+    <div id="log"></div>
+  </section>
+</main>
+
+<script>
+  // ============================================================
+  // Formats pris en charge
+  // ============================================================
+  var IMAGE_EXT = ['jpg', 'jpeg', 'jfif', 'png', 'gif', 'bmp', 'webp', 'avif', 'heic', 'heif'];
+  var TEXT_EXT = ['txt'];
+  var MAX_IMAGE_SIDE = 2480; // ~300 dpi sur une page A4
+
+  var state = {
+    records: [],
+    current: null,
+    mappings: null,
+    tableId: null,
+    auth: null,
+    names: Object.create(null),
+    busy: false
+  };
+
+  function ext(name) {
+    var m = /\.([^.\/\\]+)$/.exec(name || '');
+    return m ? m[1].toLowerCase() : '';
+  }
+
+  function baseName(name) {
+    return (name || 'piece-jointe').replace(/\.[^.\/\\]+$/, '');
+  }
+
+  function kindOf(name) {
+    var e = ext(name);
+    if (e === 'pdf') return 'pdf';
+    if (IMAGE_EXT.indexOf(e) >= 0) return 'image';
+    if (TEXT_EXT.indexOf(e) >= 0) return 'text';
+    return 'unsupported';
+  }
+
+  // Une cellule Pièces jointes arrive soit décodée ([1, 2]), soit encodée (['L', 1, 2]).
+  function toIds(value) {
+    if (!Array.isArray(value)) return [];
+    var arr = value[0] === 'L' ? value.slice(1) : value;
+    return arr.filter(function (v) { return typeof v === 'number'; });
+  }
+
+  // ============================================================
+  // Journal / UI
+  // ============================================================
+  function log(msg, cls) {
+    var el = document.getElementById('log');
+    var line = document.createElement('div');
+    if (cls) line.className = cls;
+    line.textContent = new Date().toLocaleTimeString('fr-FR') + '  ' + msg;
+    el.appendChild(line);
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function setBusy(busy) {
+    state.busy = busy;
+    refreshButtons();
+  }
+
+  function refreshButtons() {
+    var ready = !!state.mappings && !state.busy;
+    document.getElementById('btn-one').disabled = !ready || !state.current;
+    var btnAll = document.getElementById('btn-all');
+    btnAll.disabled = !ready || !state.records.length;
+    btnAll.textContent = 'Convertir toutes les lignes visibles (' + state.records.length + ')';
+  }
+
+  function renderMapping(raw) {
+    var src = raw && raw.Source, dst = raw && raw.Destination;
+    var s = document.getElementById('map-src'), d = document.getElementById('map-dst');
+    s.textContent = src || 'non choisie'; s.className = src ? '' : 'missing';
+    d.textContent = dst || 'non choisie'; d.className = dst ? '' : 'missing';
+    if (src && dst && src === dst) {
+      d.textContent += ' (identique à l\'origine !)';
+      d.className = 'missing';
+    }
+  }
+
+  async function renderCurrent() {
+    var ul = document.getElementById('current-files');
+    ul.innerHTML = '';
+    var rec = state.current;
+    if (!rec) { ul.innerHTML = '<li class="hint">Aucune ligne sélectionnée.</li>'; return; }
+    var ids = toIds(rec.Source);
+    if (!ids.length) { ul.innerHTML = '<li class="hint">Aucune pièce jointe dans la colonne d\'origine.</li>'; return; }
+    for (var i = 0; i < ids.length; i++) {
+      var name = await fileName(ids[i]);
+      var kind = kindOf(name);
+      var li = document.createElement('li');
+      var badge = document.createElement('span');
+      badge.className = 'badge' + (kind === 'pdf' ? '' : kind === 'unsupported' ? ' ko' : ' conv');
+      badge.textContent = kind === 'pdf' ? 'déjà PDF' : kind === 'unsupported' ? 'non convertible' : 'à convertir';
+      var n = document.createElement('span');
+      n.className = 'name';
+      n.textContent = name;
+      li.appendChild(n);
+      li.appendChild(badge);
+      ul.appendChild(li);
+    }
+    var done = toIds(rec.Destination).length;
+    if (done) {
+      var info = document.createElement('li');
+      info.className = 'hint';
+      info.textContent = done + ' fichier(s) déjà présent(s) dans la colonne de destination.';
+      ul.appendChild(info);
+    }
+  }
+
+  // ============================================================
+  // API Grist (pièces jointes)
+  // ============================================================
+  async function getAuth() {
+    var now = Date.now();
+    if (state.auth && state.auth.expires > now) return state.auth;
+    var t = await grist.docApi.getAccessToken({ readOnly: false });
+    state.auth = { token: t.token, baseUrl: t.baseUrl, expires: now + (t.ttlMsecs || 60000) - 15000 };
+    return state.auth;
+  }
+
+  async function loadAttachmentNames() {
+    try {
+      var t = await grist.docApi.fetchTable('_grist_Attachments');
+      for (var i = 0; i < t.id.length; i++) state.names[t.id[i]] = t.fileName[i];
+    } catch (e) {
+      // Pas grave : on retombera sur l'API REST fichier par fichier.
+    }
+  }
+
+  async function fileName(id) {
+    if (state.names[id]) return state.names[id];
+    try {
+      var a = await getAuth();
+      var r = await fetch(a.baseUrl + '/attachments/' + id + '?auth=' + encodeURIComponent(a.token));
+      if (r.ok) {
+        var meta = await r.json();
+        state.names[id] = meta.fileName;
+        return meta.fileName;
+      }
+    } catch (e) { /* ignore */ }
+    return 'pièce jointe #' + id;
+  }
+
+  async function download(id) {
+    var a = await getAuth();
+    var r = await fetch(a.baseUrl + '/attachments/' + id + '/download?auth=' + encodeURIComponent(a.token));
+    if (!r.ok) throw new Error('téléchargement impossible (HTTP ' + r.status + ')');
+    return r.blob();
+  }
+
+  async function upload(blob, name) {
+    var a = await getAuth();
+    var form = new FormData();
+    form.append('upload', blob, name);
+    var r = await fetch(a.baseUrl + '/attachments?auth=' + encodeURIComponent(a.token), { method: 'POST', body: form });
+    if (!r.ok) throw new Error('envoi impossible (HTTP ' + r.status + ')');
+    var ids = await r.json();
+    state.names[ids[0]] = name;
+    return ids[0];
+  }
+
+  async function isPdfBlob(blob) {
+    var head = new Uint8Array(await blob.slice(0, 5).arrayBuffer());
+    return String.fromCharCode.apply(null, head) === '%PDF-';
+  }
+
+  // ============================================================
+  // Conversions
+  // ============================================================
+  function loadImage(blob) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(blob);
+      var img = new Image();
+      img.onload = function () { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('image illisible par le navigateur')); };
+      img.src = url;
+    });
+  }
+
+  async function imageToPdf(blob, e) {
+    if (e === 'heic' || e === 'heif') {
+      if (typeof heic2any !== 'function') throw new Error('bibliothèque HEIC indisponible');
+      var conv = await heic2any({ blob: blob, toType: 'image/jpeg', quality: 0.9 });
+      blob = Array.isArray(conv) ? conv[0] : conv;
+    }
+    var img = await loadImage(blob);
+    var w = img.naturalWidth, h = img.naturalHeight;
+    var scale = Math.min(1, MAX_IMAGE_SIDE / Math.max(w, h));
+    var cw = Math.round(w * scale), ch = Math.round(h * scale);
+
+    var canvas = document.createElement('canvas');
+    canvas.width = cw; canvas.height = ch;
+    var ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';            // fond blanc pour les PNG transparents
+    ctx.fillRect(0, 0, cw, ch);
+    ctx.drawImage(img, 0, 0, cw, ch);
+    var data = canvas.toDataURL('image/jpeg', 0.9);
+
+    var pdf = new jspdf.jsPDF({ orientation: cw > ch ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
+    var pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
+    var margin = 10;
+    var ratio = Math.min((pw - 2 * margin) / cw, (ph - 2 * margin) / ch);
+    var dw = cw * ratio, dh = ch * ratio;
+    pdf.addImage(data, 'JPEG', (pw - dw) / 2, (ph - dh) / 2, dw, dh);
+    return pdf.output('blob');
+  }
+
+  async function textToPdf(blob) {
+    var text = await blob.text();
+    var pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4' });
+    pdf.setFont('courier', 'normal');
+    pdf.setFontSize(10);
+    var lines = pdf.splitTextToSize(text, 180);
+    var y = 15;
+    lines.forEach(function (line) {
+      if (y > 285) { pdf.addPage(); y = 15; }
+      pdf.text(line, 15, y);
+      y += 5;
+    });
+    return pdf.output('blob');
+  }
+
+  // ============================================================
+  // Traitement d'une ligne
+  // ============================================================
+  async function processRecord(rec, opts) {
+    var srcIds = toIds(rec.Source);
+    if (!srcIds.length) return { status: 'vide' };
+    if (opts.skipDone && toIds(rec.Destination).length) return { status: 'déjà traitée' };
+
+    var out = [], converted = 0, failed = 0;
+    for (var i = 0; i < srcIds.length; i++) {
+      var id = srcIds[i];
+      var name = await fileName(id);
+      var kind = kindOf(name);
+      try {
+        if (kind === 'pdf') {
+          if (opts.keepPdf) out.push(id);
+          continue;
+        }
+        var blob = await download(id);
+        if (await isPdfBlob(blob)) {        // PDF sans extension .pdf
+          if (opts.keepPdf) out.push(id);
+          continue;
+        }
+        var pdfBlob;
+        if (kind === 'image') pdfBlob = await imageToPdf(blob, ext(name));
+        else if (kind === 'text') pdfBlob = await textToPdf(blob);
+        else {
+          // Dernière chance : le navigateur sait peut-être lire le fichier comme image.
+          try { pdfBlob = await imageToPdf(blob, ''); }
+          catch (e) { throw new Error('format .' + (ext(name) || '?') + ' non pris en charge'); }
+        }
+        out.push(await upload(pdfBlob, baseName(name) + '.pdf'));
+        converted++;
+      } catch (e) {
+        failed++;
+        log('  ligne ' + rec.id + ' — ' + name + ' : ' + e.message, 'err');
+      }
+    }
+
+    if (!out.length) return { status: 'rien à écrire', converted: converted, failed: failed };
+
+    var fields = {};
+    fields[state.mappings.Destination] = ['L'].concat(out);
+    await grist.docApi.applyUserActions([['UpdateRecord', state.tableId, rec.id, fields]]);
+    return { status: 'ok', converted: converted, failed: failed, total: out.length };
+  }
+
+  function options() {
+    return {
+      keepPdf: document.getElementById('opt-keep-pdf').checked,
+      skipDone: document.getElementById('opt-skip-done').checked
+    };
+  }
+
+  function checkReady() {
+    var m = state.mappings;
+    if (!m || !m.Source || !m.Destination) {
+      log('Choisissez les colonnes d\'origine et de destination dans la configuration du widget.', 'err');
+      return false;
+    }
+    if (m.Source === m.Destination) {
+      log('Les colonnes d\'origine et de destination doivent être différentes.', 'err');
+      return false;
+    }
+    return true;
+  }
+
+  async function run(records, opts) {
+    if (!checkReady()) return;
+    setBusy(true);
+    var bar = document.getElementById('progress');
+    bar.hidden = false; bar.max = records.length; bar.value = 0;
+    var stats = { ok: 0, skipped: 0, files: 0, failed: 0 };
+    log('Début : ' + records.length + ' ligne(s), ' + state.mappings.Source + ' → ' + state.mappings.Destination);
+    try {
+      await loadAttachmentNames();
+      for (var i = 0; i < records.length; i++) {
+        var rec = records[i];
+        try {
+          var r = await processRecord(rec, opts);
+          if (r.status === 'ok') {
+            stats.ok++;
+            stats.files += r.converted;
+            stats.failed += r.failed;
+            log('Ligne ' + rec.id + ' : ' + r.converted + ' converti(s), ' + r.total + ' PDF écrit(s)', r.failed ? 'warn' : 'ok');
+          } else {
+            stats.skipped++;
+            stats.failed += r.failed || 0;
+            if (records.length === 1 || r.status === 'rien à écrire') log('Ligne ' + rec.id + ' : ' + r.status, 'warn');
+          }
+        } catch (e) {
+          stats.failed++;
+          log('Ligne ' + rec.id + ' : ' + e.message, 'err');
+        }
+        bar.value = i + 1;
+      }
+      log('Terminé — ' + stats.ok + ' ligne(s) mise(s) à jour, ' + stats.files + ' fichier(s) converti(s), '
+        + stats.skipped + ' ignorée(s), ' + stats.failed + ' erreur(s).', stats.failed ? 'warn' : 'ok');
+    } finally {
+      setBusy(false);
+      setTimeout(function () { bar.hidden = true; }, 1500);
+    }
+  }
+
+  document.getElementById('btn-one').addEventListener('click', function () {
+    if (!state.current) return;
+    var opts = options();
+    opts.skipDone = false; // sur une ligne choisie à la main, on reconvertit toujours
+    run([state.current], opts);
+  });
+
+  document.getElementById('btn-all').addEventListener('click', function () {
+    var opts = options();
+    var todo = state.records.filter(function (r) { return toIds(r.Source).length; });
+    if (!todo.length) { log('Aucune ligne avec des pièces jointes.', 'warn'); return; }
+    if (!confirm('Convertir les pièces jointes de ' + todo.length + ' ligne(s) ?')) return;
+    run(todo, opts);
+  });
+
+  // ============================================================
+  // Grist
+  // ============================================================
+  grist.ready({
+    requiredAccess: 'full',
+    columns: [
+      { name: 'Source', title: 'Colonne d\'origine (PJ à convertir)', type: 'Attachments' },
+      { name: 'Destination', title: 'Colonne de destination (PDF)', type: 'Attachments' }
+    ]
+  });
+
+  grist.onRecords(async function (records, mappings) {
+    state.mappings = mappings;
+    renderMapping(mappings);
+    state.records = (mappings && grist.mapColumnNames(records, mappings)) || [];
+    if (!state.tableId) {
+      try { state.tableId = await grist.selectedTable.getTableId(); } catch (e) { /* ignore */ }
+      await loadAttachmentNames();
+      renderCurrent();
+    }
+    var dot = document.getElementById('dot');
+    dot.className = 'dot' + (state.tableId ? ' ok' : '');
+    document.getElementById('ctx').textContent = (state.tableId || 'table ?') + ' · ' + records.length + ' ligne(s)';
+    refreshButtons();
+  });
+
+  grist.onRecord(function (record, mappings) {
+    state.current = mappings ? grist.mapColumnNames(record, mappings) : null;
+    if (state.current) state.current.id = record.id;
+    refreshButtons();
+    renderCurrent();
+  });
+</script>
+</body>
+</html>
