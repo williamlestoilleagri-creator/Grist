@@ -7,6 +7,8 @@
 <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.12.3/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
   :root {
     --bg: #f7f6f2;
@@ -133,6 +135,7 @@
   // ============================================================
   var IMAGE_EXT = ['jpg', 'jpeg', 'jfif', 'png', 'gif', 'bmp', 'webp', 'avif', 'heic', 'heif'];
   var TEXT_EXT = ['txt'];
+  var WORD_EXT = ['docx'];
   var MAX_IMAGE_SIDE = 2480; // ~300 dpi sur une page A4
 
   var state = {
@@ -159,6 +162,7 @@
     if (e === 'pdf') return 'pdf';
     if (IMAGE_EXT.indexOf(e) >= 0) return 'image';
     if (TEXT_EXT.indexOf(e) >= 0) return 'text';
+    if (WORD_EXT.indexOf(e) >= 0) return 'word';
     return 'unsupported';
   }
 
@@ -280,7 +284,12 @@
     var a = await getAuth();
     var form = new FormData();
     form.append('upload', blob, name);
-    var r = await fetch(a.baseUrl + '/attachments?auth=' + encodeURIComponent(a.token), { method: 'POST', body: form });
+    var r = await fetch(a.baseUrl + '/attachments?auth=' + encodeURIComponent(a.token), {
+      method: 'POST',
+      body: form,
+      // Grist refuse les POST authentifiés par jeton sans cet en-tête (protection CSRF).
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    });
     if (!r.ok) throw new Error('envoi impossible (HTTP ' + r.status + ')');
     var ids = await r.json();
     state.names[ids[0]] = name;
@@ -348,6 +357,64 @@
     return pdf.output('blob');
   }
 
+  // Word (.docx) : mammoth convertit en HTML, html2canvas en fait une image,
+  // découpée ensuite en pages A4.
+  async function wordToPdf(blob) {
+    if (typeof mammoth === 'undefined' || typeof html2canvas !== 'function') {
+      throw new Error('bibliothèques Word indisponibles');
+    }
+    var res = await mammoth.convertToHtml({ arrayBuffer: await blob.arrayBuffer() });
+    var PAGE_W = 794, PAGE_H = 1123, PAD = 57; // A4 à 96 dpi, marges de 15 mm
+    var holder = document.createElement('div');
+    holder.style.cssText = 'position:fixed;left:-10000px;top:0;width:' + PAGE_W + 'px;padding:' + PAD + 'px;'
+      + 'background:#fff;color:#000;font:11pt/1.4 Calibri,Arial,sans-serif;box-sizing:border-box;';
+    holder.innerHTML = '<style>'
+      + '.docx-c table{border-collapse:collapse;width:100%}'
+      + '.docx-c td,.docx-c th{border:1px solid #999;padding:3px 5px;vertical-align:top}'
+      + '.docx-c img{max-width:100%}.docx-c p{margin:0 0 6px}'
+      + '</style><div class="docx-c">' + (res.value || '<p>(document vide)</p>') + '</div>';
+    document.body.appendChild(holder);
+    try {
+      var canvas = await html2canvas(holder, { scale: 2, backgroundColor: '#ffffff', logging: false });
+      var pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4' });
+      var pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
+      var sliceH = Math.round(canvas.width * PAGE_H / PAGE_W);
+      var src = canvas.getContext('2d');
+      // Coupe la page sur une rangée blanche pour ne pas trancher une ligne de texte.
+      var topPad = Math.round(canvas.width * PAD / PAGE_W); // marge haute des pages suivantes
+      function cutAt(y, room) {
+        var end = y + room;
+        if (end >= canvas.height) return canvas.height;
+        var look = Math.round(room * 0.2);
+        var data = src.getImageData(0, end - look, canvas.width, look).data;
+        for (var row = look - 1; row >= 0; row--) {
+          var blank = true;
+          for (var i = row * canvas.width * 4; i < (row + 1) * canvas.width * 4; i += 4) {
+            if (data[i] < 245 || data[i + 1] < 245 || data[i + 2] < 245) { blank = false; break; }
+          }
+          if (blank) return end - look + row + 1;
+        }
+        return end;
+      }
+      for (var y = 0, next, page = 0; y < canvas.height; y = next, page++) {
+        var top = page > 0 ? topPad : 0;
+        next = cutAt(y, sliceH - top);
+        var h = next - y;
+        var part = document.createElement('canvas');
+        part.width = canvas.width; part.height = h + top;
+        var ctx = part.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, part.width, part.height);
+        ctx.drawImage(canvas, 0, y, canvas.width, h, 0, top, canvas.width, h);
+        if (page > 0) pdf.addPage();
+        pdf.addImage(part.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pw, ph * part.height / sliceH);
+      }
+      return pdf.output('blob');
+    } finally {
+      document.body.removeChild(holder);
+    }
+  }
+
   // ============================================================
   // Traitement d'une ligne
   // ============================================================
@@ -374,6 +441,7 @@
         var pdfBlob;
         if (kind === 'image') pdfBlob = await imageToPdf(blob, ext(name));
         else if (kind === 'text') pdfBlob = await textToPdf(blob);
+        else if (kind === 'word') pdfBlob = await wordToPdf(blob);
         else {
           // Dernière chance : le navigateur sait peut-être lire le fichier comme image.
           try { pdfBlob = await imageToPdf(blob, ''); }
