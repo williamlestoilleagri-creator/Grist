@@ -115,8 +115,9 @@
       <button id="btn-sync" class="danger">Arrêter la synchro</button>
     </div>
     <p class="hint">Quand elle est active, chaque pièce jointe non PDF déposée dans la colonne
-      d'origine est convertie et ajoutée à la colonne de destination. Les PDF d'origine ne sont
-      pas recopiés, et rien n'est jamais retiré de la colonne de destination.
+      d'origine est convertie en PDF et ajoutée à la colonne de destination ; les PJ déjà en PDF
+      y sont recopiées telles quelles. Toutes les PJ se retrouvent ainsi en PDF au même endroit.
+      Rien n'est jamais retiré de la colonne de destination.
       L'automatisme fonctionne tant que ce widget est affiché dans une page ouverte ;
       l'arrêt est enregistré dans le document et vaut pour tous les utilisateurs.</p>
   </section>
@@ -246,7 +247,8 @@
     ids.forEach(function (id) {
       var step = steps.filter(function (st) { return st.src === id; })[0];
       var label, cls;
-      if (!step) { label = 'PDF — ignoré'; cls = ''; }
+      if (!step) { label = 'PDF — recopié'; cls = ''; }
+      else if (step.copy) { label = 'PDF — à recopier'; cls = ' conv'; }
       else if (step.use) { label = 'converti'; cls = ''; }
       else if (state.failed[id]) { label = 'échec'; cls = ' ko'; }
       else { label = 'à convertir'; cls = ' conv'; }
@@ -453,21 +455,25 @@
   // ============================================================
   // Synchronisation d'une ligne
   // ============================================================
-  // Chaque PJ d'origine qui n'est pas un PDF doit avoir son PDF dans la colonne de
-  // destination : un PDF qui porte le nom attendu et qui a été créé après le dépôt du
-  // fichier d'origine. S'il manque, on convertit et on AJOUTE le résultat. Le contenu
-  // existant de la colonne de destination est toujours conservé.
-  function needsConversion(id) {
-    return kindOf(metaOf(id).name) !== 'pdf' && !state.realPdf[id];
+  // Chaque PJ d'origine doit se retrouver en PDF dans la colonne de destination :
+  //  - une PJ déjà en PDF y est recopiée telle quelle (même pièce jointe) ;
+  //  - une autre PJ doit y avoir un PDF qui porte le nom attendu et qui a été créé après
+  //    son dépôt ; s'il manque, on convertit et on AJOUTE le résultat.
+  // Le contenu existant de la colonne de destination est toujours conservé.
+  function isPdfAttachment(id) {
+    return kindOf(metaOf(id).name) === 'pdf' || !!state.realPdf[id];
   }
 
   function planRecord(rec, force) {
     var pool = force ? [] : toIds(rec.Destination).map(function (id) {
       return { id: id, name: metaOf(id).name, t: metaOf(id).t };
     });
-    var steps = [];
+    var steps = [], dest = toIds(rec.Destination);
     toIds(rec.Source).forEach(function (id) {
-      if (!needsConversion(id)) return;
+      if (isPdfAttachment(id)) {
+        if (dest.indexOf(id) < 0) steps.push({ src: id, copy: true });
+        return;
+      }
       var m = metaOf(id), target = baseName(m.name) + '.pdf';
       var k = -1;
       for (var i = 0; i < pool.length; i++) {
@@ -480,15 +486,15 @@
   }
 
   function planNeedsWork(rec, plan) {
-    return plan.steps.some(function (st) { return st.convert && !state.failed[st.src]; });
+    return plan.steps.some(function (st) { return st.copy || (st.convert && !state.failed[st.src]); });
   }
 
   async function convertOne(id) {
     var name = metaOf(id).name;
     var blob = await download(id);
-    if (await isPdfBlob(blob)) {            // PDF déposé sans extension .pdf : rien à faire
+    if (await isPdfBlob(blob)) {            // PDF déposé sans extension .pdf : on le recopie
       state.realPdf[id] = true;
-      return null;
+      return id;
     }
     var kind = kindOf(name), pdfBlob;
     if (kind === 'image') pdfBlob = await imageToPdf(blob, ext(name));
@@ -506,15 +512,21 @@
   // (à la même place) ; si la conversion échoue, l'ancien est gardé.
   async function syncRecord(rec, force) {
     var plan = planRecord(rec, false);
-    var out = toIds(rec.Destination), converted = 0, failed = 0;
+    var out = toIds(rec.Destination), converted = 0, copied = 0, failed = 0;
     for (var i = 0; i < plan.steps.length; i++) {
       if (state.stop) break;
       var st = plan.steps[i];
+      if (st.copy) {
+        if (out.indexOf(st.src) < 0) { out.push(st.src); copied++; }
+        continue;
+      }
       if (st.use && !force) continue;
       if (st.convert && state.failed[st.src] && !force) continue;
       try {
         var newId = await convertOne(st.src);
-        if (newId) {
+        if (newId === st.src) {             // c'était en fait un PDF
+          if (out.indexOf(newId) < 0) { out.push(newId); copied++; }
+        } else if (newId) {
           if (st.use) out[out.indexOf(st.use)] = newId;
           else out.push(newId);
           converted++;
@@ -532,7 +544,7 @@
       fields[state.mappings.Destination] = ['L'].concat(out);
       await grist.docApi.applyUserActions([['UpdateRecord', state.tableId, rec.id, fields]]);
     }
-    return { changed: changed, converted: converted, failed: failed, total: out.length };
+    return { changed: changed, converted: converted, copied: copied, failed: failed, total: out.length };
   }
 
   function mappingOk(quiet) {
@@ -574,7 +586,8 @@
           if (r.changed) {
             stats.rows++;
             stats.files += r.converted;
-            log('Ligne ' + rec.id + ' : ' + r.converted + ' fichier(s) converti(s), ' + r.total + ' PDF dans la destination',
+            log('Ligne ' + rec.id + ' : ' + r.converted + ' converti(s), ' + r.copied + ' PDF recopié(s), '
+              + r.total + ' PDF dans la destination',
               r.failed ? 'warn' : 'ok');
           }
           stats.failed += r.failed;
