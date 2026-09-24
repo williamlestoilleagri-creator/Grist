@@ -61,8 +61,10 @@
   .badge.conv { background: #fdf1dc; color: var(--warn); }
   .badge.ko { background: #f8e3de; color: var(--danger); }
 
-  .options { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
-  .options label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  .sync { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12.5px; }
+  .sync .state { font-weight: 600; }
+  .sync .state.on { color: var(--accent); }
+  .sync .state.off { color: var(--danger); }
 
   .actions { display: flex; gap: 8px; flex-wrap: wrap; }
   button {
@@ -70,6 +72,7 @@
     border-radius: 6px; padding: 6px 12px; font-size: 12.5px; cursor: pointer;
   }
   button.secondary { background: transparent; color: var(--accent); }
+  button.danger { background: transparent; border-color: var(--danger); color: var(--danger); }
   button:disabled { opacity: .45; cursor: default; }
 
   progress { width: 100%; height: 8px; accent-color: var(--accent); }
@@ -106,21 +109,23 @@
   </section>
 
   <section class="card">
-    <h2>Options</h2>
-    <div class="options">
-      <label><input type="checkbox" id="opt-auto" checked>
-        Conversion automatique à chaque dépôt de pièce jointe</label>
+    <h2>Synchronisation automatique</h2>
+    <div class="sync">
+      <span>État : <span class="state on" id="sync-state">active</span></span>
+      <button id="btn-sync" class="danger">Arrêter la synchro</button>
     </div>
-    <p class="hint">Seuls les fichiers qui ne sont pas des PDF sont convertis ; les PDF d'origine
-      ne sont pas recopiés. La colonne de destination est gérée par le widget : elle est
-      resynchronisée quand une pièce jointe est ajoutée, remplacée ou supprimée.
-      L'automatisme fonctionne tant que ce widget est affiché dans une page ouverte.</p>
+    <p class="hint">Quand elle est active, chaque pièce jointe non PDF déposée dans la colonne
+      d'origine est convertie et ajoutée à la colonne de destination. Les PDF d'origine ne sont
+      pas recopiés, et rien n'est jamais retiré de la colonne de destination.
+      L'automatisme fonctionne tant que ce widget est affiché dans une page ouverte ;
+      l'arrêt est enregistré dans le document et vaut pour tous les utilisateurs.</p>
   </section>
 
   <section class="card">
     <div class="actions">
       <button id="btn-one" disabled>Reconvertir la ligne sélectionnée</button>
       <button id="btn-all" class="secondary" disabled>Synchroniser toutes les lignes visibles</button>
+      <button id="btn-stop" class="danger" hidden>Interrompre le traitement en cours</button>
     </div>
     <progress id="progress" value="0" max="1" hidden></progress>
   </section>
@@ -152,6 +157,7 @@
     auto: true,
     busy: false,
     pending: false,
+    stop: false,                    // demande d'interruption du traitement en cours
     timer: null
   };
 
@@ -194,7 +200,17 @@
 
   function setBusy(busy) {
     state.busy = busy;
+    if (busy) state.stop = false;
+    document.getElementById('btn-stop').hidden = !busy;
     refreshButtons();
+  }
+
+  function renderSync() {
+    var st = document.getElementById('sync-state'), btn = document.getElementById('btn-sync');
+    st.textContent = state.auto ? 'active' : 'arrêtée';
+    st.className = 'state ' + (state.auto ? 'on' : 'off');
+    btn.textContent = state.auto ? 'Arrêter la synchro' : 'Reprendre la synchro';
+    btn.className = state.auto ? 'danger' : '';
   }
 
   function refreshButtons() {
@@ -437,9 +453,10 @@
   // ============================================================
   // Synchronisation d'une ligne
   // ============================================================
-  // La colonne de destination contient, dans l'ordre, un PDF pour chaque PJ d'origine
-  // qui n'est pas un PDF. Un PDF déjà présent est réutilisé s'il porte le nom attendu
-  // et qu'il a été créé après le dépôt du fichier d'origine ; sinon on (re)convertit.
+  // Chaque PJ d'origine qui n'est pas un PDF doit avoir son PDF dans la colonne de
+  // destination : un PDF qui porte le nom attendu et qui a été créé après le dépôt du
+  // fichier d'origine. S'il manque, on convertit et on AJOUTE le résultat. Le contenu
+  // existant de la colonne de destination est toujours conservé.
   function needsConversion(id) {
     return kindOf(metaOf(id).name) !== 'pdf' && !state.realPdf[id];
   }
@@ -463,10 +480,7 @@
   }
 
   function planNeedsWork(rec, plan) {
-    var pending = plan.steps.some(function (st) { return st.convert && !state.failed[st.src]; });
-    if (pending) return true;
-    var expected = plan.steps.filter(function (st) { return st.use; }).map(function (st) { return st.use; });
-    return expected.join(',') !== toIds(rec.Destination).join(',');
+    return plan.steps.some(function (st) { return st.convert && !state.failed[st.src]; });
   }
 
   async function convertOne(id) {
@@ -488,16 +502,23 @@
     return upload(pdfBlob, baseName(name) + '.pdf');
   }
 
+  // force = reconversion : le PDF existant d'un fichier est remplacé par le nouveau
+  // (à la même place) ; si la conversion échoue, l'ancien est gardé.
   async function syncRecord(rec, force) {
-    var plan = planRecord(rec, force);
-    var out = [], converted = 0, failed = 0;
+    var plan = planRecord(rec, false);
+    var out = toIds(rec.Destination), converted = 0, failed = 0;
     for (var i = 0; i < plan.steps.length; i++) {
+      if (state.stop) break;
       var st = plan.steps[i];
-      if (st.use) { out.push(st.use); continue; }
-      if (state.failed[st.src] && !force) continue;
+      if (st.use && !force) continue;
+      if (st.convert && state.failed[st.src] && !force) continue;
       try {
         var newId = await convertOne(st.src);
-        if (newId) { out.push(newId); converted++; }
+        if (newId) {
+          if (st.use) out[out.indexOf(st.use)] = newId;
+          else out.push(newId);
+          converted++;
+        }
         delete state.failed[st.src];
       } catch (e) {
         state.failed[st.src] = true;
@@ -508,7 +529,7 @@
     var changed = out.join(',') !== toIds(rec.Destination).join(',');
     if (changed) {
       var fields = {};
-      fields[state.mappings.Destination] = out.length ? ['L'].concat(out) : null;
+      fields[state.mappings.Destination] = ['L'].concat(out);
       await grist.docApi.applyUserActions([['UpdateRecord', state.tableId, rec.id, fields]]);
     }
     return { changed: changed, converted: converted, failed: failed, total: out.length };
@@ -543,6 +564,10 @@
       bar.hidden = false; bar.max = todo.length; bar.value = 0;
       var stats = { rows: 0, files: 0, failed: 0 };
       for (var i = 0; i < todo.length; i++) {
+        if (state.stop) {
+          log('Traitement interrompu : ' + (todo.length - i) + ' ligne(s) non traitée(s).', 'warn');
+          break;
+        }
         var rec = todo[i];
         try {
           var r = await syncRecord(rec, force);
@@ -568,6 +593,7 @@
       setTimeout(function () { bar.hidden = true; }, 1500);
       renderCurrent();
       if (state.pending) { state.pending = false; scheduleAuto(); }
+      state.stop = false;
     }
   }
 
@@ -594,11 +620,27 @@
     runPass(state.records, false, 'Synchronisation');
   });
 
-  document.getElementById('opt-auto').addEventListener('change', function (e) {
-    state.auto = e.target.checked;
+  document.getElementById('btn-sync').addEventListener('click', function () {
+    state.auto = !state.auto;
+    renderSync();
+    if (state.auto) {
+      log('Synchronisation automatique reprise.', 'ok');
+      scheduleAuto();
+    } else {
+      clearTimeout(state.timer);
+      state.pending = false;
+      if (state.busy) state.stop = true; // interrompt aussi le traitement en cours
+      log('Synchronisation automatique arrêtée.', 'warn');
+    }
     // Réglage enregistré dans le document : il vaut pour tous les utilisateurs du widget.
     Promise.resolve(grist.setOption('auto', state.auto)).catch(function () { /* droits insuffisants : réglage local */ });
-    if (state.auto) scheduleAuto();
+  });
+
+  document.getElementById('btn-stop').addEventListener('click', function () {
+    state.stop = true;
+    state.pending = false;
+    clearTimeout(state.timer);
+    log('Interruption demandée : arrêt après le fichier en cours…', 'warn');
   });
 
   // ============================================================
@@ -613,9 +655,16 @@
   });
 
   grist.onOptions(function (options) {
-    state.auto = !options || options.auto !== false;
-    document.getElementById('opt-auto').checked = state.auto;
-    scheduleAuto();
+    var auto = !options || options.auto !== false;
+    if (auto === state.auto) { scheduleAuto(); return; }
+    state.auto = auto;
+    renderSync();
+    if (auto) scheduleAuto();
+    else {
+      clearTimeout(state.timer);
+      state.pending = false;
+      if (state.busy) state.stop = true;
+    }
   });
 
   grist.onRecords(async function (records, mappings) {
