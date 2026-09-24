@@ -108,17 +108,19 @@
   <section class="card">
     <h2>Options</h2>
     <div class="options">
-      <label><input type="checkbox" id="opt-keep-pdf" checked>
-        Recopier aussi les PDF d'origine dans la colonne de destination</label>
-      <label><input type="checkbox" id="opt-skip-done" checked>
-        Ignorer les lignes dont la colonne de destination est déjà remplie (traitement en masse)</label>
+      <label><input type="checkbox" id="opt-auto" checked>
+        Conversion automatique à chaque dépôt de pièce jointe</label>
     </div>
+    <p class="hint">Seuls les fichiers qui ne sont pas des PDF sont convertis ; les PDF d'origine
+      ne sont pas recopiés. La colonne de destination est gérée par le widget : elle est
+      resynchronisée quand une pièce jointe est ajoutée, remplacée ou supprimée.
+      L'automatisme fonctionne tant que ce widget est affiché dans une page ouverte.</p>
   </section>
 
   <section class="card">
     <div class="actions">
-      <button id="btn-one" disabled>Convertir la ligne sélectionnée</button>
-      <button id="btn-all" class="secondary" disabled>Convertir toutes les lignes visibles</button>
+      <button id="btn-one" disabled>Reconvertir la ligne sélectionnée</button>
+      <button id="btn-all" class="secondary" disabled>Synchroniser toutes les lignes visibles</button>
     </div>
     <progress id="progress" value="0" max="1" hidden></progress>
   </section>
@@ -144,8 +146,13 @@
     mappings: null,
     tableId: null,
     auth: null,
-    names: Object.create(null),
-    busy: false
+    meta: Object.create(null),      // id de PJ -> { name, t } (t = date de dépôt, en secondes)
+    realPdf: Object.create(null),   // PJ sans extension .pdf mais qui sont en fait des PDF
+    failed: Object.create(null),    // PJ en échec : pas de nouvel essai automatique
+    auto: true,
+    busy: false,
+    pending: false,
+    timer: null
   };
 
   function ext(name) {
@@ -195,7 +202,7 @@
     document.getElementById('btn-one').disabled = !ready || !state.current;
     var btnAll = document.getElementById('btn-all');
     btnAll.disabled = !ready || !state.records.length;
-    btnAll.textContent = 'Convertir toutes les lignes visibles (' + state.records.length + ')';
+    btnAll.textContent = 'Synchroniser toutes les lignes visibles (' + state.records.length + ')';
   }
 
   function renderMapping(raw) {
@@ -216,27 +223,28 @@
     if (!rec) { ul.innerHTML = '<li class="hint">Aucune ligne sélectionnée.</li>'; return; }
     var ids = toIds(rec.Source);
     if (!ids.length) { ul.innerHTML = '<li class="hint">Aucune pièce jointe dans la colonne d\'origine.</li>'; return; }
-    for (var i = 0; i < ids.length; i++) {
-      var name = await fileName(ids[i]);
-      var kind = kindOf(name);
+    await ensureMeta(ids.concat(toIds(rec.Destination)));
+    if (state.current !== rec) return; // la sélection a changé entre-temps
+    ul.innerHTML = '';
+    var steps = planRecord(rec, false).steps;
+    ids.forEach(function (id) {
+      var step = steps.filter(function (st) { return st.src === id; })[0];
+      var label, cls;
+      if (!step) { label = 'PDF — ignoré'; cls = ''; }
+      else if (step.use) { label = 'converti'; cls = ''; }
+      else if (state.failed[id]) { label = 'échec'; cls = ' ko'; }
+      else { label = 'à convertir'; cls = ' conv'; }
       var li = document.createElement('li');
-      var badge = document.createElement('span');
-      badge.className = 'badge' + (kind === 'pdf' ? '' : kind === 'unsupported' ? ' ko' : ' conv');
-      badge.textContent = kind === 'pdf' ? 'déjà PDF' : kind === 'unsupported' ? 'non convertible' : 'à convertir';
       var n = document.createElement('span');
       n.className = 'name';
-      n.textContent = name;
+      n.textContent = metaOf(id).name;
+      var badge = document.createElement('span');
+      badge.className = 'badge' + cls;
+      badge.textContent = label;
       li.appendChild(n);
       li.appendChild(badge);
       ul.appendChild(li);
-    }
-    var done = toIds(rec.Destination).length;
-    if (done) {
-      var info = document.createElement('li');
-      info.className = 'hint';
-      info.textContent = done + ' fichier(s) déjà présent(s) dans la colonne de destination.';
-      ul.appendChild(info);
-    }
+    });
   }
 
   // ============================================================
@@ -250,27 +258,38 @@
     return state.auth;
   }
 
-  async function loadAttachmentNames() {
+  async function loadAttachmentMeta() {
     try {
       var t = await grist.docApi.fetchTable('_grist_Attachments');
-      for (var i = 0; i < t.id.length; i++) state.names[t.id[i]] = t.fileName[i];
+      for (var i = 0; i < t.id.length; i++) {
+        state.meta[t.id[i]] = { name: t.fileName[i], t: t.timeUploaded ? (t.timeUploaded[i] || 0) : 0 };
+      }
+      return true;
     } catch (e) {
-      // Pas grave : on retombera sur l'API REST fichier par fichier.
+      return false;
     }
   }
 
-  async function fileName(id) {
-    if (state.names[id]) return state.names[id];
-    try {
-      var a = await getAuth();
-      var r = await fetch(a.baseUrl + '/attachments/' + id + '?auth=' + encodeURIComponent(a.token));
-      if (r.ok) {
-        var meta = await r.json();
-        state.names[id] = meta.fileName;
-        return meta.fileName;
-      }
-    } catch (e) { /* ignore */ }
-    return 'pièce jointe #' + id;
+  // S'assure qu'on connaît le nom et la date de dépôt de chaque PJ (nouveaux dépôts compris).
+  async function ensureMeta(ids) {
+    var missing = ids.filter(function (id) { return !state.meta[id]; });
+    if (!missing.length) return;
+    if (await loadAttachmentMeta()) missing = missing.filter(function (id) { return !state.meta[id]; });
+    for (var i = 0; i < missing.length; i++) {
+      var id = missing[i];
+      try {
+        var a = await getAuth();
+        var r = await fetch(a.baseUrl + '/attachments/' + id + '?auth=' + encodeURIComponent(a.token));
+        if (r.ok) {
+          var m = await r.json();
+          state.meta[id] = { name: m.fileName, t: m.timeUploaded ? Date.parse(m.timeUploaded) / 1000 : 0 };
+        }
+      } catch (e) { /* ignore */ }
+    }
+  }
+
+  function metaOf(id) {
+    return state.meta[id] || { name: 'pièce jointe #' + id, t: 0 };
   }
 
   async function download(id) {
@@ -292,7 +311,7 @@
     });
     if (!r.ok) throw new Error('envoi impossible (HTTP ' + r.status + ')');
     var ids = await r.json();
-    state.names[ids[0]] = name;
+    state.meta[ids[0]] = { name: name, t: Date.now() / 1000 };
     return ids[0];
   }
 
@@ -416,123 +435,170 @@
   }
 
   // ============================================================
-  // Traitement d'une ligne
+  // Synchronisation d'une ligne
   // ============================================================
-  async function processRecord(rec, opts) {
-    var srcIds = toIds(rec.Source);
-    if (!srcIds.length) return { status: 'vide' };
-    if (opts.skipDone && toIds(rec.Destination).length) return { status: 'déjà traitée' };
+  // La colonne de destination contient, dans l'ordre, un PDF pour chaque PJ d'origine
+  // qui n'est pas un PDF. Un PDF déjà présent est réutilisé s'il porte le nom attendu
+  // et qu'il a été créé après le dépôt du fichier d'origine ; sinon on (re)convertit.
+  function needsConversion(id) {
+    return kindOf(metaOf(id).name) !== 'pdf' && !state.realPdf[id];
+  }
 
+  function planRecord(rec, force) {
+    var pool = force ? [] : toIds(rec.Destination).map(function (id) {
+      return { id: id, name: metaOf(id).name, t: metaOf(id).t };
+    });
+    var steps = [];
+    toIds(rec.Source).forEach(function (id) {
+      if (!needsConversion(id)) return;
+      var m = metaOf(id), target = baseName(m.name) + '.pdf';
+      var k = -1;
+      for (var i = 0; i < pool.length; i++) {
+        if (pool[i].name === target && pool[i].t >= m.t) { k = i; break; }
+      }
+      if (k >= 0) steps.push({ src: id, use: pool.splice(k, 1)[0].id });
+      else steps.push({ src: id, convert: true });
+    });
+    return { steps: steps };
+  }
+
+  function planNeedsWork(rec, plan) {
+    var pending = plan.steps.some(function (st) { return st.convert && !state.failed[st.src]; });
+    if (pending) return true;
+    var expected = plan.steps.filter(function (st) { return st.use; }).map(function (st) { return st.use; });
+    return expected.join(',') !== toIds(rec.Destination).join(',');
+  }
+
+  async function convertOne(id) {
+    var name = metaOf(id).name;
+    var blob = await download(id);
+    if (await isPdfBlob(blob)) {            // PDF déposé sans extension .pdf : rien à faire
+      state.realPdf[id] = true;
+      return null;
+    }
+    var kind = kindOf(name), pdfBlob;
+    if (kind === 'image') pdfBlob = await imageToPdf(blob, ext(name));
+    else if (kind === 'text') pdfBlob = await textToPdf(blob);
+    else if (kind === 'word') pdfBlob = await wordToPdf(blob);
+    else {
+      // Dernière chance : le navigateur sait peut-être lire le fichier comme image.
+      try { pdfBlob = await imageToPdf(blob, ''); }
+      catch (e) { throw new Error('format .' + (ext(name) || '?') + ' non pris en charge'); }
+    }
+    return upload(pdfBlob, baseName(name) + '.pdf');
+  }
+
+  async function syncRecord(rec, force) {
+    var plan = planRecord(rec, force);
     var out = [], converted = 0, failed = 0;
-    for (var i = 0; i < srcIds.length; i++) {
-      var id = srcIds[i];
-      var name = await fileName(id);
-      var kind = kindOf(name);
+    for (var i = 0; i < plan.steps.length; i++) {
+      var st = plan.steps[i];
+      if (st.use) { out.push(st.use); continue; }
+      if (state.failed[st.src] && !force) continue;
       try {
-        if (kind === 'pdf') {
-          if (opts.keepPdf) out.push(id);
-          continue;
-        }
-        var blob = await download(id);
-        if (await isPdfBlob(blob)) {        // PDF sans extension .pdf
-          if (opts.keepPdf) out.push(id);
-          continue;
-        }
-        var pdfBlob;
-        if (kind === 'image') pdfBlob = await imageToPdf(blob, ext(name));
-        else if (kind === 'text') pdfBlob = await textToPdf(blob);
-        else if (kind === 'word') pdfBlob = await wordToPdf(blob);
-        else {
-          // Dernière chance : le navigateur sait peut-être lire le fichier comme image.
-          try { pdfBlob = await imageToPdf(blob, ''); }
-          catch (e) { throw new Error('format .' + (ext(name) || '?') + ' non pris en charge'); }
-        }
-        out.push(await upload(pdfBlob, baseName(name) + '.pdf'));
-        converted++;
+        var newId = await convertOne(st.src);
+        if (newId) { out.push(newId); converted++; }
+        delete state.failed[st.src];
       } catch (e) {
+        state.failed[st.src] = true;
         failed++;
-        log('  ligne ' + rec.id + ' — ' + name + ' : ' + e.message, 'err');
+        log('  ligne ' + rec.id + ' — ' + metaOf(st.src).name + ' : ' + e.message, 'err');
       }
     }
-
-    if (!out.length) return { status: 'rien à écrire', converted: converted, failed: failed };
-
-    var fields = {};
-    fields[state.mappings.Destination] = ['L'].concat(out);
-    await grist.docApi.applyUserActions([['UpdateRecord', state.tableId, rec.id, fields]]);
-    return { status: 'ok', converted: converted, failed: failed, total: out.length };
+    var changed = out.join(',') !== toIds(rec.Destination).join(',');
+    if (changed) {
+      var fields = {};
+      fields[state.mappings.Destination] = out.length ? ['L'].concat(out) : null;
+      await grist.docApi.applyUserActions([['UpdateRecord', state.tableId, rec.id, fields]]);
+    }
+    return { changed: changed, converted: converted, failed: failed, total: out.length };
   }
 
-  function options() {
-    return {
-      keepPdf: document.getElementById('opt-keep-pdf').checked,
-      skipDone: document.getElementById('opt-skip-done').checked
-    };
-  }
-
-  function checkReady() {
+  function mappingOk(quiet) {
     var m = state.mappings;
-    if (!m || !m.Source || !m.Destination) {
-      log('Choisissez les colonnes d\'origine et de destination dans la configuration du widget.', 'err');
-      return false;
-    }
-    if (m.Source === m.Destination) {
-      log('Les colonnes d\'origine et de destination doivent être différentes.', 'err');
-      return false;
-    }
-    return true;
+    var msg = null;
+    if (!m || !m.Source || !m.Destination) msg = 'Choisissez les colonnes d\'origine et de destination dans la configuration du widget.';
+    else if (m.Source === m.Destination) msg = 'Les colonnes d\'origine et de destination doivent être différentes.';
+    else if (!state.tableId) msg = 'Table introuvable.';
+    if (msg && !quiet) log(msg, 'err');
+    return !msg;
   }
 
-  async function run(records, opts) {
-    if (!checkReady()) return;
+  // ============================================================
+  // Passes de traitement (automatiques ou manuelles)
+  // ============================================================
+  async function runPass(records, force, label) {
     setBusy(true);
     var bar = document.getElementById('progress');
-    bar.hidden = false; bar.max = records.length; bar.value = 0;
-    var stats = { ok: 0, skipped: 0, files: 0, failed: 0 };
-    log('Début : ' + records.length + ' ligne(s), ' + state.mappings.Source + ' → ' + state.mappings.Destination);
     try {
-      await loadAttachmentNames();
-      for (var i = 0; i < records.length; i++) {
-        var rec = records[i];
+      var ids = [];
+      records.forEach(function (r) { ids = ids.concat(toIds(r.Source), toIds(r.Destination)); });
+      await ensureMeta(ids);
+
+      var todo = force ? records : records.filter(function (r) { return planNeedsWork(r, planRecord(r, false)); });
+      if (!todo.length) {
+        if (label) log(label + ' : tout est déjà à jour.', 'ok');
+        return;
+      }
+      bar.hidden = false; bar.max = todo.length; bar.value = 0;
+      var stats = { rows: 0, files: 0, failed: 0 };
+      for (var i = 0; i < todo.length; i++) {
+        var rec = todo[i];
         try {
-          var r = await processRecord(rec, opts);
-          if (r.status === 'ok') {
-            stats.ok++;
+          var r = await syncRecord(rec, force);
+          if (r.changed) {
+            stats.rows++;
             stats.files += r.converted;
-            stats.failed += r.failed;
-            log('Ligne ' + rec.id + ' : ' + r.converted + ' converti(s), ' + r.total + ' PDF écrit(s)', r.failed ? 'warn' : 'ok');
-          } else {
-            stats.skipped++;
-            stats.failed += r.failed || 0;
-            if (records.length === 1 || r.status === 'rien à écrire') log('Ligne ' + rec.id + ' : ' + r.status, 'warn');
+            log('Ligne ' + rec.id + ' : ' + r.converted + ' fichier(s) converti(s), ' + r.total + ' PDF dans la destination',
+              r.failed ? 'warn' : 'ok');
           }
+          stats.failed += r.failed;
         } catch (e) {
           stats.failed++;
           log('Ligne ' + rec.id + ' : ' + e.message, 'err');
         }
         bar.value = i + 1;
       }
-      log('Terminé — ' + stats.ok + ' ligne(s) mise(s) à jour, ' + stats.files + ' fichier(s) converti(s), '
-        + stats.skipped + ' ignorée(s), ' + stats.failed + ' erreur(s).', stats.failed ? 'warn' : 'ok');
+      if (label || stats.rows || stats.failed) {
+        log((label || 'Automatique') + ' — ' + stats.rows + ' ligne(s) mise(s) à jour, ' + stats.files
+          + ' fichier(s) converti(s), ' + stats.failed + ' erreur(s).', stats.failed ? 'warn' : 'ok');
+      }
     } finally {
       setBusy(false);
       setTimeout(function () { bar.hidden = true; }, 1500);
+      renderCurrent();
+      if (state.pending) { state.pending = false; scheduleAuto(); }
     }
   }
 
+  // Appelé à chaque modification de la table : on attend un peu que les dépôts se terminent.
+  function scheduleAuto() {
+    if (!state.auto || !mappingOk(true)) return;
+    if (state.busy) { state.pending = true; return; }
+    clearTimeout(state.timer);
+    state.timer = setTimeout(function () {
+      if (state.busy) { state.pending = true; return; }
+      runPass(state.records, false, null);
+    }, 800);
+  }
+
   document.getElementById('btn-one').addEventListener('click', function () {
-    if (!state.current) return;
-    var opts = options();
-    opts.skipDone = false; // sur une ligne choisie à la main, on reconvertit toujours
-    run([state.current], opts);
+    if (!state.current || !mappingOk(false)) return;
+    toIds(state.current.Source).forEach(function (id) { delete state.failed[id]; });
+    runPass([state.current], true, 'Ligne ' + state.current.id);
   });
 
   document.getElementById('btn-all').addEventListener('click', function () {
-    var opts = options();
-    var todo = state.records.filter(function (r) { return toIds(r.Source).length; });
-    if (!todo.length) { log('Aucune ligne avec des pièces jointes.', 'warn'); return; }
-    if (!confirm('Convertir les pièces jointes de ' + todo.length + ' ligne(s) ?')) return;
-    run(todo, opts);
+    if (!mappingOk(false)) return;
+    state.failed = Object.create(null); // on retente aussi les fichiers en échec
+    runPass(state.records, false, 'Synchronisation');
+  });
+
+  document.getElementById('opt-auto').addEventListener('change', function (e) {
+    state.auto = e.target.checked;
+    // Réglage enregistré dans le document : il vaut pour tous les utilisateurs du widget.
+    Promise.resolve(grist.setOption('auto', state.auto)).catch(function () { /* droits insuffisants : réglage local */ });
+    if (state.auto) scheduleAuto();
   });
 
   // ============================================================
@@ -546,19 +612,26 @@
     ]
   });
 
+  grist.onOptions(function (options) {
+    state.auto = !options || options.auto !== false;
+    document.getElementById('opt-auto').checked = state.auto;
+    scheduleAuto();
+  });
+
   grist.onRecords(async function (records, mappings) {
     state.mappings = mappings;
     renderMapping(mappings);
     state.records = (mappings && grist.mapColumnNames(records, mappings)) || [];
     if (!state.tableId) {
       try { state.tableId = await grist.selectedTable.getTableId(); } catch (e) { /* ignore */ }
-      await loadAttachmentNames();
+      await loadAttachmentMeta();
       renderCurrent();
     }
     var dot = document.getElementById('dot');
     dot.className = 'dot' + (state.tableId ? ' ok' : '');
     document.getElementById('ctx').textContent = (state.tableId || 'table ?') + ' · ' + records.length + ' ligne(s)';
     refreshButtons();
+    scheduleAuto();
   });
 
   grist.onRecord(function (record, mappings) {
