@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-scheme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tableau de bord — instruction DRAAF</title>
+
+<!-- Système de Design de l'État (DSFR) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr/dist/dsfr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr/dist/utility/icons/icons.min.css">
+
+<!-- API du widget Grist -->
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+
+<style>
+  /* Compléments légers, cohérents avec les jetons de couleur du DSFR
+     (variables officielles avec repli en dur au cas où). */
+  body{
+    background-color: var(--background-default-grey, #fff);
+  }
+  .mast{
+    padding: 1.5rem 0;
+    border-bottom: 1px solid var(--border-default-grey, #ddd);
+  }
+  .kpi-highlight{
+    height: 100%;
+    border-left-color: var(--blue-france-sun-113-625, #000091) !important;
+  }
+  .kpi-value{
+    font-weight: 700;
+    color: var(--text-title-grey, #161616);
+  }
+  .anomalies-head{
+    display:flex;
+    align-items:center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .bar-track{
+    display:block;
+    height: 6px;
+    border-radius: 3px;
+    background-color: var(--background-alt-grey, #f6f6f6);
+    overflow:hidden;
+    min-width: 120px;
+  }
+  .bar-fill{
+    display:block;
+    height:100%;
+    background-color: var(--red-marianne-425-625, #e1000f);
+  }
+  .anomaly-count{
+    font-weight:700;
+    white-space:nowrap;
+  }
+  #noticeZone > * + *{
+    margin-top: 0.75rem;
+  }
+  .fr-table td, .fr-table th{
+    vertical-align: middle;
+  }
+</style>
+</head>
+<body>
+
+<div class="fr-container fr-py-4w">
+
+  <!-- En-tête (sans bloc-marque / logo) -->
+  <div class="mast fr-mb-4w">
+    <div class="fr-grid-row fr-grid-row--gutters fr-grid-row--middle">
+      <div class="fr-col-12 fr-col-md-8">
+        <p class="fr-badge fr-badge--sm fr-badge--info fr-mb-2w">Démarche Simplifiée n°149963</p>
+        <h1 class="fr-h3 fr-mb-1v">Suivi de campagne reliquats</h1>
+        <p class="fr-text--sm fr-mb-0" style="color:var(--text-mention-grey,#666)">Instruction DRAAF Bretagne</p>
+      </div>
+      <div class="fr-col-12 fr-col-md-4" style="text-align:right">
+        <p class="fr-text--sm fr-mb-1w" id="syncLabel">Connexion à Grist…</p>
+        <button type="button" class="fr-btn fr-btn--secondary fr-btn--icon-left fr-icon-refresh-line" id="refreshBtn">
+          Rafraîchir
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Indicateurs clés -->
+  <div class="fr-grid-row fr-grid-row--gutters fr-mb-4w" id="kpiRow">
+
+    <div class="fr-col-12 fr-col-sm-6 fr-col-md-3">
+      <div class="fr-highlight kpi-highlight fr-mb-0">
+        <p class="fr-display--xs kpi-value fr-mb-1v" id="kpiDossiers">—</p>
+        <p class="fr-text--sm fr-mb-0">Dossiers reçus</p>
+        <p class="fr-hint-text fr-mb-0">n° PACAGE uniques</p>
+      </div>
+    </div>
+
+    <div class="fr-col-12 fr-col-sm-6 fr-col-md-3">
+      <div class="fr-highlight kpi-highlight fr-mb-0">
+        <p class="fr-display--xs kpi-value fr-mb-1v" id="kpiExploitants">—</p>
+        <p class="fr-text--sm fr-mb-0">Exploitants recensés</p>
+        <p class="fr-hint-text fr-mb-0">DATA_Exploitants</p>
+      </div>
+    </div>
+
+    <div class="fr-col-12 fr-col-sm-6 fr-col-md-3">
+      <div class="fr-highlight kpi-highlight fr-mb-0">
+        <p class="fr-display--xs kpi-value fr-mb-1v" id="kpiTaux">—</p>
+        <p class="fr-text--sm fr-mb-0">Taux de dépôt</p>
+        <p class="fr-hint-text fr-mb-0">dossiers / exploitants</p>
+      </div>
+    </div>
+
+    <div class="fr-col-12 fr-col-sm-6 fr-col-md-3">
+      <div class="fr-highlight kpi-highlight fr-mb-0">
+        <p class="fr-display--xs kpi-value fr-mb-1v" id="kpiAppels">—</p>
+        <p class="fr-text--sm fr-mb-0">Appels enregistrés</p>
+        <p class="fr-hint-text fr-mb-0">journal des appels</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- État d'avancement des dossiers -->
+  <div class="fr-mb-4w">
+    <div class="anomalies-head fr-mb-2w">
+      <h2 class="fr-h5 fr-mb-0">État d'avancement des dossiers</h2>
+      <span class="fr-badge fr-badge--warning" id="anomTotal">—</span>
+    </div>
+
+    <div class="fr-table fr-table--bordered" id="table-anomalies">
+      <table>
+        <caption class="fr-hidden">Répartition des dossiers par état d'avancement</caption>
+        <thead>
+          <tr>
+            <th scope="col">État</th>
+            <th scope="col">Répartition</th>
+            <th scope="col" style="text-align:right">Dossiers</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Association à faire</td>
+            <td><span class="bar-track"><span class="bar-fill" id="barAssociation" style="width:0%"></span></span></td>
+            <td style="text-align:right"><span class="anomaly-count" id="countAssociation">—</span></td>
+          </tr>
+          <tr>
+            <td>Anomalies à corriger</td>
+            <td><span class="bar-track"><span class="bar-fill" id="barAnomalies" style="width:0%"></span></span></td>
+            <td style="text-align:right"><span class="anomaly-count" id="countAnomalies">—</span></td>
+          </tr>
+          <tr>
+            <td>Dossier à valider sur DN</td>
+            <td><span class="bar-track"><span class="bar-fill" id="barAValider" style="width:0%"></span></span></td>
+            <td style="text-align:right"><span class="anomaly-count" id="countAValider">—</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Zone d'alertes dynamiques (données manquantes, erreurs) -->
+  <div id="noticeZone"></div>
+
+  <p class="fr-text--sm fr-mt-4w" style="color:var(--text-mention-grey,#666)" id="footNote">Chargement des données…</p>
+
+</div>
+
+<script>
+(function(){
+
+  // Colonne PACAGE de Demarche_149963_demandeurs. Laisser null pour une
+  // détection automatique (première colonne dont l'identifiant contient
+  // « pacage »), ou indiquer l'identifiant exact, ex. 'numero_pacage'.
+  const PACAGE_COLUMN = null;
+
+  const el = id => document.getElementById(id);
+  const fmt = n => (n === null || n === undefined) ? '—' : n.toLocaleString('fr-FR');
+
+  function listValues(cell){
+    if (Array.isArray(cell)){
+      if (cell[0] === 'L') return cell.slice(1);
+      return cell.filter(v => v !== null && v !== undefined && v !== '');
+    }
+    if (cell === null || cell === undefined || cell === '') return [];
+    return [cell];
+  }
+
+  // Trouve la colonne PACAGE dans la table (réglage manuel prioritaire).
+  function findPacageColumn(table){
+    if (!table) return null;
+    if (PACAGE_COLUMN) return table[PACAGE_COLUMN] ? PACAGE_COLUMN : null;
+    return Object.keys(table).find(k => /pacage/i.test(k)) || null;
+  }
+
+  // Normalise un n° PACAGE : supprime les espaces et, pour un numéro purement
+  // numérique, restaure les zéros de tête perdus (PACAGE = 9 chiffres),
+  // pour que « 029123456 » et 29123456 comptent comme un seul dossier.
+  function normalizePacage(v){
+    if (v === null || v === undefined) return null;
+    const s = String(v).replace(/\s+/g, '');
+    if (!s) return null;
+    return /^\d{1,9}$/.test(s) ? s.padStart(9, '0') : s.toUpperCase();
+  }
+
+  function uniquePacages(table, col){
+    const set = new Set();
+    table[col].forEach(v => {
+      const p = normalizePacage(v);
+      if (p) set.add(p);
+    });
+    return set;
+  }
+
+  async function safeFetchTable(name){
+    try{
+      return await grist.docApi.fetchTable(name);
+    }catch(e){
+      console.warn('Table indisponible :', name, e);
+      return null;
+    }
+  }
+
+  function renderAlert(kind, title, message){
+    const wrap = document.createElement('div');
+    wrap.className = 'fr-alert fr-alert--' + kind + ' fr-alert--sm';
+    wrap.setAttribute('role', 'alert');
+    wrap.innerHTML =
+      (title ? '<p class="fr-alert__title">' + title + '</p>' : '') +
+      '<p>' + message + '</p>';
+    return wrap;
+  }
+
+  function clearNotices(){ el('noticeZone').innerHTML = ''; }
+  function pushNotice(node){ el('noticeZone').appendChild(node); }
+
+  function formatSyncDate(raw){
+    if (!raw) return null;
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return raw;
+    return d.toLocaleString('fr-FR', {
+      day:'2-digit', month:'2-digit', year:'numeric',
+      hour:'2-digit', minute:'2-digit'
+    });
+  }
+
+  async function loadAll(){
+    el('refreshBtn').disabled = true;
+    el('syncLabel').textContent = 'Actualisation…';
+    clearNotices();
+
+    const [demandeurs, exploitants, evenements, syncMeta] = await Promise.all([
+      safeFetchTable('Demarche_149963_demandeurs'),
+      safeFetchTable('DATA_Exploitants'),
+      safeFetchTable('DATA_Evenements'),
+      safeFetchTable('Sync_metadata'),
+    ]);
+
+    const missing = [];
+
+    // Dossiers reçus : 1 n° PACAGE unique = 1 dossier
+    const pacageCol = findPacageColumn(demandeurs);
+    let nbDossiers = null;
+    if (pacageCol){
+      nbDossiers = uniquePacages(demandeurs, pacageCol).size;
+      el('kpiDossiers').textContent = fmt(nbDossiers);
+    } else if (demandeurs) {
+      missing.push('Demarche_149963_demandeurs.' + (PACAGE_COLUMN || 'pacage'));
+    } else {
+      missing.push('Demarche_149963_demandeurs');
+    }
+
+    // Exploitants recensés
+    let nbExploitants = null;
+    if (exploitants && exploitants.id){
+      nbExploitants = exploitants.id.length;
+      el('kpiExploitants').textContent = fmt(nbExploitants);
+    } else {
+      missing.push('DATA_Exploitants');
+    }
+
+    // Taux de dépôt (même base PACAGE que « Dossiers reçus »)
+    if (nbDossiers !== null && nbExploitants){
+      el('kpiTaux').textContent = Math.round((nbDossiers / nbExploitants) * 100) + ' %';
+    }
+
+    // Appels enregistrés
+    if (evenements && evenements.id){
+      el('kpiAppels').textContent = fmt(evenements.id.length);
+    } else {
+      missing.push('DATA_Evenements');
+    }
+
+    // "Association à faire" — on lit directement la référence Association
+    // (0 / vide = pas d'exploitant associé), plutôt que le champ Anomalies :
+    // ce dernier plante (erreur Grist) sur les dossiers sans Association, car
+    // sa formule compare NB_parcelles_attendues à None dans ce cas, ce qui
+    // fait perdre tout le résultat du calcul (y compris "Association à faire").
+    const dossiersAssociation = new Set();
+
+    if (demandeurs && demandeurs.Association && demandeurs.dossier_number){
+      demandeurs.Association.forEach((assoc, i) => {
+        const dn = demandeurs.dossier_number[i];
+        if (dn === null || dn === undefined || dn === '') return;
+        if (!assoc) dossiersAssociation.add(dn); // 0, null ou undefined = pas d'association
+      });
+    } else if (demandeurs) {
+      missing.push('Demarche_149963_demandeurs.Association');
+    }
+
+    // "Anomalies à corriger" et "Dossier à valider sur DN" — viennent de
+    // DATA_Exploitants.Etat_d_avancement (un exploitant = un dossier suivi).
+    let nAnomalies = 0, nAValider = 0;
+
+    if (exploitants && exploitants.Etat_d_avancement){
+      exploitants.Etat_d_avancement.forEach(state => {
+        if (state === 'Anomalies à corriger') nAnomalies++;
+        if (state === 'Dossier à valider sur DN') nAValider++;
+      });
+    } else if (exploitants) {
+      missing.push('DATA_Exploitants.Etat_d_avancement');
+    }
+
+    const nAssociation = dossiersAssociation.size;
+    const total = nAssociation + nAnomalies + nAValider;
+    const maxCount = Math.max(nAssociation, nAnomalies, nAValider, 1);
+
+    el('anomTotal').textContent = fmt(total) + ' dossier(s) à traiter';
+    el('countAssociation').textContent = fmt(nAssociation);
+    el('countAnomalies').textContent = fmt(nAnomalies);
+    el('countAValider').textContent = fmt(nAValider);
+    el('barAssociation').style.width = (nAssociation / maxCount * 100) + '%';
+    el('barAnomalies').style.width = (nAnomalies / maxCount * 100) + '%';
+    el('barAValider').style.width = (nAValider / maxCount * 100) + '%';
+
+    // Dernière synchronisation
+    if (syncMeta && syncMeta.last_sync_at && syncMeta.last_sync_at.length){
+      let latestRaw = null, latestTime = -Infinity;
+      syncMeta.last_sync_at.forEach(raw => {
+        if (!raw) return;
+        const t = new Date(raw).getTime();
+        if (!isNaN(t) && t > latestTime){ latestTime = t; latestRaw = raw; }
+        if (isNaN(t) && latestRaw === null) latestRaw = raw;
+      });
+      const displayDate = formatSyncDate(latestRaw);
+      el('syncLabel').innerHTML = 'Dernière synchro DN : <strong>' + (displayDate || '—') + '</strong>';
+    } else {
+      el('syncLabel').textContent = 'Synchronisation inconnue';
+      missing.push('Sync_metadata');
+    }
+
+    if (missing.length){
+      pushNotice(renderAlert(
+        'warning',
+        'Données incomplètes',
+        'Tables ou colonnes indisponibles : ' + missing.join(', ') + '. Vérifiez le nom des tables ou les droits d\'accès du widget.'
+      ));
+    }
+
+    el('footNote').textContent = 'Source : document Grist DRAAF Bretagne — dernière actualisation locale : ' + new Date().toLocaleTimeString('fr-FR');
+    el('refreshBtn').disabled = false;
+  }
+
+  el('refreshBtn').addEventListener('click', loadAll);
+
+  if (window.grist){
+    grist.ready({ requiredAccess: 'full' });
+    grist.onRecords(() => loadAll());
+    loadAll().catch(e => {
+      console.error(e);
+      pushNotice(renderAlert('error', 'Erreur', 'Impossible de charger les données : ' + e.message));
+    });
+  } else {
+    pushNotice(renderAlert('info', 'Widget hors de Grist', 'Ouvrez cette page en tant que widget personnalisé dans Grist (avec accès complet au document) pour afficher les données.'));
+    el('footNote').textContent = 'API Grist non détectée.';
+  }
+})();
+</script>
+
+</body>
+</html>
