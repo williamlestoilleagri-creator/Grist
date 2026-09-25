@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>La Gazette de la DDTM</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/dsfr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/utility/icons/icons.min.css">
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<style>
+  :root { --papier: #FBFAF6; --filet: var(--text-title-grey); --rouge: #E1000F; --soleil: #E4A000; --nuage: #8A94A6; }
+  [data-fr-theme=dark] { --papier: #1E1E24; --soleil: #FFC53D; --nuage: #A5AFC2; }
+  html, body { min-height: 100%; }
+  body { margin: 0; background: var(--background-alt-grey); color: var(--text-default-grey); }
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; padding: .5rem 1rem; background: var(--background-default-grey); border-bottom: 1px solid var(--border-default-grey); position: sticky; top: 0; z-index: 2; }
+  .toolbar .spacer { flex: 1; }
+  .toolbar .fr-btn { margin: 0; }
+  .fr-segmented { margin: 0; }
+  .fr-segmented__legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+  .journal { max-width: 1120px; margin: 1rem auto 2rem; background: var(--papier); padding: 1.25rem 1.75rem 2rem; box-shadow: 0 10px 30px -18px rgba(0,0,30,.45); }
+  @media (max-width: 640px) { .journal { padding: 1rem; margin: 0; } }
+
+  .mast { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 1rem; border-bottom: 1px solid var(--filet); padding-bottom: .75rem; }
+  .mast .fr-logo { font-size: .7875rem; }
+  .mast h1 { font-family: Spectral, Georgia, serif; font-weight: 900; font-size: clamp(2rem, 6vw, 4rem); line-height: 1; margin: 0; text-align: center; color: var(--text-title-grey); letter-spacing: -.01em; }
+  .mast .ear { width: 150px; border: 1px solid var(--filet); padding: .4rem .5rem; font-size: .7rem; line-height: 1.3; text-align: center; }
+  .mast .ear b { display: block; font-size: 1.35rem; font-family: Spectral, Georgia, serif; font-weight: 900; color: var(--text-title-grey); }
+  @media (max-width: 760px) { .mast { grid-template-columns: 1fr; text-align: center; } .mast .fr-logo { justify-self: center; } .mast .ear { justify-self: center; } }
+  .dateline { display: flex; justify-content: space-between; flex-wrap: wrap; gap: .25rem 1rem; font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; padding: .35rem 0; border-bottom: 3px double var(--filet); margin-bottom: 1rem; }
+
+  .front { display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; }
+  @media (max-width: 860px) { .front { grid-template-columns: 1fr; } }
+  .kicker { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--rouge); margin: 0 0 .25rem; }
+  .headline { font-family: Spectral, Georgia, serif; font-weight: 900; font-size: clamp(1.75rem, 4.2vw, 3rem); line-height: 1.05; margin: 0 0 .75rem; color: var(--text-title-grey); }
+  .lede { font-size: 1.05rem; line-height: 1.55; margin: 0 0 1rem; }
+  .lede::first-letter { font-family: Spectral, Georgia, serif; font-weight: 900; float: left; font-size: 3.4rem; line-height: .9; padding: .15rem .4rem 0 0; color: var(--text-title-grey); }
+  figure { margin: 0; }
+  figcaption { font-size: .75rem; color: var(--text-mention-grey); font-style: italic; border-top: 1px solid var(--border-default-grey); padding-top: .25rem; margin-top: .25rem; }
+  .spark { width: 100%; height: 110px; display: block; }
+  .spark rect { fill: var(--text-title-grey); }
+  .spark rect.hot { fill: var(--rouge); }
+  .spark text { font-size: 10px; fill: var(--text-mention-grey); }
+
+  .side > section { border-top: 1px solid var(--filet); padding-top: .6rem; margin-bottom: 1.1rem; }
+  .side h2, .rubrique h2 { font-family: Spectral, Georgia, serif; font-weight: 900; font-size: 1.15rem; margin: 0 0 .5rem; color: var(--text-title-grey); }
+  .chiffre b { display: block; font-family: Spectral, Georgia, serif; font-weight: 900; font-size: 2.6rem; line-height: 1.05; color: var(--text-title-grey); font-variant-numeric: tabular-nums; }
+  .chiffre p { margin: .25rem 0 0; font-size: .875rem; }
+  .meteo { display: grid; grid-template-columns: repeat(2, 1fr); gap: .5rem; }
+  .meteo .dep { display: flex; gap: .5rem; align-items: center; border: 1px solid var(--border-default-grey); padding: .4rem .5rem; }
+  .meteo svg { width: 42px; height: 42px; flex: 0 0 42px; }
+  .meteo .n { font-weight: 700; font-size: .8125rem; color: var(--text-title-grey); line-height: 1.2; }
+  .meteo .s { font-size: .7rem; color: var(--text-mention-grey); line-height: 1.3; }
+  .depuis ul { margin: 0; padding: 0; list-style: none; font-size: .875rem; }
+  .depuis li { display: flex; justify-content: space-between; border-bottom: 1px dotted var(--border-default-grey); padding: .15rem 0; }
+  .depuis .up { color: var(--text-default-success); font-weight: 700; } .depuis .down { color: var(--text-default-error); font-weight: 700; }
+
+  .row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-top: 3px double var(--filet); margin-top: .5rem; padding-top: .75rem; }
+  .row3 article { padding: 0 1rem; border-left: 1px solid var(--border-default-grey); }
+  .row3 article:first-child { padding-left: 0; border-left: 0; }
+  .row3 h3 { font-family: Spectral, Georgia, serif; font-weight: 900; font-size: 1.25rem; line-height: 1.15; margin: 0 0 .4rem; color: var(--text-title-grey); }
+  .row3 p { font-size: .9rem; line-height: 1.5; margin: 0; }
+  @media (max-width: 760px) { .row3 { grid-template-columns: 1fr; } .row3 article { padding: 0 0 .75rem; border-left: 0; } }
+
+  .bottom { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 1.5rem; border-top: 1px solid var(--filet); margin-top: 1rem; padding-top: .75rem; }
+  @media (max-width: 860px) { .bottom { grid-template-columns: 1fr; } }
+  .rubrique ul { margin: 0; padding: 0; list-style: none; }
+  .rubrique li { font-size: .875rem; line-height: 1.45; padding: .3rem 0; border-bottom: 1px dotted var(--border-default-grey); }
+  .rubrique li b { color: var(--text-title-grey); }
+  .annonce { border: 2px solid var(--filet); padding: .75rem; text-align: center; }
+  .annonce .t { font-size: .7rem; letter-spacing: .15em; text-transform: uppercase; }
+  .annonce p { font-family: Spectral, Georgia, serif; font-size: 1.05rem; margin: .35rem 0 0; }
+  .colophon { margin-top: 1.25rem; padding-top: .5rem; border-top: 1px solid var(--border-default-grey); font-size: .7rem; color: var(--text-mention-grey); text-align: center; }
+
+  @media print {
+    .toolbar { display: none; }
+    body { background: #fff; }
+    .journal { box-shadow: none; margin: 0; max-width: none; background: #fff; }
+    @page { size: A4; margin: 12mm; }
+  }
+  .msg { margin: 1rem auto; max-width: 1120px; }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <span class="fr-icon-newspaper-line" aria-hidden="true"></span>
+  <fieldset class="fr-segmented fr-segmented--sm">
+    <legend class="fr-segmented__legend">Édition</legend>
+    <div class="fr-segmented__elements" id="editions"></div>
+  </fieldset>
+  <div class="spacer"></div>
+  <button class="fr-btn fr-btn--sm fr-btn--secondary fr-icon-printer-line fr-btn--icon-left" id="print" type="button">Imprimer la gazette</button>
+</div>
+<div id="alert"></div>
+<main class="journal" id="journal" aria-live="polite"><p>Mise sous presse…</p></main>
+
+<script>
+'use strict';
+var IN_GRIST = window.self !== window.top && !/[?&]demo=1/.test(location.search);
+try { if (matchMedia('(prefers-color-scheme: dark)').matches) document.documentElement.setAttribute('data-fr-theme', 'dark'); } catch (e) {}
+
+var DEP = {
+  '22': { nom: "Côtes-d'Armor", le: "les Côtes-d'Armor", Le: "Les Côtes-d'Armor", en: "dans les Côtes-d'Armor" },
+  '29': { nom: 'Finistère', le: 'le Finistère', Le: 'Le Finistère', en: 'dans le Finistère' },
+  '35': { nom: 'Ille-et-Vilaine', le: "l'Ille-et-Vilaine", Le: "L'Ille-et-Vilaine", en: 'en Ille-et-Vilaine' },
+  '56': { nom: 'Morbihan', le: 'le Morbihan', Le: 'Le Morbihan', en: 'dans le Morbihan' }
+};
+function depInfo(d) { return DEP[d] || { nom: 'Département ' + d, le: 'le ' + d, Le: 'Le ' + d, en: 'dans le ' + d }; }
+var CLOS = { 'Traitement terminé': 1 };
+
+var data = { demandeurs: [], departements: [], enveloppes: [], dossiers: [], sync: [] };
+var edition = 'all';
+var previous = null; // instantané lu au chargement, pour « Depuis votre dernière lecture »
+
+// ---------- utilitaires ----------
+function toList(v) { if (Array.isArray(v)) return v[0] === 'L' ? v.slice(1) : v; return v == null || v === '' ? [] : [v]; }
+function colsToRows(cols) { var k = Object.keys(cols); return (cols.id || []).map(function (_, i) { var r = {}; k.forEach(function (c) { r[c] = cols[c][i]; }); return r; }); }
+function fetchRows(t) { return IN_GRIST ? grist.docApi.fetchTable(t).then(colsToRows) : Promise.resolve(DemoData.tables[t] || []); }
+function num(v) { var n = Number(v); return isFinite(n) ? n : 0; }
+var fmtE = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+function eur(n) { return fmtE.format(Math.round(n || 0)); }
+function nb(n) { return new Intl.NumberFormat('fr-FR').format(n); }
+function pct(x) { return Math.round(100 * x) + ' %'; }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function depOf(r) { return String(r.dep2 || r.code_departement || '').slice(0, 2); }
+function pl(n, s, p) { return n + ' ' + (n > 1 ? (p || s + 's') : s); }
+function lettres(n) { var m = ['zéro', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix']; return n <= 10 ? m[n] : nb(n); }
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+function parseISO(s) { if (!s) return null; var d = new Date(s); return isNaN(d) ? null : d; }
+var DAY = 86400000;
+
+function storageGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
+function storageSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+
+// ---------- rédaction ----------
+function redige() {
+  var recs = data.demandeurs.filter(function (r) { return edition === 'all' || depOf(r) === edition; });
+  var byNum = {}; data.dossiers.forEach(function (d) { byNum[String(d.dossier_number)] = d; });
+  var syncRow = data.sync[0] || {};
+  var syncAt = parseISO(syncRow.last_sync_at);
+  var now = syncAt || new Date();
+  var deps = Object.keys(recs.reduce(function (a, r) { a[depOf(r)] = 1; return a; }, {})).filter(Boolean).sort();
+
+  var total = recs.length;
+  var etats = {}, accordeTotal = 0, nbAccordes = 0, demande = 0;
+  var depots = [], acceptes7 = 0, depots24 = 0, depots7 = 0, doyen = null;
+  recs.forEach(function (r) {
+    var e = r.Etat_dossier || (r.Eligible === 'Non' ? 'Refus notifié' : 'Hors parcours');
+    etats[e] = (etats[e] || 0) + 1;
+    accordeTotal += num(r.Aide_accordee); if (num(r.Aide_accordee) > 0) nbAccordes++;
+    demande += num(r.Aide_demandee);
+    var d = byNum[String(r.dossier_number)];
+    var dd = d && parseISO(d.date_depot);
+    if (dd) {
+      depots.push(dd);
+      if (now - dd <= DAY) depots24++;
+      if (now - dd <= 7 * DAY) depots7++;
+      var clos = d.state === 'accepte' || d.state === 'refuse' || d.state === 'sans_suite' || e === 'Traitement terminé' || e === 'Refus notifié';
+      if (!clos && (!doyen || dd < doyen.date)) doyen = { date: dd, r: r };
+    }
+    var dt = d && parseISO(d.date_traitement);
+    if (dt && d.state === 'accepte' && now - dt <= 7 * DAY) acceptes7++;
+  });
+  var clos = (etats['Traitement terminé'] || 0) + (etats['Refus notifié'] || 0);
+
+  // Bouchon : la station (hors terminus) la plus chargée, avec son département en édition régionale.
+  var bouchon = null;
+  var parDep = {};
+  recs.forEach(function (r) {
+    var e = r.Etat_dossier; if (!e || CLOS[e]) return;
+    var k = e + '|' + depOf(r); parDep[k] = (parDep[k] || 0) + 1;
+  });
+  Object.keys(parDep).forEach(function (k) { if (!bouchon || parDep[k] > bouchon.n) bouchon = { n: parDep[k], etat: k.split('|')[0], dep: k.split('|')[1] }; });
+
+  // Consommation des enveloppes
+  var conso = deps.map(function (d) {
+    var envs = data.enveloppes.filter(function (e) { return String(e.dep) === d; });
+    var cap_ = envs.reduce(function (a, e) { return a + num(e.montant); }, 0);
+    var row = data.departements.filter(function (x) { return String(x.code_dep) === d; })[0];
+    if (!cap_ && row) cap_ = num(row.Enveloppe_globale);
+    var acc = data.demandeurs.filter(function (r) { return depOf(r) === d; }).reduce(function (a, r) { return a + num(r.Aide_accordee); }, 0);
+    return { dep: d, cap: cap_, acc: acc, taux: cap_ ? acc / cap_ : 0 };
+  }).sort(function (a, b) { return b.taux - a.taux; });
+
+  // Faits divers
+  var anomalies = {};
+  recs.forEach(function (r) { toList(r.Anomalie).forEach(function (a) { anomalies[a] = (anomalies[a] || 0) + 1; }); });
+  var ibans = {};
+  recs.forEach(function (r) { var i = String(r.IBAN || '').replace(/\s+/g, '').toUpperCase(); if (i.length >= 15 && /^[A-Z]{2}\d{2}/.test(i)) (ibans[i] = ibans[i] || []).push(r); });
+  var ibanPartages = Object.keys(ibans).filter(function (k) { return ibans[k].length > 1; });
+  var ribKo = recs.filter(function (r) { return r.Anomalie_RIB; }).length;
+  var associes = recs.filter(function (r) { return r.Verif_associes; }).length;
+  var liquid = recs.filter(function (r) { return r.Statut_BODACC === 'Liquidation judiciaire' || r.Statut_BODACC === 'Sauvegarde / RJ sans plan'; });
+
+  // --- candidats à la une, notés ---
+  var une = [];
+  conso.forEach(function (c) {
+    if (!c.cap) return;
+    var D = depInfo(c.dep);
+    if (c.taux >= 1) une.push({ s: 120, k: 'Budget', t: D.Le + ' a épuisé son enveloppe', l: eur(c.acc) + ' accordés pour une enveloppe de ' + eur(c.cap) + '. Les prochains dossiers devront attendre un complément de crédits ou une révision de l\'arrêté.' });
+    else if (c.taux >= 0.75) une.push({ s: 90 + c.taux * 10, k: 'Budget', t: D.Le + ' franchit ' + Math.floor(c.taux * 20) * 5 + ' % de son enveloppe', l: eur(c.acc) + ' déjà accordés sur ' + eur(c.cap) + '. Il reste ' + eur(c.cap - c.acc) + ' : le rythme des sélections va devoir s\'ajuster.' });
+    else if (c.taux >= 0.4) une.push({ s: 40 + c.taux * 20, k: 'Budget', t: D.Le + ' a engagé ' + pct(c.taux) + ' de son enveloppe', l: eur(c.acc) + ' accordés, ' + eur(c.cap - c.acc) + ' encore disponibles.' });
+  });
+  if (bouchon && bouchon.n >= 8) {
+    var Db = depInfo(bouchon.dep);
+    une.push({ s: 55 + bouchon.n, k: 'Instruction', t: '« ' + bouchon.etat + ' » : ' + pl(bouchon.n, 'dossier') + ' à l\'arrêt ' + Db.en,
+      l: 'C\'est l\'étape la plus encombrée du parcours. ' + (bouchon.etat.indexOf('MSA') >= 0 ? 'Les données de la MSA se font attendre.' : bouchon.etat.indexOf('banque') >= 0 ? 'Les retours bancaires sont le point de blocage.' : 'Un renfort ciblé débloquerait la file.') });
+  }
+  if (depots24 >= 5) une.push({ s: 60 + depots24, k: 'Dépôts', t: pl(depots24, 'nouveau dossier') + ' en 24 heures', l: 'La démarche continue d\'attirer les exploitants touchés par la canicule : ' + pl(depots7, 'dépôt') + ' sur les sept derniers jours.' });
+  if (acceptes7 >= 5) une.push({ s: 58 + acceptes7, k: 'Paiements', t: 'Semaine faste : ' + pl(acceptes7, 'aide accordée', 'aides accordées'), l: 'Les dossiers passent la ligne d\'arrivée : ' + pl(etats['Traitement terminé'] || 0, 'dossier') + ' désormais traités au total.' });
+  if (liquid.length) une.push({ s: 30 + 5 * liquid.length, k: 'Justice', t: pl(liquid.length, 'exploitation') + ' en procédure collective', l: 'Le BODACC signale ' + (liquid.length > 1 ? 'des procédures' : 'une procédure') + ' pour ' + liquid.slice(0, 3).map(function (r) { return r.raison_sociale; }).join(', ') + '. Vérification indispensable avant tout paiement.' });
+  if (ibanPartages.length) une.push({ s: 45 + 8 * ibanPartages.length, k: 'Contrôle', t: pl(ibanPartages.length, 'IBAN', 'IBAN') + ' pour plusieurs dossiers', l: 'Le même compte bancaire apparaît sur ' + ibanPartages.reduce(function (a, k) { return a + ibans[k].length; }, 0) + ' dossiers. Ce n\'est pas forcément une fraude (groupements, erreurs de saisie), mais il faut vérifier.' });
+  une.push({ s: 20, k: 'Instruction', t: pl(total - clos, 'dossier') + ' en cours d\'instruction', l: pl(total, 'dossier') + ' déposés, ' + pl(clos, 'dossier') + ' clos (' + pct(total ? clos / total : 0) + ').' });
+  une.sort(function (a, b) { return b.s - a.s; });
+  var alaune = une[0], secondaires = une.slice(1, 4);
+
+  // --- instantané pour « Depuis votre dernière lecture » ---
+  var snap = { at: Date.now(), total: total, clos: clos, accorde: accordeTotal, msa: etats['En attente des données MSA'] || 0, termine: etats['Traitement terminé'] || 0 };
+
+  return {
+    now: now, syncAt: syncAt, total: total, clos: clos, accordeTotal: accordeTotal, nbAccordes: nbAccordes, demande: demande,
+    depots: depots, deps: deps, conso: conso, anomalies: anomalies, ibanPartages: ibanPartages, ribKo: ribKo, associes: associes,
+    liquid: liquid, doyen: doyen, bouchon: bouchon, alaune: alaune, secondaires: secondaires, snap: snap, etats: etats, recs: recs
+  };
+}
+
+// ---------- mise en page ----------
+function meteoSVG(ratio) {
+  var sun = '<circle cx="18" cy="18" r="8" fill="var(--soleil)"/>' + [0, 45, 90, 135, 180, 225, 270, 315].map(function (a) {
+    var r = a * Math.PI / 180; return '<line x1="' + (18 + 11 * Math.cos(r)) + '" y1="' + (18 + 11 * Math.sin(r)) + '" x2="' + (18 + 15 * Math.cos(r)) + '" y2="' + (18 + 15 * Math.sin(r)) + '" stroke="var(--soleil)" stroke-width="2.5" stroke-linecap="round"/>';
+  }).join('');
+  var cloud = function (x, y, c) { return '<path d="M' + (x + 8) + ',' + (y + 16) + ' a7,7 0 0 1 2,-13 a9,9 0 0 1 17,2 a6,6 0 0 1 1,11 z" fill="' + c + '"/>'; };
+  var bolt = '<path d="M26,30 l-5,8 h4 l-3,7 l8,-10 h-4 l3,-5 z" fill="var(--soleil)"/>';
+  var inner = ratio >= 0.7 ? sun : ratio >= 0.45 ? sun + cloud(12, 14, 'var(--nuage)') : ratio >= 0.25 ? cloud(6, 6, 'var(--nuage)') + cloud(12, 14, 'var(--nuage)') : cloud(8, 8, 'var(--text-mention-grey)') + bolt;
+  var label = ratio >= 0.7 ? 'Grand soleil' : ratio >= 0.45 ? 'Éclaircies' : ratio >= 0.25 ? 'Nuageux' : 'Orageux';
+  return { svg: '<svg viewBox="0 0 44 44" aria-hidden="true">' + inner + '</svg>', label: label };
+}
+
+function spark(depots, now) {
+  var days = 42, W = 640, H = 110, counts = new Array(days).fill(0);
+  depots.forEach(function (d) { var i = days - 1 - Math.floor((now - d) / DAY); if (i >= 0 && i < days) counts[i]++; });
+  var max = Math.max.apply(null, counts.concat([1])), bw = W / days;
+  var bars = counts.map(function (c, i) {
+    var h = (H - 22) * c / max;
+    return '<rect x="' + (i * bw + 1).toFixed(1) + '" y="' + (H - 16 - h).toFixed(1) + '" width="' + (bw - 2).toFixed(1) + '" height="' + h.toFixed(1) + '"' + (i >= days - 7 ? ' class="hot"' : '') + '><title>' + c + ' dépôt(s)</title></rect>';
+  }).join('');
+  var d0 = new Date(now - (days - 1) * DAY).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+  return '<svg class="spark" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Dépôts par jour sur six semaines">' + bars +
+    '<text x="0" y="' + (H - 3) + '">' + d0 + '</text><text x="' + W + '" y="' + (H - 3) + '" text-anchor="end">Aujourd\'hui</text></svg>';
+}
+
+function render() {
+  var g = redige();
+  var key = 'gazette-ddtm-' + edition;
+  if (previous === null) previous = {};
+  if (!(key in previous)) { previous[key] = storageGet(key); storageSet(key, g.snap); }
+  var prev = previous[key];
+
+  var dateLong = cap(new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }));
+  var first = g.depots.length ? new Date(Math.min.apply(null, g.depots)) : new Date();
+  var numero = Math.max(1, Math.floor((Date.now() - first) / DAY) + 1);
+  var edTxt = edition === 'all' ? 'Édition régionale · Bretagne' : 'Édition ' + depInfo(edition).nom;
+  var syncTxt = g.syncAt ? 'Synchro Démarches Numériques du ' + g.syncAt.toLocaleDateString('fr-FR') + ' à ' + g.syncAt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : 'Synchro inconnue';
+
+  var meteo = (edition === 'all' ? g.deps : [edition]).map(function (d) {
+    var rs = data.demandeurs.filter(function (r) { return depOf(r) === d; });
+    var c = rs.filter(function (r) { return r.Etat_dossier === 'Traitement terminé' || (!r.Etat_dossier && r.Eligible === 'Non'); }).length;
+    var ratio = rs.length ? c / rs.length : 0, m = meteoSVG(ratio);
+    var co = g.conso.filter(function (x) { return x.dep === d; })[0];
+    return '<div class="dep">' + m.svg + '<div><div class="n">' + esc(depInfo(d).nom) + '</div><div class="s">' + m.label + ' · ' + pct(ratio) + ' clos' + (co && co.cap ? '<br>Enveloppe ' + pct(co.taux) : '') + '</div></div></div>';
+  }).join('');
+
+  var depuis = '';
+  if (prev && prev.at) {
+    var lignes = [
+      ['Dossiers déposés', g.snap.total - prev.total, true],
+      ['Dossiers traités', g.snap.termine - prev.termine, true],
+      ['Montant accordé', g.snap.accorde - prev.accorde, true, true],
+      ['En attente MSA', g.snap.msa - prev.msa, false]
+    ];
+    depuis = '<section class="depuis"><h2>Depuis votre dernière lecture</h2><p class="fr-text--xs fr-mb-1w">Le ' + new Date(prev.at).toLocaleDateString('fr-FR') + ' à ' + new Date(prev.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + '</p><ul>' +
+      lignes.map(function (l) {
+        var v = l[1], good = l[2] ? v > 0 : v < 0;
+        return '<li><span>' + l[0] + '</span><span class="' + (v === 0 ? '' : good ? 'up' : 'down') + '">' + (v > 0 ? '+' : v < 0 ? '−' : '') + (l[3] ? eur(Math.abs(v)) : nb(Math.abs(v))) + '</span></li>';
+      }).join('') + '</ul></section>';
+  }
+
+  var faits = [];
+  var anoKeys = Object.keys(g.anomalies).sort(function (a, b) { return g.anomalies[b] - g.anomalies[a]; });
+  anoKeys.slice(0, 4).forEach(function (a) { faits.push('<b>' + cap(lettres(g.anomalies[a])) + '</b> dossier' + (g.anomalies[a] > 1 ? 's' : '') + ' : ' + esc(/^.[a-zà-ÿ]/.test(a) ? a.charAt(0).toLowerCase() + a.slice(1) : a) + '.'); });
+  if (g.ibanPartages.length) faits.push('<b>' + cap(lettres(g.ibanPartages.length)) + '</b> IBAN utilisé' + (g.ibanPartages.length > 1 ? 's' : '') + ' par plusieurs dossiers.');
+  if (g.ribKo) faits.push('<b>' + cap(lettres(g.ribKo)) + '</b> RIB incomplet' + (g.ribKo > 1 ? 's' : '') + ' (titulaire, IBAN ou BIC manquant).');
+  if (g.associes) faits.push('<b>' + cap(lettres(g.associes)) + '</b> dossier' + (g.associes > 1 ? 's' : '') + ' partagent un associé de GAEC avec un autre dépôt.');
+  if (!faits.length) faits.push('Calme plat : aucune anomalie signalée.');
+
+  var breves = [];
+  if (g.doyen) {
+    var j = Math.floor((g.now - g.doyen.date) / DAY);
+    breves.push('<b>Le doyen</b> attend depuis ' + pl(j, 'jour') + ' : ' + esc(g.doyen.r.raison_sociale) + ' (DN ' + esc(g.doyen.r.dossier_number) + '), à l\'étape « ' + esc(g.doyen.r.Etat_dossier || '?') + ' ».');
+  }
+  breves.push('<b>' + eur(g.demande) + '</b> demandés au total, pour ' + eur(g.accordeTotal) + ' accordés à ce jour.');
+  var nbSel = g.recs.filter(function (r) { return r.Selectionne; }).length;
+  breves.push('<b>' + pl(nbSel, 'dossier sélectionné', 'dossiers sélectionnés') + '</b> pour paiement, dont ' + nb(g.etats["Accepter le dossier dans DN"] || 0) + ' à accepter dans Démarches Numériques.');
+  if (g.conso.length > 1) breves.push('<b>Classement des enveloppes :</b> ' + g.conso.map(function (c) { return esc(depInfo(c.dep).nom) + ' ' + pct(c.taux); }).join(' · ') + '.');
+
+  var annonce = g.bouchon
+    ? 'Station « ' + esc(g.bouchon.etat) + ' » ' + esc(depInfo(g.bouchon.dep).en) + ' cherche renforts motivés. ' + pl(g.bouchon.n, 'dossier') + ' vous attendent. Café fourni.'
+    : 'Instructeur disponible cherche dossier à instruire. Sérieux exigé.';
+
+  var moy = g.nbAccordes ? g.accordeTotal / g.nbAccordes : 0;
+
+  document.getElementById('journal').innerHTML =
+    '<header class="mast"><p class="fr-logo">République<br>Française</p><h1>La Gazette de la DDTM</h1>' +
+      '<div class="ear"><b>' + pct(g.total ? g.clos / g.total : 0) + '</b>des dossiers clos</div></header>' +
+    '<div class="dateline"><span>' + dateLong + '</span><span>' + esc(edTxt) + '</span><span>N° ' + numero + ' · Aide canicule 2026</span></div>' +
+    '<div class="front">' +
+      '<article><p class="kicker">' + esc(g.alaune.k) + '</p><h2 class="headline">' + esc(g.alaune.t) + '</h2><p class="lede">' + esc(g.alaune.l) + '</p>' +
+        '<figure>' + spark(g.depots, g.now) + '<figcaption>Dépôts de dossiers par jour sur six semaines. Les sept derniers jours sont en rouge. ' + esc(syncTxt) + '.</figcaption></figure></article>' +
+      '<div class="side">' +
+        '<section class="chiffre"><h2>Le chiffre du jour</h2><b>' + eur(g.accordeTotal) + '</b><p>accordés à ' + pl(g.nbAccordes, 'exploitation') + (moy ? ', soit ' + eur(moy) + ' en moyenne' : '') + '.</p></section>' +
+        '<section><h2>La météo des départements</h2><div class="meteo">' + meteo + '</div></section>' +
+        depuis +
+      '</div>' +
+    '</div>' +
+    '<div class="row3">' + g.secondaires.map(function (a) { return '<article><p class="kicker">' + esc(a.k) + '</p><h3>' + esc(a.t) + '</h3><p>' + esc(a.l) + '</p></article>'; }).join('') + '</div>' +
+    '<div class="bottom">' +
+      '<section class="rubrique"><h2>Faits divers</h2><ul>' + faits.map(function (f) { return '<li>' + f + '</li>'; }).join('') + '</ul></section>' +
+      '<section class="rubrique"><h2>En bref</h2><ul>' + breves.map(function (f) { return '<li>' + f + '</li>'; }).join('') + '</ul></section>' +
+      '<section class="rubrique"><h2>Petite annonce</h2><div class="annonce"><div class="t">Offre d\'emploi</div><p>' + annonce + '</p></div></section>' +
+    '</div>' +
+    '<p class="colophon">Gazette générée automatiquement à partir du document Grist · démarche 155804' + (IN_GRIST ? '' : ' · données fictives (démo)') + '. Diffusion interne.</p>';
+}
+
+function buildEditions() {
+  var deps = Object.keys(data.demandeurs.reduce(function (a, r) { a[depOf(r)] = 1; return a; }, {})).filter(Boolean).sort();
+  var box = document.getElementById('editions');
+  box.innerHTML = ['all'].concat(deps).map(function (d) {
+    return '<div class="fr-segmented__element"><input value="' + d + '" type="radio" id="e-' + d + '" name="ed"' + (d === edition ? ' checked' : '') + '>' +
+      '<label class="fr-label" for="e-' + d + '">' + (d === 'all' ? 'Régionale' : d) + '</label></div>';
+  }).join('');
+  box.querySelectorAll('input').forEach(function (i) { i.addEventListener('change', function () { edition = i.value; render(); }); });
+}
+
+document.getElementById('print').addEventListener('click', function () { window.print(); });
+
+function loadAll() {
+  return Promise.all(['Liste_Departement', 'Liste_enveloppes', 'Demarche_155804_dossiers', 'Sync_metadata'].map(function (t) {
+    return fetchRows(t).catch(function () { return null; });
+  })).then(function (res) {
+    var missing = [];
+    data.departements = res[0] || (missing.push('Liste_Departement'), []);
+    data.enveloppes = res[1] || (missing.push('Liste_enveloppes'), []);
+    data.dossiers = res[2] || (missing.push('Demarche_155804_dossiers'), []);
+    data.sync = res[3] || (missing.push('Sync_metadata'), []);
+    if (missing.length) document.getElementById('alert').innerHTML = '<div class="fr-alert fr-alert--warning fr-alert--sm msg"><p>Tables illisibles : ' + missing.join(', ') + '. Donnez l\'accès complet au widget pour une gazette complète.</p></div>';
+    buildEditions(); render();
+  });
+}
+
+if (IN_GRIST) {
+  grist.ready({ requiredAccess: 'full' });
+  var first = true;
+  grist.onRecords(function (recs) {
+    data.demandeurs = recs || [];
+    if (first) { first = false; loadAll(); } else { render(); }
+  }, { includeColumns: 'normal' });
+} else {
+  var s = document.createElement('script'); s.src = 'demo-data.js';
+  s.onload = function () { data.demandeurs = DemoData.tables.Demarche_155804_demandeurs; loadAll(); };
+  document.head.appendChild(s);
+}
+</script>
+</body>
+</html>

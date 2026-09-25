@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan de métro de l'instruction</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/dsfr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/utility/icons/icons.min.css">
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<style>
+  :root {
+    --rouge: #E1000F;
+    --l22: #E4794A; --l29: #465F9D; --l35: #00A95F; --l56: #A558A0;
+    --lx1: #C8AA39; --lx2: #009081; --lx3: #E18B76;
+  }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--background-default-grey); color: var(--text-default-grey); }
+  .app { display: flex; flex-direction: column; height: 100vh; min-height: 420px; }
+
+  .topbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.25rem;
+    padding: .75rem 1rem; border-bottom: 1px solid var(--border-default-grey);
+    background: var(--background-alt-grey);
+  }
+  .topbar h1 { margin: 0; font-size: 1.125rem; line-height: 1.5rem; display: flex; align-items: center; gap: .5rem; }
+  .topbar h1 .ratp {
+    display: inline-grid; place-items: center; width: 1.75rem; height: 1.75rem; border-radius: 50%;
+    background: var(--background-action-high-blue-france); color: var(--text-inverted-blue-france); font-size: .9rem; font-weight: 800;
+  }
+  .topbar .spacer { flex: 1; }
+  .fr-segmented { margin: 0; }
+  .fr-segmented__legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+  .body { flex: 1; display: flex; min-height: 0; }
+  .map-wrap { flex: 1; overflow: auto; position: relative; min-width: 0; }
+  svg#plan { display: block; width: 100%; min-width: 760px; height: auto; }
+
+  aside.panel {
+    width: 320px; flex: 0 0 320px; border-left: 1px solid var(--border-default-grey);
+    display: flex; flex-direction: column; min-height: 0; background: var(--background-default-grey);
+  }
+  .panel-head { padding: 1rem; border-bottom: 1px solid var(--border-default-grey); }
+  .panel-head h2 { font-size: 1rem; margin: 0 0 .25rem; }
+  .panel-head p { margin: 0; font-size: .8125rem; color: var(--text-mention-grey); }
+  .panel-list { flex: 1; overflow: auto; margin: 0; padding: 0; list-style: none; }
+  .panel-list li { border-bottom: 1px solid var(--border-default-grey); padding: 0; }
+  .panel-list button {
+    all: unset; box-sizing: border-box; display: block; width: 100%; padding: .6rem 1rem; cursor: pointer; font-size: .8125rem;
+  }
+  .panel-list button:hover, .panel-list button:focus-visible { background: var(--background-default-grey-hover); outline: 2px solid transparent; }
+  .panel-list button:focus-visible { box-shadow: inset 0 0 0 2px var(--border-active-blue-france); }
+  .panel-list .rs { font-weight: 700; color: var(--text-title-grey); display: block; }
+  .panel-list .meta { color: var(--text-mention-grey); display: flex; justify-content: space-between; gap: .5rem; }
+  .panel-empty { padding: 1.5rem 1rem; color: var(--text-mention-grey); font-size: .875rem; }
+  .panel-empty .fr-icon-train-line::before { --icon-size: 2.5rem; display: block; margin-bottom: .5rem; color: var(--text-action-high-blue-france); }
+
+  @media (max-width: 900px) {
+    .body { flex-direction: column; }
+    aside.panel { width: auto; flex: 0 0 38%; border-left: none; border-top: 1px solid var(--border-default-grey); }
+  }
+
+  /* --- plan SVG --- */
+  .col-label { font-size: 12.5px; font-weight: 700; fill: var(--text-title-grey); }
+  .col-label.refus { fill: var(--text-default-error); }
+  .col-guide { stroke: var(--border-default-grey); stroke-dasharray: 2 5; }
+  .track { fill: none; stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; }
+  .track-flow { fill: none; stroke-width: 3; stroke: #fff; stroke-dasharray: 2 26; stroke-linecap: round; opacity: .55; animation: flow var(--flow, 6s) linear infinite; }
+  @keyframes flow { to { stroke-dashoffset: -280; } }
+  .line-dim { opacity: .12; }
+  .crowd { opacity: .22; transition: opacity .2s; }
+  .station { cursor: pointer; }
+  .station .dot { fill: var(--background-default-grey); stroke-width: 4; }
+  .station:hover .crowd, .station:focus .crowd { opacity: .4; }
+  .station:focus { outline: none; }
+  .station:focus .dot { stroke: var(--border-active-blue-france) !important; }
+  .station.selected .dot { stroke: var(--text-title-grey) !important; stroke-width: 5; }
+  .count { font-size: 12px; font-weight: 700; fill: var(--text-title-grey); pointer-events: none; }
+  .count.zero { fill: var(--text-disabled-grey); font-weight: 400; }
+  .terminus .dot { stroke-width: 6; }
+  .alarm { fill: none; stroke: var(--rouge); stroke-width: 3; transform-box: fill-box; transform-origin: center; animation: pulse 1.6s ease-out infinite; pointer-events: none; }
+  @keyframes pulse { 0% { transform: scale(.9); opacity: .9; } 100% { transform: scale(1.7); opacity: 0; } }
+  .badge-line text { font-weight: 800; font-size: 15px; fill: #fff; }
+  .line-name { font-size: 12px; fill: var(--text-mention-grey); }
+  .train { transition: transform .2s; }
+  @media (prefers-reduced-motion: reduce) { .track-flow, .alarm, .train animateMotion { animation: none; } }
+
+  .tip {
+    position: fixed; z-index: 10; pointer-events: none; max-width: 260px;
+    background: var(--background-overlap-grey); color: var(--text-default-grey);
+    border: 1px solid var(--border-default-grey); box-shadow: 0 6px 18px rgba(0,0,18,.16);
+    padding: .5rem .75rem; font-size: .8125rem; line-height: 1.3; display: none;
+  }
+  .tip b { color: var(--text-title-grey); }
+  .footer-note { padding: .4rem 1rem; font-size: .75rem; color: var(--text-mention-grey); border-top: 1px solid var(--border-default-grey); }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <h1><span class="ratp" aria-hidden="true">M</span> Plan de métro de l'instruction</h1>
+    <p class="fr-badge fr-badge--sm fr-badge--info fr-badge--no-icon" id="total" style="margin:0">…</p>
+    <div class="spacer"></div>
+    <fieldset class="fr-segmented fr-segmented--sm" id="focus-wrap">
+      <legend class="fr-segmented__legend">Ligne affichée</legend>
+      <div class="fr-segmented__elements" id="focus"></div>
+    </fieldset>
+  </div>
+  <div class="body">
+    <div class="map-wrap"><svg id="plan" role="img" aria-label="Plan des étapes d'instruction par département"></svg></div>
+    <aside class="panel" aria-live="polite">
+      <div class="panel-head"><h2 id="p-title">Choisissez une station</h2><p id="p-sub">Cliquez sur une station pour voir les dossiers qui y attendent.</p></div>
+      <div class="panel-empty" id="p-empty"><span class="fr-icon-train-line" aria-hidden="true"></span>La taille du halo autour d'une station indique le nombre de dossiers qui y attendent. Un anneau rouge qui pulse signale un bouchon.</div>
+      <ul class="panel-list" id="p-list" hidden></ul>
+    </aside>
+  </div>
+  <div class="footer-note" id="note"></div>
+</div>
+<div class="tip" id="tip"></div>
+
+<script>
+'use strict';
+var IN_GRIST = window.self !== window.top && !/[?&]demo=1/.test(location.search);
+try { if (matchMedia('(prefers-color-scheme: dark)').matches) document.documentElement.setAttribute('data-fr-theme', 'dark'); } catch (e) {}
+
+// Parcours tel que codé dans la formule Etat_dossier de Demarche_155804_demandeurs.
+var STATIONS = [
+  { key: 'En attente des données MSA', label: 'Attente MSA' },
+  { key: 'Éligibilité à instruire', label: 'Éligibilité' },
+  { key: 'Passer le dossier en instruction dans DN', label: 'Passage en instruction' },
+  { key: 'Priorité à instruire', label: 'Priorité' },
+  { key: 'Retour banque à renseigner', label: 'Retour banque' },
+  { key: 'En attente de sélection pour paiement', label: 'Sélection paiement' },
+  { key: 'Enveloppe à renseigner', label: 'Enveloppe' },
+  { key: 'Données de paiement à rechercher', label: 'Données Chorus' },
+  { key: "Montant de l'aide à renseigner", label: 'Montant' },
+  { key: 'Accepter le dossier dans DN', label: 'Acceptation DN' },
+  { key: 'Traitement terminé', label: 'Terminé', terminus: true }
+];
+var BRANCHE = [
+  { key: 'Motivation de refus à indiquer', label: 'Motif de refus' },
+  { key: "Signaler le refus à l'usager sur la DN", label: 'Refus à notifier' },
+  { key: '__refus', label: 'Refus notifié', terminus: true }
+];
+var DEP_NOMS = { '22': "Côtes-d'Armor", '29': 'Finistère', '35': 'Ille-et-Vilaine', '56': 'Morbihan' };
+var FALLBACK = ['var(--lx1)', 'var(--lx2)', 'var(--lx3)'];
+
+var records = [];
+var focusDep = 'all';
+var selected = null; // {dep, key}
+
+function lineColor(dep, i) { return DEP_NOMS[dep] ? 'var(--l' + dep + ')' : FALLBACK[i % FALLBACK.length]; }
+function depOf(r) { return String(r.dep2 || r.code_departement || '??').slice(0, 2); }
+function stationOf(r) {
+  var e = r.Etat_dossier;
+  if (!e) return r.Eligible === 'Non' ? '__refus' : '__hors';
+  for (var i = 0; i < STATIONS.length; i++) if (STATIONS[i].key === e) return e;
+  for (var j = 0; j < BRANCHE.length; j++) if (BRANCHE[j].key === e) return e;
+  return '__hors';
+}
+function parseDepot(s) {
+  // "dd/mm/yyyy HHh" (colonne Date_depot_FR)
+  var m = /^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{1,2}))?/.exec(s || '');
+  return m ? new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0)).getTime() : Infinity;
+}
+function joursDepuis(t) { return isFinite(t) ? Math.floor((Date.now() - t) / 86400000) : null; }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+function group() {
+  var byDep = {};
+  records.forEach(function (r) {
+    var d = depOf(r), s = stationOf(r);
+    byDep[d] = byDep[d] || { total: 0, st: {} };
+    byDep[d].total++;
+    (byDep[d].st[s] = byDep[d].st[s] || []).push(r);
+  });
+  return byDep;
+}
+
+var NS = 'http://www.w3.org/2000/svg';
+function el(name, attrs, parent) {
+  var n = document.createElementNS(NS, name);
+  for (var k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+
+function render() {
+  var byDep = group();
+  var deps = Object.keys(byDep).sort();
+  renderFocus(deps);
+
+  var svg = document.getElementById('plan');
+  svg.innerHTML = '';
+  var X0 = 205, DX = 96, TOP = 128, ROW = 138;
+  var W = X0 + DX * (STATIONS.length - 1) + 80;
+  var H = TOP + ROW * Math.max(deps.length, 1) + 10;
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+
+  // En-têtes de stations (inclinés, façon plan de métro)
+  STATIONS.forEach(function (s, i) {
+    var x = X0 + i * DX;
+    el('line', { x1: x, x2: x, y1: TOP - 30, y2: H - 10, class: 'col-guide' }, svg);
+    var t = el('text', { x: x, y: TOP - 38, class: 'col-label', transform: 'rotate(-32 ' + x + ' ' + (TOP - 38) + ')' }, svg);
+    t.textContent = s.label;
+  });
+
+  var maxCount = 1;
+  deps.forEach(function (d) { for (var k in byDep[d].st) if (k !== 'Traitement terminé' && k !== '__refus') maxCount = Math.max(maxCount, byDep[d].st[k].length); });
+  var rScale = function (n) { return n ? 9 + 30 * Math.sqrt(n / maxCount) : 0; };
+
+  var enCours = 0, hors = 0;
+  deps.forEach(function (d, li) {
+    var y = TOP + li * ROW + 34;
+    var color = lineColor(d, li);
+    var info = byDep[d];
+    var g = el('g', { class: focusDep !== 'all' && focusDep !== d ? 'line-dim' : '' }, svg);
+
+    // Badge de ligne
+    var b = el('g', { class: 'badge-line' }, g);
+    el('circle', { cx: 34, cy: y, r: 19, fill: color }, b);
+    var bt = el('text', { x: 34, y: y + 5, 'text-anchor': 'middle' }, b); bt.textContent = d;
+    var ln = el('text', { x: 60, y: y - 12, class: 'line-name' }, g); ln.textContent = DEP_NOMS[d] || 'Département ' + d;
+    var ln2 = el('text', { x: 60, y: y + 22, class: 'line-name' }, g);
+    var done = (info.st['Traitement terminé'] || []).length + (info.st['__refus'] || []).length;
+    ln2.textContent = info.total + ' DN · ' + Math.round(100 * done / info.total) + ' % clos';
+
+    // Voie principale + embranchement refus (après la station Éligibilité)
+    var xEnd = X0 + (STATIONS.length - 1) * DX;
+    var yB = y + 62;
+    var xB0 = X0 + DX, xB = function (k) { return X0 + (k + 2) * DX; };
+    var branch = 'M' + xB0 + ',' + y + ' C' + (xB0 + 40) + ',' + y + ' ' + (xB(0) - 50) + ',' + yB + ' ' + xB(0) + ',' + yB + ' L' + xB(BRANCHE.length - 1) + ',' + yB;
+    el('path', { d: branch, class: 'track', stroke: color, opacity: .55, 'stroke-dasharray': '1 0' }, g);
+    el('path', { d: 'M' + X0 + ',' + y + ' L' + xEnd + ',' + y, class: 'track', stroke: color }, g);
+    var flow = el('path', { d: 'M' + X0 + ',' + y + ' L' + xEnd + ',' + y, class: 'track-flow' }, g);
+    // Plus la ligne est avancée, plus le flux « roule » vite.
+    flow.style.setProperty('--flow', (14 - 11 * done / info.total).toFixed(1) + 's');
+
+    var enCoursLigne = info.total - done;
+    var seuilBouchon = Math.max(5, enCoursLigne * 0.25);
+    enCours += enCoursLigne;
+    hors += (info.st['__hors'] || []).length;
+
+    function station(def, x, sy) {
+      var list = info.st[def.key] || [];
+      var n = list.length;
+      var sg = el('g', { class: 'station' + (def.terminus ? ' terminus' : '') + (selected && selected.dep === d && selected.key === def.key ? ' selected' : ''), tabindex: 0, role: 'button', 'aria-label': (DEP_NOMS[d] || d) + ', ' + def.label + ' : ' + n + ' dossier' + (n > 1 ? 's' : '') }, g);
+      var rr = rScale(Math.min(n, maxCount));
+      if (n) el('circle', { cx: x, cy: sy, r: rr, fill: color, class: 'crowd' }, sg);
+      if (n >= seuilBouchon && !def.terminus) el('circle', { cx: x, cy: sy, r: rr, class: 'alarm' }, sg);
+      el('circle', { cx: x, cy: sy, r: def.terminus ? 11 : 8, class: 'dot', stroke: color }, sg);
+      var c = el('text', { x: x, y: sy + (def.terminus ? 30 : 26), 'text-anchor': 'middle', class: 'count' + (n ? '' : ' zero') }, sg);
+      c.textContent = n;
+      sg.addEventListener('click', function () { choose(d, def, list); });
+      sg.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(d, def, list); } });
+      sg.addEventListener('mousemove', function (e) { showTip(e, d, def, list); });
+      sg.addEventListener('mouseleave', hideTip);
+    }
+    BRANCHE.forEach(function (s, k) { station(s, xB(k), yB); });
+    STATIONS.forEach(function (s, i) { station(s, X0 + i * DX, y); });
+
+    if (li === 0) {
+      BRANCHE.forEach(function (s, k) {
+        var tl = el('text', { x: xB(k), y: yB + 44, 'text-anchor': 'middle', class: 'col-label refus' }, g);
+        tl.textContent = s.label;
+      });
+    }
+  });
+
+  document.getElementById('total').textContent = records.length + ' dossiers · ' + enCours + ' en cours';
+  document.getElementById('note').textContent = (hors ? hors + ' dossier(s) hors parcours (Etat_dossier vide ou inconnu) · ' : '') +
+    (IN_GRIST ? 'Données : table liée au widget' : 'Mode démo : données fictives');
+}
+
+function renderFocus(deps) {
+  var box = document.getElementById('focus');
+  var opts = ['all'].concat(deps);
+  box.innerHTML = opts.map(function (d) {
+    var id = 'f-' + d;
+    return '<div class="fr-segmented__element"><input value="' + d + '" type="radio" id="' + id + '" name="focus"' + (focusDep === d ? ' checked' : '') + '>' +
+      '<label class="fr-label" for="' + id + '">' + (d === 'all' ? 'Toutes' : d) + '</label></div>';
+  }).join('');
+  box.querySelectorAll('input').forEach(function (i) { i.addEventListener('change', function () { focusDep = i.value; render(); }); });
+}
+
+function stats(list) {
+  var ts = list.map(function (r) { return parseDepot(r.Date_depot_FR); }).filter(isFinite);
+  var oldest = ts.length ? Math.min.apply(null, ts) : Infinity;
+  return { oldest: joursDepuis(oldest) };
+}
+
+function showTip(e, d, def, list) {
+  var tip = document.getElementById('tip');
+  var s = stats(list);
+  tip.innerHTML = '<b>' + esc(def.label) + '</b> · ligne ' + esc(d) + '<br>' + list.length + ' dossier' + (list.length > 1 ? 's' : '') +
+    (s.oldest != null ? '<br>Le plus ancien attend depuis ' + s.oldest + ' j' : '');
+  tip.style.display = 'block';
+  var x = Math.min(e.clientX + 14, window.innerWidth - tip.offsetWidth - 8);
+  tip.style.left = x + 'px'; tip.style.top = (e.clientY + 14) + 'px';
+}
+function hideTip() { document.getElementById('tip').style.display = 'none'; }
+
+function choose(d, def, list) {
+  selected = { dep: d, key: def.key };
+  var sorted = list.slice().sort(function (a, b) { return parseDepot(a.Date_depot_FR) - parseDepot(b.Date_depot_FR); });
+  document.getElementById('p-title').textContent = def.label + ' — ' + (DEP_NOMS[d] || d);
+  document.getElementById('p-sub').textContent = list.length + ' dossier' + (list.length > 1 ? 's' : '') + ', du plus ancien au plus récent';
+  document.getElementById('p-empty').hidden = true;
+  var ul = document.getElementById('p-list');
+  ul.hidden = false;
+  ul.innerHTML = sorted.map(function (r) {
+    var j = joursDepuis(parseDepot(r.Date_depot_FR));
+    return '<li><button type="button" data-id="' + r.id + '"><span class="rs">' + esc(r.raison_sociale || '(sans raison sociale)') + '</span>' +
+      '<span class="meta"><span>DN ' + esc(r.dossier_number) + '</span><span>' + (j != null ? j + ' j' : '') + '</span></span></button></li>';
+  }).join('') || '<li class="panel-empty">Station vide 🎉</li>';
+  ul.querySelectorAll('button').forEach(function (b) {
+    b.addEventListener('click', function () { if (IN_GRIST) grist.setCursorPos({ rowId: +b.dataset.id }).catch(function () {}); });
+  });
+  if (IN_GRIST && grist.setSelectedRows) grist.setSelectedRows(list.map(function (r) { return r.id; })).catch(function () {});
+  render();
+}
+
+function loadDemo() {
+  return new Promise(function (ok, ko) {
+    var s = document.createElement('script'); s.src = 'demo-data.js'; s.onload = ok; s.onerror = ko; document.head.appendChild(s);
+  });
+}
+
+if (IN_GRIST) {
+  grist.ready({ requiredAccess: 'read table', allowSelectBy: true });
+  grist.onRecords(function (recs) { records = recs || []; render(); }, { includeColumns: 'normal' });
+} else {
+  loadDemo().then(function () { records = DemoData.tables.Demarche_155804_demandeurs; render(); })
+    .catch(function () { document.getElementById('note').textContent = 'Impossible de charger demo-data.js'; });
+}
+</script>
+</body>
+</html>

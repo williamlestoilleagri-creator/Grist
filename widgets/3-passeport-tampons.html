@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Passeport de contrôle</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/dsfr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/utility/icons/icons.min.css">
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<style>
+  :root {
+    --ok: #18753C; --ko: #CE0500; --warn: #B34000; --wait: #6A6A6A;
+    --papier: #F7F4EC; --papier-2: #EFEADC; --encre-bleue: #1F3A93; --couverture: #000091;
+  }
+  [data-fr-theme=dark] { --papier: #2A2A33; --papier-2: #24242C; --encre-bleue: #9DB1F5; --ok: #3FBF73; --ko: #FF6B6B; --warn: #FF9F5A; --wait: #9A9A9A; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--background-alt-grey); color: var(--text-default-grey); }
+  .app { min-height: 100vh; display: flex; flex-direction: column; }
+  .topbar { display: flex; align-items: center; gap: .75rem; padding: .6rem 1rem; border-bottom: 1px solid var(--border-default-grey); background: var(--background-default-grey); flex-wrap: wrap; }
+  .topbar h1 { font-size: 1.125rem; margin: 0; display: flex; gap: .5rem; align-items: center; }
+  .topbar .spacer { flex: 1; }
+  .topbar .fr-btn { margin: 0; }
+  .desk { flex: 1; display: flex; align-items: flex-start; justify-content: center; padding: 1.25rem 1rem 2rem; overflow: auto; }
+
+  .book {
+    display: grid; grid-template-columns: 1fr 1fr; width: 100%; max-width: 1080px; position: relative;
+    background: var(--couverture); padding: 10px; border-radius: 14px;
+    box-shadow: 0 18px 40px -18px rgba(0,0,40,.55), 0 2px 0 rgba(0,0,0,.15);
+  }
+  .book.shake { animation: shake .18s ease-out; }
+  @keyframes shake { 30% { transform: translate(1px, 2px); } 60% { transform: translate(-1px, -1px); } }
+  .page {
+    position: relative; background: var(--papier); min-height: 560px; padding: 1.5rem 1.5rem 1.25rem; overflow: hidden;
+    background-image:
+      repeating-radial-gradient(circle at 20% 110%, transparent 0 14px, color-mix(in srgb, var(--couverture) 5%, transparent) 14px 15px),
+      repeating-linear-gradient(115deg, transparent 0 22px, color-mix(in srgb, var(--couverture) 3%, transparent) 22px 23px);
+  }
+  .page.left { border-radius: 8px 2px 2px 8px; box-shadow: inset -18px 0 22px -18px rgba(0,0,0,.35); }
+  .page.right { border-radius: 2px 8px 8px 2px; box-shadow: inset 18px 0 22px -18px rgba(0,0,0,.35); }
+  @media (max-width: 820px) {
+    .book { grid-template-columns: 1fr; }
+    .page.left, .page.right { border-radius: 8px; box-shadow: none; }
+    .page.right { margin-top: 10px; }
+  }
+
+  .pp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+  .pp-head .fr-logo { font-size: .7875rem; }
+  .pp-title { text-align: right; font-size: .75rem; letter-spacing: .12em; text-transform: uppercase; color: var(--text-mention-grey); line-height: 1.4; }
+  .pp-title b { display: block; color: var(--text-title-blue-france); font-size: .95rem; letter-spacing: .08em; }
+  .ident { display: grid; grid-template-columns: 110px 1fr; gap: 1rem; }
+  .photo {
+    width: 110px; height: 136px; display: grid; place-items: center; background: var(--papier-2);
+    border: 1px solid var(--border-default-grey); position: relative; overflow: hidden;
+  }
+  .photo span::before { --icon-size: 3.5rem; color: var(--text-title-blue-france); }
+  .photo .mono { position: absolute; bottom: 4px; left: 0; right: 0; text-align: center; font-size: .65rem; letter-spacing: .1em; color: var(--text-mention-grey); }
+  dl.fields { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: .55rem 1rem; }
+  dl.fields div.wide { grid-column: 1 / -1; }
+  dl.fields dt { font-size: .625rem; text-transform: uppercase; letter-spacing: .1em; color: var(--text-mention-grey); }
+  dl.fields dd { margin: 0; padding: 0; font-weight: 700; color: var(--text-title-grey); font-size: .875rem; line-height: 1.3; word-break: break-word; }
+  dl.fields dd.big { font-size: 1.05rem; }
+  @media (max-width: 560px) {
+    .ident { grid-template-columns: 1fr; }
+    .photo { width: 100%; height: 72px; }
+    .page { padding: 1rem; }
+  }
+  .mrz {
+    position: absolute; left: 1.5rem; right: 1.5rem; bottom: 1rem; font-family: 'Courier New', ui-monospace, monospace;
+    font-size: clamp(.62rem, 1.35vw, .9rem); letter-spacing: .08em; color: var(--text-title-grey); line-height: 1.5;
+    white-space: pre; overflow: hidden; border-top: 1px dashed var(--border-default-grey); padding-top: .5rem;
+  }
+  .notes { margin-top: 1.25rem; padding-bottom: 4.5rem; }
+  .notes h3 { font-size: .625rem; text-transform: uppercase; letter-spacing: .1em; color: var(--text-mention-grey); margin: 0 0 .35rem; }
+  .notes ul { margin: 0; padding: 0; list-style: none; }
+  .notes li { font-family: 'Spectral', Georgia, serif; color: var(--encre-bleue); font-size: 1rem; transform: rotate(-1deg); margin-bottom: .1rem; }
+  .notes li::before { content: '✎ '; }
+
+  .right h2 { font-size: .75rem; letter-spacing: .14em; text-transform: uppercase; color: var(--text-mention-grey); margin: 0 0 .5rem; font-weight: 700; text-align: center; }
+  .stamps { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: .25rem; }
+  .stamp { all: unset; cursor: pointer; display: block; aspect-ratio: 1; position: relative; }
+  .stamp svg { width: 100%; height: 100%; overflow: visible; }
+  .stamp:focus-visible { outline: 2px solid var(--border-active-blue-france); outline-offset: 2px; }
+  .stamp .hit { opacity: 0; animation: tchac .38s cubic-bezier(.2,.9,.3,1.3) forwards; }
+  @keyframes tchac { 0% { opacity: 0; transform: scale(1.9); } 60% { opacity: 1; transform: scale(.94); } 100% { opacity: 1; transform: scale(1); } }
+  .stamp:hover .ink { filter: url(#grain) brightness(1.1); }
+  .visa { position: absolute; inset: 0; pointer-events: none; display: grid; place-items: center; }
+  .visa svg { width: 88%; overflow: visible; }
+  .visa .hit { opacity: 0; animation: tchac .5s cubic-bezier(.2,.9,.3,1.3) forwards; }
+  @media (prefers-reduced-motion: reduce) { .stamp .hit, .visa .hit { animation: none; opacity: 1; } .book.shake { animation: none; } }
+  .legend { display: flex; flex-wrap: wrap; justify-content: center; gap: .25rem .75rem; font-size: .75rem; margin-top: .75rem; color: var(--text-mention-grey); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
+
+  .cover { width: min(420px, 100%); aspect-ratio: .7; background: var(--couverture); color: #fff; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 1rem; padding: 2rem; box-shadow: 0 18px 40px -18px rgba(0,0,40,.55); }
+  .cover .t { letter-spacing: .2em; font-size: .85rem; text-transform: uppercase; opacity: .85; }
+  .cover .T { font-size: 1.6rem; font-weight: 800; letter-spacing: .1em; }
+  .cover .emblem { width: 90px; height: 90px; border: 2px solid rgba(255,255,255,.7); border-radius: 50%; display: grid; place-items: center; }
+  .cover .emblem span::before { --icon-size: 2.75rem; }
+
+  dialog { border: 1px solid var(--border-default-grey); padding: 0; max-width: 560px; width: calc(100% - 32px); background: var(--background-overlap-grey); color: var(--text-default-grey); }
+  dialog::backdrop { background: rgba(22,22,22,.64); }
+  dialog .inner { padding: 1.5rem; }
+  dialog h2 { font-size: 1.25rem; margin-bottom: .5rem; }
+  dialog table { width: 100%; border-collapse: collapse; font-size: .875rem; margin: .75rem 0 1rem; }
+  dialog th, dialog td { text-align: left; padding: .35rem .5rem; border-bottom: 1px solid var(--border-default-grey); vertical-align: top; }
+  dialog th { width: 45%; font-weight: 400; color: var(--text-mention-grey); }
+  dialog td { font-weight: 700; white-space: pre-line; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- Grain d'encre : bords irréguliers et trous dans l'aplat -->
+    <filter id="grain" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="4" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.1 1.45" result="holes"/>
+      <feComposite in="SourceGraphic" in2="holes" operator="in" result="ink"/>
+      <feTurbulence type="turbulence" baseFrequency=".04" numOctaves="2" seed="9" result="w"/>
+      <feDisplacementMap in="ink" in2="w" scale="3"/>
+    </filter>
+  </defs>
+</svg>
+<div class="app">
+  <div class="topbar">
+    <h1><span class="fr-icon-survey-line" aria-hidden="true"></span> Passeport de contrôle</h1>
+    <p class="fr-badge fr-badge--sm fr-badge--no-icon" id="pos" style="margin:0"></p>
+    <div class="spacer"></div>
+    <button class="fr-btn fr-btn--sm fr-btn--tertiary fr-icon-arrow-left-s-line fr-btn--icon-left" id="prev" type="button">Précédent</button>
+    <button class="fr-btn fr-btn--sm fr-btn--tertiary fr-icon-arrow-right-s-line fr-btn--icon-right" id="next" type="button">Suivant</button>
+  </div>
+  <div class="desk" id="desk"></div>
+</div>
+
+<dialog id="dlg" aria-labelledby="dlg-t">
+  <div class="inner">
+    <h2 id="dlg-t"></h2>
+    <p id="dlg-s" class="fr-text--sm fr-mb-0"></p>
+    <table id="dlg-tb"></table>
+    <button class="fr-btn fr-btn--secondary" type="button" id="dlg-c">Fermer</button>
+  </div>
+</dialog>
+
+<script>
+'use strict';
+var IN_GRIST = window.self !== window.top && !/[?&]demo=1/.test(location.search);
+try { if (matchMedia('(prefers-color-scheme: dark)').matches) document.documentElement.setAttribute('data-fr-theme', 'dark'); } catch (e) {}
+
+var rows = [], current = null;
+
+// ---------- utilitaires ----------
+function toList(v) { if (Array.isArray(v)) return v[0] === 'L' ? v.slice(1) : v; return v == null || v === '' ? [] : [v]; }
+function toDate(v) {
+  if (!v) return null;
+  if (v instanceof Date) return v;
+  if (Array.isArray(v)) return toDate(v[1]);
+  if (typeof v === 'number') return new Date(v * 1000);
+  var d = new Date(v); return isNaN(d) ? null : d;
+}
+function fdate(v) { var d = toDate(v); return d ? d.toLocaleDateString('fr-FR') : '—'; }
+function num(v) { var n = Number(v); return isFinite(n) ? n : 0; }
+var fmt = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+function eur(n) { return fmt.format(Math.round(n || 0)); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function val(v) { return v == null || v === '' ? '—' : (v === true ? 'Oui' : v === false ? 'Non' : Array.isArray(v) ? toList(v).join('\n') || '—' : String(v)); }
+function hash(s) { var h = 2166136261; s = String(s); for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+function seeded(seed) { return function () { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }; }
+
+// ---------- règles de contrôle (une par tampon) ----------
+function controles(r) {
+  var anomalies = toList(r.Anomalie);
+  var out = [];
+
+  var actif = String(r.etat_administratif || '').toLowerCase() === 'actif';
+  var agri = String(r.naf || '').slice(0, 2) === '01';
+  out.push({
+    key: 'sirene', titre: 'SIRENE', forme: 'circle',
+    statut: !r.etat_administratif ? 'wait' : !actif ? 'ko' : !agri || r.Hors_NAF ? 'warn' : 'ok',
+    detail: !actif && r.etat_administratif ? 'Entreprise ' + String(r.etat_administratif).toLowerCase() : (r.naf || ''),
+    regle: 'Vert si l\'établissement est actif avec un code NAF agricole (01.xx) éligible dans le département.',
+    champs: [['État administratif', r.etat_administratif], ['Code NAF', r.naf], ['Libellé NAF', r.libelle_naf], ['NAF hors paramétrage', r.Hors_NAF], ['Date de création', fdate(r.date_creation)]]
+  });
+
+  var pDN = r.PACAGE_DN, pIS = r.PACAGE_via_SIRET;
+  var pacKo = anomalies.some(function (a) { return /PACAGE/.test(a); });
+  out.push({
+    key: 'pac', titre: 'ISIS · PAC', forme: 'rect',
+    statut: !pDN && !pIS ? 'wait' : pacKo || (pDN && pIS && pDN !== pIS) ? 'ko' : 'ok',
+    detail: pDN || pIS || 'Aucun PACAGE',
+    regle: 'Vert si le PACAGE déclaré dans la DN correspond à celui trouvé dans ISIS via le SIRET.',
+    champs: [['PACAGE (DN)', pDN], ['PACAGE (ISIS via SIRET)', pIS], ['SIRET si PACAGE différents', r.Siret_si_PACAGE_differents], ['Libellé PAC', r.Libelle_PAC_via_PACAGE], ['SAU totale (ha)', r.SAUtot], ['Anomalies PACAGE', anomalies.filter(function (a) { return /PACAGE/.test(a); }).join('\n')]]
+  });
+
+  var nc = 'Pas de correspondance';
+  var sralKo = (r.ADM_Ruminants !== nc && r.ADM_Ruminants != null && !!r.ADM_Ruminants !== !!r.Ruminants_DN) ||
+               (r.ADM_Autre_elevage !== nc && r.ADM_Autre_elevage != null && !!r.ADM_Autre_elevage !== !!r.DN_Autres_elevages);
+  out.push({
+    key: 'sral', titre: 'SRAL · Élevage', forme: 'octo',
+    statut: r.ADM_Ruminants === nc || r.ADM_Ruminants == null ? 'wait' : sralKo ? 'ko' : 'ok',
+    detail: r.ADM_Ruminants === nc ? 'Inconnu du SRAL' : (r.Ruminants_DN ? 'Ruminants' : r.DN_Autres_elevages ? 'Autres élevages' : 'Sans élevage'),
+    regle: 'Compare les productions animales déclarées dans la DN avec les données d\'élevage (DATA_ELEVAGE).',
+    champs: [['Ruminants (DN)', r.Ruminants_DN], ['Ruminants (SRAL)', r.ADM_Ruminants], ['Autres élevages (DN)', r.DN_Autres_elevages], ['Autres élevages (SRAL)', r.ADM_Autre_elevage], ['Productions déclarées', r.Productions_principales]]
+  });
+
+  out.push({
+    key: 'msa', titre: 'MSA', forme: 'circle',
+    statut: !r.Lien_MSA ? 'wait' : r.Titre_principal === 'OUI' ? 'ok' : 'warn',
+    detail: !r.Lien_MSA ? 'Données attendues' : r.Titre_principal === 'OUI' ? 'Chef à titre principal' : 'Pas à titre principal',
+    regle: 'Vert si la MSA a transmis ses données et que l\'exploitant est chef d\'exploitation à titre principal.',
+    champs: [['Données MSA', r.Donnees_MSA], ['Titre principal', r.Titre_principal], ['Nouvel installé', r.Nouvel_installe], ['Date du dernier installé', fdate(r.Date_dernier_installe)], ['Échéancier 2026', r.Echeancier_de_paiement_sur_2026], ['Prise en charge cotisations', r.Prise_en_charge_de_cotisations_sociales]]
+  });
+
+  var sb = r.Statut_BODACC || 'Non contrôlé';
+  out.push({
+    key: 'bodacc', titre: 'BODACC', forme: 'rect',
+    statut: sb === 'Non contrôlé' ? 'wait' : sb === 'Aucune procédure' ? 'ok' : sb === 'Liquidation judiciaire' || sb === 'Sauvegarde / RJ sans plan' ? 'ko' : 'warn',
+    detail: sb,
+    regle: 'Recherche de procédures collectives publiées au BODACC pour ce SIRET.',
+    champs: [['Contrôle effectué', r.BODACC], ['Statut', sb], ['Annonces', r.Details_BODACC]]
+  });
+
+  var tiersOk = r.Etat_Chorus === 'Tiers OK' || /présent/.test(r.DB_Tiers || '') && !/non présent/.test(r.DB_Tiers || '');
+  out.push({
+    key: 'chorus', titre: 'Chorus · RIB', forme: 'octo',
+    statut: r.Anomalie_RIB ? 'ko' : tiersOk ? 'ok' : 'wait',
+    detail: r.Anomalie_RIB ? 'RIB incomplet' : (r.Etat_Chorus || r.Chorus || ''),
+    regle: 'Vert si le tiers existe dans Chorus et que le RIB déposé est complet (titulaire, IBAN, BIC).',
+    champs: [['État Chorus', r.Etat_Chorus], ['Base tiers', r.DB_Tiers], ['Chorus (SIRET)', r.Chorus], ['Anomalie RIB', r.Anomalie_RIB], ['IBAN', r.IBAN]]
+  });
+
+  var parts = num(r.Nb_parts) || 1, plafond = 50000 * parts, used = num(r.Minimis_recus) + num(r.Minimis_en_cours);
+  var apres = used + num(r.Aide_demandee);
+  out.push({
+    key: 'minimis', titre: 'De minimis', forme: 'circle',
+    statut: apres > plafond ? 'ko' : plafond - apres < plafond * 0.2 ? 'warn' : 'ok',
+    detail: 'Marge ' + eur(Math.max(0, plafond - apres)),
+    regle: 'Plafond de 50 000 € par part sur 3 ans glissants : aides reçues + en cours + aide demandée.',
+    champs: [['Plafond (' + parts + ' part' + (parts > 1 ? 's' : '') + ')', eur(plafond)], ['Déjà reçues', eur(r.Minimis_recus)], ['En cours', eur(r.Minimis_en_cours)], ['Aide demandée', eur(r.Aide_demandee)], ['Marge restante', eur(plafond - apres)]]
+  });
+  return out;
+}
+
+var STATUTS = {
+  ok: { mot: 'CONFORME', coul: 'var(--ok)', lib: 'Conforme' },
+  ko: { mot: 'DIVERGENT', coul: 'var(--ko)', lib: 'Anomalie' },
+  warn: { mot: 'À VÉRIFIER', coul: 'var(--warn)', lib: 'À vérifier' },
+  wait: { mot: 'EN ATTENTE', coul: 'var(--wait)', lib: 'En attente' }
+};
+
+// ---------- dessin d'un tampon ----------
+function stampSVG(c, i, rnd, dateTxt) {
+  var s = STATUTS[c.statut], col = s.coul, id = 'arc' + i;
+  var rot = (rnd() * 28 - 14).toFixed(1), dx = (rnd() * 10 - 5).toFixed(1), dy = (rnd() * 10 - 5).toFixed(1);
+  var outline, inner, textTop, torn = '';
+  if (c.forme === 'circle') {
+    outline = '<circle cx="60" cy="60" r="54" fill="none" stroke="' + col + '" stroke-width="4"/>';
+    inner = '<circle cx="60" cy="60" r="44" fill="none" stroke="' + col + '" stroke-width="1.5"/>';
+    textTop = '<path id="' + id + '" d="M18,60 A42,42 0 0 1 102,60" fill="none"/><text font-size="11" font-weight="800" letter-spacing="1.5" fill="' + col + '"><textPath href="#' + id + '" startOffset="50%" text-anchor="middle">' + esc(c.titre.toUpperCase()) + '</textPath></text>';
+  } else if (c.forme === 'rect') {
+    outline = '<rect x="6" y="22" width="108" height="76" rx="8" fill="none" stroke="' + col + '" stroke-width="4"/>';
+    inner = '<rect x="12" y="28" width="96" height="64" rx="4" fill="none" stroke="' + col + '" stroke-width="1.2" stroke-dasharray="3 2"/>';
+    textTop = '<text x="60" y="44" text-anchor="middle" font-size="11" font-weight="800" letter-spacing="1.5" fill="' + col + '">' + esc(c.titre.toUpperCase()) + '</text>';
+  } else {
+    var pts = []; for (var k = 0; k < 8; k++) { var a = Math.PI / 8 + k * Math.PI / 4; pts.push((60 + 54 * Math.cos(a)).toFixed(1) + ',' + (60 + 54 * Math.sin(a)).toFixed(1)); }
+    outline = '<polygon points="' + pts.join(' ') + '" fill="none" stroke="' + col + '" stroke-width="4"/>';
+    inner = '<circle cx="60" cy="60" r="40" fill="none" stroke="' + col + '" stroke-width="1.2"/>';
+    textTop = '<text x="60" y="42" text-anchor="middle" font-size="10.5" font-weight="800" letter-spacing="1.2" fill="' + col + '">' + esc(c.titre.toUpperCase()) + '</text>';
+  }
+  var mot = s.mot, fs = mot.length > 9 ? 12.5 : 14.5;
+  var band = '<rect x="4" y="52" width="112" height="22" fill="var(--papier)" stroke="' + col + '" stroke-width="2.2"/>' +
+             '<text x="60" y="68" text-anchor="middle" font-size="' + fs + '" font-weight="900" letter-spacing="1" fill="' + col + '">' + mot + '</text>';
+  var bottom = '<text x="60" y="89" text-anchor="middle" font-size="8.5" font-weight="700" fill="' + col + '">' + esc(truncate(c.detail, 22)) + '</text>' +
+               '<text x="60" y="99" text-anchor="middle" font-size="7.5" fill="' + col + '">' + esc(dateTxt) + '</text>';
+  var clip = '';
+  if (c.statut === 'ko') {
+    // Tampon « déchiré » : une zébrure arrache le coin inférieur droit.
+    clip = ' clip-path="url(#tear' + i + ')"';
+    torn = '<clipPath id="tear' + i + '"><polygon points="-10,-10 130,-10 130,62 118,70 124,78 108,84 114,92 98,98 104,108 88,112 92,130 -10,130"/></clipPath>';
+  }
+  var opacity = c.statut === 'wait' ? .45 : .92;
+  return '<svg viewBox="0 0 120 120" aria-hidden="true"><defs>' + torn + '</defs>' +
+    '<g transform="translate(' + dx + ' ' + dy + ') rotate(' + rot + ' 60 60)"><g class="hit" style="animation-delay:' + (i * 0.16) + 's;transform-origin:60px 60px">' +
+    '<g class="ink" filter="url(#grain)" opacity="' + opacity + '"' + clip + (c.statut === 'wait' ? ' stroke-dasharray="6 4"' : '') + '>' +
+    outline + inner + textTop + band + bottom + '</g></g></g></svg>';
+}
+function truncate(s, n) { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+
+function bigVisa(type, dateTxt) {
+  var col = type === 'ok' ? 'var(--ok)' : 'var(--ko)';
+  var t1 = type === 'ok' ? 'VISA · ÉLIGIBLE' : 'REFUSÉ';
+  var t2 = type === 'ok' ? 'Tous les contrôles sont conformes' : 'Dossier non éligible';
+  return '<svg viewBox="0 0 400 150" aria-hidden="true"><g transform="rotate(-11 200 75)"><g class="hit" style="animation-delay:1.35s;transform-origin:200px 75px">' +
+    '<g filter="url(#grain)" opacity=".88">' +
+    '<rect x="8" y="12" width="384" height="126" rx="10" fill="none" stroke="' + col + '" stroke-width="7"/>' +
+    '<rect x="20" y="24" width="360" height="102" rx="4" fill="none" stroke="' + col + '" stroke-width="2"/>' +
+    '<text x="200" y="84" text-anchor="middle" font-size="' + (type === 'ok' ? 44 : 60) + '" font-weight="900" letter-spacing="3" fill="' + col + '">' + t1 + '</text>' +
+    '<text x="200" y="112" text-anchor="middle" font-size="14" font-weight="700" letter-spacing="1" fill="' + col + '">' + t2 + ' · ' + esc(dateTxt) + '</text>' +
+    '</g></g></g></svg>';
+}
+
+// ---------- ligne MRZ (zone de lecture automatique, façon passeport) ----------
+function mrzClean(s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, '<');
+}
+function mrzCheck(s) {
+  var w = [7, 3, 1], t = 0;
+  for (var i = 0; i < s.length; i++) {
+    var c = s[i], v = c === '<' ? 0 : /\d/.test(c) ? +c : c.charCodeAt(0) - 55;
+    t += v * w[i % 3];
+  }
+  return String(t % 10);
+}
+function pad(s, n) { s = s.slice(0, n); while (s.length < n) s += '<'; return s; }
+function mrz(r) {
+  var l1 = pad('P<FRA' + mrzClean(r.raison_sociale) + '<<' + mrzClean(r.forme_juridique), 44);
+  var dn = pad(mrzClean(r.dossier_number), 9), sir = pad(mrzClean(r.siret), 14), dep = pad(mrzClean(r.dep2 || r.code_departement), 3);
+  var l2 = pad(dn + mrzCheck(dn) + 'FRA' + sir + mrzCheck(sir) + dep + mrzClean(r.PACAGE_DN), 43);
+  return l1 + '\n' + l2 + mrzCheck(l2);
+}
+
+// ---------- rendu ----------
+function prodIcon(r) {
+  var p = String(r.Productions_principales || '');
+  if (/ruminants|élevage/.test(p)) return 'fr-icon-home-4-line';
+  if (/maraichage|légumes/.test(p)) return 'fr-icon-plant-line';
+  if (/fruits/.test(p)) return 'fr-icon-leaf-line';
+  return 'fr-icon-seedling-line';
+}
+
+function render() {
+  var desk = document.getElementById('desk');
+  var idx = current ? rows.findIndex(function (x) { return x.id === current.id; }) : -1;
+  document.getElementById('pos').textContent = rows.length ? (idx >= 0 ? (idx + 1) + ' / ' + rows.length : rows.length + ' dossiers') : '';
+  document.getElementById('prev').disabled = idx <= 0;
+  document.getElementById('next').disabled = idx < 0 || idx >= rows.length - 1;
+
+  if (!current) {
+    desk.innerHTML = '<div class="cover" role="img" aria-label="Passeport fermé : sélectionnez un dossier"><div class="t">République française</div><div class="emblem"><span class="fr-icon-government-line" aria-hidden="true"></span></div>' +
+      '<div class="T">PASSEPORT<br>DE CONTRÔLE</div><div class="t">Sélectionnez un dossier</div></div>';
+    return;
+  }
+  var r = current;
+  var ctrls = controles(r);
+  var rnd = seeded(hash(r.dossier_number || r.id));
+  var today = new Date().toLocaleDateString('fr-FR');
+  var allOk = ctrls.every(function (c) { return c.statut === 'ok'; });
+  var refuse = r.Eligible === 'Non';
+  var notes = toList(r.Anomalie).concat(r.Verif_associes ? [r.Verif_associes] : []);
+  var counts = { ok: 0, ko: 0, warn: 0, wait: 0 }; ctrls.forEach(function (c) { counts[c.statut]++; });
+
+  desk.innerHTML =
+    '<article class="book" id="book" aria-label="Passeport du dossier ' + esc(r.dossier_number) + '">' +
+      '<section class="page left">' +
+        '<div class="pp-head"><p class="fr-logo">République<br>Française</p><div class="pp-title"><b>Passeport de contrôle</b>Aide canicule 2026 · DN ' + esc(r.dossier_number) + '</div></div>' +
+        '<div class="ident"><div class="photo"><span class="' + prodIcon(r) + '" aria-hidden="true"></span><span class="mono">' + esc(r.dep2 || r.code_departement || '') + '</span></div>' +
+        '<dl class="fields">' +
+          f('Nom / Raison sociale', r.raison_sociale, 'wide big') +
+          f('Forme juridique', r.forme_juridique) + f('SIRET', r.siret) +
+          f('N° dossier DN', r.dossier_number) + f('PACAGE', r.PACAGE_DN) +
+          f('Commune', (r.ville || '') + (r.code_postal ? ' (' + r.code_postal + ')' : '')) + f('Dépôt', r.Date_depot_FR) +
+          f('Production principale', r.Productions_principales, 'wide') +
+          f('Parts', (num(r.Nb_parts) || 1) + (r.GAEC ? ' · GAEC' : '')) + f('Aide demandée', eur(r.Aide_demandee)) +
+          f('Éligible', r.Eligible || 'À instruire') + f('Étape', r.Etat_dossier || (refuse ? 'Refus notifié' : '—')) +
+        '</dl></div>' +
+        (notes.length ? '<div class="notes"><h3>Annotations de l\'instructeur</h3><ul>' + notes.map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('') + '</ul></div>' : '<div class="notes"></div>') +
+        '<div class="mrz" aria-hidden="true">' + esc(mrz(r)) + '</div>' +
+      '</section>' +
+      '<section class="page right">' +
+        '<h2>Visas et contrôles</h2>' +
+        '<div class="stamps">' + ctrls.map(function (c, i) {
+          return '<button class="stamp" type="button" data-i="' + i + '" aria-label="' + esc(c.titre) + ' : ' + STATUTS[c.statut].lib + '. Voir le détail">' + stampSVG(c, i, rnd, today) + '</button>';
+        }).join('') + '</div>' +
+        (allOk || refuse ? '<div class="visa">' + bigVisa(refuse ? 'ko' : 'ok', today) + '</div>' : '') +
+        '<div class="legend">' + ['ok', 'warn', 'ko', 'wait'].map(function (k) { return '<span><i style="background:' + STATUTS[k].coul + '"></i>' + STATUTS[k].lib + ' : ' + counts[k] + '</span>'; }).join('') + '</div>' +
+      '</section>' +
+    '</article>';
+
+  desk.querySelectorAll('.stamp').forEach(function (b) {
+    b.addEventListener('click', function () { openDetail(ctrls[+b.dataset.i]); });
+  });
+  // Petit « tchac » du livret à chaque coup de tampon.
+  var book = document.getElementById('book');
+  ctrls.forEach(function (_, i) {
+    setTimeout(function () { book.classList.remove('shake'); void book.offsetWidth; book.classList.add('shake'); }, 140 + i * 160);
+  });
+}
+function f(label, v, cls) {
+  cls = cls || '';
+  return '<div class="' + (cls.indexOf('wide') >= 0 ? 'wide' : '') + '"><dt>' + label + '</dt><dd class="' + cls + '">' + esc(val(v)) + '</dd></div>';
+}
+
+function openDetail(c) {
+  document.getElementById('dlg-t').textContent = c.titre + ' — ' + STATUTS[c.statut].lib;
+  document.getElementById('dlg-s').textContent = c.regle;
+  document.getElementById('dlg-tb').innerHTML = c.champs.map(function (x) { return '<tr><th>' + esc(x[0]) + '</th><td>' + esc(val(x[1])) + '</td></tr>'; }).join('');
+  document.getElementById('dlg').showModal();
+}
+document.getElementById('dlg-c').addEventListener('click', function () { document.getElementById('dlg').close(); });
+
+function go(delta) {
+  var idx = rows.findIndex(function (x) { return current && x.id === current.id; });
+  var n = rows[idx + delta];
+  if (!n) return;
+  if (IN_GRIST) grist.setCursorPos({ rowId: n.id }).catch(function () {});
+  else { current = n; render(); }
+}
+document.getElementById('prev').addEventListener('click', function () { go(-1); });
+document.getElementById('next').addEventListener('click', function () { go(1); });
+
+if (IN_GRIST) {
+  grist.ready({ requiredAccess: 'read table' });
+  grist.onRecords(function (recs) { rows = recs || []; if (current) { current = rows.filter(function (x) { return x.id === current.id; })[0] || current; } render(); }, { includeColumns: 'normal' });
+  grist.onRecord(function (rec) {
+    if (!rec || (current && rec.id === current.id && JSON.stringify(rec) === JSON.stringify(current))) return;
+    current = rec; render();
+  }, { includeColumns: 'normal' });
+} else {
+  var s = document.createElement('script'); s.src = 'demo-data.js';
+  s.onload = function () {
+    rows = DemoData.tables.Demarche_155804_demandeurs;
+    var m = /[?&]row=(\d+)/.exec(location.search);
+    current = rows[m ? +m[1] : 5]; render();
+  };
+  document.head.appendChild(s);
+}
+</script>
+</body>
+</html>

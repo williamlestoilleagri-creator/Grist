@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulateur d'arrêté</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/dsfr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/utility/icons/icons.min.css">
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<style>
+  :root {
+    --sable: #E9C46A; --sable-fonce: #C8AA39; --verse: #E4794A; --rouge: #E1000F; --verre: #465F9D;
+    --c-forfait: #465F9D; --c-ja: #00A95F; --c-assur: #A558A0; --c-area: #E4794A;
+  }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--background-default-grey); color: var(--text-default-grey); }
+  .app { display: flex; flex-direction: column; min-height: 100vh; }
+  .topbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.25rem; padding: .75rem 1rem;
+    border-bottom: 1px solid var(--border-default-grey); background: var(--background-alt-grey);
+  }
+  .topbar h1 { margin: 0; font-size: 1.125rem; display: flex; align-items: center; gap: .5rem; }
+  .topbar .spacer { flex: 1; }
+  .fr-segmented { margin: 0; }
+  .fr-segmented__legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+  .grid { flex: 1; display: grid; grid-template-columns: minmax(260px, 330px) minmax(280px, 1fr) minmax(280px, 380px); min-height: 0; }
+  @media (max-width: 1100px) { .grid { grid-template-columns: minmax(260px, 330px) 1fr; } .impact { grid-column: 1 / -1; border-left: none !important; border-top: 1px solid var(--border-default-grey); } }
+  @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } .controls { border-right: none !important; border-bottom: 1px solid var(--border-default-grey); } }
+
+  .controls { padding: 1rem; border-right: 1px solid var(--border-default-grey); overflow: auto; }
+  .controls h2, .impact h2 { font-size: 1rem; margin: 0 0 .75rem; }
+  .slider { margin-bottom: 1rem; }
+  .slider .fr-label { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; margin-bottom: .25rem; }
+  .slider output { font-weight: 700; color: var(--text-action-high-blue-france); font-variant-numeric: tabular-nums; }
+  .slider .was { font-size: .75rem; color: var(--text-mention-grey); }
+  .slider .was.changed { color: var(--text-default-warning); }
+  input[type=range] { width: 100%; accent-color: var(--background-action-high-blue-france); }
+  [hidden] { display: none !important; }
+  .fr-toggle { margin-bottom: .75rem; }
+  /* Largeur de l'état Oui/Non, calculée d'ordinaire par le JS du DSFR */
+  .fr-toggle label { --toggle-status-width: 3.75rem; }
+  .fr-select-group, .fr-fieldset { margin-bottom: 1rem; }
+  .actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .5rem; }
+
+  .stage { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1rem; min-height: 460px; }
+  .stage svg { width: 100%; max-width: 560px; max-height: 72vh; height: auto; }
+  .verdict { margin-top: .25rem; text-align: center; }
+  .verdict .big { font-size: 1.75rem; font-weight: 800; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .verdict .ok { color: var(--text-default-success); }
+  .verdict .ko { color: var(--text-default-error); }
+  .verdict p { margin: 0; font-size: .875rem; color: var(--text-mention-grey); }
+
+  .impact { padding: 1rem; border-left: 1px solid var(--border-default-grey); overflow: auto; }
+  .kpis { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin-bottom: 1rem; }
+  .kpi { border: 1px solid var(--border-default-grey); padding: .6rem .75rem; background: var(--background-default-grey); }
+  .kpi .v { font-size: 1.125rem; font-weight: 700; color: var(--text-title-grey); font-variant-numeric: tabular-nums; }
+  .kpi .l { font-size: .75rem; color: var(--text-mention-grey); }
+  .kpi .d { font-size: .75rem; font-weight: 700; }
+  .d.up { color: var(--text-default-error); } .d.down { color: var(--text-default-success); }
+  .stack { display: flex; height: 18px; width: 100%; overflow: hidden; margin: .25rem 0 .5rem; background: var(--background-contrast-grey); }
+  .stack span { display: block; height: 100%; }
+  .legend { display: flex; flex-wrap: wrap; gap: .25rem .75rem; font-size: .75rem; margin-bottom: 1rem; }
+  .legend i { display: inline-block; width: 10px; height: 10px; margin-right: 4px; vertical-align: -1px; }
+  .env { margin-bottom: .6rem; font-size: .8125rem; }
+  .env .row { display: flex; justify-content: space-between; gap: .5rem; }
+  .bar { height: 8px; background: var(--background-contrast-grey); margin-top: 3px; }
+  .bar span { display: block; height: 100%; background: var(--sable-fonce); }
+  .note { font-size: .75rem; color: var(--text-mention-grey); }
+
+  .sand-stream { stroke: var(--verse); stroke-width: 3; stroke-dasharray: 3 7; animation: fall .6s linear infinite; }
+  @keyframes fall { to { stroke-dashoffset: -20; } }
+  .glass { fill: color-mix(in srgb, var(--verre) 7%, transparent); stroke: var(--verre); stroke-width: 3; }
+  .plate { fill: var(--text-title-grey); }
+  .lbl { font-size: 13px; fill: var(--text-default-grey); }
+  .lbl b, .lbl .strong { font-weight: 700; fill: var(--text-title-grey); }
+  .lbl-ko { font-size: 13px; font-weight: 700; fill: var(--rouge); }
+  .overflow { transition: all .35s ease; }
+  .sand { transition: y .35s ease, height .35s ease; }
+  @media (prefers-reduced-motion: reduce) { .sand-stream { animation: none; } .sand, .overflow { transition: none; } }
+
+  dialog { border: 1px solid var(--border-default-grey); padding: 0; max-width: 520px; width: calc(100% - 32px); background: var(--background-overlap-grey); color: var(--text-default-grey); }
+  dialog::backdrop { background: rgba(22,22,22,.64); }
+  dialog .inner { padding: 1.5rem; }
+  dialog h2 { font-size: 1.25rem; }
+  dialog table { width: 100%; font-size: .875rem; border-collapse: collapse; margin-bottom: 1rem; }
+  dialog td, dialog th { padding: .25rem .5rem; border-bottom: 1px solid var(--border-default-grey); text-align: left; }
+  .msg { margin: 1rem; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <h1><span class="fr-icon-money-euro-circle-line" aria-hidden="true"></span> Simulateur d'arrêté préfectoral</h1>
+    <div class="spacer"></div>
+    <fieldset class="fr-segmented fr-segmented--sm">
+      <legend class="fr-segmented__legend">Département</legend>
+      <div class="fr-segmented__elements" id="deps"></div>
+    </fieldset>
+  </div>
+  <div id="alert"></div>
+  <div class="grid">
+    <section class="controls" aria-labelledby="h-params">
+      <h2 id="h-params">Paramètres de l'arrêté</h2>
+      <div id="sliders"></div>
+      <div class="fr-toggle">
+        <input type="checkbox" class="fr-toggle__input" id="p-transp">
+        <label class="fr-toggle__label" for="p-transp" data-fr-checked-label="Oui" data-fr-unchecked-label="Non">Transparence GAEC</label>
+      </div>
+      <div class="fr-select-group">
+        <label class="fr-label" for="p-limite">Nombre maximum de parts GAEC</label>
+        <select class="fr-select" id="p-limite">
+          <option value="0">Pas de limite</option><option value="1">1</option><option value="2">2</option>
+          <option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option>
+        </select>
+      </div>
+      <fieldset class="fr-fieldset" aria-labelledby="scope-legend">
+        <legend class="fr-fieldset__legend--regular fr-fieldset__legend" id="scope-legend">Dossiers pris en compte</legend>
+        <div class="fr-fieldset__element"><div class="fr-radio-group fr-radio-group--sm">
+          <input type="radio" id="sc-all" name="scope" value="all" checked><label class="fr-label" for="sc-all">Tous sauf refusés</label></div></div>
+        <div class="fr-fieldset__element"><div class="fr-radio-group fr-radio-group--sm">
+          <input type="radio" id="sc-ok" name="scope" value="ok"><label class="fr-label" for="sc-ok">Éligibles uniquement</label></div></div>
+      </fieldset>
+      <div class="fr-toggle" id="fix56-wrap">
+        <input type="checkbox" class="fr-toggle__input" id="p-fix56">
+        <label class="fr-toggle__label" for="p-fix56" data-fr-checked-label="Corrigé" data-fr-unchecked-label="Actuel">Bonus JA 56 : seulement si Nouvel installé = « OUI »</label>
+        <p class="fr-hint-text">Dans la formule actuelle, le test <code>if rec.Nouvel_installe</code> est vrai aussi pour « NON ».</p>
+      </div>
+      <div class="actions">
+        <button class="fr-btn fr-btn--sm fr-btn--secondary fr-icon-refresh-line fr-btn--icon-left" id="reset" type="button">Réinitialiser</button>
+        <button class="fr-btn fr-btn--sm fr-btn--tertiary fr-icon-equalizer-line fr-btn--icon-left" id="equilibre" type="button">Forfait d'équilibre</button>
+        <button class="fr-btn fr-btn--sm fr-icon-check-line fr-btn--icon-left" id="apply" type="button">Appliquer à l'arrêté</button>
+      </div>
+    </section>
+
+    <section class="stage" aria-labelledby="h-sab">
+      <h2 id="h-sab" class="fr-sr-only">Sablier budgétaire</h2>
+      <svg id="sablier" viewBox="0 0 600 440" role="img" aria-describedby="verdict"></svg>
+      <div class="verdict" id="verdict" aria-live="polite"></div>
+    </section>
+
+    <section class="impact" aria-labelledby="h-impact">
+      <h2 id="h-impact">Impact de la simulation</h2>
+      <div class="kpis" id="kpis"></div>
+      <h3 class="fr-text--sm fr-text--bold fr-mb-0">D'où vient le coût ?</h3>
+      <div class="stack" id="stack"></div>
+      <div class="legend" id="legend"></div>
+      <h3 class="fr-text--sm fr-text--bold fr-mb-1w">Enveloppes du département</h3>
+      <div id="envs"></div>
+      <p class="note">Les montants déjà accordés (dossiers sélectionnés) ne bougent pas : la simulation porte sur les dossiers pas encore sélectionnés.</p>
+    </section>
+  </div>
+</div>
+
+<dialog id="confirm" aria-labelledby="c-title">
+  <div class="inner">
+    <h2 id="c-title">Appliquer ces paramètres ?</h2>
+    <p class="fr-text--sm">La ligne <b id="c-dep"></b> de la table <code>Liste_Departement</code> va être modifiée. Tous les montants <code>Aide_demandee</code> du département seront recalculés.</p>
+    <table id="c-table"></table>
+    <div class="actions">
+      <button class="fr-btn fr-btn--secondary" id="c-no" type="button">Annuler</button>
+      <button class="fr-btn" id="c-yes" type="button">Confirmer</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+'use strict';
+var IN_GRIST = window.self !== window.top && !/[?&]demo=1/.test(location.search);
+try { if (matchMedia('(prefers-color-scheme: dark)').matches) document.documentElement.setAttribute('data-fr-theme', 'dark'); } catch (e) {}
+
+var SLIDERS = [
+  { key: 'Forfait', label: 'Forfait par part', max: 6000, step: 50 },
+  { key: 'Bonus_JA', label: 'Bonus jeune installé', max: 4000, step: 50 },
+  { key: 'Bonus_assurance', label: 'Bonus assurance récolte (MRC)', max: 3000, step: 50 },
+  { key: 'Bonus_AREA', label: 'Bonus audit AREA', max: 3000, step: 50 }
+];
+var PARAM_KEYS = SLIDERS.map(function (s) { return s.key; }).concat(['Transparence_GAEC', 'Limite_NB_GAEC']);
+
+var state = { demandeurs: [], departements: [], enveloppes: [], dep: null, params: null, orig: null, scope: 'all', fix56: false };
+
+// ---------- utilitaires ----------
+function toList(v) {
+  if (Array.isArray(v)) return v[0] === 'L' ? v.slice(1) : v;
+  return v == null || v === '' ? [] : [v];
+}
+function toDate(v) {
+  if (!v) return null;
+  if (v instanceof Date) return v;
+  if (Array.isArray(v)) return toDate(v[1]);
+  if (typeof v === 'number') return new Date(v * 1000);
+  var d = new Date(v); return isNaN(d) ? null : d;
+}
+function colsToRows(cols) {
+  var keys = Object.keys(cols);
+  return (cols.id || []).map(function (_, i) { var r = {}; keys.forEach(function (k) { r[k] = cols[k][i]; }); return r; });
+}
+function fetchRows(tableId) {
+  if (!IN_GRIST) return Promise.resolve(DemoData.tables[tableId] || []);
+  return grist.docApi.fetchTable(tableId).then(colsToRows);
+}
+var fmt = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+function eur(n) { return fmt.format(Math.round(n || 0)); }
+function num(v) { var n = Number(v); return isFinite(n) ? n : 0; }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function depOf(r) { return String(r.dep2 || r.code_departement || '').slice(0, 2); }
+
+// ---------- réplique JS de la formule Aide_demandee ----------
+function calcAide(r, p, fix56) {
+  var parts = num(r.Nb_parts) || 1;
+  var nb = !p.Transparence_GAEC ? 1 : (p.Limite_NB_GAEC ? Math.min(parts, p.Limite_NB_GAEC) : parts);
+  var area = r.AREA_Audit ? 1 : 0;
+  var minimis = num(r.Minimis_recus) + num(r.Minimis_en_cours);
+  var seuil = Math.max(0, 50000 * parts - minimis);
+  var comp = { forfait: p.Forfait * nb, ja: 0, assur: 0, area: area * p.Bonus_AREA };
+  var plafond;
+  if (depOf(r) === '56') {
+    var estNI = fix56 ? r.Nouvel_installe === 'OUI' : !!r.Nouvel_installe;
+    if (estNI) {
+      var coeffR = r.Ruminants_DN ? 2 : 1, coeffI = 1, d = toDate(r.Date_dernier_installe);
+      if (d) {
+        var t = new Date(), anc = t.getFullYear() - d.getFullYear();
+        if (t.getMonth() < d.getMonth() || (t.getMonth() === d.getMonth() && t.getDate() < d.getDate())) anc -= 1;
+        coeffI = anc <= 2 ? 2 : 1;
+      }
+      comp.ja = p.Bonus_JA * coeffR * coeffI;
+    }
+    plafond = seuil;
+  } else {
+    comp.ja = r.Nouvel_installe === 'OUI' ? p.Bonus_JA : 0;
+    comp.assur = r.MRC && r.MRC !== 'False' ? p.Bonus_assurance : 0;
+    plafond = Math.min(10000, seuil);
+  }
+  var brut = comp.forfait + comp.ja + comp.assur + comp.area;
+  var total = Math.min(brut, plafond);
+  return { total: total, brut: brut, comp: comp, plafonne: brut > plafond, minimis: brut > seuil };
+}
+
+// ---------- rendu ----------
+function currentDepRow() { return state.departements.filter(function (d) { return String(d.code_dep) === state.dep; })[0]; }
+
+function paramsFrom(row) {
+  return {
+    Forfait: num(row.Forfait), Bonus_JA: num(row.Bonus_JA), Bonus_assurance: num(row.Bonus_assurance), Bonus_AREA: num(row.Bonus_AREA),
+    Transparence_GAEC: !!row.Transparence_GAEC, Limite_NB_GAEC: num(row.Limite_NB_GAEC)
+  };
+}
+
+function selectDep(code) {
+  state.dep = code;
+  var row = currentDepRow();
+  state.orig = row ? paramsFrom(row) : { Forfait: 0, Bonus_JA: 0, Bonus_assurance: 0, Bonus_AREA: 0, Transparence_GAEC: false, Limite_NB_GAEC: 0 };
+  state.params = Object.assign({}, state.orig);
+  document.getElementById('fix56-wrap').hidden = code !== '56';
+  buildControls();
+  compute();
+}
+
+function buildDeps() {
+  var codes = state.departements.map(function (d) { return String(d.code_dep); }).filter(Boolean).sort();
+  if (!codes.length) codes = Array.from(new Set(state.demandeurs.map(depOf))).filter(Boolean).sort();
+  if (!state.dep || codes.indexOf(state.dep) < 0) state.dep = codes[0];
+  var box = document.getElementById('deps');
+  box.innerHTML = codes.map(function (c) {
+    return '<div class="fr-segmented__element"><input value="' + esc(c) + '" type="radio" id="d-' + esc(c) + '" name="dep"' + (c === state.dep ? ' checked' : '') + '>' +
+      '<label class="fr-label" for="d-' + esc(c) + '">' + esc(c) + '</label></div>';
+  }).join('');
+  box.querySelectorAll('input').forEach(function (i) { i.addEventListener('change', function () { selectDep(i.value); }); });
+  selectDep(state.dep);
+}
+
+function buildControls() {
+  var p = state.params, o = state.orig;
+  document.getElementById('sliders').innerHTML = SLIDERS.map(function (s) {
+    var max = Math.max(s.max, o[s.key] * 2);
+    return '<div class="slider"><label class="fr-label" for="s-' + s.key + '"><span>' + s.label + '</span><output id="o-' + s.key + '">' + eur(p[s.key]) + '</output></label>' +
+      '<input type="range" id="s-' + s.key + '" min="0" max="' + max + '" step="' + s.step + '" value="' + p[s.key] + '">' +
+      '<span class="was" id="w-' + s.key + '">Actuel : ' + eur(o[s.key]) + '</span></div>';
+  }).join('');
+  SLIDERS.forEach(function (s) {
+    document.getElementById('s-' + s.key).addEventListener('input', function (e) { p[s.key] = +e.target.value; compute(); });
+  });
+  document.getElementById('p-transp').checked = p.Transparence_GAEC;
+  document.getElementById('p-limite').value = String(Math.min(p.Limite_NB_GAEC, 6));
+}
+
+function scoped() {
+  return state.demandeurs.filter(function (r) {
+    if (depOf(r) !== state.dep) return false;
+    return state.scope === 'ok' ? r.Eligible === 'Oui' : r.Eligible !== 'Non';
+  });
+}
+
+function compute() {
+  var p = state.params, o = state.orig;
+  SLIDERS.forEach(function (s) {
+    document.getElementById('o-' + s.key).textContent = eur(p[s.key]);
+    var w = document.getElementById('w-' + s.key);
+    w.classList.toggle('changed', p[s.key] !== o[s.key]);
+    w.textContent = 'Actuel : ' + eur(o[s.key]) + (p[s.key] !== o[s.key] ? ' → ' + (p[s.key] > o[s.key] ? '+' : '') + eur(p[s.key] - o[s.key]) : '');
+  });
+
+  var all = state.demandeurs.filter(function (r) { return depOf(r) === state.dep; });
+  var accorde = all.reduce(function (a, r) { return a + num(r.Aide_accordee); }, 0);
+  var envs = state.enveloppes.filter(function (e) { return String(e.dep) === state.dep; });
+  var capacite = envs.reduce(function (a, e) { return a + num(e.montant); }, 0);
+  if (!capacite) { var dr = currentDepRow(); capacite = dr ? num(dr.Enveloppe_globale) : 0; }
+
+  var pending = scoped().filter(function (r) { return !r.Selectionne; });
+  var besoin = 0, besoinActuel = 0, plafonnes = 0, minimis = 0, comp = { forfait: 0, ja: 0, assur: 0, area: 0 };
+  pending.forEach(function (r) {
+    var c = calcAide(r, p, state.fix56);
+    besoin += c.total;
+    besoinActuel += num(r.Aide_demandee);
+    if (c.plafonne) plafonnes++;
+    if (c.minimis) minimis++;
+    var k = c.brut ? c.total / c.brut : 0; // répartit le plafonnement au prorata
+    for (var key in comp) comp[key] += c.comp[key] * k;
+  });
+
+  drawSablier(capacite, accorde, besoin);
+  var reste = capacite - accorde - besoin;
+  document.getElementById('verdict').innerHTML = capacite
+    ? (reste >= 0
+      ? '<div class="big ok">Ça tient : +' + eur(reste) + '</div><p>de marge dans l\'enveloppe une fois tous les dossiers en attente payés</p>'
+      : '<div class="big ko">Ça déborde : ' + eur(-reste) + '</div><p>manquent pour payer tous les dossiers en attente</p>')
+    : '<div class="big">Aucune enveloppe</div><p>Aucune ligne dans Liste_enveloppes pour ce département</p>';
+
+  var delta = besoin - besoinActuel;
+  document.getElementById('kpis').innerHTML = [
+    kpi(eur(besoin), 'Besoin simulé', delta ? '<span class="d ' + (delta > 0 ? 'up' : 'down') + '">' + (delta > 0 ? '+' : '') + eur(delta) + ' vs actuel</span>' : '<span class="d">= actuel</span>'),
+    kpi(pending.length, 'Dossiers en attente de sélection'),
+    kpi(eur(pending.length ? besoin / pending.length : 0), 'Montant moyen simulé'),
+    kpi(plafonnes, 'Dossiers plafonnés', '<span class="d">dont ' + minimis + ' par le de minimis</span>'),
+    kpi(eur(accorde), 'Déjà accordé'),
+    kpi(eur(capacite), 'Enveloppe globale')
+  ].join('');
+
+  var parts = [['forfait', 'Forfait', 'var(--c-forfait)'], ['ja', 'Jeune installé', 'var(--c-ja)'], ['assur', 'Assurance', 'var(--c-assur)'], ['area', 'AREA', 'var(--c-area)']];
+  var tot = besoin || 1;
+  document.getElementById('stack').innerHTML = parts.map(function (x) { return '<span title="' + x[1] + ' : ' + eur(comp[x[0]]) + '" style="width:' + (100 * comp[x[0]] / tot) + '%;background:' + x[2] + '"></span>'; }).join('');
+  document.getElementById('legend').innerHTML = parts.map(function (x) { return '<span><i style="background:' + x[2] + '"></i>' + x[1] + ' ' + Math.round(100 * comp[x[0]] / tot) + ' %</span>'; }).join('');
+
+  document.getElementById('envs').innerHTML = envs.map(function (e) {
+    var m = num(e.montant), a = num(e.montant_accorde);
+    return '<div class="env"><div class="row"><span>' + esc(e.libelle || 'Enveloppe') + '</span><span>' + eur(a) + ' / ' + eur(m) + '</span></div>' +
+      '<div class="bar" role="progressbar" aria-valuenow="' + Math.round(m ? 100 * a / m : 0) + '" aria-valuemin="0" aria-valuemax="100"><span style="width:' + Math.min(100, m ? 100 * a / m : 0) + '%"></span></div></div>';
+  }).join('') || '<p class="note">Aucune enveloppe.</p>';
+}
+
+function kpi(v, l, extra) { return '<div class="kpi"><div class="v">' + v + '</div><div class="l">' + l + '</div>' + (extra || '') + '</div>'; }
+
+var NS = 'http://www.w3.org/2000/svg';
+function el(name, attrs, parent) { var n = document.createElementNS(NS, name); for (var k in attrs) n.setAttribute(k, attrs[k]); if (parent) parent.appendChild(n); return n; }
+
+function drawSablier(capacite, accorde, besoin) {
+  var svg = document.getElementById('sablier');
+  svg.innerHTML = '';
+  var cx = 270, top = 40, neck = 212, bot = 384, w = 130;
+  var glassPath = 'M' + (cx - w) + ',' + top + ' L' + (cx + w) + ',' + top +
+    ' C' + (cx + w) + ',' + (top + 90) + ' ' + (cx + 12) + ',' + (neck - 45) + ' ' + (cx + 8) + ',' + neck +
+    ' C' + (cx + 12) + ',' + (neck + 45) + ' ' + (cx + w) + ',' + (bot - 90) + ' ' + (cx + w) + ',' + bot +
+    ' L' + (cx - w) + ',' + bot + ' C' + (cx - w) + ',' + (bot - 90) + ' ' + (cx - 12) + ',' + (neck + 45) + ' ' + (cx - 8) + ',' + neck +
+    ' C' + (cx - 12) + ',' + (neck - 45) + ' ' + (cx - w) + ',' + (top + 90) + ' ' + (cx - w) + ',' + top + ' Z';
+  var defs = el('defs', {}, svg);
+  var cpT = el('clipPath', { id: 'cp-t' }, defs);
+  el('rect', { x: 0, y: top, width: 600, height: neck - top }, cpT);
+  var cpB = el('clipPath', { id: 'cp-b' }, defs);
+  el('rect', { x: 0, y: neck, width: 600, height: bot - neck }, cpB);
+  var cpG = el('clipPath', { id: 'cp-g' }, defs); el('path', { d: glassPath }, cpG);
+  var pat = el('pattern', { id: 'hatch', width: 8, height: 8, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' }, defs);
+  el('rect', { width: 8, height: 8, fill: 'var(--verse)' }, pat); el('line', { x1: 0, y1: 0, x2: 0, y2: 8, stroke: 'rgba(255,255,255,.35)', 'stroke-width': 4 }, pat);
+
+  var cap = capacite || 1;
+  var dispo = Math.max(0, capacite - accorde);
+  // La hauteur de sable suit la racine carrée du volume : les bulbes s'évasent, le rendu reste lisible.
+  var hTop = (neck - top - 6) * Math.sqrt(Math.min(1, dispo / cap));
+  var verse = Math.min(dispo, besoin);
+  var hMarge = dispo ? hTop * (dispo - verse) / dispo : 0;
+  var hBot = (bot - neck - 8) * Math.sqrt(Math.min(1, accorde / cap));
+
+  var gTop = el('g', { 'clip-path': 'url(#cp-g)' }, svg);
+  var gT = el('g', { 'clip-path': 'url(#cp-t)' }, gTop);
+  // Sable « à verser » pour les dossiers en attente (hachuré), surmonté de la marge restante.
+  el('rect', { class: 'sand', x: cx - w, y: neck - hTop, width: 2 * w, height: hTop, fill: 'url(#hatch)' }, gT);
+  el('rect', { class: 'sand', x: cx - w, y: neck - hTop, width: 2 * w, height: hMarge, fill: 'var(--sable)' }, gT);
+  var gB = el('g', { 'clip-path': 'url(#cp-b)' }, gTop);
+  el('path', { class: 'sand', d: 'M' + (cx - w) + ',' + bot + ' L' + (cx - w) + ',' + (bot - hBot + 18) + ' Q' + cx + ',' + (bot - hBot - 14) + ' ' + (cx + w) + ',' + (bot - hBot + 18) + ' L' + (cx + w) + ',' + bot + ' Z', fill: 'var(--sable-fonce)' }, gB);
+  if (besoin > 0 && dispo > 0) el('line', { class: 'sand-stream', x1: cx, y1: neck - 4, x2: cx, y2: bot - hBot + 4 }, svg);
+
+  el('path', { d: glassPath, class: 'glass' }, svg);
+  el('rect', { x: cx - w - 22, y: top - 16, width: 2 * w + 44, height: 14, rx: 3, class: 'plate' }, svg);
+  el('rect', { x: cx - w - 22, y: bot + 2, width: 2 * w + 44, height: 14, rx: 3, class: 'plate' }, svg);
+  el('rect', { x: cx - w - 16, y: top - 2, width: 8, height: bot - top + 4, class: 'plate', opacity: .8 }, svg);
+  el('rect', { x: cx + w + 8, y: top - 2, width: 8, height: bot - top + 4, class: 'plate', opacity: .8 }, svg);
+
+  // Étiquettes
+  function label(y, strong, txt, cls) {
+    var t = el('text', { x: cx + w + 30, y: y, class: cls || 'lbl' }, svg);
+    var a = el('tspan', { class: 'strong', x: cx + w + 30 }, t); a.textContent = strong;
+    var b = el('tspan', { x: cx + w + 30, dy: 16 }, t); b.textContent = txt;
+  }
+  label(top + 18, eur(dispo), 'encore disponible');
+  label(neck - 10, eur(verse), 'à verser (en attente)');
+  label(bot - 20, eur(accorde), 'déjà accordé');
+
+  // Débordement : le sable qui ne rentre pas s'entasse à côté du sablier.
+  var over = besoin - dispo;
+  if (over > 0) {
+    var hO = Math.min(110, 30 + 90 * Math.sqrt(over / cap));
+    var x0 = 18, base = bot + 16;
+    el('path', { class: 'overflow', d: 'M' + x0 + ',' + base + ' Q' + (x0 + 38) + ',' + (base - hO * 1.6) + ' ' + (x0 + 76) + ',' + base + ' Z', fill: 'var(--rouge)', opacity: .85 }, svg);
+    var t = el('text', { x: x0, y: base - hO - 22, class: 'lbl-ko' }, svg); t.textContent = '+' + eur(over);
+    var t2 = el('text', { x: x0, y: base - hO - 7, class: 'lbl' }, svg); t2.textContent = 'hors enveloppe';
+  }
+}
+
+// ---------- actions ----------
+document.getElementById('p-transp').addEventListener('change', function (e) { state.params.Transparence_GAEC = e.target.checked; compute(); });
+document.getElementById('p-limite').addEventListener('change', function (e) { state.params.Limite_NB_GAEC = +e.target.value; compute(); });
+document.getElementById('p-fix56').addEventListener('change', function (e) { state.fix56 = e.target.checked; compute(); });
+document.querySelectorAll('input[name=scope]').forEach(function (i) { i.addEventListener('change', function () { state.scope = i.value; compute(); }); });
+document.getElementById('reset').addEventListener('click', function () { state.params = Object.assign({}, state.orig); buildControls(); compute(); });
+
+document.getElementById('equilibre').addEventListener('click', function () {
+  // Recherche par dichotomie du forfait le plus haut qui tient dans l'enveloppe.
+  var all = state.demandeurs.filter(function (r) { return depOf(r) === state.dep; });
+  var accorde = all.reduce(function (a, r) { return a + num(r.Aide_accordee); }, 0);
+  var cap = state.enveloppes.filter(function (e) { return String(e.dep) === state.dep; }).reduce(function (a, e) { return a + num(e.montant); }, 0);
+  var dispo = cap - accorde, pending = scoped().filter(function (r) { return !r.Selectionne; });
+  function besoin(f) { var p = Object.assign({}, state.params, { Forfait: f }); return pending.reduce(function (a, r) { return a + calcAide(r, p, state.fix56).total; }, 0); }
+  var lo = 0, hi = 20000;
+  if (besoin(0) > dispo) { lo = 0; } else {
+    for (var i = 0; i < 40; i++) { var mid = (lo + hi) / 2; if (besoin(mid) <= dispo) lo = mid; else hi = mid; }
+  }
+  state.params.Forfait = Math.floor(lo / 50) * 50;
+  buildControls(); compute();
+});
+
+document.getElementById('apply').addEventListener('click', function () {
+  var row = currentDepRow();
+  if (!row) return;
+  var o = state.orig, p = state.params;
+  document.getElementById('c-dep').textContent = state.dep;
+  var fmtv = function (k, v) { return k === 'Transparence_GAEC' ? (v ? 'Oui' : 'Non') : k === 'Limite_NB_GAEC' ? (v || 'aucune') : eur(v); };
+  document.getElementById('c-table').innerHTML = '<tr><th>Paramètre</th><th>Actuel</th><th>Nouveau</th></tr>' + PARAM_KEYS.map(function (k) {
+    var ch = o[k] !== p[k];
+    return '<tr' + (ch ? ' style="font-weight:700"' : '') + '><td>' + k + '</td><td>' + fmtv(k, o[k]) + '</td><td>' + fmtv(k, p[k]) + '</td></tr>';
+  }).join('');
+  document.getElementById('confirm').showModal();
+});
+document.getElementById('c-no').addEventListener('click', function () { document.getElementById('confirm').close(); });
+document.getElementById('c-yes').addEventListener('click', function () {
+  var row = currentDepRow(), p = state.params;
+  document.getElementById('confirm').close();
+  var fields = {}; PARAM_KEYS.forEach(function (k) { fields[k] = p[k]; });
+  if (!IN_GRIST) { Object.assign(row, fields); state.orig = Object.assign({}, p); buildControls(); compute(); showAlert('success', 'Mode démo : paramètres appliqués localement.'); return; }
+  grist.docApi.applyUserActions([['UpdateRecord', 'Liste_Departement', row.id, fields]])
+    .then(function () { showAlert('success', 'Arrêté mis à jour pour le ' + state.dep + '. Les montants se recalculent.'); return reload(); })
+    .catch(function (e) { showAlert('error', 'Échec de la mise à jour : ' + e.message); });
+});
+
+function showAlert(type, msg) {
+  var a = document.getElementById('alert');
+  a.innerHTML = '<div class="fr-alert fr-alert--' + type + ' fr-alert--sm msg"><p>' + esc(msg) + '</p></div>';
+  setTimeout(function () { a.innerHTML = ''; }, 6000);
+}
+
+// ---------- chargement ----------
+function reload() {
+  return Promise.all([fetchRows('Liste_Departement'), fetchRows('Liste_enveloppes')]).then(function (res) {
+    state.departements = res[0]; state.enveloppes = res[1];
+    buildDeps();
+  }).catch(function (e) {
+    showAlert('error', 'Lecture de Liste_Departement / Liste_enveloppes impossible. Donnez l\'accès « complet » au widget. (' + e.message + ')');
+  });
+}
+
+if (IN_GRIST) {
+  grist.ready({ requiredAccess: 'full' });
+  var first = true;
+  grist.onRecords(function (recs) {
+    state.demandeurs = recs || [];
+    if (first) { first = false; reload(); } else if (state.dep) { compute(); }
+  }, { includeColumns: 'normal' });
+} else {
+  var s = document.createElement('script'); s.src = 'demo-data.js';
+  s.onload = function () { state.demandeurs = DemoData.tables.Demarche_155804_demandeurs; reload(); };
+  document.head.appendChild(s);
+}
+</script>
+</body>
+</html>
