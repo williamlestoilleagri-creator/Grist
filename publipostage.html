@@ -12,6 +12,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/pdfmake.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/vfs_fonts.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<!-- Signature électronique certifiée des PDF (PAdES) -->
+<script src="https://cdn.jsdelivr.net/npm/node-forge@1.3.1/dist/forge.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <style>
   :root {
     --bleu: var(--background-action-high-blue-france, #000091);
@@ -159,6 +162,9 @@
   .pp-progress div { height: 100%; width: 0; background: var(--bleu); transition: width .15s; }
   #genStatus { margin-top: 1rem; }
   .fr-alert { margin-bottom: 1rem; }
+  .pp-certdl { display: grid; grid-template-columns: auto 1fr; gap: .25rem 1rem; margin: 0; }
+  .pp-certdl dt { color: var(--text-mention-grey); }
+  .pp-certdl dd { margin: 0; word-break: break-word; }
   code { font-family: var(--mono); font-size: .8rem; background: var(--background-contrast-grey); padding: 0 .25rem; }
 </style>
 </head>
@@ -425,6 +431,63 @@
         <label class="fr-label" for="sigMention">Ajouter la mention « Signé électroniquement par … le … »</label>
       </div>
     </div>
+    <div class="pp-bloc" id="certBloc">
+      <h2>Signature électronique certifiée (PDF)</h2>
+      <div class="fr-alert fr-alert--info fr-alert--sm">
+        <p>Signe cryptographiquement chaque PDF généré avec <b>votre certificat de signature</b> (fichier <code>.p12</code> ou <code>.pfx</code>), au format <b>PAdES</b> reconnu par Adobe Acrobat et les outils de validation européens. Toute modification du PDF après signature est détectée.</p>
+      </div>
+      <div class="fr-alert fr-alert--warning fr-alert--sm">
+        <p>Le certificat et son mot de passe restent <b>uniquement dans la mémoire de ce navigateur</b>, le temps de la session : ils ne sont jamais enregistrés dans Grist ni envoyés sur Internet. Il faut les réimporter à chaque ouverture du widget. Les certificats sur carte à puce ou clé USB ne sont pas accessibles depuis un navigateur (voir l'aide ci-dessous).</p>
+      </div>
+      <div class="pp-grid">
+        <div>
+          <div class="fr-upload-group fr-mb-2w">
+            <label class="fr-label" for="certFile">Certificat de signature
+              <span class="fr-hint-text">Fichier .p12 ou .pfx contenant la clé privée (certificat RSA).</span>
+            </label>
+            <input class="fr-upload" type="file" id="certFile" accept=".p12,.pfx,application/x-pkcs12">
+          </div>
+          <div class="fr-input-group">
+            <label class="fr-label" for="certPass">Mot de passe du certificat</label>
+            <input class="fr-input" type="password" id="certPass" autocomplete="off">
+          </div>
+          <ul class="fr-btns-group fr-btns-group--inline-sm fr-btns-group--sm">
+            <li><button type="button" class="fr-btn" id="certLoad">Charger le certificat</button></li>
+            <li><button type="button" class="fr-btn fr-btn--tertiary" id="certClear">Retirer</button></li>
+          </ul>
+          <div id="certMsg"></div>
+        </div>
+        <div>
+          <div id="certInfo"><p class="fr-text--sm">Aucun certificat chargé.</p></div>
+          <div class="fr-toggle fr-mt-2w">
+            <input type="checkbox" class="fr-toggle__input" id="certEnabled" disabled>
+            <label class="fr-toggle__label" for="certEnabled">Signer électroniquement les PDF générés</label>
+          </div>
+          <div class="fr-input-group fr-mt-2w">
+            <label class="fr-label" for="certReason">Motif de la signature</label>
+            <input class="fr-input" type="text" id="certReason">
+          </div>
+          <div class="fr-input-group">
+            <label class="fr-label" for="certLocation">Lieu de signature</label>
+            <input class="fr-input" type="text" id="certLocation" placeholder="ex : Saint-Brieuc">
+          </div>
+        </div>
+      </div>
+      <section class="fr-accordion fr-mt-2w">
+        <h3 class="fr-accordion__title">
+          <button type="button" class="fr-accordion__btn" aria-expanded="false" id="certHelpBtn">Valeur juridique et certificats compatibles</button>
+        </h3>
+        <div class="fr-collapse" id="certHelp">
+          <ul class="fr-text--sm">
+            <li>La valeur de la signature dépend du <b>certificat</b> utilisé, pas du widget. Pour un acte administratif, l'article L212-3 du code des relations entre le public et l'administration exige un procédé conforme au <b>référentiel général de sécurité (RGS)</b> : utilisez un certificat de signature délivré par votre ministère ou par un prestataire qualifié (liste de confiance de l'ANSSI / de l'Union européenne).</li>
+            <li>Avec un certificat logiciel (.p12) qualifié ou RGS, la signature produite est une <b>signature électronique avancée</b> reposant sur ce certificat. Une <b>signature qualifiée</b> au sens du règlement eIDAS exige en plus un dispositif matériel (carte agent, clé USB cryptographique) : elle ne peut pas être produite depuis un navigateur.</li>
+            <li>Si votre certificat est sur carte ou clé USB : générez les PDF ici (un fichier par dossier), puis signez-les avec l'outil de signature de votre ministère (parapheur électronique) ou avec Adobe Acrobat Reader (« Utiliser un certificat »).</li>
+            <li>La date de signature est celle de l'ordinateur (pas d'horodatage certifié). Faites valider l'usage par votre service juridique ou votre RSSI avant d'envoyer des décisions signées.</li>
+            <li>La signature certifiée s'applique aux <b>PDF</b> uniquement, pas aux fichiers Word ou Excel.</li>
+          </ul>
+        </div>
+      </section>
+    </div>
   </div>
 
   <!-- =============================== 4. GÉNÉRER =============================== -->
@@ -546,7 +609,7 @@
         <div class="fr-tile fr-tile--sm fr-tile--horizontal fr-enlarge-button">
           <div class="fr-tile__body"><div class="fr-tile__content">
             <h3 class="fr-tile__title"><button type="button" id="genPdf">PDF</button></h3>
-            <p class="fr-tile__desc">Prêt à envoyer, signature incluse</p>
+            <p class="fr-tile__desc">Prêt à envoyer, signature incluse (certifiée si un certificat est chargé)</p>
           </div></div>
           <div class="fr-tile__header"><span class="pp-tile-icon fr-icon-file-pdf-line" aria-hidden="true"></span></div>
         </div>
@@ -2129,8 +2192,12 @@ function docFont() { return cfg.exp.font === 'Arial' ? 'Arial' : 'Marianne'; }
 
 // Police Marianne (DSFR) chargée à la demande et intégrée au PDF
 const DSFR_FONTS = 'https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.15.3/dist/fonts/';
-const MARIANNE = { normal: 'Marianne-Regular.woff2', bold: 'Marianne-Bold.woff2',
-  italics: 'Marianne-Regular_Italic.woff2', bolditalics: 'Marianne-Bold_Italic.woff2' };
+// Les polices WOFF du DSFR sont converties en TrueType avant intégration :
+// le moteur PDF gère mal les sous-ensembles WOFF/WOFF2 (glyphes corrompus, blocages).
+const MARIANNE_SRC = { normal: 'Marianne-Regular.woff', bold: 'Marianne-Bold.woff',
+  italics: 'Marianne-Regular_Italic.woff', bolditalics: 'Marianne-Bold_Italic.woff' };
+const MARIANNE = { normal: 'Marianne-Regular.ttf', bold: 'Marianne-Bold.ttf',
+  italics: 'Marianne-Regular_Italic.ttf', bolditalics: 'Marianne-Bold_Italic.ttf' };
 const ROBOTO = { normal: 'Roboto-Regular.ttf', bold: 'Roboto-Medium.ttf',
   italics: 'Roboto-Italic.ttf', bolditalics: 'Roboto-MediumItalic.ttf' };
 let pdfFont = 'Roboto';
@@ -2141,13 +2208,48 @@ function bufToBase64(buf) {
   for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
   return btoa(bin);
 }
+async function inflateZlib(u8) {
+  const ds = new DecompressionStream('deflate');
+  const out = new Response(new Blob([u8]).stream().pipeThrough(ds));
+  return new Uint8Array(await out.arrayBuffer());
+}
+// Conversion WOFF 1.0 -> TrueType/OpenType (reconstruction de l'en-tête sfnt)
+async function woffToSfnt(buf) {
+  const src = new DataView(buf);
+  if (src.getUint32(0) !== 0x774F4646) throw new Error('fichier WOFF invalide');
+  const flavor = src.getUint32(4), numTables = src.getUint16(12);
+  const tables = [];
+  for (let i = 0; i < numTables; i++) {
+    const o = 44 + i * 20;
+    const t = { tag: src.getUint32(o), offset: src.getUint32(o + 4), compLen: src.getUint32(o + 8),
+      origLen: src.getUint32(o + 12), checksum: src.getUint32(o + 16) };
+    const raw = new Uint8Array(buf, t.offset, t.compLen);
+    t.data = t.compLen < t.origLen ? await inflateZlib(raw) : raw;
+    tables.push(t);
+  }
+  let size = 12 + 16 * numTables;
+  tables.forEach(t => { size += (t.origLen + 3) & ~3; });
+  const out = new Uint8Array(size), dv = new DataView(out.buffer);
+  let pow = 1, log = 0;
+  while (pow * 2 <= numTables) { pow *= 2; log++; }
+  dv.setUint32(0, flavor); dv.setUint16(4, numTables);
+  dv.setUint16(6, pow * 16); dv.setUint16(8, log); dv.setUint16(10, numTables * 16 - pow * 16);
+  let off = 12 + 16 * numTables;
+  tables.forEach((t, i) => {
+    const r = 12 + i * 16;
+    dv.setUint32(r, t.tag); dv.setUint32(r + 4, t.checksum); dv.setUint32(r + 8, off); dv.setUint32(r + 12, t.origLen);
+    out.set(t.data.subarray(0, t.origLen), off);
+    off += (t.origLen + 3) & ~3;
+  });
+  return out.buffer;
+}
 function ensureMarianne() {
   if (!marianneReady) {
     marianneReady = (async () => {
-      for (const f of Object.values(MARIANNE)) {
-        const resp = await fetch(DSFR_FONTS + f);
-        if (!resp.ok) throw new Error('police ' + f + ' indisponible');
-        pdfMake.vfs[f] = bufToBase64(await resp.arrayBuffer());
+      for (const k of Object.keys(MARIANNE)) {
+        const resp = await fetch(DSFR_FONTS + MARIANNE_SRC[k]);
+        if (!resp.ok) throw new Error('police ' + MARIANNE_SRC[k] + ' indisponible');
+        pdfMake.vfs[MARIANNE[k]] = bufToBase64(await woffToSfnt(await resp.arrayBuffer()));
       }
       pdfMake.fonts = { Roboto: ROBOTO, Marianne: MARIANNE };
     })().catch(e => { marianneReady = null; throw e; });
@@ -2164,6 +2266,226 @@ function pdfBlob(content) {
   return new Promise((res, rej) => {
     try { pdfMake.createPdf(pdfDefinition(content)).getBlob(res); } catch (e) { rej(e); }
   });
+}
+
+/* ========================================================================
+ * Signature électronique certifiée des PDF (PAdES B-B, CAdES détaché)
+ *   - le certificat .p12 est lu avec node-forge ;
+ *   - la clé privée est importée dans WebCrypto (non exportable) puis
+ *     la copie forge est abandonnée : rien n'est stocké.
+ * ====================================================================== */
+let signer = null;   // { key: CryptoKey, cert, chain: [cert], cn, certDers: [...] }
+
+function b2u8(bin) { const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i) & 255; return u; }
+function u82b(u8) { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return s; }
+function dnField(dn, name) { const f = dn.getField(name); return f ? f.value : ''; }
+function certCN(c) { return dnField(c.subject, 'CN') || dnField(c.subject, 'O') || 'Signataire'; }
+
+async function loadCertificate(file, password) {
+  if (typeof forge === 'undefined' || !window.crypto || !crypto.subtle) throw new Error('Bibliothèque de signature indisponible (vérifiez la connexion ou le HTTPS).');
+  const buf = new Uint8Array(await file.arrayBuffer());
+  let p12;
+  try {
+    p12 = forge.pkcs12.pkcs12FromAsn1(forge.asn1.fromDer(u82b(buf)), false, password);
+  } catch (e) {
+    const m = String(e && e.message || e);
+    if (/password|mac|Invalid/i.test(m)) throw new Error('Mot de passe incorrect ou fichier illisible.');
+    if (/OID|not RSA|Cannot read public key/i.test(m)) throw new Error('Type de clé non pris en charge : seuls les certificats RSA sont acceptés.');
+    throw new Error('Fichier de certificat illisible (' + m + ').');
+  }
+  const keyBags = [].concat(
+    (p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag })[forge.pki.oids.pkcs8ShroudedKeyBag] || []),
+    (p12.getBags({ bagType: forge.pki.oids.keyBag })[forge.pki.oids.keyBag] || []));
+  const certs = (p12.getBags({ bagType: forge.pki.oids.certBag })[forge.pki.oids.certBag] || []).map(b => b.cert).filter(Boolean);
+  const key = keyBags.map(b => b.key).find(Boolean);
+  if (!key) throw new Error('Aucune clé privée RSA dans ce fichier (certificat seul, ou clé non RSA).');
+  const cert = certs.find(c => c.publicKey && c.publicKey.n && c.publicKey.n.equals(key.n));
+  if (!cert) throw new Error('Aucun certificat ne correspond à la clé privée du fichier.');
+  const pkcs8 = forge.asn1.toDer(forge.pki.wrapRsaPrivateKey(forge.pki.privateKeyToAsn1(key))).getBytes();
+  const cryptoKey = await crypto.subtle.importKey('pkcs8', b2u8(pkcs8), { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+  const chain = [cert].concat(certs.filter(c => c !== cert));
+  return { key: cryptoKey, cert, chain, cn: certCN(cert) };
+}
+
+function certStatus(cert) {
+  const now = new Date();
+  const ku = cert.getExtension('keyUsage');
+  const qc = (cert.extensions || []).some(e => e.id === '1.3.6.1.5.5.7.1.3');
+  return {
+    expired: now > cert.validity.notAfter,
+    notYet: now < cert.validity.notBefore,
+    canSign: !ku || ku.digitalSignature || ku.nonRepudiation,
+    nonRepudiation: !!(ku && ku.nonRepudiation),
+    qualified: qc,
+    selfSigned: cert.isIssuer(cert)
+  };
+}
+
+function renderCertInfo() {
+  if (!signer) {
+    $('certInfo').innerHTML = '<p class="fr-text--sm">Aucun certificat chargé.</p>';
+    $('certEnabled').checked = false; $('certEnabled').disabled = true;
+    return;
+  }
+  const c = signer.cert, st = certStatus(c);
+  const badges = [];
+  if (st.expired) badges.push('<span class="fr-badge fr-badge--sm fr-badge--error">Expiré</span>');
+  else if (st.notYet) badges.push('<span class="fr-badge fr-badge--sm fr-badge--error">Pas encore valide</span>');
+  else badges.push('<span class="fr-badge fr-badge--sm fr-badge--success">Valide</span>');
+  if (st.qualified) badges.push('<span class="fr-badge fr-badge--sm fr-badge--info">Certificat qualifié (QCStatement)</span>');
+  if (st.selfSigned) badges.push('<span class="fr-badge fr-badge--sm fr-badge--warning">Auto-signé</span>');
+  if (!st.canSign) badges.push('<span class="fr-badge fr-badge--sm fr-badge--error">Usage signature non autorisé</span>');
+  $('certInfo').innerHTML = `<div class="fr-badges-group fr-mb-1w">${badges.join('')}</div>
+    <dl class="fr-text--sm pp-certdl">
+      <dt>Titulaire</dt><dd><b>${esc(certCN(c))}</b>${dnField(c.subject, 'O') ? ' — ' + esc(dnField(c.subject, 'O')) : ''}${dnField(c.subject, 'E') ? '<br>' + esc(dnField(c.subject, 'E')) : ''}</dd>
+      <dt>Émis par</dt><dd>${esc(dnField(c.issuer, 'CN') || dnField(c.issuer, 'O'))}</dd>
+      <dt>Validité</dt><dd>du ${dateFR(c.validity.notBefore)} au ${dateFR(c.validity.notAfter)}</dd>
+      <dt>N° de série</dt><dd class="pp-code">${esc(c.serialNumber)}</dd>
+      <dt>Chaîne</dt><dd>${signer.chain.length} certificat(s)</dd>
+    </dl>`;
+  $('certEnabled').disabled = st.expired || st.notYet || !st.canSign;
+  if ($('certEnabled').disabled) $('certEnabled').checked = false;
+}
+
+$('certLoad').onclick = async () => {
+  const f = $('certFile').files[0];
+  if (!f) { $('certMsg').innerHTML = alertHTML('warn', 'Choisissez un fichier .p12 ou .pfx.'); return; }
+  $('certLoad').disabled = true;
+  try {
+    signer = await loadCertificate(f, $('certPass').value);
+    $('certPass').value = '';
+    $('certEnabled').checked = true;
+    renderCertInfo();
+    if ($('certEnabled').disabled) {
+      $('certMsg').innerHTML = alertHTML('err', 'Ce certificat ne peut pas être utilisé pour signer (expiré ou usage non autorisé).');
+    } else {
+      $('certMsg').innerHTML = alertHTML('ok', 'Certificat chargé : les PDF générés seront signés par ' + esc(signer.cn) + '.');
+    }
+    if (!$('certReason').value) $('certReason').value = 'Décision administrative';
+    if (!$('certLocation').value) $('certLocation').value = cfg.sig.lieu || '';
+  } catch (e) {
+    signer = null; renderCertInfo();
+    $('certMsg').innerHTML = alertHTML('err', esc(e.message || e));
+  } finally {
+    $('certLoad').disabled = false;
+  }
+};
+$('certClear').onclick = () => {
+  signer = null; $('certFile').value = ''; $('certPass').value = '';
+  renderCertInfo(); $('certMsg').innerHTML = alertHTML('info', 'Certificat retiré de la mémoire.');
+};
+$('certHelpBtn').onclick = () => {
+  const open = $('certHelpBtn').getAttribute('aria-expanded') === 'true';
+  $('certHelpBtn').setAttribute('aria-expanded', open ? 'false' : 'true');
+  $('certHelp').classList.toggle('fr-collapse--expanded', !open);
+};
+function signingActive() { return !!(signer && $('certEnabled').checked); }
+
+// --- Construction de la signature CMS (CAdES détachée, profil PAdES baseline B-B) ---
+async function buildCms(dataU8) {
+  const A = forge.asn1, U = A.Class.UNIVERSAL, T = A.Type;
+  const seq = (v) => A.create(U, T.SEQUENCE, true, v);
+  const set = (v) => A.create(U, T.SET, true, v);
+  const oid = (o) => A.create(U, T.OID, false, A.oidToDer(o).getBytes());
+  const oct = (b) => A.create(U, T.OCTETSTRING, false, b);
+  const nul = () => A.create(U, T.NULL, false, '');
+  const ctx0 = (v) => A.create(A.Class.CONTEXT_SPECIFIC, 0, true, v);
+  const sha256Alg = () => seq([oid('2.16.840.1.101.3.4.2.1'), nul()]);
+
+  const digest = u82b(new Uint8Array(await crypto.subtle.digest('SHA-256', dataU8)));
+  const certAsn1 = forge.pki.certificateToAsn1(signer.cert);
+  const certDer = A.toDer(certAsn1).getBytes();
+  const certHash = forge.md.sha256.create().update(certDer).digest().getBytes();
+
+  const attrs = [
+    seq([oid('1.2.840.113549.1.9.3'), set([oid('1.2.840.113549.1.7.1')])]),                 // contentType
+    seq([oid('1.2.840.113549.1.9.4'), set([oct(digest)])]),                                  // messageDigest
+    seq([oid('1.2.840.113549.1.9.16.2.47'), set([seq([seq([seq([oct(certHash)])])])])])     // signingCertificateV2
+  ];
+  // DER : les éléments d'un SET sont triés selon leur encodage
+  attrs.sort((a, b) => { const x = A.toDer(a).getBytes(), y = A.toDer(b).getBytes(); return x < y ? -1 : x > y ? 1 : 0; });
+  const signedAttrsDer = A.toDer(set(attrs)).getBytes();
+  const sig = u82b(new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', signer.key, b2u8(signedAttrsDer))));
+
+  // Émetteur et numéro de série tels qu'encodés dans le certificat d'origine
+  const tbs = signer.cert.tbsCertificate;
+  const off = tbs.value[0].tagClass === A.Class.CONTEXT_SPECIFIC ? 1 : 0;
+  const serial = tbs.value[off], issuer = tbs.value[off + 2];
+
+  const signerInfo = seq([
+    A.create(U, T.INTEGER, false, String.fromCharCode(1)),
+    seq([issuer, serial]),
+    sha256Alg(),
+    ctx0(attrs),
+    seq([oid('1.2.840.113549.1.1.1'), nul()]),
+    oct(sig)
+  ]);
+  const signedData = seq([
+    A.create(U, T.INTEGER, false, String.fromCharCode(1)),
+    set([sha256Alg()]),
+    seq([oid('1.2.840.113549.1.7.1')]),
+    ctx0(signer.chain.map(c => forge.pki.certificateToAsn1(c))),
+    set([signerInfo])
+  ]);
+  return A.toDer(seq([oid('1.2.840.113549.1.7.2'), ctx0([signedData])])).getBytes();
+}
+
+// --- Insertion de la signature dans le PDF ---
+async function signPdfBlob(blob) {
+  const { PDFDocument, PDFName, PDFNumber, PDFHexString, PDFArray, PDFString } = PDFLib;
+  const doc = await PDFDocument.load(await blob.arrayBuffer());
+  const ctx = doc.context;
+  const chainLen = signer.chain.reduce((n, c) => n + forge.asn1.toDer(forge.pki.certificateToAsn1(c)).length(), 0);
+  const SIG_LEN = Math.max(8192, chainLen + 4096);          // octets réservés pour la signature
+
+  const byteRange = PDFArray.withContext(ctx);
+  byteRange.push(PDFNumber.of(0));
+  byteRange.push(PDFName.of('**********'));
+  byteRange.push(PDFName.of('**********'));
+  byteRange.push(PDFName.of('**********'));
+  const now = new Date();
+  const sigDict = ctx.obj({
+    Type: 'Sig', Filter: 'Adobe.PPKLite', SubFilter: 'ETSI.CAdES.detached',
+    ByteRange: byteRange,
+    Contents: PDFHexString.of('0'.repeat(SIG_LEN * 2)),
+    M: PDFString.fromDate(now),
+    Name: PDFHexString.fromText(signer.cn),
+    Reason: PDFHexString.fromText($('certReason').value || 'Décision administrative'),
+    Location: PDFHexString.fromText($('certLocation').value || '')
+  });
+  const sigRef = ctx.register(sigDict);
+  const page = doc.getPages()[doc.getPageCount() - 1];
+  const widget = ctx.obj({
+    Type: 'Annot', Subtype: 'Widget', FT: 'Sig', Rect: [0, 0, 0, 0], F: 132,
+    T: PDFHexString.fromText('Signature ' + signer.cn), V: sigRef, P: page.ref
+  });
+  const widgetRef = ctx.register(widget);
+  const annots = page.node.lookup(PDFName.of('Annots'));
+  if (annots instanceof PDFArray) annots.push(widgetRef); else page.node.set(PDFName.of('Annots'), ctx.obj([widgetRef]));
+  doc.catalog.set(PDFName.of('AcroForm'), ctx.obj({ SigFlags: 3, Fields: [widgetRef] }));
+  const pdf = await doc.save({ useObjectStreams: false });
+
+  // Repérage des emplacements réservés
+  const text = new TextDecoder('latin1').decode(pdf);
+  const brPh = '/ByteRange [ 0 /********** /********** /********** ]';
+  const brPos = text.indexOf(brPh);
+  const ctPh = '<' + '0'.repeat(SIG_LEN * 2) + '>';
+  const ctPos = text.indexOf(ctPh);
+  if (brPos < 0 || ctPos < 0) throw new Error('Préparation de la signature impossible (structure PDF inattendue).');
+  const a = ctPos, b = ctPos + ctPh.length, len = pdf.length;
+  let br = '/ByteRange [0 ' + a + ' ' + b + ' ' + (len - b) + ']';
+  br += ' '.repeat(brPh.length - br.length);
+  pdf.set(new TextEncoder().encode(br), brPos);
+
+  const data = new Uint8Array(a + (len - b));
+  data.set(pdf.subarray(0, a), 0);
+  data.set(pdf.subarray(b), a);
+  const cms = await buildCms(data);
+  if (cms.length > SIG_LEN) throw new Error('Signature trop volumineuse pour l\'emplacement réservé.');
+  let hex = '';
+  for (let i = 0; i < cms.length; i++) hex += (cms.charCodeAt(i) & 255).toString(16).padStart(2, '0');
+  pdf.set(new TextEncoder().encode(hex), a + 1);
+  return new Blob([pdf], { type: 'application/pdf' });
 }
 
 /* ========================================================================
@@ -2248,12 +2570,14 @@ async function generate(kind) {
         });
         progress(rows.length / 2, rows.length, 'Création du PDF…'); await tick();
         blob = await pdfBlob(content);
+        if (signingActive()) { progress(rows.length, rows.length, 'Signature électronique…'); blob = await signPdfBlob(blob); }
       }
       const name = (rows.length === 1 ? fileNameFor(rows[0], 0) : 'Publipostage_' + dateFR(new Date()).replace(/\//g, '-')) + ext;
       downloadBlob(blob, name);
       progress(1, 1);
       const markNote = await markGenerated(rows, kind === 'docx' ? 'Word' : 'PDF');
-      genMsg(fontWarn ? 'warn' : 'ok', `${esc(name)} généré (${rows.length} dossier(s))${markNote}.` + (fontWarn ? '<br>' + fontWarn : ''));
+      const signNote = kind === 'pdf' && signingActive() ? ' · signé électroniquement par ' + esc(signer.cn) : '';
+      genMsg(fontWarn ? 'warn' : 'ok', `${esc(name)} généré (${rows.length} dossier(s))${signNote}${markNote}.` + (fontWarn ? '<br>' + fontWarn : ''));
       return;
     }
 
@@ -2269,7 +2593,10 @@ async function generate(kind) {
       const merged = mergeRecord(ir, row, i);
       let blob;
       if (kind === 'docx') { const d = new DocxBuilder(); d.addBlocks(merged); blob = await d.toBlob(); }
-      else blob = await pdfBlob(irToPdfContent(merged));
+      else {
+        blob = await pdfBlob(irToPdfContent(merged));
+        if (signingActive()) blob = await signPdfBlob(blob);
+      }
       let name = fileNameFor(row, i);
       let k = 2; const base = name;
       while (used.has(name.toLowerCase())) name = base + '_' + (k++);
@@ -2297,6 +2624,7 @@ async function generate(kind) {
     progress(1, 1);
     let msg = `${rows.length} document(s) ${kind === 'docx' ? 'Word' : 'PDF'} généré(s)`;
     if (zip) msg += ' dans ' + esc(baseName) + '.zip';
+    if (kind === 'pdf' && signingActive()) msg += ' · signé(s) électroniquement par ' + esc(signer.cn);
     if (updates.length) msg += ` · ${updates.length} ajouté(s) à la colonne « ${esc(attachCol)} »`;
     msg += await markGenerated(rows, kind === 'docx' ? 'Word' : 'PDF');
     genMsg(attachErr || fontWarn ? 'warn' : 'ok', msg + (attachErr ? '<br>Pièces jointes : ' + esc(attachErr.message) : '') + (fontWarn ? '<br>' + fontWarn : ''));
