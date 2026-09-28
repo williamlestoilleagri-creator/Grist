@@ -114,10 +114,10 @@
       <span>État : <span class="state on" id="sync-state">active</span></span>
       <button id="btn-sync" class="danger">Arrêter la synchro</button>
     </div>
-    <p class="hint">Quand elle est active, chaque pièce jointe non PDF déposée dans la colonne
-      d'origine est convertie en PDF et ajoutée à la colonne de destination ; les PJ déjà en PDF
-      y sont recopiées telles quelles. Toutes les PJ se retrouvent ainsi en PDF au même endroit.
-      Rien n'est jamais retiré de la colonne de destination.
+    <p class="hint">Quand elle est active, la colonne de destination contient <b>un seul fichier</b> :
+      le RIB le plus récent de la colonne d'origine, en PDF (recopié tel quel s'il est déjà en PDF,
+      converti sinon). Si le RIB est changé, ce fichier est remplacé. Si la colonne d'origine est
+      vidée, la colonne de destination est laissée telle quelle.
       L'automatisme fonctionne tant que ce widget est affiché dans une page ouverte ;
       l'arrêt est enregistré dans le document et vaut pour tous les utilisateurs.</p>
   </section>
@@ -126,7 +126,6 @@
     <div class="actions">
       <button id="btn-one" disabled>Reconvertir la ligne sélectionnée</button>
       <button id="btn-all" class="secondary" disabled>Synchroniser toutes les lignes visibles</button>
-      <button id="btn-dedupe" class="secondary" disabled>Retirer les doublons de la destination</button>
       <button id="btn-stop" class="danger" hidden>Interrompre le traitement en cours</button>
     </div>
     <progress id="progress" value="0" max="1" hidden></progress>
@@ -222,7 +221,6 @@
     var btnAll = document.getElementById('btn-all');
     btnAll.disabled = !ready || !state.records.length;
     btnAll.textContent = 'Synchroniser toutes les lignes visibles (' + state.records.length + ')';
-    document.getElementById('btn-dedupe').disabled = !ready || !state.records.length;
   }
 
   function renderMapping(raw) {
@@ -246,15 +244,14 @@
     await ensureMeta(ids.concat(toIds(rec.Destination)));
     if (state.current !== rec) return; // la sélection a changé entre-temps
     ul.innerHTML = '';
-    var steps = planRecord(rec, false).steps;
+    var plan = planRecord(rec);
     ids.forEach(function (id) {
-      var step = steps.filter(function (st) { return st.src === id; })[0];
-      var label, cls;
-      if (!step) { label = 'PDF — recopié'; cls = ''; }
-      else if (step.copy) { label = 'PDF — à recopier'; cls = ' conv'; }
-      else if (step.use) { label = 'converti'; cls = ''; }
+      var pdf = isPdfAttachment(id), label, cls = '';
+      if (id !== plan.src) label = 'ancien RIB — ignoré';
+      else if (plan.ok) label = pdf ? 'PDF — recopié' : 'converti';
+      else if (plan.keep !== undefined) { label = 'doublons à retirer'; cls = ' conv'; }
       else if (state.failed[id]) { label = 'échec'; cls = ' ko'; }
-      else { label = 'à convertir'; cls = ' conv'; }
+      else { label = pdf ? 'PDF — à recopier' : 'à convertir'; cls = ' conv'; }
       var li = document.createElement('li');
       var n = document.createElement('span');
       n.className = 'name';
@@ -462,41 +459,42 @@
   // ============================================================
   // Synchronisation d'une ligne
   // ============================================================
-  // Chaque PJ d'origine doit se retrouver en PDF dans la colonne de destination :
-  //  - une PJ déjà en PDF y est recopiée telle quelle (même pièce jointe) ;
-  //  - une autre PJ doit y avoir un PDF qui porte le nom attendu et qui a été créé après
-  //    son dépôt ; s'il manque, on convertit et on AJOUTE le résultat.
-  // Le contenu existant de la colonne de destination est toujours conservé.
+  // La colonne de destination contient AU PLUS UN fichier : le RIB le plus récent de la
+  // colonne d'origine, en PDF (recopié s'il l'est déjà, converti sinon). Quand le RIB change,
+  // ce fichier est remplacé. Si la colonne d'origine est vide, on ne touche à rien.
   function isPdfAttachment(id) {
     return kindOf(metaOf(id).name) === 'pdf' || !!state.realPdf[id];
   }
 
-  function planRecord(rec, force) {
-    var pool = force ? [] : toIds(rec.Destination).map(function (id) {
-      return { id: id, name: metaOf(id).name, t: metaOf(id).t };
-    });
-    var steps = [], dest = toIds(rec.Destination);
+  // RIB de référence : la PJ d'origine déposée en dernier (la dernière de la liste à égalité).
+  function latestSource(rec) {
+    var best = null;
     toIds(rec.Source).forEach(function (id) {
-      if (isPdfAttachment(id)) {
-        if (dest.indexOf(id) < 0) steps.push({ src: id, copy: true });
-        return;
-      }
-      var m = metaOf(id), target = baseName(m.name) + '.pdf';
-      var k = -1;
-      for (var i = 0; i < pool.length; i++) {
-        if (pool[i].id === state.done[id]) { k = i; break; }
-      }
-      for (i = 0; k < 0 && i < pool.length; i++) {
-        if (pool[i].name === target && pool[i].t >= m.t) k = i;
-      }
-      if (k >= 0) steps.push({ src: id, use: pool.splice(k, 1)[0].id });
-      else steps.push({ src: id, convert: true });
+      if (best === null || metaOf(id).t >= metaOf(best).t) best = id;
     });
-    return { steps: steps };
+    return best;
+  }
+
+  // Le fichier de destination correspond-il bien au RIB de référence ?
+  function matches(src, dstId) {
+    if (isPdfAttachment(src)) return dstId === src;
+    if (state.done[src] === dstId) return true;
+    var m = metaOf(src), d = metaOf(dstId);
+    return d.name === baseName(m.name) + '.pdf' && d.t >= m.t;
+  }
+
+  function planRecord(rec) {
+    var src = latestSource(rec);
+    if (src === null) return { src: null, ok: true };
+    var dest = toIds(rec.Destination);
+    var keep = dest.filter(function (id) { return matches(src, id); })[0];
+    return { src: src, keep: keep, ok: keep !== undefined && dest.length === 1 };
   }
 
   function planNeedsWork(rec, plan) {
-    return plan.steps.some(function (st) { return st.copy || (st.convert && !state.failed[st.src]); });
+    if (plan.ok) return false;
+    if (plan.keep !== undefined) return true;          // bon PDF présent, mais pas seul
+    return isPdfAttachment(plan.src) || !state.failed[plan.src];
   }
 
   async function convertOne(id) {
@@ -518,44 +516,40 @@
     return upload(pdfBlob, baseName(name) + '.pdf');
   }
 
-  // force = reconversion : le PDF existant d'un fichier est remplacé par le nouveau
-  // (à la même place) ; si la conversion échoue, l'ancien est gardé.
+  // force = reconversion du RIB même si son PDF existe déjà. En cas d'échec de conversion,
+  // la colonne de destination est laissée telle quelle.
   async function syncRecord(rec, force) {
-    var plan = planRecord(rec, false);
-    var out = toIds(rec.Destination), converted = 0, copied = 0, failed = 0;
-    for (var i = 0; i < plan.steps.length; i++) {
-      if (state.stop) break;
-      var st = plan.steps[i];
-      if (st.copy) {
-        if (out.indexOf(st.src) < 0) { out.push(st.src); copied++; }
-        continue;
-      }
-      if (st.use && !force) continue;
-      if (st.convert && state.failed[st.src] && !force) continue;
-      try {
-        var newId = await convertOne(st.src);
-        if (newId === st.src) {             // c'était en fait un PDF
-          if (out.indexOf(newId) < 0) { out.push(newId); copied++; }
-        } else if (newId) {
-          state.done[st.src] = newId;
-          if (st.use) out[out.indexOf(st.use)] = newId;
-          else out.push(newId);
-          converted++;
+    var dest = toIds(rec.Destination);
+    var plan = planRecord(rec), res = { changed: false, converted: 0, copied: 0, failed: 0, total: dest.length };
+    if (plan.src === null) return res;
+    var target = force ? undefined : plan.keep;
+    if (target === undefined) {
+      if (isPdfAttachment(plan.src)) {
+        target = plan.src;
+        res.copied = 1;
+      } else if (force || !state.failed[plan.src]) {
+        try {
+          var newId = await convertOne(plan.src);
+          if (newId === plan.src) res.copied = 1;   // c'était en fait un PDF
+          else { state.done[plan.src] = newId; res.converted = 1; }
+          target = newId;
+          delete state.failed[plan.src];
+        } catch (e) {
+          state.failed[plan.src] = true;
+          res.failed = 1;
+          log('  ligne ' + rec.id + ' — ' + metaOf(plan.src).name + ' : ' + e.message, 'err');
         }
-        delete state.failed[st.src];
-      } catch (e) {
-        state.failed[st.src] = true;
-        failed++;
-        log('  ligne ' + rec.id + ' — ' + metaOf(st.src).name + ' : ' + e.message, 'err');
       }
     }
-    var changed = out.join(',') !== toIds(rec.Destination).join(',');
-    if (changed) {
+    if (target === undefined) return res;
+    res.changed = !(dest.length === 1 && dest[0] === target);
+    if (res.changed) {
       var fields = {};
-      fields[state.mappings.Destination] = ['L'].concat(out);
+      fields[state.mappings.Destination] = ['L', target];
       await grist.docApi.applyUserActions([['UpdateRecord', state.tableId, rec.id, fields]]);
     }
-    return { changed: changed, converted: converted, copied: copied, failed: failed, total: out.length };
+    res.total = 1;
+    return res;
   }
 
   function mappingOk(quiet) {
@@ -579,7 +573,7 @@
       records.forEach(function (r) { ids = ids.concat(toIds(r.Source), toIds(r.Destination)); });
       await ensureMeta(ids);
 
-      var todo = force ? records : records.filter(function (r) { return planNeedsWork(r, planRecord(r, false)); });
+      var todo = force ? records : records.filter(function (r) { return planNeedsWork(r, planRecord(r)); });
       if (!todo.length) {
         if (label) log(label + ' : tout est déjà à jour.', 'ok');
         return;
@@ -597,8 +591,8 @@
           if (r.changed) {
             stats.rows++;
             stats.files += r.converted;
-            log('Ligne ' + rec.id + ' : ' + r.converted + ' converti(s), ' + r.copied + ' PDF recopié(s), '
-              + r.total + ' PDF dans la destination',
+            log('Ligne ' + rec.id + ' : ' + (r.converted ? 'RIB converti en PDF' : r.copied ? 'RIB PDF recopié'
+              : 'doublons retirés') + ' — 1 seul fichier dans la destination',
               r.failed ? 'warn' : 'ok');
           }
           stats.failed += r.failed;
@@ -642,46 +636,6 @@
     if (!mappingOk(false)) return;
     state.failed = Object.create(null); // on retente aussi les fichiers en échec
     runPass(state.records, false, 'Synchronisation');
-  });
-
-  // Doublon = même pièce jointe deux fois, ou même nom et même taille qu'une PJ précédente
-  // de la cellule. On garde la première occurrence.
-  function dedupeIds(ids) {
-    var seen = Object.create(null);
-    return ids.filter(function (id) {
-      var m = state.meta[id];
-      var key = m && m.size != null ? m.name + '|' + m.size : '#' + id;
-      if (seen['#' + id] || seen[key]) return false;
-      seen['#' + id] = seen[key] = true;
-      return true;
-    });
-  }
-
-  document.getElementById('btn-dedupe').addEventListener('click', async function () {
-    if (!mappingOk(false)) return;
-    setBusy(true);
-    try {
-      state.meta = Object.create(null);
-      await loadAttachmentMeta();
-      var actions = [], removed = 0;
-      state.records.forEach(function (r) {
-        var ids = toIds(r.Destination), kept = dedupeIds(ids);
-        if (kept.length < ids.length) {
-          var fields = {};
-          fields[state.mappings.Destination] = ['L'].concat(kept);
-          actions.push(['UpdateRecord', state.tableId, r.id, fields]);
-          removed += ids.length - kept.length;
-        }
-      });
-      if (!actions.length) { log('Aucun doublon trouvé.', 'ok'); return; }
-      if (!confirm('Retirer ' + removed + ' doublon(s) sur ' + actions.length + ' ligne(s) ?')) return;
-      await grist.docApi.applyUserActions(actions);
-      log(removed + ' doublon(s) retiré(s) sur ' + actions.length + ' ligne(s).', 'ok');
-    } catch (e) {
-      log('Retrait des doublons : ' + e.message, 'err');
-    } finally {
-      setBusy(false);
-    }
   });
 
   document.getElementById('btn-sync').addEventListener('click', function () {
