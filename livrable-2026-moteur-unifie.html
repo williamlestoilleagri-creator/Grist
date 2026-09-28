@@ -1,0 +1,1490 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Livrable 2026 - Moteur unifié</title>
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 16px;
+      font-family: Arial, sans-serif;
+      background: #f5f7fb;
+      color: #1f2937;
+    }
+
+    .container { width: 100%; }
+
+    /* ---------- Recherche ---------- */
+    .search-wrap {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: #f5f7fb;
+      padding-bottom: 12px;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 14px;
+      font-size: 15px;
+      outline: none;
+      background: #fff;
+    }
+    .search-input:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    }
+
+    /* ---------- Filtres dossier reçu / non transmis / exploitants importés ---------- */
+    .filter-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .filter-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 7px 12px;
+      border-radius: 999px;
+      border: 1px solid #d1d5db;
+      background: #fff;
+      color: #374151;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.15s ease;
+    }
+    .filter-chip:hover { border-color: #93c5fd; }
+    .filter-chip input { display: none; }
+    .filter-chip.active-recu {
+      background: #dcfce7; border-color: #bbf7d0; color: #166534;
+    }
+    .filter-chip.active-nontransmis {
+      background: #fef2f2; border-color: #fecaca; color: #b91c1c;
+    }
+    .filter-chip.active-importe {
+      background: #e0e7ff; border-color: #c7d2fe; color: #3730a3;
+    }
+    .filter-chip.active-nonimporte {
+      background: #fff7ed; border-color: #fed7aa; color: #9a3412;
+    }
+    .filter-sep {
+      width: 1px; align-self: stretch; background: #d1d5db; margin: 2px 4px;
+    }
+
+    .meta { margin-top: 10px; font-size: 13px; color: #6b7280; }
+
+    .results { display: grid; gap: 10px; margin-top: 10px; }
+
+    .card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 14px;
+      padding: 14px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .card:hover { border-color: #93c5fd; box-shadow: 0 8px 18px rgba(0, 0, 0, 0.06); transform: translateY(-1px); }
+    .card.active { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.10); }
+
+    .title { font-size: 20px; font-weight: 700; margin-bottom: 8px; color: #111827; }
+    .line { font-size: 14px; line-height: 1.5; color: #374151; word-break: break-word; }
+    .empty { background: #fff; border: 1px dashed #d1d5db; border-radius: 14px; padding: 18px; text-align: center; color: #6b7280; }
+    mark { background: #fde68a; padding: 0 2px; border-radius: 4px; }
+    .small { font-size: 12px; color: #6b7280; margin-top: 6px; }
+
+    .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .tag {
+      display: inline-block;
+      font-size: 11.5px;
+      font-weight: 700;
+      border-radius: 999px;
+      padding: 3px 9px;
+      white-space: nowrap;
+    }
+    .tag-present { color: #166534; background: #dcfce7; border: 1px solid #bbf7d0; }
+    .tag-absent { color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; }
+    .tag-courrier { color: #92400e; background: #fef3c7; border: 1px solid #fde68a; }
+    .tag-courrier-1 { color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; }
+    .tag-courrier-2 { color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; }
+    .tag-warn { color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; }
+
+    .open-fiche-btn {
+      margin-top: 10px;
+      display: inline-block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #2563eb;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 10px;
+      padding: 6px 10px;
+      cursor: pointer;
+    }
+    .open-fiche-btn:hover { background: #dbeafe; }
+
+    /* ---------- Fiche ---------- */
+    .back-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #fff; border: 1px solid #d1d5db; border-radius: 10px;
+      padding: 8px 12px; font-size: 14px; cursor: pointer; margin-bottom: 14px;
+    }
+    .back-btn:hover { border-color: #93c5fd; }
+
+    .fiche-header {
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 14px;
+      padding: 16px; margin-bottom: 14px;
+    }
+    .fiche-header .title { margin-bottom: 4px; }
+    .fiche-header .sub { font-size: 13px; color: #6b7280; margin-bottom: 8px; }
+
+    .fiche-loading {
+      background: #fff; border: 1px dashed #d1d5db; border-radius: 14px;
+      padding: 24px; text-align: center; color: #6b7280;
+    }
+
+    .section {
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 14px;
+      margin-bottom: 12px; overflow: hidden;
+    }
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 14px; background: #f9fafb; border-bottom: 1px solid #e5e7eb;
+      font-weight: 700; font-size: 14px; color: #111827;
+    }
+    .section-count {
+      font-size: 12px; font-weight: 600; color: #2563eb; background: #eff6ff;
+      border-radius: 999px; padding: 2px 8px;
+    }
+    .section-body { padding: 10px 14px; }
+
+    .row-block {
+      border: 1px solid #f0f1f4; border-radius: 10px; padding: 10px 12px;
+      margin-bottom: 8px; background: #fcfcfd;
+    }
+    .row-block:last-child { margin-bottom: 0; }
+
+    .field {
+      display: flex; gap: 6px; font-size: 13px; line-height: 1.5;
+      padding: 2px 0; border-bottom: 1px dashed #eef0f3;
+    }
+    .field:last-child { border-bottom: none; }
+    .field-list { flex-direction: column; align-items: flex-start; }
+    .field-label { color: #6b7280; min-width: 42%; flex-shrink: 0; }
+    .field-value { color: #1f2937; font-weight: 500; word-break: break-word; }
+    .value-list { margin: 6px 0 2px 4px; padding-left: 18px; color: #1f2937; font-weight: 500; }
+    .value-list li { margin-bottom: 3px; word-break: break-word; }
+    .section-empty { font-size: 13px; color: #9ca3af; font-style: italic; padding: 6px 0; }
+
+    .fiche-error {
+      background: #fef2f2; border: 1px solid #fecaca; color: #991b1b;
+      border-radius: 12px; padding: 14px; font-size: 14px;
+    }
+
+    /* ---------- Mise en page à deux colonnes ---------- */
+    .fiche-layout { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+    .fiche-main { flex: 3 1 400px; min-width: 280px; }
+
+    /* ---------- Journal des appels ---------- */
+    .call-log {
+      flex: 1 1 260px; max-width: 340px;
+      background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 14px; padding: 12px;
+    }
+    .call-log-header {
+      display: flex; align-items: center; justify-content: space-between;
+      font-weight: 700; font-size: 14px; color: #3730a3; margin-bottom: 10px; padding: 0 2px;
+    }
+    .call-log-count {
+      font-size: 12px; font-weight: 700; background: #c7d2fe; color: #3730a3;
+      border-radius: 999px; padding: 2px 8px;
+    }
+    .call-log-body { display: flex; flex-direction: column; gap: 10px; }
+    .call-log-empty { font-size: 13px; color: #6366f1; font-style: italic; text-align: center; padding: 14px 0; }
+
+    .call-card {
+      background: #fff; border-left: 4px solid #6366f1; border-radius: 10px;
+      padding: 10px 12px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+    .call-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; gap: 6px; }
+    .call-num { font-weight: 700; font-size: 13px; color: #3730a3; }
+
+    .badge-traite { background: #dcfce7; color: #166534; }
+    .badge-encours { background: #fef9c3; color: #854d0e; }
+    .badge-annule { background: #fee2e2; color: #991b1b; }
+    .badge-default { background: #e5e7eb; color: #374151; }
+
+    .badge-select {
+      appearance: none; -webkit-appearance: none; -moz-appearance: none;
+      border: none; font-size: 11px; font-weight: 700; padding: 3px 22px 3px 8px;
+      border-radius: 999px; cursor: pointer; white-space: nowrap;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%23374151'><path d='M5.5 7.5l4.5 4.5 4.5-4.5' stroke='%23374151' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+      background-repeat: no-repeat; background-position: right 6px center; background-size: 12px;
+    }
+    .badge-select:focus { outline: 2px solid rgba(99, 102, 241, 0.4); }
+    .badge-select.badge-traite { background-color: #dcfce7; color: #166534; }
+    .badge-select.badge-encours { background-color: #fef9c3; color: #854d0e; }
+    .badge-select.badge-annule { background-color: #fee2e2; color: #991b1b; }
+    .badge-select.badge-default { background-color: #e5e7eb; color: #374151; }
+
+    .call-field { font-size: 12.5px; line-height: 1.5; display: flex; gap: 4px; flex-wrap: wrap; padding: 1px 0; }
+    .call-label { color: #6366f1; font-weight: 600; min-width: 78px; }
+    .call-value { color: #1f2937; word-break: break-word; }
+
+    .call-numero-input {
+      flex: 1;
+      min-width: 0;
+      border: 1px solid transparent;
+      background: transparent;
+      font-family: inherit;
+      font-size: 12.5px;
+      color: #1f2937;
+      padding: 1px 4px;
+      border-radius: 6px;
+    }
+    .call-numero-input::placeholder { color: #d1d5db; }
+    .call-numero-input:hover { border-color: #d1d5db; }
+    .call-numero-input:focus {
+      outline: none;
+      border-color: #6366f1;
+      background: #fff;
+      box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+    }
+
+    .call-link-tag {
+      display: inline-block; font-size: 10.5px; font-weight: 700; border-radius: 999px;
+      padding: 2px 7px; margin-left: 4px;
+    }
+    .call-link-tag.via-exploitant { background: #dcfce7; color: #166534; }
+    .call-link-tag.via-tag { background: #e0e7ff; color: #3730a3; }
+
+    /* ---------- Formulaire "Nouvel appel" ---------- */
+    .new-call-btn {
+      width: 100%; background: #4f46e5; color: #fff; border: none; border-radius: 10px;
+      padding: 9px 12px; font-size: 13px; font-weight: 700; cursor: pointer; margin-bottom: 10px;
+    }
+    .new-call-btn:hover { background: #4338ca; }
+
+    .new-call-form {
+      background: #fff; border: 1px solid #c7d2fe; border-radius: 12px; padding: 12px;
+      margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .new-call-form.hidden { display: none; }
+
+    .form-field { display: flex; flex-direction: column; gap: 3px; }
+    .form-field label { font-size: 11.5px; font-weight: 700; color: #4338ca; }
+    .form-field input, .form-field select, .form-field textarea {
+      font-family: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid #d1d5db;
+      border-radius: 8px; outline: none; background: #fff; color: #1f2937;
+    }
+    .form-field input:focus, .form-field select:focus, .form-field textarea:focus {
+      border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+    }
+    .form-field select[multiple] { min-height: 74px; }
+    .form-field textarea { resize: vertical; min-height: 50px; }
+    .form-field textarea.reponse-textarea { min-height: 76px; }
+    .form-hint { font-size: 10.5px; color: #9ca3af; }
+
+    .form-actions { display: flex; gap: 8px; margin-top: 4px; }
+    .form-submit-btn {
+      flex: 1; background: #16a34a; color: #fff; border: none; border-radius: 8px;
+      padding: 8px 10px; font-size: 13px; font-weight: 700; cursor: pointer;
+    }
+    .form-submit-btn:hover { background: #15803d; }
+    .form-submit-btn:disabled { background: #9ca3af; cursor: not-allowed; }
+
+    .form-cancel-btn {
+      background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; border-radius: 8px;
+      padding: 8px 10px; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .form-cancel-btn:hover { background: #e5e7eb; }
+
+    .form-message { font-size: 12px; border-radius: 8px; padding: 6px 8px; }
+    .form-message.success { background: #dcfce7; color: #166534; }
+    .form-message.error { background: #fee2e2; color: #991b1b; }
+
+    /* ---------- Boutons rapides "Courrier reçu" ---------- */
+    .courrier-actions {
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 14px;
+      padding: 14px 16px; margin-bottom: 14px;
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+    .courrier-actions-label { font-size: 13px; font-weight: 700; color: #374151; margin-right: 4px; }
+    .courrier-btn {
+      border: none; border-radius: 10px; padding: 9px 14px;
+      font-size: 13px; font-weight: 700; color: #fff; cursor: pointer;
+    }
+    .courrier-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .courrier-btn-1 { background: #b91c1c; }
+    .courrier-btn-1:hover { background: #991b1b; }
+    .courrier-btn-2 { background: #16a34a; }
+    .courrier-btn-2:hover { background: #15803d; }
+    .courrier-actions-message { flex-basis: 100%; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Vue recherche -->
+    <div id="searchView">
+      <div class="search-wrap">
+        <input
+          id="searchInput"
+          class="search-input"
+          type="text"
+          placeholder="Rechercher un PACAGE, un nom, une commune, un type de courrier..."
+        />
+        <div class="filter-row" id="filterRow">
+          <label class="filter-chip" id="chipRecu">
+            <input type="checkbox" id="filterRecu">
+            <span>📨 Dossier reçu</span>
+          </label>
+          <label class="filter-chip" id="chipNonTransmis">
+            <input type="checkbox" id="filterNonTransmis">
+            <span>⚠ Dossier non transmis</span>
+          </label>
+          <span class="filter-sep"></span>
+          <label class="filter-chip" id="chipImporte">
+            <input type="checkbox" id="filterImporte">
+            <span>✓ Dans la liste des exploitants importés</span>
+          </label>
+          <label class="filter-chip" id="chipNonImporte">
+            <input type="checkbox" id="filterNonImporte">
+            <span>⚠ Absente de la liste des exploitants importés</span>
+          </label>
+        </div>
+        <div id="meta" class="meta">Chargement des données...</div>
+      </div>
+      <div id="results" class="results"></div>
+    </div>
+
+    <!-- Vue fiche -->
+    <div id="ficheView" style="display:none;">
+      <button class="back-btn" id="backBtn">&larr; Retour à la recherche</button>
+      <div id="ficheContent"></div>
+    </div>
+  </div>
+
+  <script>
+    // ================= État global =================
+    // Table liée : Liste_1_Exploitant (une ligne = un exploitant/PACAGE, déjà agrégé).
+    // Les parcelles associées sont récupérées séparément depuis DATA_Parcelle_10aout pour la fiche.
+    let allRecords = [];
+    let recordByPacage = new Map();       // PACAGE -> ligne Liste_1_Exploitant
+    let parcellesByPacage = new Map();    // PACAGE -> [lignes DATA_Parcelle_10aout]
+    let parcellesDefByPacage = new Map(); // PACAGE -> [lignes DATA_Parcelles_DEF] (pour les téléphones)
+    let groupEntries = [];                // [ [PACAGE, parcelles, summary], ... ]
+    let columns = [];
+    let currentSelectedRowId = null;
+    let currentGroupKey = null;
+
+    let exploitantPacageMap = new Map(); // PACAGE (texte) -> [lignes DATA_Exploitants]
+    let exploitantRefMap = new Map();    // ExploitantID ("PACAGE - Nom") -> id de ligne Liste_Exploitant
+    let referenceDataLoaded = false;
+
+    const searchInput = document.getElementById("searchInput");
+    const metaEl = document.getElementById("meta");
+    const resultsEl = document.getElementById("results");
+    const searchView = document.getElementById("searchView");
+    const ficheView = document.getElementById("ficheView");
+    const ficheContent = document.getElementById("ficheContent");
+    const backBtn = document.getElementById("backBtn");
+
+    // Filtres "dossier reçu" / "dossier non transmis" (mutuellement exclusifs)
+    const filterRecuEl = document.getElementById("filterRecu");
+    const filterNonTransmisEl = document.getElementById("filterNonTransmis");
+    const chipRecu = document.getElementById("chipRecu");
+    const chipNonTransmis = document.getElementById("chipNonTransmis");
+
+    // Filtres "dans / absente de la liste des exploitants importés" (mutuellement exclusifs,
+    // combinables avec les filtres dossier reçu / non transmis)
+    const filterImporteEl = document.getElementById("filterImporte");
+    const filterNonImporteEl = document.getElementById("filterNonImporte");
+    const chipImporte = document.getElementById("chipImporte");
+    const chipNonImporte = document.getElementById("chipNonImporte");
+
+    // ================= Utilitaires =================
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+    function escapeRegExp(string) { return String(string).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+    function highlight(text, query) {
+      const safeText = escapeHtml(text ?? "");
+      if (!query) return safeText;
+      const regex = new RegExp("(" + escapeRegExp(query) + ")", "ig");
+      return safeText.replace(regex, "<mark>$1</mark>");
+    }
+    function normalize(value) { return String(value ?? "").toLowerCase().trim(); }
+
+    function courrierBadgeClass(typeCourrier) {
+      if (typeCourrier === "Courrier 1 - ZSCE") return "tag-courrier-1";
+      if (typeCourrier === "Courrier 2 - Hors ZSCE - Etat") return "tag-courrier-2";
+      return "tag-courrier";
+    }
+
+    function decodeRef(value) { return typeof value === "number" && value ? value : null; }
+    function decodeRefList(value) {
+      if (Array.isArray(value) && value[0] === "L") return value.slice(1);
+      if (Array.isArray(value)) return value;
+      return [];
+    }
+
+    async function fetchTableRows(tableId) {
+      const table = await grist.docApi.fetchTable(tableId);
+      const cols = Object.keys(table).filter(c => c !== "id");
+      return table.id.map((id, i) => {
+        const row = { id };
+        cols.forEach(c => (row[c] = table[c][i]));
+        return row;
+      });
+    }
+
+    // ================= Indexation Liste_1_Exploitant + parcelles associées =================
+
+    // Chaque ligne de Liste_1_Exploitant est déjà unique par PACAGE (pas de regroupement à faire ici).
+    function buildRecordIndex(records) {
+      const map = new Map();
+      records.forEach(r => {
+        const key = r.Pacage ? String(r.Pacage).trim() : "id:" + r.id;
+        map.set(key, r);
+      });
+      return map;
+    }
+
+    // Indexe les parcelles (DATA_Parcelle_10aout) par PACAGE, pour la section "Parcelles importées"
+    // et le calcul du nombre de parcelles / surface totale de la fiche.
+    function buildParcellesIndex(records) {
+      const map = new Map();
+      records.forEach(r => {
+        const key = r.PACAGE ? String(r.PACAGE).trim() : null;
+        if (!key) return;
+        if (!map.has(key)) map.set(key, []);
+        map.get(key).push(r);
+      });
+      return map;
+    }
+
+    async function loadReferenceData() {
+      const [exploitantsRows, listeExploitantRows, parcelleRows, parcellesDefRows] = await Promise.all([
+        fetchTableRows("DATA_Exploitants"),
+        fetchTableRows("Liste_Exploitant"),
+        fetchTableRows("DATA_Parcelle_10aout"),
+        fetchTableRows("DATA_Parcelles_DEF")
+      ]);
+
+      exploitantPacageMap = new Map();
+      exploitantsRows.forEach(r => {
+        const key = String(r.PacageREF || "").trim();
+        if (!key) return;
+        if (!exploitantPacageMap.has(key)) exploitantPacageMap.set(key, []);
+        exploitantPacageMap.get(key).push(r);
+      });
+
+      // Liste_Exploitant : table pivot utilisée par DATA_Evenements.Exploitant_ID.
+      // Clé = "PACAGE - Nom", identique à DATA_Exploitants.ExploitantID.
+      exploitantRefMap = new Map();
+      listeExploitantRows.forEach(r => {
+        const key = String(r.ExploitantID || "").trim();
+        if (key) exploitantRefMap.set(key, r.id);
+      });
+
+      parcellesByPacage = buildParcellesIndex(parcelleRows);
+
+      // Index DATA_Parcelles_DEF par PACAGE, pour récupérer Telephone_Fixe / Telephone_portable
+      parcellesDefByPacage = new Map();
+      parcellesDefRows.forEach(r => {
+        const key = r.PACAGE ? String(r.PACAGE).trim() : null;
+        if (!key) return;
+        if (!parcellesDefByPacage.has(key)) parcellesDefByPacage.set(key, []);
+        parcellesDefByPacage.get(key).push(r);
+      });
+    }
+
+    // Récupère l'id Liste_Exploitant correspondant à une clé "PACAGE - Nom",
+    // en créant la ligne si elle n'existe pas encore.
+    async function getOrCreateExploitantRef(key) {
+      if (!key) return null;
+      const trimmed = String(key).trim();
+      if (!trimmed) return null;
+      if (exploitantRefMap.has(trimmed)) return exploitantRefMap.get(trimmed);
+
+      const result = await grist.docApi.applyUserActions([
+        ["AddRecord", "Liste_Exploitant", null, { ExploitantID: trimmed }]
+      ]);
+      const newId = result && Array.isArray(result.retValues) ? result.retValues[0] : null;
+      if (newId) exploitantRefMap.set(trimmed, newId);
+      return newId;
+    }
+
+    // Construit le résumé d'une fiche à partir de la ligne Liste_1_Exploitant (déjà agrégée)
+    // et des parcelles associées (DATA_Parcelle_10aout), pour compléter compte/surface/courrier.
+    function buildSummary(rec, parcelles) {
+      const pacageKey = rec.Pacage ? String(rec.Pacage).trim() : "id:" + rec.id;
+      const exploitants = exploitantPacageMap.get(pacageKey) || [];
+      const surfTotal = parcelles.reduce((sum, r) => sum + (Number(r.SURF_CALC) || 0), 0);
+      const repParcelle = parcelles[0] || {};
+
+      // Agrège tous les numéros de téléphone trouvés pour ce PACAGE, quelle que soit la source :
+      // DATA_Exploitants (Telephone_Portable, Mobile) et DATA_Parcelles_DEF (Telephone_Fixe, Telephone_portable).
+      const parcellesDefRows = parcellesDefByPacage.get(pacageKey) || [];
+      const phoneSet = new Set();
+      exploitants.forEach(e => {
+        if (e.Telephone_Portable) phoneSet.add(String(e.Telephone_Portable).trim());
+        if (e.Mobile) phoneSet.add(String(e.Mobile).trim());
+      });
+      parcellesDefRows.forEach(p => {
+        if (p.Telephone_Fixe) phoneSet.add(String(p.Telephone_Fixe).trim());
+        if (p.Telephone_portable) phoneSet.add(String(p.Telephone_portable).trim());
+      });
+      if (rec.Telephone) phoneSet.add(String(rec.Telephone).trim());
+      if (rec.Mobile) phoneSet.add(String(rec.Mobile).trim());
+      const telephones = [...phoneSet].filter(Boolean).join(", ");
+
+      // Statut "dossier reçu" : basé sur DATA_Exploitants.Nb_DN (nb de démarches valides associées).
+      // Si plusieurs lignes DATA_Exploitants correspondent au même PACAGE, on additionne.
+      const nbDN = exploitants.reduce((sum, e) => sum + (Number(e.Nb_DN) || 0), 0);
+      const aTransmisDossier = nbDN > 0;
+
+      return {
+        id: rec.id,
+        PACAGE: rec.Pacage,
+        Civilite: rec.Civilite,
+        Nom: rec.Nom_ou_Raison_sociale,
+        Adresse: rec.Adresse,
+        Code_Postal: rec.Code_Postal,
+        Commune: rec.Commune,
+        Telephone_Fixe: rec.Telephone,
+        Telephones: telephones,
+        Financement: rec.Financement,
+        Raison_de_la_selection: repParcelle.Raison_de_la_selection,
+        TypeCourrier: repParcelle.TypeCourrier,
+        ExploitantID: rec.Pacage + " - " + (rec.Nom_ou_Raison_sociale || ""),
+        Mail: rec.Email,
+        Mobile: rec.Mobile,
+        Dep: rec.Dep,
+        Liste_2: rec.Liste_2,
+        Liste_3: rec.Liste_3,
+        Doublon_mobile: rec.Doublon_mobile,
+        count: parcelles.length,
+        SURF_CALC: Math.round(surfTotal * 100) / 100,
+        Pas_de_coordonnees: !!rec.Pas_de_coordonnees,
+        exploitants: exploitants,
+        presentDansExploitants: !!rec.Concerne || exploitants.length > 0,
+        nbDN: nbDN,
+        aTransmisDossier: aTransmisDossier
+      };
+    }
+
+    function computeGroupEntries() {
+      groupEntries = [...recordByPacage.entries()].map(([key, rec]) => {
+        const parcelles = parcellesByPacage.get(key) || [];
+        return [key, parcelles, buildSummary(rec, parcelles)];
+      });
+    }
+
+    // ================= Recherche =================
+    const SEARCH_PRIORITY_COLUMNS = ["PACAGE", "Nom", "Commune", "Adresse", "Financement", "TypeCourrier", "Mail", "Mobile", "Telephones"];
+
+    function getSearchableText(summary) {
+      const values = SEARCH_PRIORITY_COLUMNS
+        .filter(col => summary[col] !== null && summary[col] !== undefined && summary[col] !== "")
+        .map(col => String(summary[col]));
+      return values.join(" ").toLowerCase();
+    }
+
+    function getPreferredTitle(summary, query) {
+      const priority = ["Nom", "PACAGE", "Commune"];
+      for (const col of priority) {
+        if (summary[col] !== undefined && summary[col] !== null && summary[col] !== "") {
+          return highlight(String(summary[col]), query);
+        }
+      }
+      return "PACAGE " + (summary.PACAGE || summary.id);
+    }
+
+    function getDetailLines(summary, query) {
+      const priority = ["PACAGE", "Nom", "Commune", "Adresse", "Financement", "count", "SURF_CALC", "Mail", "Mobile", "Telephones"];
+      const used = new Set();
+      const lines = [];
+      for (const col of priority) {
+        if (summary[col] !== undefined && summary[col] !== null && summary[col] !== "" && !used.has(col)) {
+          used.add(col);
+          lines.push(`<strong>${escapeHtml(labelFor(col))}</strong> : ${highlight(String(summary[col]), query)}`);
+        }
+        if (lines.length >= 8) break;
+      }
+      return lines.join("<br>");
+    }
+
+    async function selectRow(rowId) {
+      currentSelectedRowId = rowId;
+      try { await grist.setCursorPos({ rowId: rowId }); } catch (e) { console.error("Erreur setCursorPos :", e); }
+      try { await grist.setSelectedRows([rowId]); } catch (e) { console.error("Erreur setSelectedRows :", e); }
+      updateActiveCard();
+    }
+
+    function updateActiveCard() {
+      document.querySelectorAll(".card").forEach(card => {
+        card.classList.toggle("active", card.dataset.groupkey === currentGroupKey);
+      });
+    }
+
+    // Applique les filtres de statut (dossier reçu / non transmis, présence dans la liste
+    // des exploitants importés) puis le texte de recherche.
+    function filterGroups(query) {
+      const q = normalize(query);
+      let list = [...groupEntries];
+
+      if (filterRecuEl.checked) {
+        list = list.filter(([, , summary]) => summary.aTransmisDossier);
+      } else if (filterNonTransmisEl.checked) {
+        list = list.filter(([, , summary]) => !summary.aTransmisDossier);
+      }
+
+      if (filterImporteEl.checked) {
+        list = list.filter(([, , summary]) => summary.presentDansExploitants);
+      } else if (filterNonImporteEl.checked) {
+        list = list.filter(([, , summary]) => !summary.presentDansExploitants);
+      }
+
+      if (!q) return list;
+      return list.filter(([, , summary]) => getSearchableText(summary).includes(q));
+    }
+
+    function render() {
+      if (!referenceDataLoaded) {
+        metaEl.textContent = "Chargement des données de référence...";
+        resultsEl.innerHTML = "";
+        return;
+      }
+
+      const query = searchInput.value.trim();
+      const visible = filterGroups(query);
+      const absentCount = groupEntries.filter(([, , s]) => !s.presentDansExploitants).length;
+      const presentCount = groupEntries.length - absentCount;
+      const totalParcelles = groupEntries.reduce((sum, [, parcelles]) => sum + parcelles.length, 0);
+      const totalTransmis = groupEntries.filter(([, , s]) => s.aTransmisDossier).length;
+      const totalNonTransmis = groupEntries.length - totalTransmis;
+
+      metaEl.innerHTML =
+        `${visible.length} exploitations affichées sur ${groupEntries.length} ` +
+        `(${totalParcelles} parcelles au total)` +
+        `<br>📨 <strong>${totalTransmis}</strong> ont transmis un dossier · ⚠ <strong>${totalNonTransmis}</strong> n'ont pas transmis` +
+        `<br>✓ <strong>${presentCount}</strong> dans la liste des exploitants importés · ⚠ <strong>${absentCount}</strong> absentes`;
+
+      if (!visible.length) {
+        resultsEl.innerHTML = `<div class="empty">Aucun résultat trouvé</div>`;
+        return;
+      }
+
+      resultsEl.innerHTML = visible.map(([key, rows, summary]) => `
+        <div class="card" data-groupkey="${escapeHtml(key)}" data-rowid="${summary.id}">
+          <div class="title">${getPreferredTitle(summary, query)}</div>
+          <div class="line">${getDetailLines(summary, query)}</div>
+          <div class="small">${rows.length} parcelle(s) · ID de ligne Grist : ${summary.id}</div>
+          <div class="badges">
+            ${summary.aTransmisDossier
+              ? `<span class="tag tag-present">📨 Dossier reçu</span>`
+              : `<span class="tag tag-absent">⚠ Dossier non transmis</span>`}
+            ${summary.presentDansExploitants
+              ? `<span class="tag tag-present">✓ Dans la liste des exploitants importés</span>`
+              : `<span class="tag tag-absent">⚠ Absente de la liste des exploitants importés</span>`}
+            ${summary.TypeCourrier ? `<span class="tag ${courrierBadgeClass(summary.TypeCourrier)}">📨 ${escapeHtml(String(summary.TypeCourrier))}</span>` : ""}
+            ${summary.Pas_de_coordonnees ? `<span class="tag tag-warn">Aucune coordonnée</span>` : ""}
+          </div>
+          <div class="open-fiche-btn" data-groupkey="${escapeHtml(key)}">Voir la fiche complète →</div>
+        </div>
+      `).join("");
+
+      document.querySelectorAll(".card").forEach(card => {
+        card.addEventListener("click", async (ev) => {
+          const key = card.dataset.groupkey;
+          const rowId = Number(card.dataset.rowid);
+          currentGroupKey = key;
+          if (ev.target.classList.contains("open-fiche-btn")) {
+            await selectRow(rowId);
+            openFiche(key);
+          } else {
+            await selectRow(rowId);
+          }
+        });
+      });
+
+      updateActiveCard();
+    }
+
+    searchInput.addEventListener("input", render);
+
+    // Cases "Dossier reçu" / "Dossier non transmis" : mutuellement exclusives.
+    filterRecuEl.addEventListener("change", () => {
+      if (filterRecuEl.checked) filterNonTransmisEl.checked = false;
+      chipRecu.classList.toggle("active-recu", filterRecuEl.checked);
+      chipNonTransmis.classList.remove("active-nontransmis");
+      render();
+    });
+    filterNonTransmisEl.addEventListener("change", () => {
+      if (filterNonTransmisEl.checked) filterRecuEl.checked = false;
+      chipNonTransmis.classList.toggle("active-nontransmis", filterNonTransmisEl.checked);
+      chipRecu.classList.remove("active-recu");
+      render();
+    });
+
+    // Cases "Dans la liste des exploitants importés" / "Absente" : mutuellement exclusives.
+    filterImporteEl.addEventListener("change", () => {
+      if (filterImporteEl.checked) filterNonImporteEl.checked = false;
+      chipImporte.classList.toggle("active-importe", filterImporteEl.checked);
+      chipNonImporte.classList.remove("active-nonimporte");
+      render();
+    });
+    filterNonImporteEl.addEventListener("change", () => {
+      if (filterNonImporteEl.checked) filterImporteEl.checked = false;
+      chipNonImporte.classList.toggle("active-nonimporte", filterNonImporteEl.checked);
+      chipImporte.classList.remove("active-importe");
+      render();
+    });
+
+    // ================= Rendu générique de champs (fiche) =================
+
+    function fieldValueToText(val) {
+      if (Array.isArray(val) && val[0] === "L") return val.slice(1).join(", ");
+      if (Array.isArray(val)) return val.join(", ");
+      if (typeof val === "boolean") return val ? "Oui" : "Non";
+      return String(val);
+    }
+
+    function splitIntoListItems(text) {
+      if (typeof text !== "string") return null;
+      let items = null;
+      if (text.includes("\n")) items = text.split(/\n+/);
+      else if (text.includes("•")) items = text.split("•");
+      if (!items) return null;
+      items = items.map(s => s.replace(/^[•\-\*]\s*/, "").trim()).filter(Boolean);
+      return items.length > 1 ? items : null;
+    }
+
+    // Traduit un nom de colonne technique en libellé lisible pour l'affichage dans les fiches.
+    const FIELD_LABELS = {
+      PACAGE: "N° PACAGE",
+      Type: "Type",
+      Civilite: "Civilité",
+      Nom: "Nom",
+      Adresse: "Adresse",
+      Code_Postal: "Code postal",
+      Commune: "Commune",
+      Telephone_Fixe: "Téléphone fixe",
+      Telephone_portable: "Téléphone portable",
+      Telephone_Portable: "Téléphone portable",
+      Mobile: "Mobile",
+      CLE: "Clé",
+      NUM_ILOT: "N° d'îlot",
+      NUM_PARCEL: "N° de parcelle",
+      Numero_de_prelevement: "N° de prélèvement",
+      SURF_CALC: "Surface calculée (ha)",
+      CULT_2026: "Culture 2026",
+      CULT_2025: "Culture 2025",
+      CULT_2024: "Culture 2024",
+      ID_BVAV: "ID zone BVAV",
+      LB_BVAV: "Libellé zone BVAV",
+      ID_BAV: "ID zone BAV",
+      LB_BAV: "Libellé zone BAV",
+      Raison_de_la_selection: "Raison de la sélection",
+      Financement: "Financement",
+      Code_unique: "Code unique",
+      SIRET: "SIRET",
+      Siret: "SIRET",
+      count: "Nombre de parcelles",
+      Mail: "Adresse mail",
+      Adresse_mail: "Adresse mail",
+      Telephones: "Téléphone(s)",
+      ExploitantID: "Identifiant exploitant",
+      TypeCourrier: "Courrier reçu",
+      id2: "Identifiant",
+      Nom_Raison_sociale: "Nom / Raison sociale",
+      Date_debut_validite_SIGC: "Date de début de validité (SIGC)",
+      DN_associe: "Démarche associée",
+      Parcelles_selectionnees: "Parcelles sélectionnées",
+      Reponse_Question: "Question(s) en attente de réponse",
+      Pacage_Raison_de_la_selection: "Raison de la sélection",
+      A_repondu_a_la_DN: "A répondu à la démarche",
+      Duplica_dans_Nom_Raison_sociale: "Doublon possible sur le nom",
+      NB_parcelles: "Nombre de parcelles attendues",
+      Numero_de_l_appel: "N° de l'appel",
+      Cree_le: "Créé le",
+      Cree_par: "Créé par",
+      Traitement: "Traitement",
+      Description: "Description",
+      Reponse: "Réponse apportée",
+      Statut: "Statut",
+      Nom_ou_Raison_sociale: "Nom / Raison sociale",
+      Telephone: "Téléphone",
+      Dep: "Département",
+      Liste_2: "Présent dans Liste 2",
+      Liste_3: "Présent dans Liste 3",
+      Doublon_mobile: "Doublon de mobile détecté",
+      Concerne: "Concerné (présent dans la liste des exploitants importés)",
+      Email: "Adresse mail",
+      Intro_mail: "Intro mail",
+      Mobile_pour_SMS: "Mobile (format SMS)"
+    };
+
+    // Humanise un nom de colonne sans libellé prédéfini : remplace les underscores par des
+    // espaces et met en minuscule, en conservant la première lettre en majuscule.
+    function humanizeKey(key) {
+      const spaced = String(key).replace(/_/g, " ").trim();
+      if (!spaced) return key;
+      return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+    }
+
+    function labelFor(key) {
+      return FIELD_LABELS[key] || humanizeKey(key);
+    }
+
+    function renderFieldRow(key, rawValue) {
+      const text = fieldValueToText(rawValue);
+      const label = labelFor(key);
+      const items = splitIntoListItems(text);
+      if (items) {
+        return `
+          <div class="field field-list">
+            <span class="field-label">${escapeHtml(label)}</span>
+            <ul class="value-list">${items.map(i => `<li>${escapeHtml(i)}</li>`).join("")}</ul>
+          </div>
+        `;
+      }
+      return `
+        <div class="field">
+          <span class="field-label">${escapeHtml(label)}</span>
+          <span class="field-value">${escapeHtml(text)}</span>
+        </div>
+      `;
+    }
+
+    function renderGenericRow(row, skip = []) {
+      const parts = Object.keys(row)
+        .filter(k => k !== "id" && !k.startsWith("gristHelper") && !skip.includes(k))
+        .filter(k => row[k] !== null && row[k] !== undefined && row[k] !== "")
+        .map(k => renderFieldRow(k, row[k]));
+      return parts.join("") || `<div class="section-empty">Aucune donnée</div>`;
+    }
+
+    function renderSection(title, rows, skip = []) {
+      const body = rows.length
+        ? rows.map(r => `<div class="row-block">${renderGenericRow(r, skip)}</div>`).join("")
+        : `<div class="section-empty">Aucune ligne liée trouvée</div>`;
+      return `
+        <div class="section">
+          <div class="section-header">
+            <span>${escapeHtml(title)}</span>
+            <span class="section-count">${rows.length}</span>
+          </div>
+          <div class="section-body">${body}</div>
+        </div>
+      `;
+    }
+
+    // ================= Journal des appels (unifié) =================
+    // Lien "moteur 1" : DATA_Evenements.Exploitant_ID -> DATA_Exploitants (quand l'exploitant existe)
+    // Lien "moteur 2" : tag "[PACAGE:XXXX]" en début de Description (fonctionne toujours, même sans exploitant)
+    // Un appel est considéré lié s'il correspond à L'UN OU L'AUTRE des deux mécanismes.
+
+    function pacageTag(pacage) { return `[PACAGE:${pacage}]`; }
+    function stripTag(description, tag) { return (description || "").replace(tag, "").trim(); }
+
+    function formatDateTime(value) {
+      if (typeof value === "number" && value) {
+        try {
+          return new Date(value * 1000).toLocaleString("fr-FR", {
+            day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"
+          });
+        } catch (e) { return String(value); }
+      }
+      return value ? String(value) : "—";
+    }
+
+    function resolveThematiques(ev, themeRows) {
+      const ids = decodeRefList(ev.Thematique);
+      const labels = ids.map(id => {
+        const t = themeRows.find(x => x.id === id);
+        return t ? t.Thematique : null;
+      }).filter(Boolean);
+      return labels.join(", ");
+    }
+
+    function resolveQuestionOrStatut(ev, questionRows) {
+      const qId = decodeRef(ev.Question_FAQ);
+      if (qId) {
+        const q = questionRows.find(x => x.id === qId);
+        if (q && q.Question) return { label: "Question FAQ", value: String(q.Question) };
+      }
+      return { label: "Statut", value: ev.Statut ? String(ev.Statut) : "Question à ajouter dans la FAQ" };
+    }
+
+    function traitementBadgeClass(traitement) {
+      if (traitement === "Traité") return "badge-traite";
+      if (traitement === "En cours") return "badge-encours";
+      if (traitement === "Annulé") return "badge-annule";
+      return "badge-default";
+    }
+
+    function renderCallCard(ev, ctx) {
+      const num = ev.Numero_de_l_appel !== undefined && ev.Numero_de_l_appel !== null && ev.Numero_de_l_appel !== ""
+        ? ev.Numero_de_l_appel : "—";
+      const theme = resolveThematiques(ev, ctx.themeRows) || "—";
+      const date = formatDateTime(ev.Cree_le);
+      const par = ev.Cree_par ? String(ev.Cree_par) : "—";
+      const traitement = ev.Traitement ? String(ev.Traitement) : "—";
+      const type = ev.Type ? fieldValueToText(ev.Type) : "—";
+      const description = stripTag(ev.Description, ctx.tag);
+      const reponse = ev.Reponse ? String(ev.Reponse) : "";
+      const typeCourrier = ev.TypeCourrier ? String(ev.TypeCourrier) : "";
+      const qOrStatut = resolveQuestionOrStatut(ev, ctx.questionRows);
+      const viaExploitant = ctx.exploitantIdSet.has(decodeRef(ev.Exploitant_ID));
+      const linkTag = viaExploitant
+        ? `<span class="call-link-tag via-exploitant">via Exploitant</span>`
+        : `<span class="call-link-tag via-tag">via PACAGE</span>`;
+
+      return `
+        <div class="call-card">
+          <div class="call-card-top">
+            <span class="call-num">Appel n°${escapeHtml(String(num))} ${linkTag}</span>
+            <select class="badge-select ${traitementBadgeClass(traitement)}" data-eventid="${ev.id}">
+              <option value="En cours" ${traitement === "En cours" ? "selected" : ""}>En cours</option>
+              <option value="Traité" ${traitement === "Traité" ? "selected" : ""}>Traité</option>
+              <option value="Annulé" ${traitement === "Annulé" ? "selected" : ""}>Annulé</option>
+            </select>
+          </div>
+          ${typeCourrier ? `<div class="call-field"><span class="call-label">Courrier reçu</span><span class="call-value"><span class="tag ${courrierBadgeClass(typeCourrier)}">📨 ${escapeHtml(typeCourrier)}</span></span></div>` : ""}
+          <div class="call-field"><span class="call-label">Thématique</span><span class="call-value">${escapeHtml(theme)}</span></div>
+          <div class="call-field"><span class="call-label">Date</span><span class="call-value">${escapeHtml(date)}</span></div>
+          <div class="call-field"><span class="call-label">Créé par</span><span class="call-value">${escapeHtml(par)}</span></div>
+          <div class="call-field">
+            <span class="call-label">Appelant</span>
+            <input
+              type="text"
+              class="call-numero-input"
+              data-eventid="${ev.id}"
+              value="${escapeHtml(ev.Numero_d_appel || "")}"
+              placeholder="Numéro de l'appelant"
+            >
+          </div>
+          <div class="call-field"><span class="call-label">Type</span><span class="call-value">${escapeHtml(type)}</span></div>
+          ${description ? `<div class="call-field"><span class="call-label">Description</span><span class="call-value">${escapeHtml(description)}</span></div>` : ""}
+          ${reponse ? `<div class="call-field"><span class="call-label">Réponse</span><span class="call-value">${escapeHtml(reponse)}</span></div>` : ""}
+          <div class="call-field"><span class="call-label">${escapeHtml(qOrStatut.label)}</span><span class="call-value">${escapeHtml(qOrStatut.value)}</span></div>
+        </div>
+      `;
+    }
+
+    function nextCallNumber(events) {
+      const nums = events.map(e => Number(e.Numero_de_l_appel)).filter(n => !isNaN(n));
+      return nums.length ? Math.max(...nums) + 1 : 1;
+    }
+
+    function renderNewCallForm(ctx) {
+      const themeOptions = ctx.themeRows.map(t =>
+        `<option value="${t.id}">${escapeHtml(t.Thematique || "(sans nom)")}</option>`
+      ).join("");
+      const questionOptions = ctx.questionRows.map(q =>
+        `<option value="${q.id}">${escapeHtml((q.Question || "").slice(0, 60))}</option>`
+      ).join("");
+
+      // Options basées sur la clé texte ExploitantID ("PACAGE - Nom"), la même que celle
+      // utilisée par Liste_Exploitant (référencée par DATA_Evenements.Exploitant_ID).
+      const exploitants = ctx.summary.exploitants || [];
+      const optionEntries = [
+        { key: ctx.summary.ExploitantID, label: `${ctx.summary.Nom || ctx.summary.PACAGE} (fiche PACAGE)` }
+      ];
+      exploitants.forEach(ex => {
+        const key = ex.ExploitantID || (ctx.summary.PACAGE + " - " + (ex.Nom_Raison_sociale || ""));
+        if (key && key !== optionEntries[0].key) {
+          optionEntries.push({ key, label: ex.Nom_Raison_sociale || key });
+        }
+      });
+
+      const exploitantField = optionEntries.length > 1
+        ? `
+          <div class="form-field">
+            <label>Exploitant concerné</label>
+            <select name="exploitant">
+              ${optionEntries.map(o => `<option value="${escapeHtml(o.key)}">${escapeHtml(o.label)}</option>`).join("")}
+            </select>
+          </div>
+        `
+        : `<input type="hidden" name="exploitant" value="${escapeHtml(optionEntries[0].key)}">`;
+
+      return `
+        <form class="new-call-form hidden" id="newCallForm">
+          ${exploitantField}
+
+          <div class="form-field">
+            <label>N° de l'appel</label>
+            <input type="text" name="numero" value="${nextCallNumber(ctx.events)}">
+          </div>
+
+          <div class="form-field">
+            <label>Numéro de l'appelant</label>
+            <input
+              type="text"
+              name="numero_appelant"
+              value="${escapeHtml(ctx.summary.Mobile || ctx.summary.Telephones || "")}"
+              placeholder="Numéro de l'appelant"
+            >
+          </div>
+
+          <div class="form-field">
+            <label>Courrier reçu</label>
+            <select name="typecourrier">
+              <option value="">— Sélectionner —</option>
+              <option value="Courrier 1 - ZSCE" ${ctx.summary.TypeCourrier === "Courrier 1 - ZSCE" ? "selected" : ""}>Courrier 1 - ZSCE</option>
+              <option value="Courrier 2 - Hors ZSCE - Etat" ${ctx.summary.TypeCourrier === "Courrier 2 - Hors ZSCE - Etat" ? "selected" : ""}>Courrier 2 - Hors ZSCE - Etat</option>
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label>Thématique(s)</label>
+            <select name="thematique" multiple>${themeOptions}</select>
+            <span class="form-hint">Ctrl/Cmd + clic pour sélectionner plusieurs thématiques</span>
+          </div>
+
+          <div class="form-field">
+            <label>Type</label>
+            <select name="type" multiple>
+              <option value="Problème technique">Problème technique</option>
+              <option value="Problème de compréhension de la DN">Problème de compréhension de la DN</option>
+              <option value="Problème de saisie">Problème de saisie</option>
+              <option value="Ne souhaite pas participer à la campagne">Ne souhaite pas participer à la campagne</option>
+            </select>
+            <span class="form-hint">Ctrl/Cmd + clic pour sélectionner plusieurs types</span>
+          </div>
+
+          <div class="form-field">
+            <label>Traitement</label>
+            <select name="traitement">
+              <option value="En cours" selected>En cours</option>
+              <option value="Traité">Traité</option>
+              <option value="Annulé">Annulé</option>
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label>Description</label>
+            <textarea name="description" placeholder="Détail de l'appel..."></textarea>
+          </div>
+
+          <div class="form-field">
+            <label>Réponse apportée</label>
+            <textarea name="reponse" class="reponse-textarea" placeholder="Réponse donnée..."></textarea>
+          </div>
+
+          <div class="form-field">
+            <label>Question FAQ liée (facultatif)</label>
+            <select name="question">
+              <option value="">— Aucune —</option>
+              ${questionOptions}
+            </select>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="form-submit-btn" id="submitNewCallBtn">Enregistrer l'appel</button>
+            <button type="button" class="form-cancel-btn" id="cancelNewCallBtn">Annuler</button>
+          </div>
+        </form>
+      `;
+    }
+
+    function renderCourrierActions() {
+      return `
+        <div class="courrier-actions" id="courrierActions">
+          <span class="courrier-actions-label">Courrier reçu :</span>
+          <button type="button" class="courrier-btn courrier-btn-1" id="btnCourrier1">Courrier 1 - ZSCE</button>
+          <button type="button" class="courrier-btn courrier-btn-2" id="btnCourrier2">Courrier 2 - Hors ZSCE - Etat</button>
+          <div class="courrier-actions-message" id="courrierActionsMessage"></div>
+        </div>
+      `;
+    }
+
+    // Enregistre directement un "Courrier reçu" dans le journal des appels, sans passer
+    // par le formulaire complet "Nouvel appel".
+    async function markCourrierReceived(ctx, value) {
+      const buttons = document.querySelectorAll(".courrier-btn");
+      const messageEl = document.getElementById("courrierActionsMessage");
+      buttons.forEach(b => (b.disabled = true));
+      if (messageEl) messageEl.innerHTML = "";
+
+      try {
+        const exploitantRefId = await getOrCreateExploitantRef(ctx.summary.ExploitantID);
+        const fields = {
+          TypeCourrier: value,
+          Traitement: "Traité",
+          Description: (ctx.tag + " Courrier reçu enregistré directement depuis la fiche.").trim(),
+          Numero_de_l_appel: nextCallNumber(ctx.events)
+        };
+        if (exploitantRefId) fields.Exploitant_ID = exploitantRefId;
+
+        await grist.docApi.applyUserActions([
+          ["AddRecord", "DATA_Evenements", null, fields]
+        ]);
+        await refreshCallLog(ctx);
+
+        const newMessageEl = document.getElementById("courrierActionsMessage");
+        if (newMessageEl) newMessageEl.innerHTML = `<div class="form-message success">"${escapeHtml(value)}" enregistré.</div>`;
+      } catch (err) {
+        console.error("Erreur enregistrement courrier reçu :", err);
+        const newMessageEl = document.getElementById("courrierActionsMessage");
+        if (newMessageEl) newMessageEl.innerHTML = `<div class="form-message error">Échec de l'enregistrement (${escapeHtml(err.message || err)}).</div>`;
+      } finally {
+        document.querySelectorAll(".courrier-btn").forEach(b => (b.disabled = false));
+      }
+    }
+
+    function bindCourrierActions(ctx) {
+      const btn1 = document.getElementById("btnCourrier1");
+      const btn2 = document.getElementById("btnCourrier2");
+      if (btn1) btn1.addEventListener("click", () => markCourrierReceived(ctx, "Courrier 1 - ZSCE"));
+      if (btn2) btn2.addEventListener("click", () => markCourrierReceived(ctx, "Courrier 2 - Hors ZSCE - Etat"));
+    }
+
+    function renderCallLog(ctx) {
+      const events = ctx.events || [];
+      const body = events.length
+        ? events.map(ev => renderCallCard(ev, ctx)).join("")
+        : `<div class="call-log-empty">Aucun appel enregistré pour ce PACAGE</div>`;
+      return `
+        <div class="call-log" id="callLogWrap">
+          <div class="call-log-header">
+            <span>📞 Journal des appels</span>
+            <span class="call-log-count">${events.length}</span>
+          </div>
+          <button type="button" class="new-call-btn" id="toggleNewCallBtn">+ Nouvel appel entrant</button>
+          ${renderNewCallForm(ctx)}
+          <div id="callFormMessage"></div>
+          <div class="call-log-body">${body}</div>
+        </div>
+      `;
+    }
+
+    async function updateTraitement(select, ctx) {
+      const eventId = Number(select.dataset.eventid);
+      const newValue = select.value;
+      const previousClass = Array.from(select.classList).find(c => c.startsWith("badge-") && c !== "badge-select");
+      select.disabled = true;
+      try {
+        await grist.docApi.applyUserActions([
+          ["UpdateRecord", "DATA_Evenements", eventId, { Traitement: newValue }]
+        ]);
+        if (previousClass) select.classList.remove(previousClass);
+        select.classList.add(traitementBadgeClass(newValue));
+        const ev = ctx.events.find(e => e.id === eventId);
+        if (ev) ev.Traitement = newValue;
+      } catch (err) {
+        console.error("Erreur mise à jour Traitement :", err);
+        alert("Impossible de mettre à jour le statut de l'appel (" + (err.message || err) + ").");
+      } finally {
+        select.disabled = false;
+      }
+    }
+
+    async function updateNumeroAppel(input, ctx) {
+      const eventId = Number(input.dataset.eventid);
+      const newValue = input.value.trim();
+      const previousValue = input.dataset.previousValue || "";
+      if (newValue === previousValue) return; // rien n'a changé, pas d'appel inutile
+
+      input.disabled = true;
+      try {
+        await grist.docApi.applyUserActions([
+          ["UpdateRecord", "DATA_Evenements", eventId, { Numero_d_appel: newValue }]
+        ]);
+        input.dataset.previousValue = newValue;
+        const ev = ctx.events.find(e => e.id === eventId);
+        if (ev) ev.Numero_d_appel = newValue;
+      } catch (err) {
+        console.error("Erreur mise à jour du numéro de l'appelant :", err);
+        alert("Impossible de mettre à jour le numéro de l'appelant (" + (err.message || err) + ").");
+        input.value = previousValue;
+      } finally {
+        input.disabled = false;
+      }
+    }
+
+    function bindCallLogUI(ctx) {
+      const toggleBtn = document.getElementById("toggleNewCallBtn");
+      const form = document.getElementById("newCallForm");
+      const cancelBtn = document.getElementById("cancelNewCallBtn");
+
+      document.querySelectorAll(".badge-select").forEach(select => {
+        select.addEventListener("change", () => updateTraitement(select, ctx));
+      });
+
+      document.querySelectorAll(".call-numero-input").forEach(input => {
+        input.dataset.previousValue = input.value.trim();
+        input.addEventListener("blur", () => updateNumeroAppel(input, ctx));
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") { e.preventDefault(); input.blur(); }
+        });
+      });
+
+      if (!toggleBtn || !form) return;
+      toggleBtn.addEventListener("click", () => form.classList.toggle("hidden"));
+      if (cancelBtn) cancelBtn.addEventListener("click", () => form.classList.add("hidden"));
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        await submitNewCall(form, ctx);
+      });
+    }
+
+    async function submitNewCall(form, ctx) {
+      const messageEl = document.getElementById("callFormMessage");
+      const submitBtn = document.getElementById("submitNewCallBtn");
+      messageEl.innerHTML = "";
+
+      const exploitantKey = form.querySelector('[name="exploitant"]')?.value.trim() || "";
+
+      const numero = form.querySelector('[name="numero"]')?.value.trim() || "";
+      const numeroAppelant = form.querySelector('[name="numero_appelant"]')?.value.trim() || "";
+      const themeSelect = form.querySelector('[name="thematique"]');
+      const themeIds = themeSelect
+        ? Array.from(themeSelect.selectedOptions).map(o => Number(o.value)).filter(Boolean)
+        : [];
+      const typeSelect = form.querySelector('[name="type"]');
+      const typeValues = typeSelect
+        ? Array.from(typeSelect.selectedOptions).map(o => o.value).filter(Boolean)
+        : [];
+      const typeCourrier = form.querySelector('[name="typecourrier"]')?.value || "";
+      const traitement = form.querySelector('[name="traitement"]')?.value || "En cours";
+      const description = form.querySelector('[name="description"]')?.value.trim() || "";
+      const reponse = form.querySelector('[name="reponse"]')?.value.trim() || "";
+      const questionRaw = form.querySelector('[name="question"]')?.value || "";
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Enregistrement...";
+
+      try {
+        // Exploitant_ID référence désormais Liste_Exploitant (clé "PACAGE - Nom"),
+        // pas DATA_Exploitants directement : on résout ou crée la ligne pivot ici.
+        const exploitantRefId = await getOrCreateExploitantRef(exploitantKey);
+
+        const fullDescription = (ctx.tag + (description ? " " + description : "")).trim();
+
+        const fields = {
+          Traitement: traitement,
+          Description: fullDescription
+        };
+        if (exploitantRefId) fields.Exploitant_ID = exploitantRefId;
+        if (numero !== "") fields.Numero_de_l_appel = numero;
+        if (numeroAppelant !== "") fields.Numero_d_appel = numeroAppelant;
+        if (themeIds.length) fields.Thematique = ["L", ...themeIds];
+        if (typeValues.length) fields.Type = ["L", ...typeValues];
+        if (typeCourrier) fields.TypeCourrier = typeCourrier;
+        if (reponse) fields.Reponse = reponse;
+        if (questionRaw) fields.Question_FAQ = Number(questionRaw);
+
+        await grist.docApi.applyUserActions([
+          ["AddRecord", "DATA_Evenements", null, fields]
+        ]);
+        await refreshCallLog(ctx);
+        const newMessageEl = document.getElementById("callFormMessage");
+        if (newMessageEl) newMessageEl.innerHTML = `<div class="form-message success">Appel enregistré avec succès.</div>`;
+      } catch (err) {
+        console.error("Erreur création appel :", err);
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Enregistrer l'appel";
+        messageEl.innerHTML = `<div class="form-message error">Échec de l'enregistrement (${escapeHtml(err.message || err)}).</div>`;
+      }
+    }
+
+    function sortEvents(events) {
+      events.sort((a, b) => {
+        const na = Number(a.Numero_de_l_appel), nb = Number(b.Numero_de_l_appel);
+        const aHasNum = a.Numero_de_l_appel !== undefined && a.Numero_de_l_appel !== null && a.Numero_de_l_appel !== "" && !isNaN(na);
+        const bHasNum = b.Numero_de_l_appel !== undefined && b.Numero_de_l_appel !== null && b.Numero_de_l_appel !== "" && !isNaN(nb);
+        if (aHasNum && bHasNum) return na - nb;
+        return (Number(a.Cree_le) || 0) - (Number(b.Cree_le) || 0);
+      });
+      return events;
+    }
+
+    function matchEvents(evenementsRows, tag, exploitantIdSet) {
+      return evenementsRows.filter(r => {
+        if ((r.Description || "").includes(tag)) return true;
+        const linked = decodeRef(r.Exploitant_ID);
+        return linked !== null && exploitantIdSet.has(linked);
+      });
+    }
+
+    async function refreshCallLog(ctx) {
+      const relevantKeys = new Set([ctx.summary.ExploitantID].filter(Boolean));
+      (ctx.summary.exploitants || []).forEach(e => {
+        const key = e.ExploitantID || (ctx.summary.PACAGE + " - " + (e.Nom_Raison_sociale || ""));
+        if (key) relevantKeys.add(key);
+      });
+      ctx.exploitantIdSet = new Set([...relevantKeys].map(k => exploitantRefMap.get(k)).filter(Boolean));
+
+      const evenementsRows = await fetchTableRows("DATA_Evenements");
+      ctx.events = sortEvents(matchEvents(evenementsRows, ctx.tag, ctx.exploitantIdSet));
+      const wrap = document.getElementById("callLogWrap");
+      if (wrap) {
+        wrap.outerHTML = renderCallLog(ctx);
+        bindCallLogUI(ctx);
+      }
+    }
+
+    async function buildFiche(summary) {
+      const tag = pacageTag(summary.PACAGE || summary.id);
+
+      // Toutes les clés ExploitantID pertinentes pour ce PACAGE : celle de la fiche Livrable_2026
+      // elle-même, plus celles de chaque exploitant DATA_Exploitants trouvé.
+      const relevantKeys = new Set([summary.ExploitantID].filter(Boolean));
+      (summary.exploitants || []).forEach(e => {
+        const key = e.ExploitantID || (summary.PACAGE + " - " + (e.Nom_Raison_sociale || ""));
+        if (key) relevantKeys.add(key);
+      });
+
+      // Résout ces clés en ids de lignes Liste_Exploitant (celles qui existent déjà ;
+      // une clé sans ligne Liste_Exploitant n'a simplement encore aucun appel enregistré).
+      const exploitantIdSet = new Set(
+        [...relevantKeys].map(k => exploitantRefMap.get(k)).filter(Boolean)
+      );
+
+      const [evenementsRows, themeRows, questionRows] = await Promise.all([
+        fetchTableRows("DATA_Evenements"),
+        fetchTableRows("Liste_Theme"),
+        fetchTableRows("DATA_Question"),
+      ]);
+
+      const events = sortEvents(matchEvents(evenementsRows, tag, exploitantIdSet));
+
+      return { tag, exploitantIdSet, events, themeRows, questionRows, summary };
+    }
+
+    async function openFiche(groupKey) {
+      const rec = recordByPacage.get(groupKey);
+      if (!rec) return;
+      const rows = parcellesByPacage.get(groupKey) || [];
+      const summary = buildSummary(rec, rows);
+      currentGroupKey = groupKey;
+
+      searchView.style.display = "none";
+      ficheView.style.display = "block";
+
+      const header = `
+        <div class="fiche-header">
+          <div class="title">${escapeHtml(getPreferredTitle(summary, ""))}</div>
+          <div class="sub">PACAGE : ${escapeHtml(summary.PACAGE || "—")} · Commune : ${escapeHtml(summary.Commune || "—")}</div>
+          <div class="badges">
+            ${summary.aTransmisDossier
+              ? `<span class="tag tag-present">📨 Dossier reçu</span>`
+              : `<span class="tag tag-absent">⚠ Dossier non transmis</span>`}
+            ${summary.presentDansExploitants
+              ? `<span class="tag tag-present">✓ Dans la liste des exploitants importés</span>`
+              : `<span class="tag tag-absent">⚠ Absente de la liste des exploitants importés</span>`}
+            ${summary.TypeCourrier ? `<span class="tag ${courrierBadgeClass(summary.TypeCourrier)}">📨 ${escapeHtml(String(summary.TypeCourrier))}</span>` : ""}
+            ${summary.Pas_de_coordonnees ? `<span class="tag tag-warn">Aucune coordonnée</span>` : ""}
+          </div>
+        </div>
+      `;
+
+      ficheContent.innerHTML = `
+        ${header}
+        <div class="fiche-layout">
+          <div class="call-log">
+            <div class="call-log-header"><span>📞 Journal des appels</span></div>
+            <div class="call-log-body"><div class="call-log-empty">Chargement...</div></div>
+          </div>
+          <div class="fiche-main">
+            ${renderSection("Fiche de l'exploitation", [summary], ["exploitants", "TypeCourrier", "presentDansExploitants", "Pas_de_coordonnees", "Telephone_Fixe", "aTransmisDossier", "nbDN"])}
+            ${renderSection("Parcelles importées", rows)}
+          </div>
+        </div>
+      `;
+
+      try {
+        const ctx = await buildFiche(summary);
+
+        // Enrichit les exploitants trouvés avec les infos administratives issues de Livrable_2026,
+        // au cas où certains champs manqueraient côté DATA_Exploitants.
+        const enrichedExploitants = (summary.exploitants || []).map(r => ({
+          id: r.id,
+          Civilite: summary.Civilite,
+          Nom: summary.Nom,
+          Adresse: summary.Adresse,
+          Code_Postal: summary.Code_Postal,
+          Commune: summary.Commune,
+          Telephone_Fixe: summary.Telephone_Fixe,
+          Telephone_portable: summary.Telephone_portable,
+          ...r
+        }));
+
+        ficheContent.innerHTML = `
+          ${header}
+          ${renderCourrierActions()}
+          <div class="fiche-layout">
+            ${renderCallLog(ctx)}
+            <div class="fiche-main">
+              ${renderSection("Fiche de l'exploitation", [summary], ["exploitants", "TypeCourrier", "presentDansExploitants", "Pas_de_coordonnees", "Telephone_Fixe", "aTransmisDossier", "nbDN"])}
+              ${enrichedExploitants.length
+                ? renderSection("Liste des exploitants importés", enrichedExploitants, [
+                    "gristHelper_Display2", "manualSort", "Pacage", "PacageREF", "Reponse_Question"
+                  ])
+                : ""}
+              ${renderSection("Parcelles importées", rows)}
+            </div>
+          </div>
+        `;
+        bindCallLogUI(ctx);
+        bindCourrierActions(ctx);
+      } catch (err) {
+        console.error("Erreur construction fiche :", err);
+        ficheContent.innerHTML += `
+          <div class="fiche-error">
+            Impossible de charger le journal des appels (${escapeHtml(err.message || err)}).<br>
+            Vérifie que le widget a bien reçu l'autorisation d'accès complet au document Grist.
+          </div>
+        `;
+      }
+    }
+
+    backBtn.addEventListener("click", () => {
+      ficheView.style.display = "none";
+      searchView.style.display = "block";
+    });
+
+    // ================= Initialisation Grist =================
+    grist.ready({
+      requiredAccess: "full" // nécessaire pour interroger DATA_Exploitants, Liste_Exploitant, DATA_Parcelle_10aout, DATA_Evenements, Liste_Theme, DATA_Question
+    });
+
+    grist.onRecords(async (records) => {
+      allRecords = Array.isArray(records) ? records : [];
+      columns = Object.keys(allRecords[0] || {}).filter(col => col !== "id");
+      recordByPacage = buildRecordIndex(allRecords);
+
+      if (!referenceDataLoaded) {
+        render();
+        try {
+          await loadReferenceData();
+          referenceDataLoaded = true;
+        } catch (err) {
+          console.error("Erreur chargement données de référence :", err);
+          metaEl.textContent = "Erreur : impossible de charger DATA_Exploitants / Liste_Exploitant / DATA_Parcelle_10aout.";
+          resultsEl.innerHTML = `<div class="empty">Échec du chargement (${escapeHtml(err.message || err)}).<br>Vérifie que ces tables existent bien sous ces noms dans le document.</div>`;
+          return;
+        }
+      }
+
+      computeGroupEntries();
+      render();
+    });
+  </script>
+</body>
+</html>
