@@ -1,0 +1,1923 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Publipostage Grist</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/vfs_fonts.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #f7f6f2;
+    --panel: #ffffff;
+    --ink: #23281f;
+    --ink-soft: #6b7263;
+    --line: #e2e0d8;
+    --accent: #2f6f4f;
+    --accent-soft: #e7f0ea;
+    --warn: #b7791f;
+    --warn-soft: #fdf3dc;
+    --danger: #b3442f;
+    --danger-soft: #fbe9e5;
+    --radius: 8px;
+    --sans: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: var(--sans);
+    font-size: 13px;
+    color: var(--ink);
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+  }
+  button, select, input, textarea { font: inherit; color: inherit; }
+
+  /* ---------- En-tête et onglets ---------- */
+  header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px 0;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+  header .title { font-weight: 600; margin-right: 6px; padding-bottom: 8px; }
+  nav.tabs { display: flex; gap: 2px; flex-wrap: wrap; }
+  nav.tabs button {
+    border: none; background: transparent;
+    padding: 7px 10px 8px; cursor: pointer;
+    color: var(--ink-soft);
+    border-bottom: 2px solid transparent;
+  }
+  nav.tabs button.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+  nav.tabs button .n {
+    display: inline-block; width: 17px; height: 17px; line-height: 17px;
+    border-radius: 50%; background: var(--line); color: var(--ink);
+    font-size: 11px; text-align: center; margin-right: 4px;
+  }
+  nav.tabs button.active .n { background: var(--accent); color: #fff; }
+  header .status { margin-left: auto; font-size: 11.5px; color: var(--ink-soft); padding-bottom: 8px; }
+
+  main { flex: 1; overflow: auto; padding: 12px; }
+  section.tab { display: none; }
+  section.tab.active { display: block; }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 12px; margin-bottom: 12px;
+  }
+  .card h3 { margin: 0 0 8px; font-size: 13px; }
+  .hint { color: var(--ink-soft); font-size: 12px; margin: 4px 0 8px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+  .row label { min-width: 150px; color: var(--ink-soft); }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+
+  select, input[type=text], input[type=number], textarea {
+    border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; background: #fff;
+  }
+  select:focus, input:focus, textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+
+  .btn {
+    border: 1px solid var(--line); background: #fff; border-radius: 6px;
+    padding: 5px 10px; cursor: pointer; white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { filter: brightness(1.08); color: #fff; }
+  .btn.danger:hover { border-color: var(--danger); color: var(--danger); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  .msg { padding: 8px 10px; border-radius: 6px; margin-bottom: 10px; font-size: 12.5px; }
+  .msg.warn { background: var(--warn-soft); color: #6b4a10; }
+  .msg.err { background: var(--danger-soft); color: var(--danger); }
+  .msg.ok { background: var(--accent-soft); color: var(--accent); }
+
+  /* ---------- Colonnes ---------- */
+  .colfilter { width: 100%; margin-bottom: 8px; }
+  .collist { max-height: 340px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
+  .collist label {
+    display: flex; gap: 8px; align-items: center; padding: 5px 8px;
+    border-bottom: 1px solid #f0efe9; cursor: pointer;
+  }
+  .collist label:last-child { border-bottom: none; }
+  .collist label:hover { background: #fafaf7; }
+  .collist .cid { font-family: var(--mono); font-size: 11px; color: var(--ink-soft); margin-left: auto; }
+  .collist .ctype { font-size: 10.5px; color: var(--ink-soft); background: #f1f0ea; border-radius: 4px; padding: 1px 5px; }
+
+  /* ---------- Éditeur ---------- */
+  .editor-wrap { display: grid; grid-template-columns: 1fr 230px; gap: 12px; }
+  @media (max-width: 760px) { .editor-wrap { grid-template-columns: 1fr; } }
+  .toolbar {
+    display: flex; flex-wrap: wrap; gap: 3px; align-items: center;
+    padding: 6px; border: 1px solid var(--line); border-bottom: none;
+    border-radius: var(--radius) var(--radius) 0 0; background: #fbfaf7;
+  }
+  .toolbar button {
+    min-width: 28px; height: 28px; border: 1px solid transparent; background: transparent;
+    border-radius: 5px; cursor: pointer; padding: 0 6px;
+  }
+  .toolbar button:hover { background: #fff; border-color: var(--line); }
+  .toolbar .sep { width: 1px; height: 20px; background: var(--line); margin: 0 3px; }
+  .toolbar select { height: 28px; padding: 2px 4px; }
+  .toolbar input[type=color] { width: 28px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 5px; background: #fff; }
+  #imgTools { display: none; gap: 6px; align-items: center; font-size: 12px; }
+  #imgTools.show { display: flex; }
+
+  .paper {
+    background: #fff; border: 1px solid var(--line);
+    min-height: 420px; padding: 36px 44px;
+    font-family: Arial, Helvetica, sans-serif; font-size: 11pt; line-height: 1.35;
+  }
+  #editor { border-radius: 0 0 var(--radius) var(--radius); outline: none; }
+  #editor:focus { border-color: var(--accent); }
+  .paper p { margin: 0 0 6pt; min-height: 1em; }
+  .paper h1 { font-size: 18pt; margin: 0 0 8pt; }
+  .paper h2 { font-size: 14pt; margin: 0 0 6pt; }
+  .paper h3 { font-size: 12pt; margin: 0 0 6pt; }
+  .paper ul, .paper ol { margin: 0 0 6pt; padding-left: 24px; }
+  .paper img { max-width: 100%; }
+  .paper hr, .pv-break {
+    border: none; border-top: 2px dashed #c9c6bb; margin: 14px 0; position: relative; height: 0;
+  }
+  .paper hr::after, .pv-break::after {
+    content: "saut de page"; position: absolute; top: -9px; left: 50%; transform: translateX(-50%);
+    background: #fff; color: #a19e93; font-size: 10px; padding: 0 6px; font-family: var(--sans);
+  }
+  #editor img.sel { outline: 2px solid var(--accent); }
+
+  .fields h3 { margin-top: 0; }
+  .chip {
+    display: block; width: 100%; text-align: left;
+    border: 1px solid var(--line); background: #fff; border-radius: 6px;
+    padding: 5px 8px; margin-bottom: 4px; cursor: pointer;
+  }
+  .chip:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .chip small { display: block; font-family: var(--mono); color: var(--ink-soft); font-size: 10.5px; }
+  .chip.special { border-style: dashed; }
+  .fieldsbox { max-height: 380px; overflow: auto; }
+
+  /* ---------- Aperçu ---------- */
+  .pvnav { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+  .pvnav .lbl { font-weight: 600; }
+  .hl-ok { background: #fff4bf; }
+  .hl-missing { background: #fbd5cc; color: var(--danger); }
+  .nohl .hl-ok, .nohl .hl-missing { background: transparent; color: inherit; }
+
+  /* ---------- Signature ---------- */
+  .sigpad-wrap { border: 1px dashed #bdb9ad; border-radius: 6px; background: #fff; position: relative; }
+  #sigCanvas { width: 100%; height: 180px; display: block; touch-action: none; cursor: crosshair; }
+  .sigpad-wrap .base {
+    position: absolute; left: 24px; right: 24px; bottom: 36px; border-bottom: 1px solid #e5e2d8; pointer-events: none;
+  }
+  #sigPreview {
+    min-height: 80px; display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--line); border-radius: 6px; background:
+      repeating-conic-gradient(#f4f3ef 0% 25%, #fff 0% 50%) 50% / 16px 16px;
+  }
+  #sigPreview img { max-width: 100%; max-height: 140px; }
+
+  /* ---------- Génération ---------- */
+  .reclist { max-height: 300px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+  .reclist label { display: flex; gap: 8px; padding: 4px 8px; border-bottom: 1px solid #f0efe9; cursor: pointer; }
+  .reclist label:hover { background: #fafaf7; }
+  .reclist .rid { color: var(--ink-soft); font-family: var(--mono); font-size: 11px; margin-left: auto; }
+  .exports { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+  .exportbtn {
+    border: 1px solid var(--line); background: #fff; border-radius: var(--radius);
+    padding: 14px 12px; cursor: pointer; text-align: left;
+  }
+  .exportbtn:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .exportbtn b { display: block; font-size: 14px; margin-bottom: 3px; }
+  .exportbtn span { color: var(--ink-soft); font-size: 12px; }
+  .exportbtn:disabled { opacity: .5; cursor: wait; }
+  .progress { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 10px; display: none; }
+  .progress.show { display: block; }
+  .progress div { height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+  #genStatus { margin-top: 8px; font-size: 12.5px; }
+  code { font-family: var(--mono); font-size: 11.5px; background: #f1f0ea; padding: 1px 4px; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="title">Publipostage</span>
+  <nav class="tabs" id="tabs">
+    <button data-tab="donnees" class="active"><span class="n">1</span>Données</button>
+    <button data-tab="message"><span class="n">2</span>Message</button>
+    <button data-tab="signature"><span class="n">3</span>Signature</button>
+    <button data-tab="generer"><span class="n">4</span>Générer</button>
+  </nav>
+  <span class="status" id="status">Connexion à Grist…</span>
+</header>
+
+<main>
+  <!-- =============================== 1. DONNÉES =============================== -->
+  <section class="tab active" id="tab-donnees">
+    <div id="accessMsg"></div>
+    <div class="grid2">
+      <div class="card">
+        <h3>Source des données</h3>
+        <div class="row">
+          <label><input type="radio" name="source" value="widget" checked> Lignes affichées par ce widget</label>
+        </div>
+        <p class="hint">Utilise la table sélectionnée dans « Données de la vue » du widget, avec ses filtres et sa liaison éventuelle à une autre vue (ex : filtrer par département).</p>
+        <div class="row">
+          <label><input type="radio" name="source" value="table"> Une autre table (toutes les lignes)</label>
+        </div>
+        <div class="row">
+          <select id="tableSelect" style="flex:1; min-width: 220px"></select>
+          <button class="btn" id="reloadBtn" title="Recharger les données">⟳ Recharger</button>
+        </div>
+        <p class="hint" id="tableInfo"></p>
+      </div>
+
+      <div class="card">
+        <h3>Modèles enregistrés</h3>
+        <p class="hint">Un modèle mémorise la table, les colonnes, le message et la signature. Les modèles sont stockés dans les options du widget (dans le document Grist).</p>
+        <div class="row">
+          <select id="modelSelect" style="flex:1; min-width: 180px"><option value="">— Aucun modèle —</option></select>
+          <button class="btn" id="modelLoad">Charger</button>
+          <button class="btn danger" id="modelDelete">Supprimer</button>
+        </div>
+        <div class="row">
+          <input type="text" id="modelName" placeholder="Nom du modèle (ex : Décision individuelle)" style="flex:1; min-width: 180px">
+          <button class="btn primary" id="modelSave">Enregistrer</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Colonnes à utiliser dans le publipostage</h3>
+      <p class="hint">Les colonnes cochées deviennent des champs <code>{{colonne}}</code> insérables dans le message, et les colonnes du fichier Excel.</p>
+      <div class="row">
+        <input type="text" id="colFilter" class="colfilter" placeholder="Rechercher une colonne…" style="flex:1">
+        <button class="btn" id="colAll">Tout cocher</button>
+        <button class="btn" id="colNone">Tout décocher</button>
+      </div>
+      <div class="collist" id="colList"></div>
+      <div class="row" style="margin-top:10px">
+        <label for="labelCol">Colonne d'identification</label>
+        <select id="labelCol" style="flex:1; min-width: 200px"></select>
+      </div>
+      <p class="hint">Sert à reconnaître chaque enregistrement dans l'aperçu et dans la liste de génération.</p>
+    </div>
+  </section>
+
+  <!-- =============================== 2. MESSAGE =============================== -->
+  <section class="tab" id="tab-message">
+    <div class="pvnav">
+      <button class="btn" id="modeEdit">✎ Rédaction</button>
+      <button class="btn" id="modePreview">👁 Aperçu fusionné</button>
+      <span id="pvControls" style="display:none; gap:6px; align-items:center;">
+        <button class="btn" id="pvPrev">◀</button>
+        <span class="lbl" id="pvLabel"></span>
+        <button class="btn" id="pvNext">▶</button>
+        <label style="margin-left:8px"><input type="checkbox" id="pvHl" checked> Surligner les champs</label>
+      </span>
+    </div>
+
+    <div class="editor-wrap">
+      <div>
+        <div id="editPane">
+          <div class="toolbar" id="toolbar">
+            <select id="tbBlock" title="Style de paragraphe">
+              <option value="p">Normal</option>
+              <option value="h1">Titre 1</option>
+              <option value="h2">Titre 2</option>
+              <option value="h3">Titre 3</option>
+            </select>
+            <select id="tbSize" title="Taille du texte">
+              <option value="">Taille</option>
+              <option>8</option><option>9</option><option>10</option><option>11</option>
+              <option>12</option><option>14</option><option>16</option><option>18</option>
+              <option>20</option><option>24</option><option>28</option>
+            </select>
+            <span class="sep"></span>
+            <button data-cmd="bold" title="Gras (Ctrl+B)"><b>G</b></button>
+            <button data-cmd="italic" title="Italique (Ctrl+I)"><i>I</i></button>
+            <button data-cmd="underline" title="Souligné (Ctrl+U)"><u>S</u></button>
+            <input type="color" id="tbColor" value="#000000" title="Couleur du texte">
+            <span class="sep"></span>
+            <button data-cmd="justifyLeft" title="Aligner à gauche">⇤</button>
+            <button data-cmd="justifyCenter" title="Centrer">↔</button>
+            <button data-cmd="justifyRight" title="Aligner à droite">⇥</button>
+            <button data-cmd="justifyFull" title="Justifier">☰</button>
+            <span class="sep"></span>
+            <button data-cmd="insertUnorderedList" title="Liste à puces">• —</button>
+            <button data-cmd="insertOrderedList" title="Liste numérotée">1.</button>
+            <span class="sep"></span>
+            <button id="tbImage" title="Insérer une image (logo, en-tête…)">🖼</button>
+            <button id="tbBreak" title="Insérer un saut de page">⤓</button>
+            <button id="tbSig" title="Insérer l'emplacement de la signature">✍</button>
+            <button data-cmd="removeFormat" title="Effacer la mise en forme">⌫</button>
+            <span class="sep"></span>
+            <button data-cmd="undo" title="Annuler">↶</button>
+            <button data-cmd="redo" title="Rétablir">↷</button>
+            <span id="imgTools">
+              <span class="sep"></span>Largeur image
+              <input type="range" id="imgWidth" min="30" max="640" step="5">
+              <span id="imgWidthVal"></span>
+            </span>
+          </div>
+          <div id="editor" class="paper" contenteditable="true" spellcheck="true"></div>
+        </div>
+        <div id="previewPane" style="display:none">
+          <div id="preview" class="paper"></div>
+        </div>
+      </div>
+
+      <div class="card fields">
+        <h3>Champs de fusion</h3>
+        <p class="hint">Cliquez pour insérer à l'emplacement du curseur.</p>
+        <div class="fieldsbox" id="fieldsBox"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =============================== 3. SIGNATURE =============================== -->
+  <section class="tab" id="tab-signature">
+    <div class="card">
+      <label style="font-weight:600"><input type="checkbox" id="sigEnabled"> Intégrer une signature électronique aux documents</label>
+      <p class="hint">La signature est placée à l'emplacement du champ <code>{{SIGNATURE}}</code> dans le message, ou à la fin du document si ce champ est absent.</p>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>Dessiner la signature</h3>
+        <div class="sigpad-wrap">
+          <canvas id="sigCanvas"></canvas>
+          <div class="base"></div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <label style="min-width:auto">Couleur</label>
+          <select id="sigInk">
+            <option value="#1b2a5e">Bleu encre</option>
+            <option value="#000000">Noir</option>
+          </select>
+          <label style="min-width:auto">Épaisseur</label>
+          <input type="range" id="sigThick" min="1" max="6" step="0.5" value="2.5">
+          <button class="btn" id="sigClear">Effacer</button>
+          <button class="btn primary" id="sigUse">Utiliser ce tracé</button>
+        </div>
+        <div class="row">
+          <button class="btn" id="sigImport">Importer une image de signature (PNG/JPG)…</button>
+          <input type="file" id="sigFile" accept="image/*" style="display:none">
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Signature enregistrée</h3>
+        <div id="sigPreview"><span class="hint">Aucune signature</span></div>
+        <div class="row" style="margin-top:8px">
+          <label for="sigWidth">Largeur dans le document</label>
+          <input type="range" id="sigWidth" min="80" max="360" step="10" value="180">
+          <span id="sigWidthVal"></span>
+        </div>
+        <div class="row">
+          <label for="sigAlign">Alignement du bloc</label>
+          <select id="sigAlign">
+            <option value="left">Gauche</option>
+            <option value="center">Centré</option>
+            <option value="right" selected>Droite</option>
+          </select>
+        </div>
+        <div class="row">
+          <button class="btn danger" id="sigRemove">Supprimer la signature</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Bloc signataire</h3>
+      <p class="hint">Ces textes acceptent aussi les champs de fusion (ex : <code>{{Code_dpt}}</code>).</p>
+      <div class="row">
+        <label><input type="checkbox" id="sigFaitA" checked> « Fait à …, le … »</label>
+        <input type="text" id="sigLieu" placeholder="Lieu (ex : Rennes)" style="flex:1; min-width: 160px">
+      </div>
+      <div class="row">
+        <label for="sigFonction">Fonction / qualité</label>
+        <input type="text" id="sigFonction" placeholder="ex : Pour le préfet et par délégation, le directeur départemental" style="flex:1; min-width: 220px">
+      </div>
+      <div class="row">
+        <label for="sigNom">Nom du signataire</label>
+        <input type="text" id="sigNom" placeholder="ex : Prénom NOM" style="flex:1; min-width: 220px">
+      </div>
+      <div class="row">
+        <label><input type="checkbox" id="sigMention" checked> Ajouter la mention « Signé électroniquement par … le … »</label>
+      </div>
+    </div>
+  </section>
+
+  <!-- =============================== 4. GÉNÉRER =============================== -->
+  <section class="tab" id="tab-generer">
+    <div class="grid2">
+      <div class="card">
+        <h3>Enregistrements à fusionner</h3>
+        <div class="row">
+          <input type="text" id="recSearch" placeholder="Filtrer…" style="flex:1; min-width: 140px">
+          <button class="btn" id="recAll">Tout</button>
+          <button class="btn" id="recNone">Aucun</button>
+        </div>
+        <div class="reclist" id="recList"></div>
+        <p class="hint" id="recCount"></p>
+      </div>
+
+      <div class="card">
+        <h3>Options</h3>
+        <div class="row">
+          <label>Word / PDF</label>
+          <select id="expMode" style="flex:1">
+            <option value="single">Un seul fichier (un enregistrement par page)</option>
+            <option value="multi">Un fichier par enregistrement (archive ZIP)</option>
+          </select>
+        </div>
+        <div class="row">
+          <label for="expName">Nom des fichiers</label>
+          <input type="text" id="expName" style="flex:1; min-width: 180px">
+        </div>
+        <p class="hint">Champs de fusion acceptés, ex : <code>Decision_{{raison_sociale}}</code>.</p>
+        <div class="row">
+          <label for="expAttach">Joindre dans la colonne</label>
+          <select id="expAttach" style="flex:1"><option value="">— Ne pas joindre à Grist —</option></select>
+        </div>
+        <p class="hint">Si une colonne « Pièces jointes » est choisie, chaque document généré (un par enregistrement) est ajouté dans cette colonne de la ligne correspondante (en mode « Un seul fichier », les documents sont uniquement joints dans Grist, sans téléchargement).</p>
+        <div class="row">
+          <label><input type="checkbox" id="expMessage" checked> Excel : ajouter une colonne « Message » (texte fusionné)</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Générer</h3>
+      <div class="exports">
+        <button class="exportbtn" id="genDocx"><b>📄 Word (.docx)</b><span>Document mis en forme, signature incluse</span></button>
+        <button class="exportbtn" id="genPdf"><b>📕 PDF</b><span>Prêt à envoyer, signature incluse</span></button>
+        <button class="exportbtn" id="genXlsx"><b>📊 Excel (.xlsx)</b><span>Table de publipostage (source de données)</span></button>
+      </div>
+      <div class="progress" id="progress"><div></div></div>
+      <div id="genStatus"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+"use strict";
+
+/* ========================================================================
+ * État
+ * ====================================================================== */
+const DEFAULT_TEMPLATE =
+  '<p style="text-align: right;">{{DATE_JOUR_LONGUE}}</p>' +
+  '<p><b>Objet :</b> votre demande d\'aide</p>' +
+  '<p>Madame, Monsieur,</p>' +
+  '<p>Rédigez ici votre message. Insérez les champs de fusion à l\'aide du panneau de droite.</p>' +
+  '<p>Je vous prie d\'agréer, Madame, Monsieur, l\'expression de mes salutations distinguées.</p>' +
+  '<p>{{SIGNATURE}}</p>';
+
+let cfg = {
+  source: 'widget',
+  tableId: '',
+  cols: [],
+  labelCol: '',
+  html: DEFAULT_TEMPLATE,
+  sig: {
+    enabled: false, image: null, imgW: 0, imgH: 0, width: 180, align: 'right',
+    faitA: true, lieu: '', fonction: '', nom: '', mention: true
+  },
+  exp: { mode: 'single', name: 'Publipostage_{{NUMERO}}', attachCol: '', message: true },
+  models: {}
+};
+
+let widgetTableId = null;     // table liée au widget
+let widgetRowIds = [];        // ids visibles dans le widget (ordre de la vue)
+let meta = null;              // { tables: {tableId: [cols]} }
+let data = { tableId: null, cols: [], rows: [] };  // données chargées
+let excluded = new Set();     // ids décochés dans l'onglet Générer
+let pvIndex = 0;
+let configLoaded = false;
+let hasFullAccess = false;
+
+const $ = (id) => document.getElementById(id);
+
+function setStatus(t) { $('status').textContent = t; }
+
+/* ========================================================================
+ * Onglets
+ * ====================================================================== */
+$('tabs').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-tab]');
+  if (!b) return;
+  showTab(b.dataset.tab);
+});
+function showTab(name) {
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('section.tab').forEach(s => s.classList.toggle('active', s.id === 'tab-' + name));
+  if (name === 'message') { renderFields(); if (isPreview) renderPreview(); }
+  if (name === 'generer') renderRecList();
+  if (name === 'signature') resizeSigCanvas();
+}
+
+/* ========================================================================
+ * Persistance (options du widget, repli localStorage)
+ * ====================================================================== */
+let saveTimer = null;
+function saveConfig() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    const copy = JSON.parse(JSON.stringify(cfg));
+    try { localStorage.setItem('grist-publipostage', JSON.stringify(copy)); } catch (e) {}
+    try { await grist.setOption('config', copy); } catch (e) { /* lecteur seul : pas d'écriture */ }
+  }, 600);
+}
+function loadLocal() {
+  try { const s = localStorage.getItem('grist-publipostage'); return s ? JSON.parse(s) : null; }
+  catch (e) { return null; }
+}
+function applyConfig(c) {
+  if (!c) return;
+  cfg = Object.assign({}, cfg, c);
+  cfg.sig = Object.assign({}, cfg.sig, c.sig || {});
+  cfg.exp = Object.assign({}, cfg.exp, c.exp || {});
+  cfg.models = c.models || {};
+}
+
+/* ========================================================================
+ * Formatage des valeurs Grist
+ * ====================================================================== */
+const MOIS = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+function pad2(n) { return String(n).padStart(2, '0'); }
+function dateFR(d) { return pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1) + '/' + d.getFullYear(); }
+function dateLongueFR(d) { return (d.getDate() === 1 ? '1er' : d.getDate()) + ' ' + MOIS[d.getMonth()] + ' ' + d.getFullYear(); }
+
+function parseOpts(s) { try { return s ? JSON.parse(s) : {}; } catch (e) { return {}; } }
+
+function formatValue(col, row) {
+  let v = row[col.id];
+  if (col.displayId && row[col.displayId] !== undefined) v = row[col.displayId];
+  if (v === null || v === undefined || v === '') return '';
+  if (Array.isArray(v)) {
+    if (v[0] === 'E') return '#ERREUR';
+    if (v[0] === 'L') {
+      if (col.baseType === 'Attachments') return (v.length - 1) + ' pièce(s) jointe(s)';
+      return v.slice(1).map(x => x === null ? '' : String(x)).join(', ');
+    }
+    if (v[0] === 'd') return dateFR(new Date(v[1] * 1000));
+    if (v[0] === 'D') return formatDateTime(v[1], v[2]);
+    if (v[0] === 'R') return String(v[2] || '');
+    return v.slice(1).join(', ');
+  }
+  const bt = col.baseType;
+  if (bt === 'Bool') return v ? 'Oui' : 'Non';
+  if (bt === 'Date' && typeof v === 'number') {
+    const d = new Date(v * 1000);
+    return pad2(d.getUTCDate()) + '/' + pad2(d.getUTCMonth() + 1) + '/' + d.getUTCFullYear();
+  }
+  if (bt === 'DateTime' && typeof v === 'number') return formatDateTime(v, col.tz);
+  if ((bt === 'Numeric' || bt === 'Int') && typeof v === 'number') return formatNumber(v, col);
+  if (bt === 'Ref' && typeof v === 'number') return v ? String(v) : '';
+  return String(v);
+}
+function formatDateTime(sec, tz) {
+  try {
+    return new Intl.DateTimeFormat('fr-FR', {
+      timeZone: tz || 'Europe/Paris', day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    }).format(new Date(sec * 1000)).replace(' ', ' à ');
+  } catch (e) { return new Date(sec * 1000).toLocaleString('fr-FR'); }
+}
+function formatNumber(v, col) {
+  const o = col.opts || {};
+  const opt = {};
+  if (o.numMode === 'currency') { opt.style = 'currency'; opt.currency = o.currency || 'EUR'; }
+  else if (o.numMode === 'percent') { opt.style = 'percent'; }
+  let min = o.decimals, max = o.maxDecimals;
+  if (col.baseType === 'Int') { min = min || 0; max = max || 0; }
+  if (min === undefined || min === null) min = o.numMode === 'currency' ? 2 : 0;
+  if (max === undefined || max === null) max = Math.max(min, o.numMode === 'currency' ? 2 : 10);
+  opt.minimumFractionDigits = Math.min(min, 20);
+  opt.maximumFractionDigits = Math.max(Math.min(max, 20), opt.minimumFractionDigits);
+  try {
+    // Espaces fines insécables remplacées par des espaces insécables (meilleure compatibilité polices)
+    return new Intl.NumberFormat('fr-FR', opt).format(v).replace(/ /g, ' ');
+  } catch (e) { return String(v); }
+}
+
+/* ========================================================================
+ * Chargement des métadonnées et des données
+ * ====================================================================== */
+async function loadMeta() {
+  const [tables, columns] = await Promise.all([
+    grist.docApi.fetchTable('_grist_Tables'),
+    grist.docApi.fetchTable('_grist_Tables_column')
+  ]);
+  const tableById = {};
+  tables.id.forEach((id, i) => { tableById[id] = tables.tableId[i]; });
+  const colRefToId = {};
+  columns.id.forEach((id, i) => { colRefToId[id] = columns.colId[i]; });
+  const byTable = {};
+  columns.id.forEach((id, i) => {
+    const tId = tableById[columns.parentId[i]];
+    if (!tId) return;
+    const colId = columns.colId[i];
+    const type = columns.type[i] || 'Any';
+    const baseType = type.split(':')[0];
+    const col = {
+      ref: id,
+      id: colId,
+      label: columns.label[i] || colId,
+      type, baseType,
+      tz: baseType === 'DateTime' ? type.split(':')[1] : null,
+      isFormula: !!columns.isFormula[i],
+      formula: columns.formula[i] || '',
+      displayId: columns.displayCol[i] ? colRefToId[columns.displayCol[i]] : null,
+      opts: parseOpts(columns.widgetOptions[i]),
+      hidden: colId.startsWith('gristHelper_') || colId === 'manualSort'
+    };
+    (byTable[tId] = byTable[tId] || []).push(col);
+  });
+  meta = { tables: byTable };
+}
+
+async function currentTableId() {
+  return cfg.source === 'widget' ? widgetTableId : cfg.tableId;
+}
+
+async function loadData() {
+  const tableId = await currentTableId();
+  if (!tableId) {
+    data = { tableId: null, cols: [], rows: [] };
+    $('tableInfo').textContent = cfg.source === 'widget'
+      ? "Sélectionnez une table dans « Données de la vue » du widget (panneau de droite de Grist)."
+      : 'Choisissez une table.';
+    renderAll();
+    return;
+  }
+  setStatus('Chargement de ' + tableId + '…');
+  if (!meta || !meta.tables[tableId]) await loadMeta();
+  const raw = await grist.docApi.fetchTable(tableId);
+  const ids = raw.id || [];
+  const rowsById = new Map();
+  ids.forEach((id, i) => {
+    const r = { id };
+    for (const k in raw) r[k] = raw[k][i];
+    rowsById.set(id, r);
+  });
+  let rows;
+  if (cfg.source === 'widget' && widgetRowIds.length) {
+    rows = widgetRowIds.map(id => rowsById.get(id)).filter(Boolean);
+  } else {
+    rows = ids.map(id => rowsById.get(id));
+  }
+  const cols = (meta.tables[tableId] || []).filter(c => !c.hidden);
+  data = { tableId, cols, rows };
+
+  // Première utilisation de cette table : on coche quelques colonnes par défaut
+  const valid = new Set(cols.map(c => c.id));
+  cfg.cols = cfg.cols.filter(id => valid.has(id));
+  if (!cfg.labelCol || !valid.has(cfg.labelCol)) {
+    const firstText = cols.find(c => c.baseType === 'Text') || cols[0];
+    cfg.labelCol = firstText ? firstText.id : '';
+  }
+  $('tableInfo').textContent = tableId + ' — ' + rows.length + ' enregistrement(s), ' + cols.length + ' colonne(s)';
+  setStatus(tableId + ' · ' + rows.length + ' ligne(s)');
+  if (pvIndex >= rows.length) pvIndex = 0;
+  renderAll();
+}
+
+async function fillTableSelect() {
+  let list = [];
+  try { list = await grist.docApi.listTables(); } catch (e) {}
+  list.sort((a, b) => a.localeCompare(b));
+  const sel = $('tableSelect');
+  sel.innerHTML = '<option value="">— Choisir une table —</option>' +
+    list.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+  sel.value = cfg.tableId || '';
+}
+
+/* ========================================================================
+ * Rendu onglet Données
+ * ====================================================================== */
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+const TYPE_FR = { Text: 'Texte', Numeric: 'Numérique', Int: 'Entier', Bool: 'Booléen', Date: 'Date', DateTime: 'Date/heure',
+  Choice: 'Choix', ChoiceList: 'Choix multiple', Ref: 'Référence', RefList: 'Réf. multiple', Attachments: 'Pièces jointes', Any: 'Formule' };
+
+function renderColList() {
+  const q = $('colFilter').value.trim().toLowerCase();
+  const sel = new Set(cfg.cols);
+  $('colList').innerHTML = data.cols
+    .filter(c => !q || c.label.toLowerCase().includes(q) || c.id.toLowerCase().includes(q))
+    .map(c => `<label><input type="checkbox" data-col="${esc(c.id)}" ${sel.has(c.id) ? 'checked' : ''}>
+      <span>${esc(c.label)}</span><span class="ctype">${esc(TYPE_FR[c.baseType] || c.baseType)}</span>
+      <span class="cid">${esc(c.id)}</span></label>`).join('')
+    || '<div class="hint" style="padding:8px">Aucune colonne.</div>';
+
+  $('labelCol').innerHTML = data.cols.map(c =>
+    `<option value="${esc(c.id)}" ${c.id === cfg.labelCol ? 'selected' : ''}>${esc(c.label)}</option>`).join('');
+
+  const attachable = data.cols.filter(c => c.baseType === 'Attachments' && (!c.isFormula || !c.formula));
+  $('expAttach').innerHTML = '<option value="">— Ne pas joindre à Grist —</option>' +
+    attachable.map(c => `<option value="${esc(c.id)}" ${c.id === cfg.exp.attachCol ? 'selected' : ''}>${esc(c.label)}</option>`).join('');
+}
+
+$('colList').addEventListener('change', (e) => {
+  const cb = e.target.closest('input[data-col]');
+  if (!cb) return;
+  const id = cb.dataset.col;
+  // On conserve l'ordre de la table
+  const set = new Set(cfg.cols);
+  if (cb.checked) set.add(id); else set.delete(id);
+  cfg.cols = data.cols.map(c => c.id).filter(x => set.has(x));
+  saveConfig();
+});
+$('colFilter').addEventListener('input', renderColList);
+$('colAll').onclick = () => {
+  const q = $('colFilter').value.trim().toLowerCase();
+  const set = new Set(cfg.cols);
+  data.cols.filter(c => !q || c.label.toLowerCase().includes(q) || c.id.toLowerCase().includes(q)).forEach(c => set.add(c.id));
+  cfg.cols = data.cols.map(c => c.id).filter(x => set.has(x));
+  renderColList(); saveConfig();
+};
+$('colNone').onclick = () => { cfg.cols = []; renderColList(); saveConfig(); };
+$('labelCol').onchange = (e) => { cfg.labelCol = e.target.value; saveConfig(); };
+
+document.querySelectorAll('input[name=source]').forEach(r => r.addEventListener('change', () => {
+  cfg.source = document.querySelector('input[name=source]:checked').value;
+  $('tableSelect').disabled = cfg.source !== 'table';
+  excluded.clear(); saveConfig(); loadData().catch(showError);
+}));
+$('tableSelect').onchange = (e) => {
+  cfg.tableId = e.target.value; cfg.cols = []; cfg.labelCol = ''; excluded.clear();
+  saveConfig(); loadData().catch(showError);
+};
+$('reloadBtn').onclick = () => { meta = null; loadData().catch(showError); };
+
+function showError(e) {
+  console.error(e);
+  setStatus('Erreur : ' + (e && e.message || e));
+}
+
+/* ----- Modèles ----- */
+function renderModels() {
+  const names = Object.keys(cfg.models || {}).sort();
+  $('modelSelect').innerHTML = '<option value="">— Aucun modèle —</option>' +
+    names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+}
+$('modelSave').onclick = () => {
+  const name = $('modelName').value.trim() || $('modelSelect').value;
+  if (!name) { $('modelName').focus(); return; }
+  syncEditorToCfg();
+  cfg.models[name] = {
+    source: cfg.source, tableId: cfg.tableId, cols: cfg.cols.slice(), labelCol: cfg.labelCol,
+    html: cfg.html, sig: JSON.parse(JSON.stringify(cfg.sig)), exp: Object.assign({}, cfg.exp)
+  };
+  renderModels(); $('modelSelect').value = name; $('modelName').value = '';
+  saveConfig(); setStatus('Modèle « ' + name + ' » enregistré');
+};
+$('modelLoad').onclick = () => {
+  const m = cfg.models[$('modelSelect').value];
+  if (!m) return;
+  Object.assign(cfg, { source: m.source, tableId: m.tableId, cols: m.cols.slice(), labelCol: m.labelCol, html: m.html });
+  cfg.sig = Object.assign({}, cfg.sig, m.sig);
+  cfg.exp = Object.assign({}, cfg.exp, m.exp);
+  applyCfgToUI(); saveConfig(); loadData().catch(showError);
+  setStatus('Modèle « ' + $('modelSelect').value + ' » chargé');
+};
+$('modelDelete').onclick = () => {
+  const n = $('modelSelect').value;
+  if (!n) return;
+  if ($('modelDelete').dataset.confirm !== n) {
+    $('modelDelete').dataset.confirm = n;
+    $('modelDelete').textContent = 'Confirmer ?';
+    setTimeout(() => { $('modelDelete').textContent = 'Supprimer'; delete $('modelDelete').dataset.confirm; }, 3000);
+    return;
+  }
+  delete cfg.models[n]; renderModels(); saveConfig();
+  $('modelDelete').textContent = 'Supprimer'; delete $('modelDelete').dataset.confirm;
+};
+
+/* ========================================================================
+ * Éditeur
+ * ====================================================================== */
+const editor = $('editor');
+let savedRange = null;
+try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch (e) {}
+try { document.execCommand('styleWithCSS', false, false); } catch (e) {}
+
+document.addEventListener('selectionchange', () => {
+  const s = window.getSelection();
+  if (s.rangeCount && editor.contains(s.getRangeAt(0).commonAncestorContainer)) savedRange = s.getRangeAt(0).cloneRange();
+});
+function restoreSelection() {
+  editor.focus();
+  if (savedRange) { const s = window.getSelection(); s.removeAllRanges(); s.addRange(savedRange); }
+}
+function exec(cmd, val) { restoreSelection(); document.execCommand(cmd, false, val); onEditorChange(); }
+
+$('toolbar').addEventListener('mousedown', (e) => {
+  // Empêche la perte de sélection en cliquant sur les boutons
+  if (e.target.closest('button')) e.preventDefault();
+});
+$('toolbar').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-cmd]');
+  if (b) exec(b.dataset.cmd);
+});
+$('tbBlock').onchange = (e) => { exec('formatBlock', '<' + e.target.value + '>'); };
+$('tbSize').onchange = (e) => {
+  const pt = e.target.value; if (!pt) return;
+  exec('fontSize', '7');
+  editor.querySelectorAll('font[size="7"]').forEach(f => {
+    const span = document.createElement('span');
+    span.style.fontSize = pt + 'pt';
+    while (f.firstChild) span.appendChild(f.firstChild);
+    f.replaceWith(span);
+  });
+  e.target.value = ''; onEditorChange();
+};
+$('tbColor').oninput = (e) => exec('foreColor', e.target.value);
+$('tbBreak').onclick = () => exec('insertHTML', '<hr><p><br></p>');
+$('tbSig').onclick = () => insertToken('SIGNATURE');
+
+$('tbImage').onclick = () => {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/*';
+  inp.onchange = async () => {
+    const f = inp.files[0]; if (!f) return;
+    const img = await fileToNormalizedImage(f, 1600);
+    const w = Math.min(img.w, 240);
+    exec('insertHTML', `<img src="${img.src}" style="width:${w}px">`);
+  };
+  inp.click();
+};
+
+// Redimensionnement des images de l'éditeur
+let selImg = null;
+editor.addEventListener('click', (e) => {
+  editor.querySelectorAll('img.sel').forEach(i => i.classList.remove('sel'));
+  if (e.target.tagName === 'IMG') {
+    selImg = e.target; selImg.classList.add('sel');
+    const w = Math.round(selImg.getBoundingClientRect().width);
+    $('imgWidth').value = w; $('imgWidthVal').textContent = w + ' px';
+    $('imgTools').classList.add('show');
+  } else { selImg = null; $('imgTools').classList.remove('show'); }
+});
+$('imgWidth').oninput = (e) => {
+  if (!selImg) return;
+  selImg.style.width = e.target.value + 'px'; selImg.removeAttribute('width'); selImg.style.height = '';
+  $('imgWidthVal').textContent = e.target.value + ' px'; onEditorChange();
+};
+
+function insertToken(name) {
+  exec('insertText', '{{' + name + '}}');
+}
+
+// Collage : on ne garde que la mise en forme exportable
+editor.addEventListener('paste', (e) => {
+  const html = e.clipboardData.getData('text/html');
+  if (!html) return; // texte brut : comportement natif
+  e.preventDefault();
+  const div = document.createElement('div');
+  div.innerHTML = html.replace(/<!--[\s\S]*?-->/g, '');
+  const ir = htmlToIR(div);
+  exec('insertHTML', irToHTML(ir, { editable: true }));
+});
+
+let edTimer = null;
+function onEditorChange() {
+  clearTimeout(edTimer);
+  edTimer = setTimeout(() => { syncEditorToCfg(); saveConfig(); }, 400);
+}
+editor.addEventListener('input', onEditorChange);
+function syncEditorToCfg() { cfg.html = editor.innerHTML; }
+
+/* ----- Champs de fusion ----- */
+const SPECIAL_FIELDS = [
+  { id: 'DATE_JOUR', label: 'Date du jour (28/09/2026)' },
+  { id: 'DATE_JOUR_LONGUE', label: 'Date du jour (28 septembre 2026)' },
+  { id: 'NUMERO', label: 'N° d\'ordre dans le publipostage' },
+  { id: 'SIGNATURE', label: 'Emplacement de la signature' }
+];
+function renderFields() {
+  const byId = Object.fromEntries(data.cols.map(c => [c.id, c]));
+  const cols = cfg.cols.map(id => byId[id]).filter(Boolean);
+  $('fieldsBox').innerHTML =
+    (cols.length ? cols.map(c => `<button class="chip" data-tok="${esc(c.id)}">${esc(c.label)}<small>{{${esc(c.id)}}}</small></button>`).join('')
+      : '<p class="hint">Aucune colonne cochée (onglet 1).</p>') +
+    '<h3 style="margin-top:12px">Champs spéciaux</h3>' +
+    SPECIAL_FIELDS.map(f => `<button class="chip special" data-tok="${f.id}">${esc(f.label)}<small>{{${f.id}}}</small></button>`).join('');
+}
+$('fieldsBox').addEventListener('mousedown', (e) => { if (e.target.closest('.chip')) e.preventDefault(); });
+$('fieldsBox').addEventListener('click', (e) => {
+  const c = e.target.closest('.chip'); if (!c) return;
+  if (isPreview) setPreview(false);
+  insertToken(c.dataset.tok);
+});
+
+/* ========================================================================
+ * HTML -> représentation intermédiaire (IR)
+ *   bloc paragraphe : {type:'p', style, align, list, runs:[{text,b,i,u,color,size}]}
+ *   bloc image      : {type:'image', src, w, h, align}
+ *   saut de page    : {type:'pagebreak'}
+ * ====================================================================== */
+const FONT_SIZES = { 1: 8, 2: 10, 3: 12, 4: 14, 5: 18, 6: 24, 7: 36 };
+const CSS_SIZES = { 'xx-small': 7, 'x-small': 7.5, small: 10, medium: 12, large: 13.5, 'x-large': 18, 'xx-large': 24, 'xxx-large': 36 };
+const BLOCK_TAGS = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'BLOCKQUOTE', 'PRE', 'TR', 'SECTION', 'ARTICLE', 'HEADER', 'FOOTER', 'ADDRESS', 'CENTER']);
+
+function toHex(c) {
+  if (!c) return null;
+  c = c.trim().toLowerCase();
+  let m = c.match(/^#([0-9a-f]{3})$/);
+  if (m) return '#' + m[1].split('').map(x => x + x).join('');
+  if (/^#[0-9a-f]{6}$/.test(c)) return c;
+  m = c.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  if (m) return '#' + [m[1], m[2], m[3]].map(x => (+x).toString(16).padStart(2, '0')).join('');
+  const named = { black: '#000000', red: '#ff0000', blue: '#0000ff', green: '#008000', gray: '#808080', grey: '#808080', white: '#ffffff' };
+  return named[c] || null;
+}
+function cssSizeToPt(s) {
+  if (!s) return null;
+  s = s.trim();
+  if (CSS_SIZES[s]) return CSS_SIZES[s];
+  let m = s.match(/^([\d.]+)pt$/); if (m) return +m[1];
+  m = s.match(/^([\d.]+)px$/); if (m) return Math.round(+m[1] * 0.75 * 2) / 2;
+  m = s.match(/^([\d.]+)(em|rem)$/); if (m) return Math.round(+m[1] * 11 * 2) / 2;
+  return null;
+}
+function sameFmt(a, b) {
+  return a.b === b.b && a.i === b.i && a.u === b.u && a.color === b.color && a.size === b.size && a.hl === b.hl;
+}
+
+function htmlToIR(root) {
+  const blocks = [];
+  let cur = null;
+  let listSeq = 0;
+
+  function newPara(ctx) {
+    cur = { type: 'p', style: ctx.style || 'normal', align: ctx.align || 'left', list: ctx.li || null, runs: [] };
+    blocks.push(cur);
+    return cur;
+  }
+  function addText(text, fmt, ctx) {
+    if (!cur) newPara(ctx);
+    const run = { text, b: !!fmt.b, i: !!fmt.i, u: !!fmt.u, color: fmt.color || null, size: fmt.size || null };
+    const last = cur.runs[cur.runs.length - 1];
+    if (last && sameFmt(last, run)) last.text += text; else cur.runs.push(run);
+  }
+  function finishPara() {
+    if (cur) {
+      // "<p>texte<br></p>" : le <br> final ne crée pas de ligne supplémentaire
+      const last = cur.runs[cur.runs.length - 1];
+      if (last && last.text.endsWith('\n')) {
+        last.text = last.text.slice(0, -1);
+        if (!last.text) cur.runs.pop();
+      }
+    }
+    cur = null;
+  }
+
+  function walk(node, fmt, ctx) {
+    if (node.nodeType === 3) {
+      let t = node.nodeValue.replace(/[\r\n\t]+/g, ' ').replace(/ {2,}/g, ' ').replace(/ /g, ' ');
+      if (!cur && !t.trim()) return;
+      if (t) addText(t, fmt, ctx);
+      return;
+    }
+    if (node.nodeType !== 1) return;
+    const tag = node.tagName;
+    if (['SCRIPT', 'STYLE', 'META', 'LINK', 'TITLE', 'HEAD', 'XML'].includes(tag) || tag.includes(':')) return;
+
+    const st = node.style || {};
+    const f = Object.assign({}, fmt);
+    if (tag === 'B' || tag === 'STRONG') f.b = true;
+    if (tag === 'I' || tag === 'EM') f.i = true;
+    if (tag === 'U' || tag === 'INS') f.u = true;
+    if (/^H[1-6]$/.test(tag)) f.b = true;
+    if (st.fontWeight) f.b = st.fontWeight === 'bold' || st.fontWeight === 'bolder' || +st.fontWeight >= 600;
+    if (st.fontStyle) f.i = st.fontStyle === 'italic' || st.fontStyle === 'oblique';
+    const td = st.textDecorationLine || st.textDecoration;
+    if (td && td.includes('underline')) f.u = true;
+    if (st.color) f.color = toHex(st.color) || f.color;
+    if (st.fontSize) f.size = cssSizeToPt(st.fontSize) || f.size;
+    if (tag === 'FONT') {
+      if (node.getAttribute('color')) f.color = toHex(node.getAttribute('color')) || f.color;
+      if (node.getAttribute('size')) f.size = FONT_SIZES[node.getAttribute('size')] || f.size;
+    }
+
+    if (tag === 'BR') { addText('\n', fmt, ctx); return; }
+    if (tag === 'HR') { finishPara(); blocks.push({ type: 'pagebreak' }); return; }
+    if (tag === 'IMG') {
+      const src = node.getAttribute('src') || '';
+      if (!src.startsWith('data:image/')) return;
+      let w = parseFloat(st.width) || parseFloat(node.getAttribute('width')) || node.naturalWidth || 200;
+      const nw = node.naturalWidth, nh = node.naturalHeight;
+      let h = (nw && nh) ? w * nh / nw : (parseFloat(st.height) || parseFloat(node.getAttribute('height')) || w / 2);
+      const img = { type: 'image', src, w, h, align: ctx.align || 'left' };
+      // Une image seule dans un paragraphe prend l'alignement du paragraphe
+      finishPara();
+      blocks.push(img);
+      return;
+    }
+    if (tag === 'UL' || tag === 'OL') {
+      finishPara();
+      const level = ctx.listDef ? Math.min(ctx.listDef.level + 1, 2) : 0;
+      const listDef = { kind: tag === 'OL' ? 'ol' : 'ul', id: ++listSeq, level };
+      for (const ch of node.childNodes) walk(ch, f, Object.assign({}, ctx, { listDef }));
+      finishPara();
+      return;
+    }
+    if (tag === 'TD' || tag === 'TH') {
+      for (const ch of node.childNodes) walk(ch, f, ctx);
+      addText('    ', f, ctx);
+      return;
+    }
+    if (BLOCK_TAGS.has(tag)) {
+      finishPara();
+      const c2 = Object.assign({}, ctx);
+      const al = st.textAlign || node.getAttribute('align') || (tag === 'CENTER' ? 'center' : '');
+      if (al) c2.align = ({ start: 'left', end: 'right', justify: 'justify' })[al] || al;
+      if (tag === 'H1') c2.style = 'h1';
+      else if (tag === 'H2') c2.style = 'h2';
+      else if (/^H[3-6]$/.test(tag)) c2.style = 'h3';
+      if (tag === 'LI' && ctx.listDef) c2.li = ctx.listDef;
+      const before = blocks.length;
+      newPara(c2);
+      const created = cur;
+      for (const ch of node.childNodes) walk(ch, f, c2);
+      finishPara();
+      // Paragraphe vide conservé uniquement s'il n'a produit aucun autre bloc
+      if (blocks.length > before + 1 && created.runs.length === 0) blocks.splice(blocks.indexOf(created), 1);
+      return;
+    }
+    for (const ch of node.childNodes) walk(ch, f, ctx);
+  }
+
+  for (const ch of root.childNodes) walk(ch, {}, {});
+  finishPara();
+  return blocks;
+}
+
+/* ========================================================================
+ * Fusion d'un enregistrement dans l'IR
+ * ====================================================================== */
+const TOKEN_RE = /\{\{\s*([^{}]+?)\s*\}\}/g;
+
+function makeResolver(row, index) {
+  const byId = {}, byLabel = {};
+  data.cols.forEach(c => { byId[c.id] = c; byLabel[c.label.toLowerCase()] = c; });
+  const now = new Date();
+  return function (name) {
+    const key = name.trim();
+    if (key === 'DATE_JOUR') return { v: dateFR(now) };
+    if (key === 'DATE_JOUR_LONGUE') return { v: dateLongueFR(now) };
+    if (key === 'NUMERO') return { v: String(index + 1) };
+    if (key === 'id') return { v: String(row ? row.id : '') };
+    const col = byId[key] || byLabel[key.toLowerCase()];
+    if (!col || !row) return { v: '{{' + key + '}}', missing: true };
+    return { v: formatValue(col, row) };
+  };
+}
+
+function resolveText(text, resolve) {
+  return text.replace(TOKEN_RE, (m, name) => name.trim() === 'SIGNATURE' ? '' : resolve(name).v);
+}
+
+// Remplace les champs dans une liste de runs, en isolant les valeurs (pour le surlignage)
+function mergeRuns(runs, resolve) {
+  const out = [];
+  for (const r of runs) {
+    let last = 0;
+    r.text.replace(TOKEN_RE, (m, name, off) => {
+      if (off > last) out.push(Object.assign({}, r, { text: r.text.slice(last, off) }));
+      const res = resolve(name);
+      out.push(Object.assign({}, r, { text: res.v, hl: res.missing ? 'missing' : 'ok' }));
+      last = off + m.length;
+      return m;
+    });
+    if (last < r.text.length) out.push(Object.assign({}, r, { text: r.text.slice(last) }));
+  }
+  return out;
+}
+
+function signatureBlocks(resolve) {
+  const s = cfg.sig;
+  const al = s.align || 'right';
+  const res = (t) => resolveText(t || '', resolve);
+  const para = (text, extra) => ({ type: 'p', style: 'normal', align: al, list: null,
+    runs: [Object.assign({ text, b: false, i: false, u: false, color: null, size: null }, extra || {})] });
+  const out = [];
+  if (s.faitA) out.push(para('Fait' + (s.lieu ? ' à ' + res(s.lieu) : '') + ', le ' + dateFR(new Date())));
+  if (s.fonction) out.push(para(res(s.fonction)));
+  if (s.image && s.imgW) {
+    const w = s.width || 180;
+    out.push({ type: 'image', src: s.image, w, h: w * s.imgH / s.imgW, align: al });
+  } else {
+    out.push(para(' '));
+  }
+  if (s.nom) out.push(para(res(s.nom), { b: true }));
+  if (s.mention) {
+    const now = new Date();
+    out.push(para('Signé électroniquement' + (s.nom ? ' par ' + res(s.nom) : '') + ' le ' + dateFR(now) +
+      ' à ' + pad2(now.getHours()) + 'h' + pad2(now.getMinutes()), { i: true, size: 8, color: '#555555' }));
+  }
+  return out;
+}
+
+const SIG_RE = /\{\{\s*SIGNATURE\s*\}\}/;
+function mergeRecord(ir, row, index) {
+  const resolve = makeResolver(row, index);
+  const out = [];
+  let sigPlaced = false;
+  for (const b of ir) {
+    if (b.type !== 'p') { out.push(Object.assign({}, b)); continue; }
+    const list = b.list ? Object.assign({}, b.list, { id: index * 10000 + b.list.id }) : null;
+    const hasSig = b.runs.some(r => SIG_RE.test(r.text));
+    if (!hasSig) { out.push(Object.assign({}, b, { list, runs: mergeRuns(b.runs, resolve) })); continue; }
+    // Découpe du paragraphe autour de {{SIGNATURE}}
+    let segment = [];
+    const flush = () => {
+      const runs = mergeRuns(segment, resolve);
+      if (runs.some(r => r.text.trim())) out.push(Object.assign({}, b, { list, runs }));
+      segment = [];
+    };
+    for (const r of b.runs) {
+      const parts = r.text.split(/\{\{\s*SIGNATURE\s*\}\}/);
+      parts.forEach((p, k) => {
+        if (k > 0) {
+          flush();
+          if (cfg.sig.enabled) { out.push(...signatureBlocks(resolve)); sigPlaced = true; }
+        }
+        if (p) segment.push(Object.assign({}, r, { text: p }));
+      });
+    }
+    flush();
+  }
+  if (cfg.sig.enabled && !sigPlaced) {
+    out.push({ type: 'p', style: 'normal', align: 'left', list: null, runs: [] });
+    out.push(...signatureBlocks(resolve));
+  }
+  return out;
+}
+
+function irToPlainText(ir) {
+  return ir.map(b => b.type === 'p' ? b.runs.map(r => r.text).join('') : (b.type === 'pagebreak' ? '' : '')).join('\n').trim();
+}
+
+/* ----- Numérotation des listes (aperçu et PDF) ----- */
+function listPrefixer() {
+  const counters = {};
+  return function (list) {
+    if (!list) return '';
+    if (list.kind === 'ul') return ['•', '–', '•'][list.level] || '•';
+    const k = list.id + ':' + list.level;
+    counters[k] = (counters[k] || 0) + 1;
+    return counters[k] + '.';
+  };
+}
+
+/* ========================================================================
+ * IR -> HTML (aperçu, collage)
+ * ====================================================================== */
+function runsToHTML(runs, editable) {
+  return runs.map(r => {
+    let h = esc(r.text).replace(/\n/g, '<br>');
+    const st = [];
+    if (r.color) st.push('color:' + r.color);
+    if (r.size) st.push('font-size:' + r.size + 'pt');
+    if (st.length) h = `<span style="${st.join(';')}">${h}</span>`;
+    if (r.u) h = '<u>' + h + '</u>';
+    if (r.i) h = '<i>' + h + '</i>';
+    if (r.b) h = '<b>' + h + '</b>';
+    if (!editable && r.hl) h = `<span class="hl-${r.hl}">${h}</span>`;
+    return h;
+  }).join('');
+}
+function irToHTML(ir, opts) {
+  opts = opts || {};
+  const prefix = listPrefixer();
+  let html = '';
+  let openList = null; // pour le collage : reconstruit ul/ol
+  const closeList = () => { if (openList) { html += '</' + openList.kind + '>'; openList = null; } };
+  for (const b of ir) {
+    if (b.type === 'pagebreak') { closeList(); html += opts.editable ? '<hr>' : '<div class="pv-break"></div>'; continue; }
+    if (b.type === 'image') {
+      closeList();
+      html += `<p style="text-align:${b.align}"><img src="${b.src}" style="width:${Math.round(b.w)}px"></p>`;
+      continue;
+    }
+    const inner = runsToHTML(b.runs, opts.editable) || '<br>';
+    const tag = b.style === 'normal' ? 'p' : b.style;
+    const al = b.align && b.align !== 'left' ? ` style="text-align:${b.align}"` : '';
+    if (b.list && opts.editable) {
+      if (!openList || openList.id !== b.list.id) { closeList(); openList = b.list; html += '<' + b.list.kind + '>'; }
+      html += `<li${al}>${inner}</li>`;
+      continue;
+    }
+    closeList();
+    if (b.list) {
+      const ind = 24 * (b.list.level + 1);
+      html += `<${tag} style="margin-left:${ind}px;text-indent:-16px;text-align:${b.align}"><span style="display:inline-block;width:16px">${prefix(b.list)}</span>${inner}</${tag}>`;
+    } else {
+      html += `<${tag}${al}>${inner}</${tag}>`;
+    }
+  }
+  closeList();
+  return html;
+}
+
+/* ----- Aperçu ----- */
+let isPreview = false;
+function setPreview(on) {
+  isPreview = on;
+  $('editPane').style.display = on ? 'none' : '';
+  $('previewPane').style.display = on ? '' : 'none';
+  $('pvControls').style.display = on ? 'inline-flex' : 'none';
+  $('modeEdit').classList.toggle('primary', !on);
+  $('modePreview').classList.toggle('primary', on);
+  if (on) { syncEditorToCfg(); renderPreview(); }
+}
+$('modeEdit').onclick = () => setPreview(false);
+$('modePreview').onclick = () => setPreview(true);
+$('pvPrev').onclick = () => { const n = selectedRows().length; if (n) { pvIndex = (pvIndex - 1 + n) % n; renderPreview(); } };
+$('pvNext').onclick = () => { const n = selectedRows().length; if (n) { pvIndex = (pvIndex + 1) % n; renderPreview(); } };
+$('pvHl').onchange = () => $('preview').classList.toggle('nohl', !$('pvHl').checked);
+
+function rowLabel(row) {
+  const col = data.cols.find(c => c.id === cfg.labelCol);
+  const v = col ? formatValue(col, row) : '';
+  return v || ('Ligne ' + row.id);
+}
+function renderPreview() {
+  const rows = selectedRows();
+  const ir = htmlToIR(editor);
+  if (!rows.length) {
+    $('pvLabel').textContent = 'Aucun enregistrement';
+    $('preview').innerHTML = irToHTML(mergeRecord(ir, null, 0));
+    return;
+  }
+  if (pvIndex >= rows.length) pvIndex = 0;
+  const row = rows[pvIndex];
+  $('pvLabel').textContent = (pvIndex + 1) + ' / ' + rows.length + ' — ' + rowLabel(row);
+  $('preview').innerHTML = irToHTML(mergeRecord(ir, row, pvIndex));
+}
+
+/* ========================================================================
+ * Signature
+ * ====================================================================== */
+const canvas = $('sigCanvas');
+const ctx2d = canvas.getContext('2d');
+let drawing = false, pts = [], hasInk = false;
+
+function resizeSigCanvas() {
+  const r = canvas.getBoundingClientRect();
+  if (!r.width) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+  if (canvas.width === w && canvas.height === h) return;
+  // Préserve le tracé en cours lors d'un redimensionnement
+  const old = hasInk ? canvas.toDataURL() : null;
+  canvas.width = w; canvas.height = h;
+  ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (old) { const im = new Image(); im.onload = () => ctx2d.drawImage(im, 0, 0, r.width, r.height); im.src = old; }
+}
+window.addEventListener('resize', resizeSigCanvas);
+
+function pos(e) { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+canvas.addEventListener('pointerdown', (e) => {
+  resizeSigCanvas();
+  drawing = true; pts = [pos(e)]; canvas.setPointerCapture(e.pointerId);
+  ctx2d.strokeStyle = $('sigInk').value;
+  ctx2d.fillStyle = $('sigInk').value;
+  ctx2d.lineWidth = +$('sigThick').value;
+  ctx2d.lineCap = 'round'; ctx2d.lineJoin = 'round';
+  ctx2d.beginPath(); ctx2d.arc(pts[0].x, pts[0].y, ctx2d.lineWidth / 2, 0, Math.PI * 2); ctx2d.fill();
+  hasInk = true;
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (!drawing) return;
+  const p = pos(e); pts.push(p);
+  const n = pts.length;
+  if (n < 3) return;
+  // Lissage par courbes quadratiques entre points milieux
+  const a = pts[n - 3], b = pts[n - 2], c = pts[n - 1];
+  const m1 = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, m2 = { x: (b.x + c.x) / 2, y: (b.y + c.y) / 2 };
+  ctx2d.beginPath(); ctx2d.moveTo(m1.x, m1.y); ctx2d.quadraticCurveTo(b.x, b.y, m2.x, m2.y); ctx2d.stroke();
+});
+const endStroke = () => { drawing = false; pts = []; };
+canvas.addEventListener('pointerup', endStroke);
+canvas.addEventListener('pointercancel', endStroke);
+
+$('sigClear').onclick = () => { ctx2d.clearRect(0, 0, canvas.width, canvas.height); hasInk = false; };
+$('sigUse').onclick = () => {
+  if (!hasInk) { setStatus('Dessinez d\'abord votre signature'); return; }
+  const trimmed = trimCanvas(canvas);
+  if (!trimmed) return;
+  setSignature(trimmed.src, trimmed.w, trimmed.h);
+};
+function trimCanvas(c) {
+  const g = c.getContext('2d');
+  const { width, height } = c;
+  const px = g.getImageData(0, 0, width, height).data;
+  let x0 = width, y0 = height, x1 = -1, y1 = -1;
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    if (px[(y * width + x) * 4 + 3] > 8) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  }
+  if (x1 < 0) return null;
+  const padding = 8;
+  x0 = Math.max(0, x0 - padding); y0 = Math.max(0, y0 - padding);
+  x1 = Math.min(width - 1, x1 + padding); y1 = Math.min(height - 1, y1 + padding);
+  const out = document.createElement('canvas');
+  out.width = x1 - x0 + 1; out.height = y1 - y0 + 1;
+  out.getContext('2d').drawImage(c, x0, y0, out.width, out.height, 0, 0, out.width, out.height);
+  return { src: out.toDataURL('image/png'), w: out.width, h: out.height };
+}
+$('sigImport').onclick = () => $('sigFile').click();
+$('sigFile').onchange = async () => {
+  const f = $('sigFile').files[0]; if (!f) return;
+  const img = await fileToNormalizedImage(f, 900);
+  setSignature(img.src, img.w, img.h);
+  $('sigFile').value = '';
+};
+$('sigRemove').onclick = () => { cfg.sig.image = null; cfg.sig.imgW = cfg.sig.imgH = 0; renderSig(); saveConfig(); };
+
+function setSignature(src, w, h) {
+  cfg.sig.image = src; cfg.sig.imgW = w; cfg.sig.imgH = h;
+  cfg.sig.enabled = true;
+  renderSig(); saveConfig();
+  setStatus('Signature enregistrée');
+}
+function renderSig() {
+  const s = cfg.sig;
+  $('sigEnabled').checked = !!s.enabled;
+  $('sigPreview').innerHTML = s.image ? `<img src="${s.image}" style="width:${s.width}px">` : '<span class="hint">Aucune signature</span>';
+  $('sigWidth').value = s.width; $('sigWidthVal').textContent = s.width + ' px';
+  $('sigAlign').value = s.align;
+  $('sigFaitA').checked = !!s.faitA; $('sigLieu').value = s.lieu || '';
+  $('sigFonction').value = s.fonction || ''; $('sigNom').value = s.nom || '';
+  $('sigMention').checked = !!s.mention;
+}
+$('sigEnabled').onchange = (e) => { cfg.sig.enabled = e.target.checked; saveConfig(); };
+$('sigWidth').oninput = (e) => { cfg.sig.width = +e.target.value; renderSig(); saveConfig(); };
+$('sigAlign').onchange = (e) => { cfg.sig.align = e.target.value; saveConfig(); };
+$('sigFaitA').onchange = (e) => { cfg.sig.faitA = e.target.checked; saveConfig(); };
+$('sigMention').onchange = (e) => { cfg.sig.mention = e.target.checked; saveConfig(); };
+['Lieu', 'Fonction', 'Nom'].forEach(k => {
+  $('sig' + k).addEventListener('input', (e) => { cfg.sig[k.toLowerCase()] = e.target.value; saveConfig(); });
+});
+
+/* ----- Images : lecture, redimensionnement, conversion PNG/JPEG ----- */
+function loadImage(src) {
+  return new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; });
+}
+function readFile(f) {
+  return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+}
+async function fileToNormalizedImage(file, maxW) {
+  const src = await readFile(file);
+  return normalizeImage(src, maxW);
+}
+async function normalizeImage(src, maxW) {
+  const im = await loadImage(src);
+  let w = im.naturalWidth || 200, h = im.naturalHeight || 100;
+  const isOk = /^data:image\/(png|jpeg|jpg);/.test(src);
+  if (isOk && (!maxW || w <= maxW)) return { src, w, h };
+  const scale = maxW && w > maxW ? maxW / w : 1;
+  const c = document.createElement('canvas');
+  c.width = Math.round(w * scale); c.height = Math.round(h * scale);
+  c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+  const jpeg = /^data:image\/jpe?g/.test(src);
+  return { src: c.toDataURL(jpeg ? 'image/jpeg' : 'image/png', 0.92), w: c.width, h: c.height };
+}
+// Garantit que toutes les images de l'IR sont en PNG/JPEG (exigé par Word et pdfmake)
+async function normalizeIRImages(ir) {
+  for (const b of ir) {
+    if (b.type === 'image' && !/^data:image\/(png|jpeg|jpg);/.test(b.src)) {
+      b.src = (await normalizeImage(b.src)).src;
+    }
+  }
+}
+
+/* ========================================================================
+ * Onglet Générer : sélection des enregistrements
+ * ====================================================================== */
+function selectedRows() { return data.rows.filter(r => !excluded.has(r.id)); }
+
+function renderRecList() {
+  const q = $('recSearch').value.trim().toLowerCase();
+  const byId = Object.fromEntries(data.cols.map(c => [c.id, c]));
+  const searchCols = [cfg.labelCol].concat(cfg.cols).map(id => byId[id]).filter(Boolean);
+  const html = [];
+  let shown = 0;
+  for (const r of data.rows) {
+    if (q && !searchCols.some(c => formatValue(c, r).toLowerCase().includes(q))) continue;
+    if (++shown > 1500) break;
+    html.push(`<label><input type="checkbox" data-id="${r.id}" ${excluded.has(r.id) ? '' : 'checked'}>
+      <span>${esc(rowLabel(r))}</span><span class="rid">#${r.id}</span></label>`);
+  }
+  $('recList').innerHTML = html.join('') || '<div class="hint" style="padding:8px">Aucun enregistrement.</div>';
+  $('recCount').textContent = selectedRows().length + ' enregistrement(s) sélectionné(s) sur ' + data.rows.length;
+}
+$('recList').addEventListener('change', (e) => {
+  const cb = e.target.closest('input[data-id]'); if (!cb) return;
+  const id = +cb.dataset.id;
+  if (cb.checked) excluded.delete(id); else excluded.add(id);
+  $('recCount').textContent = selectedRows().length + ' enregistrement(s) sélectionné(s) sur ' + data.rows.length;
+});
+$('recSearch').addEventListener('input', renderRecList);
+function visibleRecIds() { return [...$('recList').querySelectorAll('input[data-id]')].map(i => +i.dataset.id); }
+$('recAll').onclick = () => { visibleRecIds().forEach(id => excluded.delete(id)); renderRecList(); };
+$('recNone').onclick = () => { visibleRecIds().forEach(id => excluded.add(id)); renderRecList(); };
+
+$('expMode').onchange = (e) => { cfg.exp.mode = e.target.value; saveConfig(); };
+$('expName').oninput = (e) => { cfg.exp.name = e.target.value; saveConfig(); };
+$('expAttach').onchange = (e) => { cfg.exp.attachCol = e.target.value; saveConfig(); };
+$('expMessage').onchange = (e) => { cfg.exp.message = e.target.checked; saveConfig(); };
+
+/* ========================================================================
+ * Export Word (.docx) — WordprocessingML généré à la main
+ * ====================================================================== */
+function xmlEsc(s) {
+  return String(s).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+const EMU_PER_PX = 9525;
+const DOCX_MAX_W_PX = 640;   // largeur utile A4 avec marges de 2 cm
+
+class DocxBuilder {
+  constructor() {
+    this.body = [];
+    this.media = [];            // {name, data(base64), rId, ext}
+    this.mediaBySrc = new Map();
+    this.nums = [];             // listes numérotées : chacune son w:num pour redémarrer à 1
+    this.numByList = new Map();
+    this.docPrId = 1;
+  }
+  imageRel(src) {
+    if (this.mediaBySrc.has(src)) return this.mediaBySrc.get(src);
+    const m = src.match(/^data:image\/(png|jpe?g);base64,(.*)$/);
+    if (!m) return null;
+    const ext = m[1] === 'png' ? 'png' : 'jpeg';
+    const n = this.media.length + 1;
+    const rel = { rId: 'rIdImg' + n, name: 'image' + n + '.' + ext, data: m[2], ext };
+    this.media.push(rel); this.mediaBySrc.set(src, rel);
+    return rel;
+  }
+  numId(list) {
+    if (list.kind === 'ul') return 1;
+    if (!this.numByList.has(list.id)) { const id = 2 + this.nums.length; this.nums.push(id); this.numByList.set(list.id, id); }
+    return this.numByList.get(list.id);
+  }
+  run(r) {
+    const pr = [];
+    if (r.b) pr.push('<w:b/><w:bCs/>');
+    if (r.i) pr.push('<w:i/><w:iCs/>');
+    if (r.color) pr.push(`<w:color w:val="${r.color.replace('#', '').toUpperCase()}"/>`);
+    if (r.size) pr.push(`<w:sz w:val="${Math.round(r.size * 2)}"/><w:szCs w:val="${Math.round(r.size * 2)}"/>`);
+    if (r.u) pr.push('<w:u w:val="single"/>');
+    const rPr = pr.length ? '<w:rPr>' + pr.join('') + '</w:rPr>' : '';
+    return r.text.split('\n').map((t, k) =>
+      `<w:r>${rPr}${k > 0 ? '<w:br/>' : ''}${t ? `<w:t xml:space="preserve">${xmlEsc(t)}</w:t>` : ''}</w:r>`).join('');
+  }
+  jc(align) { return ({ left: 'left', center: 'center', right: 'right', justify: 'both' })[align] || 'left'; }
+  addBlocks(ir) {
+    for (const b of ir) {
+      if (b.type === 'pagebreak') { this.pageBreak(); continue; }
+      if (b.type === 'image') {
+        const rel = this.imageRel(b.src);
+        if (!rel) continue;
+        const scale = b.w > DOCX_MAX_W_PX ? DOCX_MAX_W_PX / b.w : 1;
+        const cx = Math.round(b.w * scale * EMU_PER_PX), cy = Math.round(b.h * scale * EMU_PER_PX);
+        const id = this.docPrId++;
+        this.body.push(`<w:p><w:pPr><w:spacing w:after="0"/><w:jc w:val="${this.jc(b.align)}"/></w:pPr><w:r><w:drawing>` +
+          `<wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/>` +
+          `<wp:docPr id="${id}" name="Image ${id}"/>` +
+          `<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
+          `<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="${id}" name="${rel.name}"/><pic:cNvPicPr/></pic:nvPicPr>` +
+          `<pic:blipFill><a:blip r:embed="${rel.rId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
+          `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>` +
+          `</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`);
+        continue;
+      }
+      const ppr = [];
+      if (b.style !== 'normal') ppr.push(`<w:pStyle w:val="Heading${b.style.slice(1)}"/>`);
+      if (b.list) ppr.push(`<w:numPr><w:ilvl w:val="${b.list.level}"/><w:numId w:val="${this.numId(b.list)}"/></w:numPr>`);
+      if (b.list) ppr.push('<w:spacing w:after="40"/>');
+      ppr.push(`<w:jc w:val="${this.jc(b.align)}"/>`);
+      this.body.push(`<w:p><w:pPr>${ppr.join('')}</w:pPr>${b.runs.map(r => this.run(r)).join('')}</w:p>`);
+    }
+  }
+  pageBreak() { this.body.push('<w:p><w:r><w:br w:type="page"/></w:r></w:p>'); }
+
+  async toBlob() {
+    const zip = new JSZip();
+    const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+    const R = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+    zip.file('[Content_Types].xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Default Extension="png" ContentType="image/png"/>' +
+      '<Default Extension="jpeg" ContentType="image/jpeg"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
+      '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>' +
+      '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>' +
+      '</Types>');
+    zip.file('_rels/.rels',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+      '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>' +
+      '</Relationships>');
+    const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+    zip.file('docProps/core.xml',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">' +
+      '<dc:title>Publipostage</dc:title><dc:creator>Grist – widget Publipostage</dc:creator>' +
+      `<dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified>` +
+      '</cp:coreProperties>');
+    zip.file('word/_rels/document.xml.rels',
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+      '<Relationship Id="rIdNum" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>' +
+      this.media.map(m => `<Relationship Id="${m.rId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${m.name}"/>`).join('') +
+      '</Relationships>');
+    this.media.forEach(m => zip.file('word/media/' + m.name, m.data, { base64: true }));
+
+    const heading = (n, sz) =>
+      `<w:style w:type="paragraph" w:styleId="Heading${n}"><w:name w:val="heading ${n}"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/>` +
+      `<w:pPr><w:keepNext/><w:spacing w:before="240" w:after="120"/><w:outlineLvl w:val="${n - 1}"/></w:pPr><w:rPr><w:b/><w:bCs/><w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/></w:rPr></w:style>`;
+    zip.file('word/styles.xml',
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles ${W}>` +
+      '<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:eastAsia="Arial" w:cs="Arial"/><w:sz w:val="22"/><w:szCs w:val="22"/><w:lang w:val="fr-FR"/></w:rPr></w:rPrDefault>' +
+      '<w:pPrDefault><w:pPr><w:spacing w:after="120" w:line="264" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>' +
+      '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>' +
+      heading(1, 36) + heading(2, 28) + heading(3, 24) +
+      '</w:styles>');
+
+    const lvl = (i, fmt, text, ind) =>
+      `<w:lvl w:ilvl="${i}"><w:start w:val="1"/><w:numFmt w:val="${fmt}"/><w:lvlText w:val="${text}"/><w:lvlJc w:val="left"/>` +
+      `<w:pPr><w:ind w:left="${ind}" w:hanging="360"/></w:pPr>` +
+      (fmt === 'bullet' ? '<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/></w:rPr>' : '') + '</w:lvl>';
+    zip.file('word/numbering.xml',
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:numbering ${W}>` +
+      '<w:abstractNum w:abstractNumId="0"><w:multiLevelType w:val="hybridMultilevel"/>' +
+      lvl(0, 'bullet', '•', 720) + lvl(1, 'bullet', '–', 1440) + lvl(2, 'bullet', '•', 2160) + '</w:abstractNum>' +
+      '<w:abstractNum w:abstractNumId="1"><w:multiLevelType w:val="hybridMultilevel"/>' +
+      lvl(0, 'decimal', '%1.', 720) + lvl(1, 'lowerLetter', '%2.', 1440) + lvl(2, 'lowerRoman', '%3.', 2160) + '</w:abstractNum>' +
+      '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>' +
+      this.nums.map(id => `<w:num w:numId="${id}"><w:abstractNumId w:val="1"/>` +
+        `<w:lvlOverride w:ilvl="0"><w:startOverride w:val="1"/></w:lvlOverride>` +
+        `<w:lvlOverride w:ilvl="1"><w:startOverride w:val="1"/></w:lvlOverride>` +
+        `<w:lvlOverride w:ilvl="2"><w:startOverride w:val="1"/></w:lvlOverride></w:num>`).join('') +
+      '</w:numbering>');
+
+    zip.file('word/document.xml',
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document ${W} ${R} ` +
+      'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" ' +
+      'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
+      'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>' +
+      (this.body.join('') || '<w:p/>') +
+      '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>' +
+      '<w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="567" w:footer="567" w:gutter="0"/></w:sectPr>' +
+      '</w:body></w:document>');
+
+    return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+  }
+}
+
+/* ========================================================================
+ * Export PDF — pdfmake
+ * ====================================================================== */
+const PDF_MAX_W_PT = 481;  // A4 (595pt) - 2 x 57pt de marge
+function runsToPdf(runs, justify) {
+  // Fusionne les runs de même mise en forme (le surlignage n'existe pas en PDF)
+  const merged = [];
+  for (const r0 of runs) {
+    const r = Object.assign({}, r0, { hl: undefined });
+    const last = merged[merged.length - 1];
+    if (last && sameFmt(last, r)) last.text += r.text; else merged.push(r);
+  }
+  // pdfmake ajoute l'espacement de justification à chaque changement de mise en forme :
+  // en milieu de mot (ex : « **123**, »), on rattache la ponctuation au run précédent.
+  if (justify) {
+    for (let k = 1; k < merged.length; k++) {
+      const prev = merged[k - 1], cur = merged[k];
+      if (!prev.text || /\s$/.test(prev.text)) continue;
+      const m = cur.text.match(/^[^\s]+/);
+      if (!m) continue;
+      prev.text += m[0];
+      cur.text = cur.text.slice(m[0].length);
+    }
+  }
+  const t = merged.filter(r => r.text).map(r => {
+    const o = { text: r.text };
+    if (r.b) o.bold = true;
+    if (r.i) o.italics = true;
+    if (r.u) o.decoration = 'underline';
+    if (r.color) o.color = r.color;
+    if (r.size) o.fontSize = r.size;
+    return o;
+  });
+  return t.length ? t : ' ';
+}
+function irToPdfContent(ir) {
+  const prefix = listPrefixer();
+  const content = [];
+  for (const b of ir) {
+    if (b.type === 'pagebreak') { content.push({ text: '', pageBreak: 'after' }); continue; }
+    if (b.type === 'image') {
+      const w = Math.min(b.w * 0.75, PDF_MAX_W_PT);
+      content.push({ image: b.src, width: w, alignment: b.align === 'justify' ? 'left' : b.align, margin: [0, 2, 0, 2] });
+      continue;
+    }
+    const style = b.style === 'normal' ? undefined : b.style;
+    const align = b.align || 'left';
+    if (b.list) {
+      content.push({
+        columns: [{ width: 16, text: prefix(b.list) }, { width: '*', text: runsToPdf(b.runs, align === 'justify'), alignment: align }],
+        columnGap: 2, margin: [18 * (b.list.level + 1) - 16, 0, 0, 2], style
+      });
+    } else {
+      content.push({ text: runsToPdf(b.runs, align === 'justify'), alignment: align, style, margin: [0, 0, 0, 6] });
+    }
+  }
+  return content;
+}
+function pdfDefinition(content) {
+  return {
+    pageSize: 'A4',
+    pageMargins: [57, 57, 57, 57],
+    content,
+    defaultStyle: { font: 'Roboto', fontSize: 11, lineHeight: 1.15 },
+    styles: {
+      h1: { fontSize: 18, bold: true, margin: [0, 6, 0, 8] },
+      h2: { fontSize: 14, bold: true, margin: [0, 6, 0, 6] },
+      h3: { fontSize: 12, bold: true, margin: [0, 4, 0, 6] }
+    },
+    info: { title: 'Publipostage', creator: 'Grist – widget Publipostage' }
+  };
+}
+function pdfBlob(content) {
+  return new Promise((res, rej) => {
+    try { pdfMake.createPdf(pdfDefinition(content)).getBlob(res); } catch (e) { rej(e); }
+  });
+}
+
+/* ========================================================================
+ * Génération
+ * ====================================================================== */
+function sanitizeFilename(s) {
+  return (s || 'document').replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '_').replace(/\s+/g, ' ').trim().slice(0, 120) || 'document';
+}
+function fileNameFor(row, index) {
+  return sanitizeFilename(resolveText(cfg.exp.name || 'Publipostage_{{NUMERO}}', makeResolver(row, index)));
+}
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+function progress(done, total, text) {
+  $('progress').classList.add('show');
+  $('progress').firstElementChild.style.width = (total ? Math.round(100 * done / total) : 0) + '%';
+  if (text) $('genStatus').innerHTML = text;
+}
+function genMsg(kind, text) { $('genStatus').innerHTML = `<div class="msg ${kind}">${text}</div>`; }
+function lockButtons(on) { ['genDocx', 'genPdf', 'genXlsx'].forEach(id => $(id).disabled = on); }
+const tick = () => new Promise(r => setTimeout(r, 0));
+
+async function uploadAttachment(blob, filename) {
+  const tok = await grist.docApi.getAccessToken({ readOnly: false });
+  const fd = new FormData();
+  fd.append('upload', blob, filename);
+  const resp = await fetch(`${tok.baseUrl}/attachments?auth=${encodeURIComponent(tok.token)}`, {
+    method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  });
+  if (!resp.ok) throw new Error('Envoi de la pièce jointe refusé (' + resp.status + ')');
+  const ids = await resp.json();
+  return ids[0];
+}
+
+async function generate(kind) {
+  syncEditorToCfg();
+  const rows = selectedRows();
+  if (!rows.length) { genMsg('warn', 'Aucun enregistrement sélectionné.'); return; }
+  if (cfg.sig.enabled && !cfg.sig.image) {
+    genMsg('warn', 'La signature est activée mais aucune signature n\'a été dessinée ou importée (onglet 3).');
+    return;
+  }
+  lockButtons(true);
+  try {
+    await Promise.all([...editor.querySelectorAll('img')].map(i => i.decode ? i.decode().catch(() => {}) : null));
+    const ir = htmlToIR(editor);
+    await normalizeIRImages(ir);
+
+    if (kind === 'xlsx') { await exportXlsx(rows, ir); return; }
+
+    const ext = kind === 'docx' ? '.docx' : '.pdf';
+    const attachCol = cfg.exp.attachCol;
+    const perRecord = cfg.exp.mode === 'multi' || !!attachCol;
+    const baseName = sanitizeFilename((cfg.exp.name || '').replace(TOKEN_RE, '').replace(/[\s_\-]+$/, '') || 'Publipostage');
+
+    // --- Un seul document ---
+    if (!perRecord) {
+      let blob;
+      if (kind === 'docx') {
+        const d = new DocxBuilder();
+        for (let i = 0; i < rows.length; i++) {
+          if (i) d.pageBreak();
+          d.addBlocks(mergeRecord(ir, rows[i], i));
+          if (i % 25 === 0) { progress(i, rows.length, `Fusion ${i + 1} / ${rows.length}…`); await tick(); }
+        }
+        progress(rows.length, rows.length, 'Création du fichier Word…');
+        blob = await d.toBlob();
+      } else {
+        const content = [];
+        rows.forEach((r, i) => {
+          const part = irToPdfContent(mergeRecord(ir, r, i));
+          if (i && part.length) part[0].pageBreak = 'before';
+          content.push(...part);
+        });
+        progress(rows.length / 2, rows.length, 'Création du PDF…'); await tick();
+        blob = await pdfBlob(content);
+      }
+      const name = (rows.length === 1 ? fileNameFor(rows[0], 0) : 'Publipostage_' + dateFR(new Date()).replace(/\//g, '-')) + ext;
+      downloadBlob(blob, name);
+      progress(1, 1);
+      genMsg('ok', `✔ ${esc(name)} généré (${rows.length} enregistrement(s)).`);
+      return;
+    }
+
+    // --- Un document par enregistrement ---
+    const zip = cfg.exp.mode === 'multi' ? new JSZip() : null;
+    const used = new Set();
+    const updates = [];
+    let attachErr = null;
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      progress(i, rows.length, `Document ${i + 1} / ${rows.length} : ${esc(rowLabel(row))}`);
+      await tick();
+      const merged = mergeRecord(ir, row, i);
+      let blob;
+      if (kind === 'docx') { const d = new DocxBuilder(); d.addBlocks(merged); blob = await d.toBlob(); }
+      else blob = await pdfBlob(irToPdfContent(merged));
+      let name = fileNameFor(row, i);
+      let k = 2; const base = name;
+      while (used.has(name.toLowerCase())) name = base + '_' + (k++);
+      used.add(name.toLowerCase());
+      if (zip) zip.file(name + ext, blob);
+      if (attachCol && !attachErr) {
+        try {
+          const attId = await uploadAttachment(blob, name + ext);
+          const cur = row[attachCol];
+          const existing = Array.isArray(cur) && cur[0] === 'L' ? cur.slice(1) : [];
+          updates.push({ id: row.id, val: ['L', ...existing, attId] });
+        } catch (e) { attachErr = e; }
+      }
+    }
+    if (updates.length) {
+      progress(rows.length, rows.length, 'Enregistrement des pièces jointes dans Grist…');
+      await grist.docApi.applyUserActions([['BulkUpdateRecord', data.tableId, updates.map(u => u.id),
+        { [attachCol]: updates.map(u => u.val) }]]);
+    }
+    if (zip) {
+      progress(rows.length, rows.length, 'Compression de l\'archive…');
+      const zblob = await zip.generateAsync({ type: 'blob' });
+      downloadBlob(zblob, baseName + '.zip');
+    }
+    progress(1, 1);
+    let msg = `✔ ${rows.length} document(s) ${kind === 'docx' ? 'Word' : 'PDF'} généré(s)`;
+    if (zip) msg += ' dans ' + esc(baseName) + '.zip';
+    if (updates.length) msg += ` · ${updates.length} ajouté(s) à la colonne « ${esc(attachCol)} »`;
+    genMsg(attachErr ? 'warn' : 'ok', msg + (attachErr ? '<br>⚠ Pièces jointes : ' + esc(attachErr.message) : ''));
+    if (updates.length) loadData().catch(showError);
+  } catch (e) {
+    console.error(e);
+    genMsg('err', 'Erreur pendant la génération : ' + esc(e.message || e));
+  } finally {
+    lockButtons(false);
+    setTimeout(() => $('progress').classList.remove('show'), 1200);
+  }
+}
+
+async function exportXlsx(rows, ir) {
+  const byId = Object.fromEntries(data.cols.map(c => [c.id, c]));
+  const cols = cfg.cols.map(id => byId[id]).filter(Boolean);
+  if (!cols.length) { genMsg('warn', 'Cochez au moins une colonne dans l\'onglet 1.'); return; }
+  const header = cols.map(c => c.label);
+  if (cfg.exp.message) header.push('Message');
+  const aoa = [header];
+  rows.forEach((r, i) => {
+    const line = cols.map(c => {
+      const v = r[c.id];
+      // Les nombres restent numériques pour Excel ; le reste est mis en forme comme dans le document
+      if ((c.baseType === 'Numeric' || c.baseType === 'Int') && typeof v === 'number') return v;
+      return formatValue(c, r);
+    });
+    if (cfg.exp.message) line.push(irToPlainText(mergeRecord(ir, r, i)));
+    aoa.push(line);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = header.map((h, k) => {
+    let w = h.length;
+    for (let i = 1; i < Math.min(aoa.length, 200); i++) w = Math.max(w, String(aoa[i][k] == null ? '' : aoa[i][k]).split('\n')[0].length);
+    return { wch: Math.min(Math.max(w + 2, 8), k === header.length - 1 && cfg.exp.message ? 80 : 50) };
+  });
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: aoa.length - 1, c: header.length - 1 } }) };
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Publipostage');
+  const name = 'Publipostage_' + (data.tableId || '') + '_' + dateFR(new Date()).replace(/\//g, '-') + '.xlsx';
+  XLSX.writeFile(wb, name);
+  genMsg('ok', `✔ ${esc(name)} généré (${rows.length} ligne(s), ${cols.length} colonne(s)).`);
+}
+
+$('genDocx').onclick = () => generate('docx');
+$('genPdf').onclick = () => generate('pdf');
+$('genXlsx').onclick = () => generate('xlsx');
+
+/* ========================================================================
+ * Initialisation
+ * ====================================================================== */
+function applyCfgToUI() {
+  document.querySelector(`input[name=source][value="${cfg.source}"]`).checked = true;
+  $('tableSelect').value = cfg.tableId || '';
+  $('tableSelect').disabled = cfg.source !== 'table';
+  editor.innerHTML = cfg.html || DEFAULT_TEMPLATE;
+  $('expMode').value = cfg.exp.mode;
+  $('expName').value = cfg.exp.name;
+  $('expMessage').checked = !!cfg.exp.message;
+  renderSig(); renderModels();
+}
+function renderAll() {
+  renderColList();
+  renderFields();
+  if ($('tab-generer').classList.contains('active')) renderRecList();
+  if (isPreview) renderPreview();
+}
+
+let rowsTimer = null;
+function init() {
+  if (typeof grist === 'undefined') {
+    setStatus('API Grist introuvable : ce fichier doit être utilisé comme widget personnalisé dans Grist.');
+    applyConfig(loadLocal()); applyCfgToUI(); renderAll();
+    return;
+  }
+  grist.ready({ requiredAccess: 'full' });
+
+  grist.onOptions((options) => {
+    if (configLoaded) return;
+    configLoaded = true;
+    applyConfig((options && options.config) || loadLocal());
+    applyCfgToUI();
+    fillTableSelect().then(() => loadData()).catch(showError);
+  });
+
+  grist.on('message', (msg) => {
+    if (msg && msg.settings && msg.settings.accessLevel) {
+      hasFullAccess = msg.settings.accessLevel === 'full';
+      $('accessMsg').innerHTML = hasFullAccess ? '' :
+        '<div class="msg warn">Ce widget a besoin de l\'accès <b>complet</b> au document (pour lire les autres tables et joindre les documents générés). ' +
+        'Accordez-le dans le panneau de configuration du widget.</div>';
+    }
+    if (msg && msg.tableId && msg.tableId !== widgetTableId) {
+      widgetTableId = msg.tableId;
+      if (configLoaded && cfg.source === 'widget') loadData().catch(showError);
+    }
+  });
+
+  grist.onRecords((records) => {
+    widgetRowIds = (records || []).map(r => r.id);
+    clearTimeout(rowsTimer);
+    rowsTimer = setTimeout(async () => {
+      if (!widgetTableId) {
+        try { widgetTableId = await grist.selectedTable.getTableId(); } catch (e) {}
+      }
+      if (configLoaded && cfg.source === 'widget') loadData().catch(showError);
+    }, 250);
+  });
+
+  // Si aucune option n'arrive (anciennes versions de Grist), on démarre quand même
+  setTimeout(() => {
+    if (configLoaded) return;
+    configLoaded = true;
+    applyConfig(loadLocal()); applyCfgToUI();
+    fillTableSelect().then(() => loadData()).catch(showError);
+  }, 2500);
+  setStatus('Connecté');
+}
+
+setPreview(false);
+init();
+</script>
+</body>
+</html>
