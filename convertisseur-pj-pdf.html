@@ -117,7 +117,8 @@
     <p class="hint">Quand elle est active, la colonne de destination contient <b>un seul fichier</b> :
       le RIB le plus récent de la colonne d'origine, en PDF (recopié tel quel s'il est déjà en PDF,
       converti sinon). Si le RIB est changé, ce fichier est remplacé. Si la colonne d'origine est
-      vidée, la colonne de destination est laissée telle quelle.
+      vidée, la colonne de destination est laissée telle quelle. Si vous supprimez le PDF de la
+      colonne de destination, le RIB correspondant est aussi supprimé de la colonne d'origine.
       L'automatisme fonctionne tant que ce widget est affiché dans une page ouverte ;
       l'arrêt est enregistré dans le document et vaut pour tous les utilisateurs.</p>
   </section>
@@ -160,8 +161,29 @@
     busy: false,
     pending: false,
     stop: false,                    // demande d'interruption du traitement en cours
-    timer: null
+    timer: null,
+    // Ligne -> [PDF placé dans la destination, RIB d'origine dont il provient]. Enregistré dans
+    // les options du widget pour détecter la suppression du PDF, même widget fermé.
+    links: {},
+    linksDirty: false,
+    optionsLoaded: false,           // pas de traitement avant d'avoir lu les options
+    awaiting: Object.create(null)   // ligne -> PDF écrit, pas encore revu dans les données
   };
+
+  function setLink(rowId, destId, srcId) {
+    var l = state.links[rowId];
+    if (l && l[0] === destId && l[1] === srcId) return;
+    state.links[rowId] = [destId, srcId];
+    state.linksDirty = true;
+  }
+
+  function saveLinks() {
+    if (!state.linksDirty) return;
+    state.linksDirty = false;
+    Promise.resolve(grist.setOption('links', state.links)).catch(function () {
+      log('Impossible d\'enregistrer le suivi des PDF (droits insuffisants ?).', 'warn');
+    });
+  }
 
   function ext(name) {
     var m = /\.([^.\/\\]+)$/.exec(name || '');
@@ -546,8 +568,10 @@
     if (res.changed) {
       var fields = {};
       fields[state.mappings.Destination] = ['L', target];
+      state.awaiting[rec.id] = target;
       await grist.docApi.applyUserActions([['UpdateRecord', state.tableId, rec.id, fields]]);
     }
+    setLink(rec.id, target, plan.src);
     res.total = 1;
     return res;
   }
@@ -558,6 +582,7 @@
     if (!m || !m.Source || !m.Destination) msg = 'Choisissez les colonnes d\'origine et de destination dans la configuration du widget.';
     else if (m.Source === m.Destination) msg = 'Les colonnes d\'origine et de destination doivent être différentes.';
     else if (!state.tableId) msg = 'Table introuvable.';
+    else if (!state.optionsLoaded) msg = 'Options du widget pas encore chargées, réessayez dans un instant.';
     if (msg && !quiet) log(msg, 'err');
     return !msg;
   }
@@ -572,6 +597,18 @@
       var ids = [];
       records.forEach(function (r) { ids = ids.concat(toIds(r.Source), toIds(r.Destination)); });
       await ensureMeta(ids);
+
+      if (!force) {
+        var removed = await removeDeletedRibs(records);
+        if (removed.length) {
+          // Les lignes modifiées reviendront par onRecords : on ne les traite pas maintenant.
+          records = records.filter(function (r) { return removed.indexOf(r.id) < 0; });
+        }
+        records.forEach(function (r) {
+          var plan = planRecord(r);
+          if (plan.ok && plan.src !== null) setLink(r.id, plan.keep, plan.src);
+        });
+      }
 
       var todo = force ? records : records.filter(function (r) { return planNeedsWork(r, planRecord(r)); });
       if (!todo.length) {
@@ -607,12 +644,41 @@
           + ' fichier(s) converti(s), ' + stats.failed + ' erreur(s).', stats.failed ? 'warn' : 'ok');
       }
     } finally {
+      saveLinks();
       setBusy(false);
       setTimeout(function () { bar.hidden = true; }, 1500);
       renderCurrent();
       if (state.pending) { state.pending = false; scheduleAuto(); }
       state.stop = false;
     }
+  }
+
+  // PDF supprimé à la main de la destination => on supprime aussi le RIB d'origine
+  // correspondant. Renvoie les ids des lignes modifiées.
+  async function removeDeletedRibs(records) {
+    var actions = [], rows = [];
+    records.forEach(function (r) {
+      var dest = toIds(r.Destination);
+      var wait = state.awaiting[r.id];
+      if (wait !== undefined) {
+        if (dest.indexOf(wait) < 0) return;   // notre écriture n'est pas encore revenue
+        delete state.awaiting[r.id];
+      }
+      var l = state.links[r.id];
+      if (!l || dest.indexOf(l[0]) >= 0) return;
+      delete state.links[r.id];
+      state.linksDirty = true;
+      var src = toIds(r.Source);
+      if (src.indexOf(l[1]) < 0) return;      // RIB d'origine déjà retiré
+      var fields = {};
+      fields[state.mappings.Source] = ['L'].concat(src.filter(function (id) { return id !== l[1]; }));
+      actions.push(['UpdateRecord', state.tableId, r.id, fields]);
+      rows.push(r.id);
+      log('Ligne ' + r.id + ' : PDF supprimé de la destination — RIB « ' + metaOf(l[1]).name
+        + ' » supprimé de l\'origine', 'warn');
+    });
+    if (actions.length) await grist.docApi.applyUserActions(actions);
+    return rows;
   }
 
   // Appelé à chaque modification de la table : on attend un peu que les dépôts se terminent.
@@ -673,6 +739,8 @@
   });
 
   grist.onOptions(function (options) {
+    if (!state.linksDirty) state.links = (options && options.links) || {};
+    state.optionsLoaded = true;
     var auto = !options || options.auto !== false;
     if (auto === state.auto) { scheduleAuto(); return; }
     state.auto = auto;
