@@ -72,6 +72,9 @@
   .pp-list__item .fr-checkbox-group { flex: 1; min-width: 0; }
   .pp-list__item .fr-checkbox-group .fr-label { width: 100%; }
   .pp-list__meta { margin-left: auto; display: flex; gap: .5rem; align-items: center; white-space: nowrap; }
+  .pp-cond { display: grid; grid-template-columns: minmax(160px, 1.2fr) minmax(150px, 1fr) minmax(160px, 1.4fr) auto; gap: .5rem; align-items: center; margin-bottom: .5rem; }
+  .pp-cond .fr-select, .pp-cond .fr-input { margin: 0; }
+  @media (max-width: 700px) { .pp-cond { grid-template-columns: 1fr 1fr; } }
   .pp-code { font-family: var(--mono); font-size: .75rem; color: var(--text-mention-grey); }
   .pp-empty { padding: .75rem; color: var(--text-mention-grey); font-size: .875rem; }
 
@@ -426,9 +429,61 @@
 
   <!-- =============================== 4. GÉNÉRER =============================== -->
   <div id="tab-generer" class="fr-tabs__panel" role="tabpanel" aria-labelledby="tabbtn-generer">
+    <div class="pp-bloc">
+      <h2>Sélection des dossiers</h2>
+      <div class="pp-grid">
+        <div>
+          <div class="fr-select-group">
+            <label class="fr-label" for="selView">Filtres d'une vue Grist
+              <span class="fr-hint-text">Applique les filtres enregistrés et le tri d'une vue de la même table (ex : Traitement22, Traitement35, Traitement56).</span>
+            </label>
+            <select class="fr-select" id="selView"></select>
+          </div>
+          <div class="fr-select-group">
+            <label class="fr-label" for="selDone">Dossiers déjà générés
+              <span class="fr-hint-text" id="selDoneHint"></span>
+            </label>
+            <select class="fr-select" id="selDone">
+              <option value="hide">Exclure les dossiers déjà générés</option>
+              <option value="all">Inclure tous les dossiers</option>
+              <option value="only">Uniquement les dossiers déjà générés</option>
+            </select>
+          </div>
+          <div class="fr-select-group">
+            <label class="fr-label" for="selMark">Marquer comme généré dans la colonne
+              <span class="fr-hint-text">Facultatif. Après chaque génération, la date (ou « vrai » pour une case à cocher) est écrite dans cette colonne Grist. Elle sert aussi à repérer les dossiers déjà générés, pour tous les utilisateurs.</span>
+            </label>
+            <select class="fr-select" id="selMark"></select>
+          </div>
+          <div class="fr-checkbox-group fr-checkbox-group--sm fr-mb-2w">
+            <input type="checkbox" id="selAutoMark" checked>
+            <label class="fr-label" for="selAutoMark">Marquer les dossiers comme générés après chaque export</label>
+          </div>
+          <button type="button" class="fr-btn fr-btn--tertiary fr-btn--sm fr-icon-refresh-line fr-btn--icon-left" id="selForget">Oublier l'historique des dossiers affichés</button>
+        </div>
+        <div>
+          <div class="fr-input-group">
+            <label class="fr-label" for="selNumbers">Numéros de dossier
+              <span class="fr-hint-text">Collez une liste (un par ligne, ou séparés par des virgules ou des espaces). Laissez vide pour ne pas filtrer.</span>
+            </label>
+            <textarea class="fr-input" id="selNumbers" rows="5" placeholder="ex : 33875608&#10;33875612"></textarea>
+          </div>
+          <div class="fr-select-group">
+            <label class="fr-label" for="selNumCol">Colonne du numéro de dossier</label>
+            <select class="fr-select" id="selNumCol"></select>
+          </div>
+          <div id="selNumMsg"></div>
+        </div>
+      </div>
+      <h3 class="fr-h6 fr-mt-2w fr-mb-1w">Filtres sur les colonnes</h3>
+      <p class="fr-text--sm fr-mb-1w">Toutes les conditions doivent être remplies. Les colonnes proposées sont toutes celles de la table, pas seulement les colonnes cochées.</p>
+      <div id="condList"></div>
+      <button type="button" class="fr-btn fr-btn--secondary fr-btn--sm fr-icon-add-line fr-btn--icon-left" id="condAdd">Ajouter un filtre</button>
+    </div>
+
     <div class="pp-grid">
       <div class="pp-bloc">
-        <h2>Enregistrements à fusionner</h2>
+        <h2>Dossiers à fusionner</h2>
         <div class="pp-inline pp-mb">
           <div class="fr-input-group">
             <label class="fr-label fr-sr-only" for="recSearch">Filtrer les enregistrements</label>
@@ -535,6 +590,9 @@ let cfg = {
     faitA: true, lieu: '', fonction: '', nom: '', mention: true
   },
   exp: { mode: 'single', name: 'Publipostage_{{NUMERO}}', attachCol: '', message: true, font: 'Marianne' },
+  sel: { view: 0, done: 'hide', mark: '', autoMark: true, numbers: '', numCol: '', conds: [] },
+  currentModel: '',
+  history: {},   // { "table|modèle": { rowId: "jj/mm/aaaa (Word)" } }
   models: {}
 };
 
@@ -543,6 +601,8 @@ let widgetRowIds = [];        // ids visibles dans le widget (ordre de la vue)
 let meta = null;              // { tables: {tableId: [cols]} }
 let data = { tableId: null, cols: [], rows: [] };  // données chargées
 let excluded = new Set();     // ids décochés dans l'onglet Générer
+let filteredRows = [];        // dossiers retenus par les filtres (avant décochage manuel)
+let numMissing = [];          // numéros collés introuvables
 let pvIndex = 0;
 let configLoaded = false;
 let hasFullAccess = false;
@@ -592,6 +652,9 @@ function applyConfig(c) {
   cfg = Object.assign({}, cfg, c);
   cfg.sig = Object.assign({}, cfg.sig, c.sig || {});
   cfg.exp = Object.assign({}, cfg.exp, c.exp || {});
+  cfg.sel = Object.assign({}, cfg.sel, c.sel || {});
+  cfg.sel.conds = (c.sel && c.sel.conds) || [];
+  cfg.history = c.history || {};
   cfg.models = c.models || {};
 }
 
@@ -660,9 +723,12 @@ function formatNumber(v, col) {
  * Chargement des métadonnées et des données
  * ====================================================================== */
 async function loadMeta() {
-  const [tables, columns] = await Promise.all([
+  const [tables, columns, views, sections, filters] = await Promise.all([
     grist.docApi.fetchTable('_grist_Tables'),
-    grist.docApi.fetchTable('_grist_Tables_column')
+    grist.docApi.fetchTable('_grist_Tables_column'),
+    grist.docApi.fetchTable('_grist_Views').catch(() => null),
+    grist.docApi.fetchTable('_grist_Views_section').catch(() => null),
+    grist.docApi.fetchTable('_grist_Filters').catch(() => null)
   ]);
   const tableById = {};
   tables.id.forEach((id, i) => { tableById[id] = tables.tableId[i]; });
@@ -689,7 +755,35 @@ async function loadMeta() {
     };
     (byTable[tId] = byTable[tId] || []).push(col);
   });
-  meta = { tables: byTable };
+  // Vues (pages) et leurs sections, avec les filtres et tris enregistrés
+  const viewName = {};
+  if (views) views.id.forEach((id, i) => { viewName[id] = views.name[i]; });
+  const filtersBySection = {};
+  if (filters) filters.id.forEach((id, i) => {
+    (filtersBySection[filters.viewSectionRef[i]] = filtersBySection[filters.viewSectionRef[i]] || [])
+      .push({ colRef: filters.colRef[i], filter: filters.filter[i] });
+  });
+  const secs = [];
+  if (sections) sections.id.forEach((id, i) => {
+    const view = sections.parentId[i];
+    const tId = tableById[sections.tableRef[i]];
+    if (!view || !viewName[view] || !tId) return;
+    let fl = filtersBySection[id] || [];
+    // Anciens documents : filtres stockés dans filterSpec
+    if (!fl.length && sections.filterSpec && sections.filterSpec[i]) {
+      try {
+        const spec = JSON.parse(sections.filterSpec[i]);
+        fl = Object.keys(spec).map(colRef => ({ colRef: +colRef, filter: JSON.stringify(spec[colRef]) }));
+      } catch (e) {}
+    }
+    secs.push({
+      ref: id, tableId: tId, view: viewName[view],
+      title: sections.title ? sections.title[i] : '',
+      sort: sections.sortColRefs ? sections.sortColRefs[i] : '',
+      filters: fl
+    });
+  });
+  meta = { tables: byTable, sections: secs };
 }
 
 async function currentTableId() {
@@ -826,8 +920,10 @@ $('modelSave').onclick = () => {
   syncEditorToCfg();
   cfg.models[name] = {
     source: cfg.source, tableId: cfg.tableId, cols: cfg.cols.slice(), labelCol: cfg.labelCol,
-    html: cfg.html, sig: JSON.parse(JSON.stringify(cfg.sig)), exp: Object.assign({}, cfg.exp)
+    html: cfg.html, sig: JSON.parse(JSON.stringify(cfg.sig)), exp: Object.assign({}, cfg.exp),
+    sel: JSON.parse(JSON.stringify(cfg.sel))
   };
+  cfg.currentModel = name;
   renderModels(); $('modelSelect').value = name; $('modelName').value = '';
   saveConfig(); setStatus('Modèle « ' + name + ' » enregistré');
 };
@@ -837,6 +933,9 @@ $('modelLoad').onclick = () => {
   Object.assign(cfg, { source: m.source, tableId: m.tableId, cols: m.cols.slice(), labelCol: m.labelCol, html: m.html });
   cfg.sig = Object.assign({}, cfg.sig, m.sig);
   cfg.exp = Object.assign({}, cfg.exp, m.exp);
+  if (m.sel) cfg.sel = Object.assign({}, cfg.sel, JSON.parse(JSON.stringify(m.sel)));
+  cfg.currentModel = $('modelSelect').value;
+  excluded.clear();
   applyCfgToUI(); saveConfig(); loadData().catch(showError);
   setStatus('Modèle « ' + $('modelSelect').value + ' » chargé');
 };
@@ -1456,7 +1555,159 @@ async function normalizeIRImages(ir) {
 /* ========================================================================
  * Onglet Générer : sélection des enregistrements
  * ====================================================================== */
-function selectedRows() { return data.rows.filter(r => !excluded.has(r.id)); }
+function selectedRows() { return filteredRows.filter(r => !excluded.has(r.id)); }
+
+/* ----- Historique des dossiers générés ----- */
+function historyKey() { return (data.tableId || '') + '|' + (cfg.currentModel || ''); }
+function historyMap() { return cfg.history[historyKey()] || {}; }
+function markValueDone(row) {
+  const col = data.cols.find(c => c.id === cfg.sel.mark);
+  if (!col) return '';
+  const v = row[col.id];
+  if (v === null || v === undefined || v === '' || v === false) return '';
+  return formatValue(col, row) || 'oui';
+}
+function doneInfo(row) {
+  const h = historyMap()[row.id];
+  if (h) return h;
+  const m = markValueDone(row);
+  return m ? (m === 'Oui' ? 'déjà généré' : m) : '';
+}
+
+/* ----- Filtres enregistrés d'une vue Grist ----- */
+const keyOf = (x) => JSON.stringify(x === undefined ? null : x);
+function colByRef(ref) { return data.cols.find(c => c.ref === ref) || (meta.tables[data.tableId] || []).find(c => c.ref === ref); }
+function viewFilterFn(sec) {
+  const tests = [];
+  for (const f of sec.filters) {
+    const col = colByRef(f.colRef);
+    let spec = null;
+    try { spec = JSON.parse(f.filter); } catch (e) {}
+    if (!col || !spec) continue;
+    const inc = spec.included ? new Set(spec.included.map(keyOf)) : null;
+    const exc = spec.excluded ? new Set(spec.excluded.map(keyOf)) : null;
+    const min = typeof spec.min === 'number' ? spec.min : null;
+    const max = typeof spec.max === 'number' ? spec.max : null;
+    if (!inc && !exc && min === null && max === null) continue;
+    tests.push((row) => {
+      const v = row[col.id];
+      // Colonnes à valeurs multiples : la ligne passe si l'une des valeurs passe
+      const vals = Array.isArray(v) && v[0] === 'L' ? (v.length > 1 ? v.slice(1) : [null, '']) : [v];
+      return vals.some(x => {
+        if (inc && !inc.has(keyOf(x))) return false;
+        if (exc && exc.has(keyOf(x))) return false;
+        if (min !== null && !(typeof x === 'number' && x >= min)) return false;
+        if (max !== null && !(typeof x === 'number' && x <= max)) return false;
+        return true;
+      });
+    });
+  }
+  return (row) => tests.every(t => t(row));
+}
+function viewSortFn(sec) {
+  let spec = [];
+  try { spec = JSON.parse(sec.sort || '[]'); } catch (e) {}
+  const keys = spec.map(e => {
+    const n = parseInt(String(e), 10);
+    const col = colByRef(Math.abs(n));
+    return col ? { col, dir: n < 0 ? -1 : 1 } : null;
+  }).filter(Boolean);
+  if (!keys.length) return null;
+  const val = (col, row) => {
+    const v = col.displayId && row[col.displayId] !== undefined ? row[col.displayId] : row[col.id];
+    return Array.isArray(v) ? v.slice(1).join(', ') : v;
+  };
+  return (a, b) => {
+    for (const k of keys) {
+      const x = val(k.col, a), y = val(k.col, b);
+      if (x === y) continue;
+      if (x === null || x === undefined || x === '') return -1 * k.dir;
+      if (y === null || y === undefined || y === '') return 1 * k.dir;
+      const c = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'fr', { numeric: true });
+      if (c) return c * k.dir;
+    }
+    return 0;
+  };
+}
+
+/* ----- Conditions libres ----- */
+const OPS = [
+  ['eq', 'est égal à'], ['ne', 'est différent de'], ['contains', 'contient'], ['ncontains', 'ne contient pas'],
+  ['in', 'fait partie de (valeurs séparées par ;)'], ['gt', 'est supérieur à'], ['lt', 'est inférieur à'],
+  ['empty', 'est vide'], ['nempty', 'n\'est pas vide']
+];
+const norm = (x) => String(x == null ? '' : x).trim().toLowerCase();
+function parseFRDate(s) {
+  const m = String(s).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  return m ? Date.UTC(+m[3], +m[2] - 1, +m[1]) / 1000 : null;
+}
+function cellItems(col, row) {
+  const v = col.displayId && row[col.displayId] !== undefined ? row[col.displayId] : row[col.id];
+  if (Array.isArray(v) && v[0] === 'L' && col.baseType !== 'Attachments') return v.slice(1).map(x => x == null ? '' : String(x));
+  return [formatValue(col, row)];
+}
+function condFn(cond) {
+  const col = data.cols.find(c => c.id === cond.col) || (meta && (meta.tables[data.tableId] || []).find(c => c.id === cond.col));
+  if (!col || !cond.op) return null;
+  const val = norm(cond.val);
+  if (!['empty', 'nempty'].includes(cond.op) && val === '') return null;  // condition incomplète : ignorée
+  return (row) => {
+    const items = cellItems(col, row).map(norm);
+    const full = norm(formatValue(col, row));
+    const isEmpty = items.every(x => x === '');
+    switch (cond.op) {
+      case 'empty': return isEmpty;
+      case 'nempty': return !isEmpty;
+      case 'eq': return items.includes(val) || full === val;
+      case 'ne': return !items.includes(val) && full !== val;
+      case 'contains': return full.includes(val);
+      case 'ncontains': return !full.includes(val);
+      case 'in': { const set = val.split(';').map(x => x.trim()).filter(Boolean); return items.some(x => set.includes(x)); }
+      case 'gt': case 'lt': {
+        const raw = row[col.id];
+        let a = typeof raw === 'number' ? raw : parseFloat(full.replace(/\s/g, '').replace(',', '.'));
+        let b = (col.baseType === 'Date' || col.baseType === 'DateTime') ? parseFRDate(cond.val) : parseFloat(val.replace(/\s/g, '').replace(',', '.'));
+        if (isNaN(a) || b === null || isNaN(b)) return false;
+        return cond.op === 'gt' ? a > b : a < b;
+      }
+    }
+    return true;
+  };
+}
+
+/* ----- Calcul de la sélection ----- */
+function parseNumbers(text) { return String(text || '').split(/[\s,;]+/).map(x => x.trim()).filter(Boolean); }
+function refreshSelection() {
+  let rows = data.rows.slice();
+  const sec = meta && meta.sections ? meta.sections.find(x => x.ref === +cfg.sel.view && x.tableId === data.tableId) : null;
+  if (sec) {
+    rows = rows.filter(viewFilterFn(sec));
+    const sortFn = viewSortFn(sec);
+    if (sortFn) rows.sort(sortFn);
+  }
+  for (const c of cfg.sel.conds) { const f = condFn(c); if (f) rows = rows.filter(f); }
+  numMissing = [];
+  const nums = parseNumbers(cfg.sel.numbers);
+  const numCol = data.cols.find(c => c.id === cfg.sel.numCol) || (meta && (meta.tables[data.tableId] || []).find(c => c.id === cfg.sel.numCol));
+  if (nums.length && numCol) {
+    const byNum = new Map();
+    for (const r of rows) {
+      const k = norm(formatValue(numCol, r));
+      if (!byNum.has(k)) byNum.set(k, []);
+      byNum.get(k).push(r);
+    }
+    const out = [], seen = new Set();
+    for (const n of nums) {
+      const found = byNum.get(norm(n));
+      if (!found) { numMissing.push(n); continue; }
+      for (const r of found) if (!seen.has(r.id)) { seen.add(r.id); out.push(r); }
+    }
+    rows = out;   // dans l'ordre de la liste collée
+  }
+  if (cfg.sel.done === 'hide') rows = rows.filter(r => !doneInfo(r));
+  else if (cfg.sel.done === 'only') rows = rows.filter(r => doneInfo(r));
+  filteredRows = rows;
+}
 
 function renderRecList() {
   const q = $('recSearch').value.trim().toLowerCase();
@@ -1464,23 +1715,165 @@ function renderRecList() {
   const searchCols = [cfg.labelCol].concat(cfg.cols).map(id => byId[id]).filter(Boolean);
   const html = [];
   let shown = 0;
-  for (const r of data.rows) {
+  for (const r of filteredRows) {
     if (q && !searchCols.some(c => formatValue(c, r).toLowerCase().includes(q))) continue;
     if (++shown > 1500) break;
+    const done = doneInfo(r);
     html.push(`<div class="pp-list__item"><div class="fr-checkbox-group fr-checkbox-group--sm">
       <input type="checkbox" id="rec-${r.id}" data-id="${r.id}" ${excluded.has(r.id) ? '' : 'checked'}>
       <label class="fr-label" for="rec-${r.id}">${esc(rowLabel(r))}</label></div>
-      <span class="pp-list__meta pp-code">#${r.id}</span></div>`);
+      <span class="pp-list__meta">${done ? `<span class="fr-badge fr-badge--sm fr-badge--success">Généré ${esc(done)}</span>` : ''}<span class="pp-code">#${r.id}</span></span></div>`);
   }
-  $('recList').innerHTML = html.join('') || '<div class="pp-empty">Aucun enregistrement.</div>';
-  $('recCount').textContent = selectedRows().length + ' enregistrement(s) sélectionné(s) sur ' + data.rows.length;
+  $('recList').innerHTML = html.join('') || '<div class="pp-empty">Aucun dossier ne correspond aux filtres.</div>';
+  updateRecCount();
+  renderSelInfo();
+}
+function updateRecCount() {
+  $('recCount').textContent = selectedRows().length + ' dossier(s) sélectionné(s) · ' + filteredRows.length +
+    ' après filtres · ' + data.rows.length + ' dans la table';
+}
+function renderSelInfo() {
+  const n = Object.keys(historyMap()).length;
+  $('selDoneHint').textContent = 'Historique ' + (cfg.currentModel ? 'du modèle « ' + cfg.currentModel + ' »' : 'sans modèle') +
+    ' : ' + n + ' dossier(s) déjà généré(s) dans cette table' + (cfg.sel.mark ? ', plus ceux renseignés dans la colonne choisie.' : '.');
+  const nums = parseNumbers(cfg.sel.numbers);
+  $('selNumMsg').innerHTML = !nums.length ? '' : (numMissing.length
+    ? alertHTML('warn', nums.length + ' numéro(s) collé(s), ' + numMissing.length + ' introuvable(s) avec les filtres actuels : ' + esc(numMissing.slice(0, 30).join(', ')) + (numMissing.length > 30 ? '…' : ''))
+    : alertHTML('ok', 'Les ' + nums.length + ' numéro(s) collé(s) ont été trouvés.'));
 }
 $('recList').addEventListener('change', (e) => {
   const cb = e.target.closest('input[data-id]'); if (!cb) return;
   const id = +cb.dataset.id;
   if (cb.checked) excluded.delete(id); else excluded.add(id);
-  $('recCount').textContent = selectedRows().length + ' enregistrement(s) sélectionné(s) sur ' + data.rows.length;
+  updateRecCount();
 });
+
+/* ----- Interface de sélection ----- */
+function dataColsAll() { return (meta && meta.tables[data.tableId] || []).filter(c => !c.hidden); }
+function renderSelControls() {
+  const cols = dataColsAll();
+  const secs = (meta && meta.sections || []).filter(x => x.tableId === data.tableId);
+  $('selView').innerHTML = '<option value="0">— Aucune vue —</option>' + secs.map(x =>
+    `<option value="${x.ref}" ${x.ref === +cfg.sel.view ? 'selected' : ''}>${esc(x.view)}${x.title ? ' › ' + esc(x.title) : ''} (${x.filters.length} filtre(s))</option>`).join('');
+  $('selDone').value = cfg.sel.done;
+  $('selAutoMark').checked = cfg.sel.autoMark !== false;
+  const markable = cols.filter(c => ['Date', 'DateTime', 'Bool', 'Text', 'Any'].includes(c.baseType) && (!c.isFormula || !c.formula));
+  $('selMark').innerHTML = '<option value="">— Aucune (historique du widget uniquement) —</option>' + markable.map(c =>
+    `<option value="${esc(c.id)}" ${c.id === cfg.sel.mark ? 'selected' : ''}>${esc(c.label)} (${esc(TYPE_FR[c.baseType] || c.baseType)})</option>`).join('');
+  if (!cfg.sel.numCol || !cols.some(c => c.id === cfg.sel.numCol)) {
+    const guess = cols.find(c => c.id === 'dossier_number') || cols.find(c => /dossier|numero|num_/i.test(c.id)) || cols.find(c => c.id === cfg.labelCol);
+    cfg.sel.numCol = guess ? guess.id : '';
+  }
+  $('selNumCol').innerHTML = cols.map(c => `<option value="${esc(c.id)}" ${c.id === cfg.sel.numCol ? 'selected' : ''}>${esc(c.label)}</option>`).join('');
+  $('selNumbers').value = cfg.sel.numbers || '';
+  renderConds();
+}
+function renderConds() {
+  const cols = dataColsAll();
+  $('condList').innerHTML = cfg.sel.conds.map((c, i) => {
+    const col = cols.find(x => x.id === c.col);
+    const values = [];
+    if (col) {
+      const seen = new Set();
+      for (const r of data.rows) {
+        for (const it of cellItems(col, r)) { if (it && !seen.has(it)) { seen.add(it); values.push(it); } }
+        if (values.length >= 300) break;
+      }
+      values.sort((a, b) => a.localeCompare(b, 'fr', { numeric: true }));
+    }
+    const noVal = c.op === 'empty' || c.op === 'nempty';
+    return `<div class="pp-cond" data-i="${i}">
+      <select class="fr-select" data-f="col" aria-label="Colonne">${cols.map(x => `<option value="${esc(x.id)}" ${x.id === c.col ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</select>
+      <select class="fr-select" data-f="op" aria-label="Condition">${OPS.map(([k, l]) => `<option value="${k}" ${k === c.op ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>
+      <input class="fr-input" data-f="val" aria-label="Valeur" value="${esc(c.val || '')}" ${noVal ? 'disabled placeholder="—"' : 'placeholder="Valeur"'} list="dl-${i}">
+      <datalist id="dl-${i}">${values.map(v => `<option value="${esc(v)}">`).join('')}</datalist>
+      <button type="button" class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-icon-delete-bin-line" data-f="del" title="Supprimer ce filtre">Supprimer ce filtre</button>
+    </div>`;
+  }).join('');
+}
+function selChanged(rerenderControls) {
+  if (rerenderControls) renderConds();
+  saveConfig(); refreshSelection(); renderRecList();
+  pvIndex = 0; if (isPreview) renderPreview();
+}
+$('condAdd').onclick = () => {
+  const cols = dataColsAll();
+  cfg.sel.conds.push({ col: (cols.find(c => c.id === 'dep2') || cols[0] || {}).id || '', op: 'eq', val: '' });
+  selChanged(true);
+};
+$('condList').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-f=del]'); if (!b) return;
+  cfg.sel.conds.splice(+b.closest('.pp-cond').dataset.i, 1); selChanged(true);
+});
+$('condList').addEventListener('change', (e) => {
+  const el = e.target.closest('[data-f]'); if (!el || el.dataset.f === 'del') return;
+  const c = cfg.sel.conds[+el.closest('.pp-cond').dataset.i];
+  c[el.dataset.f] = el.value;
+  if (el.dataset.f === 'col') c.val = '';
+  selChanged(el.dataset.f !== 'val');
+});
+let condTimer = null;
+$('condList').addEventListener('input', (e) => {
+  const el = e.target.closest('[data-f=val]'); if (!el) return;
+  cfg.sel.conds[+el.closest('.pp-cond').dataset.i].val = el.value;
+  clearTimeout(condTimer); condTimer = setTimeout(() => selChanged(false), 300);
+});
+$('selView').onchange = (e) => { cfg.sel.view = +e.target.value; selChanged(false); };
+$('selDone').onchange = (e) => { cfg.sel.done = e.target.value; selChanged(false); };
+$('selMark').onchange = (e) => { cfg.sel.mark = e.target.value; selChanged(false); };
+$('selAutoMark').onchange = (e) => { cfg.sel.autoMark = e.target.checked; saveConfig(); };
+$('selNumCol').onchange = (e) => { cfg.sel.numCol = e.target.value; selChanged(false); };
+let numTimer = null;
+$('selNumbers').addEventListener('input', (e) => {
+  cfg.sel.numbers = e.target.value;
+  clearTimeout(numTimer); numTimer = setTimeout(() => selChanged(false), 300);
+});
+$('selForget').onclick = () => {
+  const b = $('selForget');
+  const ids = filteredRows.map(r => r.id);
+  if (!ids.length) return;
+  if (b.dataset.confirm !== '1') {
+    b.dataset.confirm = '1'; b.textContent = 'Confirmer : oublier ' + ids.length + ' dossier(s) ?';
+    setTimeout(() => { b.textContent = 'Oublier l\'historique des dossiers affichés'; delete b.dataset.confirm; }, 4000);
+    return;
+  }
+  delete b.dataset.confirm; b.textContent = 'Oublier l\'historique des dossiers affichés';
+  const h = cfg.history[historyKey()] || {};
+  ids.forEach(id => delete h[id]);
+  cfg.history[historyKey()] = h;
+  selChanged(false);
+  genMsg('info', 'Historique effacé pour ' + ids.length + ' dossier(s). Les valeurs déjà écrites dans une colonne Grist ne sont pas modifiées.');
+};
+
+/* ----- Marquage après génération ----- */
+async function markGenerated(rows, kindLabel) {
+  if (cfg.sel.autoMark === false || !rows.length) return '';
+  const today = new Date();
+  const stamp = 'le ' + dateFR(today) + ' (' + kindLabel + ')';
+  const h = cfg.history[historyKey()] || {};
+  rows.forEach(r => { h[r.id] = stamp; });
+  cfg.history[historyKey()] = h;
+  saveConfig();
+  let note = '';
+  const col = dataColsAll().find(c => c.id === cfg.sel.mark);
+  if (col) {
+    let v;
+    if (col.baseType === 'Date') v = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) / 1000;
+    else if (col.baseType === 'DateTime') v = Math.floor(today.getTime() / 1000);
+    else if (col.baseType === 'Bool') v = true;
+    else v = 'Généré ' + stamp;
+    try {
+      await grist.docApi.applyUserActions([['BulkUpdateRecord', data.tableId, rows.map(r => r.id), { [col.id]: rows.map(() => v) }]]);
+      rows.forEach(r => { r[col.id] = v; });
+      note = ' · marqué(s) dans la colonne « ' + esc(col.label) + ' »';
+    } catch (e) {
+      note = '<br>Marquage dans la colonne « ' + esc(col.label) + ' » impossible : ' + esc(e.message || e);
+    }
+  }
+  // Les dossiers générés disparaissent de la sélection si on exclut les dossiers déjà générés
+  refreshSelection(); renderRecList();
+  return note;
+}
 $('recSearch').addEventListener('input', renderRecList);
 function visibleRecIds() { return [...$('recList').querySelectorAll('input[data-id]')].map(i => +i.dataset.id); }
 $('recAll').onclick = () => { visibleRecIds().forEach(id => excluded.delete(id)); renderRecList(); };
@@ -1859,7 +2252,8 @@ async function generate(kind) {
       const name = (rows.length === 1 ? fileNameFor(rows[0], 0) : 'Publipostage_' + dateFR(new Date()).replace(/\//g, '-')) + ext;
       downloadBlob(blob, name);
       progress(1, 1);
-      genMsg(fontWarn ? 'warn' : 'ok', `${esc(name)} généré (${rows.length} enregistrement(s)).` + (fontWarn ? '<br>' + fontWarn : ''));
+      const markNote = await markGenerated(rows, kind === 'docx' ? 'Word' : 'PDF');
+      genMsg(fontWarn ? 'warn' : 'ok', `${esc(name)} généré (${rows.length} dossier(s))${markNote}.` + (fontWarn ? '<br>' + fontWarn : ''));
       return;
     }
 
@@ -1904,6 +2298,7 @@ async function generate(kind) {
     let msg = `${rows.length} document(s) ${kind === 'docx' ? 'Word' : 'PDF'} généré(s)`;
     if (zip) msg += ' dans ' + esc(baseName) + '.zip';
     if (updates.length) msg += ` · ${updates.length} ajouté(s) à la colonne « ${esc(attachCol)} »`;
+    msg += await markGenerated(rows, kind === 'docx' ? 'Word' : 'PDF');
     genMsg(attachErr || fontWarn ? 'warn' : 'ok', msg + (attachErr ? '<br>Pièces jointes : ' + esc(attachErr.message) : '') + (fontWarn ? '<br>' + fontWarn : ''));
     if (updates.length) loadData().catch(showError);
   } catch (e) {
@@ -1943,7 +2338,8 @@ async function exportXlsx(rows, ir) {
   XLSX.utils.book_append_sheet(wb, ws, 'Publipostage');
   const name = 'Publipostage_' + (data.tableId || '') + '_' + dateFR(new Date()).replace(/\//g, '-') + '.xlsx';
   XLSX.writeFile(wb, name);
-  genMsg('ok', `${esc(name)} généré (${rows.length} ligne(s), ${cols.length} colonne(s)).`);
+  const markNote = await markGenerated(rows, 'Excel');
+  genMsg('ok', `${esc(name)} généré (${rows.length} ligne(s), ${cols.length} colonne(s))${markNote}.`);
 }
 
 $('genDocx').onclick = () => generate('docx');
@@ -1968,6 +2364,8 @@ function applyCfgToUI() {
 function renderAll() {
   renderColList();
   renderFields();
+  if (data.tableId) renderSelControls();
+  refreshSelection();
   if ($('tab-generer').classList.contains('fr-tabs__panel--selected')) renderRecList();
   if (isPreview) renderPreview();
 }
