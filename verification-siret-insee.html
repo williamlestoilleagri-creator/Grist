@@ -71,6 +71,9 @@
   .ctl select:focus, .ctl input:focus{ border-color:var(--primary); background:#fff; }
   .ctl.key input{ min-width:240px; font-family:var(--font-mono); font-size:12px; }
   .ctl.hidden{ display:none; }
+  .ctl.mode select{ font-weight:600; color:var(--primary); border-color:#C9C9F2; background:var(--primary-soft); }
+  .badge.mid{ background:var(--warning-soft); color:var(--warning); }
+  td .alt{ display:block; font-size:10.5px; color:var(--ink-faint); margin-top:2px; white-space:normal; }
   .spacer{ flex:1 1 auto; }
 
   .btn{
@@ -221,13 +224,36 @@
   </header>
 
   <div class="config">
+    <div class="ctl mode">
+      <label for="sel-mode">Mode</label>
+      <select id="sel-mode">
+        <option value="verify">Vérifier à partir du SIRET</option>
+        <option value="find">Trouver le SIRET (nom, commune, adresse)</option>
+      </select>
+    </div>
     <div class="ctl">
       <label for="sel-table">Table</label>
       <select id="sel-table"><option value="">Chargement…</option></select>
     </div>
-    <div class="ctl">
+    <div class="ctl verify-only" id="ctl-siret">
       <label for="sel-siret">Colonne SIRET</label>
       <select id="sel-siret" disabled><option value="">—</option></select>
+    </div>
+    <div class="ctl find-only hidden">
+      <label for="sel-f-nom">Raison sociale *</label>
+      <select id="sel-f-nom" data-find="nom" disabled><option value="">—</option></select>
+    </div>
+    <div class="ctl find-only hidden">
+      <label for="sel-f-commune">Code commune INSEE</label>
+      <select id="sel-f-commune" data-find="commune" disabled><option value="">—</option></select>
+    </div>
+    <div class="ctl find-only hidden">
+      <label for="sel-f-cp">Code postal</label>
+      <select id="sel-f-cp" data-find="cp" disabled><option value="">—</option></select>
+    </div>
+    <div class="ctl find-only hidden">
+      <label for="sel-f-adresse">Adresse / lieu-dit</label>
+      <select id="sel-f-adresse" data-find="adresse" disabled><option value="">—</option></select>
     </div>
     <div class="ctl">
       <label for="sel-order">Ordre des lignes</label>
@@ -265,10 +291,13 @@
 
   <div class="table-wrap" id="table-wrap">
     <div class="placeholder" id="placeholder">
-      <h2>Vérifier des entreprises à partir du SIRET</h2>
+      <h2>Vérifier ou retrouver des entreprises dans Sirene</h2>
       <ol>
-        <li>Choisissez la <b>table</b> et la <b>colonne contenant le SIRET</b>.</li>
-        <li>Cliquez sur <b>Vérifier</b> : chaque SIRET est interrogé dans la base Sirene.</li>
+        <li>Choisissez le <b>mode</b> puis la <b>table</b>.</li>
+        <li><b>Vérifier</b> : indiquez la colonne SIRET.<br>
+          <b>Trouver le SIRET</b> : indiquez la colonne raison sociale, et si possible le code commune INSEE,
+          le code postal et l'adresse / lieu-dit pour départager les homonymes.</li>
+        <li>Lancez la recherche : chaque ligne est interrogée dans la base Sirene.</li>
         <li>Cliquez sur <b>Copier</b> en tête d'une colonne, sélectionnez la première cellule
           de la colonne cible dans Grist et collez (Ctrl/Cmd + V).</li>
       </ol>
@@ -301,6 +330,7 @@
   // ============================================================
   var FIELDS = [
     { key: 'statut',        label: 'Statut',            on: true,  badge: true },
+    { key: 'confiance',     label: 'Confiance',         on: true,  findOnly: true },
     { key: 'siret',         label: 'SIRET',             on: false, mono: true },
     { key: 'siren',         label: 'SIREN',             on: false, mono: true },
     { key: 'nom',           label: 'Raison sociale',    on: true  },
@@ -324,6 +354,8 @@
   };
 
   var state = {
+    mode: 'verify',      // 'verify' : SIRET -> infos ; 'find' : nom (+ commune, adresse) -> SIRET
+    find: { nom: '', commune: '', cp: '', adresse: '' }, // colonnes Grist utilisées en mode 'find'
     tables: [],
     tableId: '',
     siretCol: '',
@@ -453,7 +485,11 @@
     var etab = (ent.matching_etablissements || []).find(function (e) { return e.siret === siret; });
     if (!etab && ent.siege && ent.siege.siret === siret) etab = ent.siege;
     if (!etab) return { statut: 'notfound' };
+    return mapRecherche(ent, etab);
+  }
 
+  function mapRecherche(ent, etab) {
+    var siret = etab.siret;
     var dirigeants = (ent.dirigeants || []).map(function (d) {
       var who = d.type_dirigeant === 'personne morale'
         ? (d.denomination || d.siren)
@@ -487,6 +523,120 @@
       date_creation: clean(etab.date_creation || ent.date_creation),
       forme_juridique: clean(ent.nature_juridique)
     };
+  }
+
+  // --- Recherche inverse : nom (+ code commune, code postal, adresse / lieu-dit) -> SIRET ---
+  var NAME_STOP = ('sarl sas sasu sa eurl sci earl gaec scea snc selarl scop scp ei eirl ste societe ' +
+    'ets etablissements entreprise et de du des la le les l d en au aux').split(' ');
+  var ADDR_STOP = ('rue r route rte chemin che chem ch lieu dit lieudit ld avenue av ave boulevard bd bld place pl ' +
+    'impasse imp allee all quai qu cours crs square sq hameau ham residence res zone za zi zac lotissement lot ' +
+    'bis ter de du des la le les l d en au aux sur sous').split(' ');
+
+  function tokens(s, stop) {
+    return norm(s).split(' ').filter(function (t) { return t && stop.indexOf(t) < 0 && (t.length > 1 || /\d/.test(t)); });
+  }
+  function tokMatch(a, b) {
+    if (a === b) return true;
+    if (a.length >= 4 && b.length >= 4 && (a.indexOf(b) === 0 || b.indexOf(a) === 0)) return true;
+    return false;
+  }
+  // part des mots de "q" retrouvés dans "c"
+  function coverage(q, c) {
+    if (!q.length) return 0;
+    var hit = q.filter(function (t) { return c.some(function (u) { return tokMatch(t, u); }); }).length;
+    return hit / q.length;
+  }
+  function nameSim(query, candidates) {
+    var q = tokens(query, NAME_STOP);
+    if (!q.length) q = norm(query).split(' ').filter(Boolean);
+    var best = 0;
+    candidates.forEach(function (c) {
+      var ct = tokens(c, NAME_STOP);
+      if (!ct.length) return;
+      var sc = 0.8 * coverage(q, ct) + 0.2 * coverage(ct, q);
+      if (norm(c) === norm(query)) sc = 1;
+      if (sc > best) best = sc;
+    });
+    return best;
+  }
+
+  function normCommune(v) {
+    var s = clean(cellToText(v)).toUpperCase().replace(/\s/g, '');
+    if (/^\d{1,5}$/.test(s)) return s.padStart(5, '0');
+    return /^(2A|2B)\d{3}$/.test(s) ? s : (/^\d{5}$/.test(s) ? s : '');
+  }
+  function normCp(v) {
+    var s = clean(cellToText(v)).replace(/\s/g, '');
+    if (/^\d{4,5}$/.test(s)) return s.padStart(5, '0');
+    return '';
+  }
+
+  async function searchRecherche(q, filters) {
+    var url = 'https://recherche-entreprises.api.gouv.fr/search?per_page=10&q=' + encodeURIComponent(q);
+    Object.keys(filters).forEach(function (k) { if (filters[k]) url += '&' + k + '=' + encodeURIComponent(filters[k]); });
+    var res = await fetchWithRetry(url);
+    if (res.status === 400) return [];
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    var json = await res.json();
+    return json.results || [];
+  }
+
+  async function findRecherche(query) {
+    var nom = clean(query.nom);
+    if (nom.length < 3) return { statut: 'notfound', error: 'Nom trop court (3 caractères minimum)' };
+
+    // 1) nom + commune (ou code postal) ; 2) si rien : nom + département (communes fusionnées…)
+    // Paris, Lyon, Marseille : Sirene code les établissements par arrondissement
+    var PLM = { '75056': '75', '69123': '69', '13055': '13' };
+    if (PLM[query.commune]) query = Object.assign({}, query, { commune: '', dep: PLM[query.commune] });
+    var filters = query.commune ? { code_commune: query.commune }
+      : (query.cp ? { code_postal: query.cp } : (query.dep ? { departement: query.dep } : {}));
+    var results = await searchRecherche(nom, filters);
+    if (!results.length && (query.commune || query.cp) && !query.dep) {
+      var dep = deptFrom(query.commune, query.cp);
+      if (dep) { await sleep(160); results = await searchRecherche(nom, { departement: dep }); }
+    }
+    if (!results.length) return { statut: 'notfound' };
+
+    var addrQ = tokens(query.adresse, ADDR_STOP);
+    var cands = [];
+    results.forEach(function (ent) {
+      var etabs = (ent.matching_etablissements || []).slice();
+      if (!etabs.length && ent.siege && ent.siege.siret) etabs.push(ent.siege);
+      etabs.forEach(function (etab) {
+        if (!etab || !etab.siret) return;
+        var names = [ent.nom_complet, ent.nom_raison_sociale, ent.sigle, etab.nom_commercial]
+          .concat(etab.liste_enseignes || []).filter(Boolean);
+        var sName = nameSim(nom, names);
+        var sAddr = addrQ.length
+          ? coverage(addrQ, tokens([etab.adresse, etab.complement_adresse, etab.libelle_voie].join(' '), ADDR_STOP))
+          : null;
+        var inCommune = query.commune ? etab.commune === query.commune
+          : (query.cp ? etab.code_postal === query.cp : null);
+        var w = 0.6, score = 0.6 * sName;
+        if (sAddr !== null) { w += 0.3; score += 0.3 * sAddr; }
+        if (inCommune !== null) { w += 0.1; score += inCommune ? 0.1 : 0; }
+        score = score / w;
+        if (etab.etat_administratif === 'F') score *= 0.9; // préfère les établissements actifs
+        if (sName < 0.34) return;
+        cands.push({ ent: ent, etab: etab, score: score });
+      });
+    });
+    if (!cands.length) return { statut: 'notfound' };
+
+    cands.sort(function (a, b) { return b.score - a.score; });
+    var best = cands[0], second = cands[1];
+    var gap = second ? best.score - second.score : 1;
+    var level = (best.score >= 0.85 && gap >= 0.08) ? 'high' : (best.score >= 0.6 ? 'mid' : 'low');
+
+    var out = mapRecherche(best.ent, best.etab);
+    out.confiance = { high: 'Élevée', mid: 'Moyenne', low: 'Faible' }[level] + ' (' + Math.round(best.score * 100) + ' %)';
+    out.confLevel = level;
+    out.alternatives = cands.slice(1, 4).map(function (c) {
+      return c.etab.siret + ' · ' + clean(c.ent.nom_complet) + ' · ' + clean(c.etab.adresse) +
+        ' (' + Math.round(c.score * 100) + ' %)';
+    });
+    return out;
   }
 
   // --- API Sirene officielle INSEE (portail-api.insee.fr) ---
@@ -584,6 +734,18 @@
       var guess = state.columns.find(function (c) { return /siret/i.test(c.id + ' ' + c.label); });
       state.siretCol = guess ? guess.id : '';
     }
+    // Colonnes du mode "trouver" : conserve sinon devine d'après le nom
+    var GUESS = {
+      nom: /raison|soci[ée]t[ée]|entreprise|d[ée]nomination|^nom$|nom.?(de.?l.?)?(entreprise|soci)/i,
+      commune: /(code|cod).?(insee|commune|com)|insee|cog/i,
+      cp: /(code.?postal|^cp$|postal)/i,
+      adresse: /adresse|lieu.?dit|voie|^rue$/i
+    };
+    Object.keys(state.find).forEach(function (k) {
+      if (state.columns.some(function (c) { return c.id === state.find[k]; })) return;
+      var g = state.columns.find(function (c) { return GUESS[k].test(c.label) || GUESS[k].test(c.id); });
+      state.find[k] = g ? g.id : '';
+    });
     // comparaisons : supprime celles vers des colonnes disparues
     Object.keys(state.compare).forEach(function (k) {
       if (!state.columns.some(function (c) { return c.id === state.compare[k]; })) delete state.compare[k];
@@ -600,6 +762,12 @@
     s.innerHTML = '<option value="">— Choisir —</option>' + opts;
     s.value = state.siretCol || '';
     s.disabled = !state.columns.length;
+    Object.keys(state.find).forEach(function (k) {
+      var sel = document.querySelector('[data-find="' + k + '"]');
+      sel.innerHTML = '<option value="">' + (k === 'nom' ? '— Choisir —' : '— Aucune —') + '</option>' + opts;
+      sel.value = state.find[k] || '';
+      sel.disabled = !state.columns.length;
+    });
 
     var hasManual = state.data && state.data.manualSort;
     var orderOpts = (hasManual ? '<option value="manualSort">Ordre par défaut de la table</option>' : '') +
@@ -614,7 +782,14 @@
     }
     o.value = state.order;
     o.disabled = !state.columns.length;
-    $('btn-run').disabled = !state.siretCol || state.running;
+    updateRunButton();
+  }
+
+  function isReady() { return state.mode === 'find' ? !!state.find.nom : !!state.siretCol; }
+  function updateRunButton() {
+    if (state.running) return;
+    $('btn-run').disabled = !isReady();
+    $('btn-run').textContent = state.mode === 'find' ? 'Rechercher' : 'Vérifier';
   }
 
   function buildRows() {
@@ -642,9 +817,24 @@
     }
 
     var sc = state.siretCol ? d[state.siretCol] : null;
+    var fc = {};
+    Object.keys(state.find).forEach(function (k) { fc[k] = state.find[k] ? d[state.find[k]] : null; });
     state.rows = idx.map(function (i) {
       var raw = sc ? sc[i] : null;
-      return { rowId: d.id[i], i: i, raw: raw, siret: normSiret(raw) };
+      var row = { rowId: d.id[i], i: i, raw: raw, siret: normSiret(raw) };
+      if (state.mode === 'find') {
+        row.query = {
+          nom: fc.nom ? clean(cellToText(fc.nom[i])) : '',
+          commune: fc.commune ? normCommune(fc.commune[i]) : '',
+          cp: fc.cp ? normCp(fc.cp[i]) : '',
+          adresse: fc.adresse ? clean(cellToText(fc.adresse[i])) : ''
+        };
+        row.key = 'find|' + JSON.stringify(row.query);
+        row.raw = join([row.query.nom, row.query.adresse, join([row.query.cp, row.query.commune && 'INSEE ' + row.query.commune])], ' · ');
+      } else {
+        row.key = row.siret;
+      }
+      return row;
     });
     $('count').textContent = n + ' ligne' + (n > 1 ? 's' : '');
     render();
@@ -659,6 +849,10 @@
   // Vérification
   // ============================================================
   function resultFor(row) {
+    if (state.mode === 'find') {
+      if (!row.query || !row.query.nom) return { statut: 'empty' };
+      return state.results[row.key] || { statut: 'wait' };
+    }
     if (!row.siret) return { statut: 'empty' };
     if (!isValidSiret(row.siret)) return { statut: 'invalid', siret: row.siret };
     return state.results[row.siret] || { statut: 'wait', siret: row.siret };
@@ -666,24 +860,28 @@
 
   async function run() {
     if (state.running) { state.stop = true; return; }
-    var source = state.source;
+    var find = state.mode === 'find';
+    var source = find ? 'recherche' : state.source;
     var key = $('inp-key').value.trim();
-    if (source === 'insee' && !key) { showMsg('Renseignez votre clé API INSEE (portail-api.insee.fr).', 'warning'); return; }
+    if (!find && source === 'insee' && !key) { showMsg('Renseignez votre clé API INSEE (portail-api.insee.fr).', 'warning'); return; }
 
     var todo = [];
     var seen = Object.create(null);
     state.results = Object.create(null);
+    var queries = Object.create(null);
     state.rows.forEach(function (r) {
-      if (!r.siret || !isValidSiret(r.siret) || seen[r.siret]) return;
-      seen[r.siret] = 1;
-      var c = state.cache[source + '|' + r.siret];
-      if (c) state.results[r.siret] = c; else todo.push(r.siret);
+      if (find ? !(r.query && r.query.nom) : (!r.siret || !isValidSiret(r.siret))) return;
+      if (seen[r.key]) return;
+      seen[r.key] = 1;
+      queries[r.key] = r.query;
+      var c = state.cache[source + '|' + r.key];
+      if (c) state.results[r.key] = c; else todo.push(r.key);
     });
 
     state.running = true; state.stop = false;
     $('btn-run').textContent = 'Arrêter';
     $('btn-run').className = 'btn btn-danger';
-    showMsg(todo.length ? 'Interrogation de ' + todo.length + ' SIRET…' : '', 'info');
+    showMsg(todo.length ? 'Interrogation de ' + todo.length + (find ? ' entreprise(s)…' : ' SIRET…') : '', 'info');
     render();
 
     // API Recherche : 7 req/s max ; API INSEE : 30 req/min
@@ -691,18 +889,19 @@
     var errors = 0, fatal = null, lastRender = 0;
 
     for (var k = 0; k < todo.length && !state.stop; k++) {
-      var siret = todo[k], t0 = Date.now(), res;
+      var rk = todo[k], t0 = Date.now(), res;
       try {
-        res = source === 'insee' ? await lookupInsee(siret, key) : await lookupRecherche(siret);
-        state.cache[source + '|' + siret] = res;
+        res = find ? await findRecherche(queries[rk])
+          : source === 'insee' ? await lookupInsee(rk, key) : await lookupRecherche(rk);
+        state.cache[source + '|' + rk] = res;
       } catch (e) {
         errors++;
-        res = { statut: 'error', siret: siret, error: e.message };
+        res = { statut: 'error', siret: find ? '' : rk, error: e.message };
         if (/Clé API|Failed to fetch|NetworkError|Load failed/i.test(e.message) && errors >= 3 && k === errors - 1) {
           fatal = e.message; // toutes les premières requêtes échouent : inutile d'insister
         }
       }
-      state.results[siret] = res;
+      state.results[rk] = res;
       if (fatal) break;
       if (Date.now() - lastRender > 400 || k === todo.length - 1) { render(); lastRender = Date.now(); }
       var wait = delay - (Date.now() - t0);
@@ -710,15 +909,15 @@
     }
 
     state.running = false;
-    $('btn-run').textContent = 'Vérifier';
     $('btn-run').className = 'btn btn-primary';
+    updateRunButton();
     if (fatal) {
       showMsg('Échec des requêtes : ' + fatal +
         (source === 'insee' ? ' — vérifiez la clé, ou essayez la source « API Recherche d\'entreprises ».' : ''), 'error');
     } else if (state.stop) {
       showMsg('Vérification interrompue.', 'warning');
     } else if (errors) {
-      showMsg(errors + ' SIRET en erreur. Relancez « Vérifier » pour les réessayer.', 'warning');
+      showMsg(errors + ' ligne(s) en erreur. Relancez la recherche pour les réessayer.', 'warning');
     } else {
       showMsg('');
     }
@@ -728,7 +927,9 @@
   // ============================================================
   // Rendu
   // ============================================================
-  function visibleFields() { return FIELDS.filter(function (f) { return state.visible[f.key]; }); }
+  function visibleFields() {
+    return FIELDS.filter(function (f) { return state.visible[f.key] && (!f.findOnly || state.mode === 'find'); });
+  }
 
   function fieldValue(res, f) {
     if (f.key === 'statut') return STATUS[res.statut] || '';
@@ -738,6 +939,7 @@
   function isIssue(row, res) {
     if (res.statut === 'empty' || res.statut === 'wait') return false;
     if (res.statut !== 'ok') return true;
+    if (res.confLevel && res.confLevel !== 'high') return true;
     return visibleFields().some(function (f) {
       var cmp = state.compare[f.key];
       return cmp && !sameValue(fieldValue(res, f), gristValue(row, cmp));
@@ -745,7 +947,9 @@
   }
 
   function renderFields() {
-    $('fields').innerHTML = '<span class="lbl">Colonnes</span>' + FIELDS.map(function (f) {
+    $('fields').innerHTML = '<span class="lbl">Colonnes</span>' + FIELDS.filter(function (f) {
+      return !f.findOnly || state.mode === 'find';
+    }).map(function (f) {
       var on = state.visible[f.key];
       return '<label class="chip' + (on ? ' on' : '') + '"><input type="checkbox" data-field="' + f.key + '"' +
         (on ? ' checked' : '') + '>' + esc(f.label) + '</label>';
@@ -755,7 +959,7 @@
   function render() {
     var wrap = $('table-wrap');
     var ph = $('placeholder');
-    if (!state.tableId || !state.siretCol || !state.rows.length) {
+    if (!state.tableId || !isReady() || !state.rows.length) {
       wrap.innerHTML = '';
       wrap.appendChild(ph);
       updateStats();
@@ -767,14 +971,16 @@
       return '<option value="' + esc(c.id) + '">' + esc(c.label) + '</option>';
     }).join('');
 
-    var srcLabel = (state.columns.find(function (c) { return c.id === state.siretCol; }) || {}).label || state.siretCol;
+    var srcLabel = state.mode === 'find' ? 'Recherche'
+      : (state.columns.find(function (c) { return c.id === state.siretCol; }) || {}).label || state.siretCol;
     var h = '<table><thead><tr><th class="rownum">#</th>' +
-      '<th><div class="th-top"><span class="th-title">' + esc(srcLabel) + '<small>colonne Grist</small></span></div></th>';
+      '<th><div class="th-top"><span class="th-title">' + esc(srcLabel) + '<small>' +
+      (state.mode === 'find' ? 'valeurs Grist' : 'colonne Grist') + '</small></span></div></th>';
     fields.forEach(function (f) {
       var cmp = state.compare[f.key] || '';
       h += '<th><div class="th-top"><span class="th-title">' + esc(f.label) + '</span>' +
         '<button class="copy-btn" data-copy="' + f.key + '" title="Copier la colonne pour la coller dans Grist">Copier</button></div>' +
-        (f.key === 'statut' ? '' :
+        (f.key === 'statut' || f.key === 'confiance' ? '' :
           '<select class="cmp' + (cmp ? ' active' : '') + '" data-cmp="' + f.key + '">' +
           cmpOptions.replace('value="' + esc(cmp) + '"', 'value="' + esc(cmp) + '" selected') + '</select>') +
         '</th>';
@@ -789,9 +995,18 @@
       fields.forEach(function (f) {
         if (f.key === 'statut') {
           var cls = { ok: 'ok', closed: 'closed', notfound: 'ko', invalid: 'ko', error: 'ko', wait: 'wait', empty: 'none' }[res.statut];
-          var label = res.statut === 'empty' ? 'pas de SIRET' : STATUS[res.statut];
+          var label = res.statut === 'empty' ? (state.mode === 'find' ? 'pas de nom' : 'pas de SIRET') : STATUS[res.statut];
           h += '<td><span class="badge ' + cls + '"' + (res.error ? ' title="' + esc(res.error) + '"' : '') + '>' +
             esc(label) + '</span></td>';
+          return;
+        }
+        if (f.key === 'confiance') {
+          if (!res.confiance) { h += '<td></td>'; return; }
+          var alts = (res.alternatives || []);
+          h += '<td><span class="badge ' + { high: 'ok', mid: 'mid', low: 'ko' }[res.confLevel] + '">' + esc(res.confiance) + '</span>' +
+            (alts.length ? '<span class="alt" title="' + esc(alts.join('\n')) + '">' + alts.length +
+              ' autre' + (alts.length > 1 ? 's' : '') + ' candidat' + (alts.length > 1 ? 's' : '') + ' (survoler)</span>' : '') +
+            '</td>';
           return;
         }
         var v = fieldValue(res, f);
@@ -894,6 +1109,7 @@
   function saveOptions() {
     try {
       grist.setOptions({
+        mode: state.mode, find: state.find,
         tableId: state.tableId, siretCol: state.siretCol, order: state.order,
         source: state.source, visible: state.visible, compare: state.compare
       });
@@ -906,8 +1122,18 @@
     try { localStorage.setItem('insee-api-key', $('inp-key').value.trim()); } catch (e) { /* ignore */ }
   }
   function applySource() {
-    $('sel-source').value = state.source;
-    $('ctl-key').classList.toggle('hidden', state.source !== 'insee');
+    var find = state.mode === 'find';
+    $('sel-source').value = find ? 'recherche' : state.source;
+    $('sel-source').disabled = find; // la recherche par nom passe par l'API Recherche d'entreprises
+    $('ctl-key').classList.toggle('hidden', find || state.source !== 'insee');
+  }
+  function applyMode() {
+    var find = state.mode === 'find';
+    $('sel-mode').value = state.mode;
+    document.querySelectorAll('.find-only').forEach(function (el) { el.classList.toggle('hidden', !find); });
+    document.querySelectorAll('.verify-only').forEach(function (el) { el.classList.toggle('hidden', find); });
+    applySource();
+    updateRunButton();
   }
 
   // ============================================================
@@ -923,8 +1149,22 @@
   $('sel-siret').addEventListener('change', function () {
     state.siretCol = this.value;
     state.results = Object.create(null);
-    $('btn-run').disabled = !state.siretCol;
+    updateRunButton();
     buildRows(); saveOptions();
+  });
+  $('sel-mode').addEventListener('change', function () {
+    state.mode = this.value;
+    if (state.mode === 'find') state.visible.siret = true; // c'est la colonne qu'on cherche
+    state.results = Object.create(null);
+    showMsg('');
+    applyMode(); renderFields(); buildRows(); saveOptions();
+  });
+  document.querySelectorAll('[data-find]').forEach(function (sel) {
+    sel.addEventListener('change', function () {
+      state.find[this.getAttribute('data-find')] = this.value;
+      state.results = Object.create(null);
+      updateRunButton(); buildRows(); saveOptions();
+    });
   });
   $('sel-order').addEventListener('change', function () {
     state.order = this.value; buildRows(); saveOptions();
@@ -971,13 +1211,15 @@
   var initialized = false;
   async function init(opts) {
     opts = opts || {};
+    if (opts.mode) state.mode = opts.mode;
+    if (opts.find) Object.keys(state.find).forEach(function (k) { state.find[k] = opts.find[k] || ''; });
     if (opts.tableId) state.tableId = opts.tableId;
     if (opts.siretCol) state.siretCol = opts.siretCol;
     if (opts.order) state.order = opts.order;
     if (opts.source) state.source = opts.source;
     if (opts.visible) Object.keys(opts.visible).forEach(function (k) { state.visible[k] = !!opts.visible[k]; });
     if (opts.compare) state.compare = Object.assign({}, opts.compare);
-    applySource(); renderFields(); loadKey();
+    applyMode(); renderFields(); loadKey();
     try {
       await loadMeta();
       await loadTables();
