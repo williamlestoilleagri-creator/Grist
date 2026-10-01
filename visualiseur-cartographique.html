@@ -168,6 +168,8 @@
   #map{ position:absolute; inset:0; background:#E8ECEF; font-family:Marianne, arial, sans-serif; }
   .leaflet-container{ font-family:Marianne, arial, sans-serif; }
   .leaflet-control-attribution{ font-size:10px; }
+  .vz-tiles-gray{ filter:grayscale(1) brightness(1.06) contrast(.88); }
+  .vz-tiles-faint{ filter:grayscale(1) brightness(1.18) contrast(.6); opacity:.75; }
 
   .vz-card{
     position:absolute; top:12px; left:12px; z-index:800; width:290px; max-height:calc(100% - 24px);
@@ -462,9 +464,11 @@ const GEO_SRC = {
 
 const IGN = 'https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}';
 const BASEMAPS = {
-  gris:  { label: 'Gris clair', url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', opt: { subdomains: 'abcd', maxZoom: 19, attribution: '© OpenStreetMap © CARTO' } },
-  gris2: { label: 'Gris clair sans libellés', url: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', opt: { subdomains: 'abcd', maxZoom: 19, attribution: '© OpenStreetMap © CARTO' } },
-  plan:  { label: 'Plan IGN', url: IGN + '&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&FORMAT=image/png', opt: { maxZoom: 19, attribution: '© IGN – Géoplateforme' } },
+  // Fonds IGN (Géoplateforme) : gratuits, sans clé d'API. Les variantes « grises » sont obtenues par filtre CSS.
+  gris:  { label: 'Plan IGN gris (discret)', url: IGN + '&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&FORMAT=image/png', cls: 'vz-tiles-gray', opt: { maxZoom: 19, attribution: '© IGN – Géoplateforme' } },
+  gris2: { label: 'Plan IGN très atténué', url: IGN + '&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&FORMAT=image/png', cls: 'vz-tiles-faint', opt: { maxZoom: 19, attribution: '© IGN – Géoplateforme' } },
+  plan:  { label: 'Plan IGN (couleurs)', url: IGN + '&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&FORMAT=image/png', opt: { maxZoom: 19, attribution: '© IGN – Géoplateforme' } },
+  osm:   { label: 'OpenStreetMap', url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', cls: 'vz-tiles-gray', opt: { maxZoom: 19, attribution: '© contributeurs OpenStreetMap' } },
   ortho: { label: 'Photographies aériennes', url: IGN + '&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&FORMAT=image/jpeg', opt: { maxZoom: 19, attribution: '© IGN – Géoplateforme' } },
   aucun: { label: 'Aucun fond de carte', url: null },
 };
@@ -1489,7 +1493,7 @@ function initMap() {
 function setBasemap(id) {
   if (S.base) { S.map.removeLayer(S.base); S.base = null; }
   const b = BASEMAPS[id] || BASEMAPS.gris;
-  if (b.url) { S.base = L.tileLayer(b.url, Object.assign({ crossOrigin: true }, b.opt)).addTo(S.map); S.base.bringToBack(); }
+  if (b.url) { S.base = L.tileLayer(b.url, Object.assign({ crossOrigin: true, className: b.cls || '' }, b.opt)).addTo(S.map); S.base.bringToBack(); }
 }
 
 function activeInd() {
