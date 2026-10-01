@@ -1104,16 +1104,22 @@
   }
 
   // ============================================================
-  // Options (persistées par widget, sauf la clé API)
+  // Réglages : gardés dans le navigateur (localStorage), par document.
+  // On n'utilise PAS grist.setOptions : dans le « Custom widget builder »,
+  // les options du widget contiennent le code HTML/JS et seraient écrasées.
   // ============================================================
+  var prefsKey = 'siret-widget';
   function saveOptions() {
     try {
-      grist.setOptions({
+      localStorage.setItem(prefsKey, JSON.stringify({
         mode: state.mode, find: state.find,
         tableId: state.tableId, siretCol: state.siretCol, order: state.order,
         source: state.source, visible: state.visible, compare: state.compare
-      });
+      }));
     } catch (e) { /* ignore */ }
+  }
+  function loadPrefs() {
+    try { return JSON.parse(localStorage.getItem(prefsKey) || '{}') || {}; } catch (e) { return {}; }
   }
   function loadKey() {
     try { $('inp-key').value = localStorage.getItem('insee-api-key') || ''; } catch (e) { /* ignore */ }
@@ -1208,9 +1214,9 @@
   // ============================================================
   grist.ready({ requiredAccess: 'full', allowSelectBy: false });
 
-  var initialized = false;
-  async function init(opts) {
-    opts = opts || {};
+  async function init() {
+    try { prefsKey = 'siret-widget:' + await grist.docApi.getDocName(); } catch (e) { /* clé par défaut */ }
+    var opts = loadPrefs();
     if (opts.mode) state.mode = opts.mode;
     if (opts.find) Object.keys(state.find).forEach(function (k) { state.find[k] = opts.find[k] || ''; });
     if (opts.tableId) state.tableId = opts.tableId;
@@ -1229,13 +1235,7 @@
     }
   }
 
-  grist.onOptions(function (opts) {
-    if (initialized) return;
-    initialized = true;
-    init(opts);
-  });
-  // si onOptions n'est jamais appelé (anciennes versions)
-  setTimeout(function () { if (!initialized) { initialized = true; init({}); } }, 1500);
+  init();
 
   renderFields();
 })();
