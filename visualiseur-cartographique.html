@@ -115,6 +115,12 @@
   .vz-tbl .vz-tbl-name, .vz-tbl .vz-tbl-meta{ display:block; }
   .vz-tbl .vz-tbl-name{ font-weight:700; font-size:.8125rem; word-break:break-all; }
   .vz-tbl .vz-tbl-meta{ font-size:.71875rem; color:var(--g-425); line-height:1.05rem; }
+  .vz-tbl, .vz-ind{ border-left-width:6px !important; border-left-style:solid !important; }
+  .vz-tbl[aria-current="true"]{ box-shadow:0 0 0 1px var(--bf); }
+  .vz-score{ flex:0 0 auto; min-width:30px; height:22px; padding:0 6px; border-radius:11px; font-size:.75rem; font-weight:700;
+    display:inline-flex; align-items:center; justify-content:center; align-self:center; margin-left:4px; }
+  .vz-score-legend{ display:flex; align-items:center; gap:6px; font-size:.6875rem; color:var(--g-425); margin:0 0 8px; }
+  .vz-score-legend .bar{ flex:1 1 auto; height:6px; border-radius:3px; background:linear-gradient(90deg,#18753C,#68A532,#C8AA39,#E4794A,#CE0500); }
   details.vz-details{ margin-top:10px; }
   details.vz-details > summary{ cursor:pointer; font-size:.8125rem; font-weight:700; color:var(--g-200); padding:6px 0; }
 
@@ -608,6 +614,7 @@ const S = {
   map: null, base: null, layer: null, circles: null, labels: null, featLayers: new Map(),
   charts: [],
   refused: {},            // tables refusées après lecture des valeurs (session en cours)
+  locRate: {},            // taux de localisation constaté par table
 };
 
 function defaultCfg() {
@@ -772,12 +779,18 @@ function prescanTable(tableId) {
   const has = Object.keys(roles);
   const okPair = roles.lat && roles.lon;
   const usable = has.filter(r => r !== 'lat' && r !== 'lon').length || okPair;
-  if (!cols.length) return { status: 'refused', reason: 'Table vide (aucune colonne)', roles };
-  if (!usable) return { status: 'refused', reason: 'Aucune colonne géographique (code INSEE, code postal, commune, département, coordonnées)', roles };
+  // Score 0-100 : précision de la localisation (70 %) + richesse en colonnes analysables (30 %)
+  const geoCols = new Set(Object.values(roles).flat());
+  const statCols = cols.filter(c => ['Numeric', 'Int', 'Bool', 'Choice', 'ChoiceList', 'Ref'].includes(c.base) && !geoCols.has(c.colId) && !ID_RX.test(normKey(c.colId))).length;
+  const richness = Math.min(1, statCols / 5);
+  const geo = roles.insee ? 100 : okPair ? 95 : roles.postal ? 85 : (roles.name && roles.dept) ? 75 : roles.dept ? 60 : roles.name ? 45 : 0;
+  const score = usable ? Math.round(20 + geo * 0.55 + richness * 25) : Math.round(richness * 8);
+  if (!cols.length) return { status: 'refused', reason: 'Table vide (aucune colonne)', roles, score: 0 };
+  if (!usable) return { status: 'refused', reason: 'Aucune colonne géographique (code INSEE, code postal, commune, département, coordonnées)', roles, score };
   const parts = [];
   if (roles.insee) parts.push('code INSEE'); if (roles.postal) parts.push('code postal');
   if (roles.name) parts.push('commune'); if (roles.dept) parts.push('département'); if (okPair) parts.push('coordonnées');
-  return { status: 'probable', reason: 'Colonnes détectées : ' + parts.join(', '), roles };
+  return { status: 'probable', reason: 'Colonnes détectées : ' + parts.join(', ') + ' · ' + statCols + ' colonne' + (statCols > 1 ? 's' : '') + ' analysable' + (statCols > 1 ? 's' : ''), roles, score };
 }
 
 function decodeCell(x) {
@@ -873,6 +886,16 @@ function geoRoleOf(colId) {
 }
 
 function recommend(c) {
+  const r = recommendRaw(c);
+  const p = S.prof[c.colId];
+  const fill = p ? p.fill : 0;
+  const base = { rec: 72, ok: 50, warn: 18, geo: 6, no: 0 }[r.status];
+  const span = { rec: 28, ok: 18, warn: 14, geo: 0, no: 0 }[r.status];
+  const variety = p ? Math.min(1, (p.kind === 'num' ? p.distinct / 20 : p.distinct >= 2 ? 1 : 0)) : 0;
+  r.score = Math.round(base + span * (0.6 * fill + 0.4 * variety));
+  return r;
+}
+function recommendRaw(c) {
   const p = S.prof[c.colId];
   const k = normKey(c.colId);
   const pc = Math.round(p.fill * 100) + ' %';
@@ -904,6 +927,17 @@ function recommend(c) {
     return { status: 'ok', reason: p.distinct + ' modalités, renseignée à ' + pc + '.', aggs, def: aggs[0] };
   }
   return { status: 'no', reason: 'Type non pris en charge.', aggs: [] };
+}
+/* Dégradé favorable (vert) → défavorable (rouge), couleurs DSFR */
+const SCORE_SCALE = chroma.scale(['#CE0500', '#E4794A', '#C8AA39', '#68A532', '#18753C']).mode('lab').domain([0, 25, 50, 75, 100]);
+function scoreColor(sc) { return SCORE_SCALE(Math.max(0, Math.min(100, sc))).hex(); }
+function scorePill(sc, title) {
+  const col = scoreColor(sc);
+  const fg = chroma(col).luminance() > 0.45 ? '#161616' : '#FFFFFF';
+  return '<span class="vz-score" style="background:' + col + ';color:' + fg + '" title="' + esc(title || 'Score d\'intérêt') + ' : ' + sc + ' / 100">' + sc + '</span>';
+}
+function scoreLegend() {
+  return '<div class="vz-score-legend" aria-hidden="true"><span>Idéale</span><span class="bar"></span><span>Inadaptée</span></div>';
 }
 const STATUS_BADGE = {
   rec:  '<span class="fr-badge fr-badge--sm fr-badge--success fr-badge--no-icon">Conseillé</span>',
@@ -1109,6 +1143,7 @@ async function locateRecords() {
     else if (scale === 'epci') { if (com.codeEpci) key[i] = com.codeEpci; else { why.inconnu++; if (samples.length < 60) samples.push({ i, reason: 'Commune sans EPCI' }); } }
   }
   Object.assign(S.rec, { key, dep, why, samples, per, A, located: key.filter(Boolean).length });
+  S.locRate[S.table.tableId] = n ? S.rec.located / n : 0;
 }
 
 function needsDenominators() {
@@ -1690,6 +1725,7 @@ async function rebuild(opts) {
     buildTerritories();
     drawGeometry();
     hideOverlay();
+    renderTables();
     if (S.selected && !S.terr.has(S.selected)) S.selected = null;
     recompute();
     if (!opts.keepView) fitData();
@@ -1935,23 +1971,31 @@ function renderStatus() {
  * Rendu : panneau latéral
  * ===================================================================== */
 function renderTables() {
-  const ok = [], ko = [];
+  const rows = [];
+  let nRef = 0;
   S.meta.tables.forEach(tb => {
     const p = S.prescan[tb.tableId];
     const geoErr = S.cfg.tableId !== tb.tableId && S.refused[tb.tableId];
     const refused = p.status === 'refused' || geoErr;
+    if (refused) nRef++;
+    // le taux réel de localisation (connu après lecture) affine le score
+    let sc = geoErr ? Math.min(p.score, 8) : p.score;
+    if (!refused && S.locRate[tb.tableId] != null) sc = Math.round(sc * (0.4 + 0.6 * S.locRate[tb.tableId]));
+    const col = scoreColor(sc);
     const nCols = (S.meta.cols[tb.tableId] || []).length;
-    const html = '<button type="button" class="vz-tbl" data-table="' + esc(tb.tableId) + '"' + (refused ? ' disabled' : '') + (S.cfg.tableId === tb.tableId ? ' aria-current="true"' : '') + '>' +
+    const html = '<button type="button" class="vz-tbl" style="border-left-color:' + col + '" data-table="' + esc(tb.tableId) + '"' + (refused ? ' disabled' : '') + (S.cfg.tableId === tb.tableId ? ' aria-current="true"' : '') + '>' +
       '<span class="vz-tbl-ico ' + (refused ? 'fr-icon-close-circle-line' : 'fr-icon-map-pin-2-line') + '" aria-hidden="true"></span>' +
       '<span class="vz-tbl-main"><span class="vz-tbl-name">' + esc(tb.tableId) + (tb.summary ? ' <span class="fr-badge fr-badge--sm fr-badge--no-icon">résumé</span>' : '') +
       (tb.tableId === S.linkedTableId ? ' <span class="fr-badge fr-badge--sm fr-badge--info fr-badge--no-icon">liée au widget</span>' : '') + '</span>' +
-      '<span class="vz-tbl-meta">' + esc(refused ? ('Refusée — ' + (geoErr || p.reason)) : p.reason) + ' · ' + nCols + ' colonnes</span></span></button>';
-    (refused ? ko : ok).push(html);
+      '<span class="vz-tbl-meta">' + esc(refused ? ('Refusée — ' + (geoErr || p.reason)) : p.reason) + ' · ' + nCols + ' colonnes' +
+      (!refused && S.locRate[tb.tableId] != null ? ' · ' + Math.round(S.locRate[tb.tableId] * 100) + ' % localisés' : '') + '</span></span>' +
+      scorePill(sc, refused ? 'Table refusée' : 'Intérêt cartographique') + '</button>';
+    rows.push({ sc, refused, html });
   });
-  $('#tables').innerHTML = ok.join('') || '<div class="fr-alert fr-alert--warning fr-alert--sm"><p>Aucune table de ce document ne contient d\'information géographique exploitable.</p></div>';
-  $('#tables-refused').innerHTML = ko.join('');
-  $('#tables-refused-sum').textContent = 'Tables refusées (' + ko.length + ') — sans intérêt géographique';
-  $('#tables-refused-box').hidden = !ko.length;
+  rows.sort((a, b) => (a.refused - b.refused) || (b.sc - a.sc));
+  $('#tables').innerHTML = scoreLegend() + rows.map(r => r.html).join('') +
+    (rows.length === nRef ? '<div class="fr-alert fr-alert--warning fr-alert--sm vz-alert"><p>Aucune table de ce document ne contient d\'information géographique exploitable.</p></div>' : '');
+  $('#tables-refused-box').hidden = true;
   $$('#tables .vz-tbl').forEach(b => b.onclick = () => selectTable(b.dataset.table));
 }
 
@@ -2070,7 +2114,7 @@ function renderIndicators() {
   const t = T();
   if (!S.table || !t || !S.geo || !S.geo.any) { box.innerHTML = '<p class="vz-empty">Choisissez d\'abord une table géolocalisable.</p>'; return; }
   const sel = new Map(t.indicators.map(i => [i.col || '__count', i]));
-  const items = [{ colId: '__count', label: "Nombre d'enregistrements", type: '—', rec: { status: 'rec', reason: 'Toujours disponible : nombre d\'enregistrements par territoire.', aggs: ['count'], def: 'count' } }]
+  const items = [{ colId: '__count', label: "Nombre d'enregistrements", type: '—', rec: { status: 'rec', score: 90, reason: 'Toujours disponible : nombre d\'enregistrements par territoire.', aggs: ['count'], def: 'count' } }]
     .concat(S.table.cols.map(c => ({ colId: c.colId, label: c.label, type: TYPE_LABEL[c.base] || c.base, rec: recommend(c) })));
   const counts = { rec: 0, ok: 0, warn: 0, no: 0, geo: 0 };
   items.forEach(it => counts[it.rec.status]++);
@@ -2081,13 +2125,13 @@ function renderIndicators() {
     if (indFilter.mode === 'rec' && it.rec.status !== 'rec') return false;
     if (indFilter.mode === 'sel' && !sel.has(it.colId)) return false;
     return true;
-  }).sort((a, b) => (sel.has(b.colId) - sel.has(a.colId)) || (order[a.rec.status] - order[b.rec.status]));
+  }).sort((a, b) => (b.rec.score - a.rec.score) || (order[a.rec.status] - order[b.rec.status]));
 
   box.innerHTML =
     '<h2>Indicateurs à cartographier <span class="fr-badge fr-badge--sm fr-badge--info fr-badge--no-icon">' + t.indicators.length + ' sélectionné' + (t.indicators.length > 1 ? 's' : '') + '</span></h2>' +
     '<p class="vz-hint">Cochez les colonnes à analyser. Chaque indicateur est agrégé par territoire ; la carte affiche l\'indicateur actif (liste « Analyses » de la légende). ' +
     '<strong>' + counts.rec + ' conseillé' + (counts.rec > 1 ? 's' : '') + '</strong>, ' + counts.ok + ' possible' + (counts.ok > 1 ? 's' : '') + ', ' + counts.warn + ' déconseillé' + (counts.warn > 1 ? 's' : '') + '.</p>' +
-    '<div class="vz-ind-tools"><input class="fr-input" type="search" id="ind-q" placeholder="Rechercher une colonne…" value="' + esc(indFilter.q) + '"></div>' +
+    scoreLegend() + '<div class="vz-ind-tools"><input class="fr-input" type="search" id="ind-q" placeholder="Rechercher une colonne…" value="' + esc(indFilter.q) + '"></div>' +
     '<div class="vz-chips">' + [['all', 'Toutes'], ['rec', 'Conseillées'], ['sel', 'Sélectionnées']].map(([m, l]) => '<button type="button" class="fr-tag fr-tag--sm" aria-pressed="' + (indFilter.mode === m) + '" data-imode="' + m + '">' + l + '</button>').join('') + '</div>' +
     shown.map(it => indRow(it, sel.get(it.colId))).join('') +
     (shown.length ? '' : '<p class="vz-empty">Aucune colonne ne correspond.</p>');
@@ -2119,10 +2163,10 @@ function indRow(it, ind) {
       '<button type="button" class="fr-btn fr-btn--sm ' + (isActive ? '' : 'fr-btn--secondary') + ' full fr-icon-road-map-line fr-btn--icon-left" data-iactive="' + esc(ind.id) + '"' + (isActive ? ' disabled' : '') + '>' + (isActive ? 'Indicateur affiché sur la carte' : 'Afficher sur la carte') + '</button></div>';
     if (it.rec.status === 'warn') opts += '<div class="fr-alert fr-alert--warning fr-alert--sm vz-alert" style="margin-left:28px"><p>Indicateur déconseillé : ' + esc(it.rec.reason) + '</p></div>';
   }
-  return '<div class="vz-ind' + (ind ? ' sel' : '') + (dis ? ' disabled' : '') + '"><div class="vz-ind-head"><div class="fr-checkbox-group fr-checkbox-group--sm">' +
+  return '<div class="vz-ind' + (ind ? ' sel' : '') + (dis ? ' disabled' : '') + '" style="border-left-color:' + scoreColor(it.rec.score) + '"><div class="vz-ind-head"><div class="fr-checkbox-group fr-checkbox-group--sm">' +
     '<input type="checkbox" id="' + id + '" data-icol="' + esc(it.colId) + '"' + (ind ? ' checked' : '') + (dis ? ' disabled' : '') + '>' +
     '<label class="fr-label" for="' + id + '">' + esc(it.label) + '<span class="fr-hint-text">' + (it.colId === '__count' ? 'Comptage' : esc(it.colId) + ' · ' + esc(it.type)) + '</span></label></div>' +
-    STATUS_BADGE[it.rec.status] + '</div><p class="vz-reason">' + esc(it.rec.reason) + '</p>' + opts + '</div>';
+    STATUS_BADGE[it.rec.status] + scorePill(it.rec.score, 'Pertinence de l\'indicateur') + '</div><p class="vz-reason">' + esc(it.rec.reason) + '</p>' + opts + '</div>';
 }
 function toggleIndicator(colId, on) {
   const t = T();
@@ -2357,7 +2401,7 @@ const save = debounce(() => {
   const s = JSON.stringify(S.cfg);
   if (s === lastSaved) return;
   lastSaved = s;
-  if (S.gr && !S.demo) { try { Promise.resolve(S.gr.setOptions({ vizCfg: S.cfg })).catch(() => {}); } catch (e) {} }
+  if (S.gr && !S.demo) { try { Promise.resolve(S.gr.setOption('vizCfg', S.cfg)).catch(() => {}); } catch (e) {} }
   else { try { localStorage.setItem('vz-cfg', s); } catch (e) {} }
 }, 700);
 
