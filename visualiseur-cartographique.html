@@ -265,6 +265,7 @@
   }
   .app.detail-closed .vz-detail{ display:none; }
   .app.detail-closed .vz-detail-toggle{ bottom:22px; }
+  .app.no-selection .vz-detail-toggle{ display:none; }
   .vz-d-head{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
   .vz-d-kicker{ font-size:.75rem; font-weight:700; color:var(--g-425); width:100%; margin:0 0 -8px; }
   .vz-d-title{ font-size:1.375rem; line-height:1.75rem; margin:0; padding-left:12px; border-left:4px solid var(--bf); }
@@ -1826,40 +1827,12 @@ function renderDetail() {
   const tr = key ? S.terr.get(key) : null;
 
   if (!tr) {
-    // ---- Vue d'ensemble ----
-    const withData = Array.from(vals.values()).filter(isNum).length;
-    const additive = AGG[ind.agg] && AGG[ind.agg].additive && (!ind.per || ind.per === 'none');
-    box.innerHTML =
-      '<div class="vz-d-head"><p class="vz-d-kicker">' + esc(indLabel(ind)) + '</p><h2 class="vz-d-title">Vue d\'ensemble</h2>' +
-      '<div class="vz-chips"><span class="vz-d-chip ' + SCALES[t.scale].icon + '">' + SCALES[t.scale].label + '</span><span class="vz-d-chip light fr-icon-table-line">' + esc(S.table.tableId) + '</span></div></div>' +
-      '<div class="vz-d-grid"><div class="vz-kpis">' +
-        kpi(fmt(S.rec.located, 0), '', 'enregistrements localisés', 'sur ' + fmt(S.table.n, 0) + ' (' + fmt(S.table.n ? S.rec.located / S.table.n * 100 : 0, 0) + ' %)') +
-        '<div class="vz-kpi-grid">' +
-          kpi(fmt(withData, 0), '', 'territoires renseignés', 'sur ' + fmt(S.terr.size, 0), true) +
-          kpi(additive ? fmt(S.valStats.sum) : fmt(S.valStats.mean), unit, additive ? 'total' : 'moyenne des territoires', '', true) +
-          kpi(fmt(S.valStats.min), unit, 'minimum', '', true) +
-          kpi(fmt(S.valStats.max), unit, 'maximum', '', true) +
-        '</div></div>' +
-        '<div class="vz-chart-box"><div class="vz-chart"><canvas id="ch1"></canvas></div><p class="vz-chart-cap">Répartition des territoires par classe<em>Nombre de territoires (' + esc(SCALES[t.scale].label.toLowerCase()) + ')</em></p></div>' +
-        '<div class="vz-chart-box"><div class="vz-chart"><canvas id="ch2"></canvas></div><p class="vz-chart-cap">Les 10 territoires aux valeurs les plus élevées<em>Cliquez sur une barre pour sélectionner le territoire</em></p></div>' +
-      '</div>';
-    chartDefaults();
-    if (!window.Chart) return;
-    S.charts.push(new Chart($('#ch1'), {
-      type: 'bar',
-      data: { labels: S.cls.classes.map(c => c.label), datasets: [{ data: S.cls.classes.map(c => c.count), backgroundColor: S.cls.classes.map(c => c.color), borderColor: '#fff', borderWidth: 1 }] },
-      options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { maxRotation: 45, autoSkip: false, font: { size: 10 } } }, y: { beginAtZero: true, ticks: { precision: 0 } } } },
-    }));
-    const top = Array.from(S.terr.values()).filter(x => isNum(vals.get(x.key))).sort((a, b) => vals.get(b.key) - vals.get(a.key)).slice(0, 10);
-    S.charts.push(new Chart($('#ch2'), {
-      type: 'bar',
-      data: { labels: top.map(x => x.name), datasets: [{ data: top.map(x => vals.get(x.key)), backgroundColor: top.map(x => { const ci = S.cls.assign(vals.get(x.key)); return ci >= 0 ? S.cls.classes[ci].color : '#929292'; }) }] },
-      options: { indexAxis: 'y', maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => fmt(c.raw) + ' ' + unit } } },
-        scales: { x: { ticks: { callback: v => fmt(v) } }, y: { grid: { display: false }, ticks: { font: { size: 10 } } } },
-        onClick: (e, els) => { if (els.length) selectTerritory(top[els[0].index].key, true); } },
-    }));
+    // Pas de territoire sélectionné : le panneau de détail reste fermé.
+    box.innerHTML = '';
+    $('#app').classList.add('detail-closed', 'no-selection');
     return;
   }
+  $('#app').classList.remove('no-selection');
 
   // ---- Territoire sélectionné ----
   const v = vals.get(key);
