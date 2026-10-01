@@ -1,325 +1,290 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" data-fr-scheme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Vérification SIRET · INSEE</title>
+<title>Vérification d'entreprises · SIRET</title>
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
-
+<!-- Système de design de l'État (DSFR) : police Marianne et bloc-marque officiels -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.15.3/dist/dsfr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.15.3/dist/utility/icons/icons.min.css">
 <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
 
 <style>
-  :root{
-    --bg: #F5F4F0;
-    --surface: #FFFFFF;
-    --ink: #1B1B1E;
-    --ink-soft: #65656B;
-    --ink-faint: #9A9A9F;
-    --border: #E2E0D8;
-    --primary: #000091;
-    --primary-soft: #E5E5FB;
-    --accent: #C9184A;
-    --accent-soft: #FBE3EA;
-    --success: #18753C;
-    --success-soft: #E2F3E8;
-    --warning: #B34000;
-    --warning-soft: #FBE9DD;
-    --radius: 8px;
-    --shadow: 0 1px 2px rgba(20,20,30,.06), 0 8px 24px -16px rgba(20,20,30,.25);
-    --font-display: 'Spectral', Georgia, serif;
-    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
-  }
-  *{ box-sizing:border-box; }
-  html,body{ height:100%; }
-  body{
-    margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-body);
-    font-size:13px; line-height:1.45; -webkit-font-smoothing:antialiased;
-  }
-  button, input, select{ font-family:inherit; font-size:inherit; color:inherit; }
+  body{ background:var(--background-default-grey); }
+  .sv-main{ padding:1.5rem 1rem 2rem; max-width:78rem; margin:0 auto; }
 
-  .app{ display:flex; flex-direction:column; height:100vh; min-height:420px; }
+  /* En-tête compact : le widget vit dans un panneau Grist */
+  .fr-header__body-row{ padding:.5rem 0; }
+  .fr-header__service-title{ font-size:1.125rem; }
 
-  /* ---------- header ---------- */
-  .app-header{
-    display:flex; align-items:center; justify-content:space-between; gap:12px;
-    padding:12px 16px; background:var(--primary); color:#fff; flex:0 0 auto;
-  }
-  .app-header h1{ font-family:var(--font-display); font-weight:600; font-size:17px; margin:0; }
-  .app-header .sub{ font-size:11.5px; opacity:.78; margin-top:1px; }
-  .app-header .count{
-    font-family:var(--font-mono); font-size:12px; background:rgba(255,255,255,.14);
-    border-radius:999px; padding:5px 11px; white-space:nowrap;
-  }
+  .sv-req{ color:var(--text-default-error); font-weight:700; }
+  .sv-legend{ font-size:.875rem; color:var(--text-mention-grey); margin:0 0 1.25rem; }
 
-  /* ---------- config ---------- */
-  .config{
-    display:flex; flex-wrap:wrap; gap:10px 12px; align-items:flex-end;
-    padding:12px 16px; background:var(--surface); border-bottom:1px solid var(--border); flex:0 0 auto;
-  }
-  .ctl{ display:flex; flex-direction:column; gap:4px; min-width:150px; }
-  .ctl label{
-    font-size:10.5px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-faint);
-  }
-  .ctl select, .ctl input{
-    padding:7px 9px; border:1px solid var(--border); border-radius:7px; background:#FCFCFB; outline:none;
-    min-width:150px;
-  }
-  .ctl select:focus, .ctl input:focus{ border-color:var(--primary); background:#fff; }
-  .ctl.key input{ min-width:240px; font-family:var(--font-mono); font-size:12px; }
-  .ctl.hidden{ display:none; }
-  .ctl.mode select{ font-weight:600; color:var(--primary); border-color:#C9C9F2; background:var(--primary-soft); }
-  .badge.mid{ background:var(--warning-soft); color:var(--warning); }
-  td .alt{ display:block; font-size:10.5px; color:var(--ink-faint); margin-top:2px; white-space:normal; }
-  .spacer{ flex:1 1 auto; }
+  .sv-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(15rem, 1fr)); gap:0 1.5rem; }
+  .sv-grid .fr-select-group, .sv-grid .fr-input-group{ margin-bottom:1.25rem; }
+  .sv-hidden{ display:none !important; }
 
-  .btn{
-    border:none; border-radius:7px; padding:8px 14px; font-weight:600; cursor:pointer;
-    transition:filter .12s, opacity .12s, background .12s; white-space:nowrap;
-  }
-  .btn:disabled{ opacity:.5; cursor:default; }
-  .btn-primary{ background:var(--primary); color:#fff; }
-  .btn-primary:not(:disabled):hover{ filter:brightness(1.15); }
-  .btn-ghost{ background:transparent; color:var(--ink-soft); border:1px solid var(--border); }
-  .btn-ghost:not(:disabled):hover{ background:#F4F3EE; }
-  .btn-danger{ background:var(--accent); color:#fff; }
+  .sv-subtitle{ font-size:1rem; font-weight:700; margin:.5rem 0 .25rem; }
+  .sv-subhint{ font-size:.875rem; color:var(--text-mention-grey); margin:0 0 1rem; }
 
-  /* ---------- fields chips ---------- */
-  .fields{
-    display:flex; flex-wrap:wrap; gap:6px; align-items:center;
-    padding:9px 16px; background:var(--surface); border-bottom:1px solid var(--border); flex:0 0 auto;
+  /* Sections repliables (natif, accessible au clavier) */
+  details.sv-details{ border-top:1px solid var(--border-default-grey); border-bottom:1px solid var(--border-default-grey); margin:0 0 1.5rem; }
+  details.sv-details + details.sv-details{ border-top:none; margin-top:-1.5rem; }
+  details.sv-details > summary{
+    cursor:pointer; padding:.75rem .25rem; font-weight:500; color:var(--text-action-high-blue-france);
+    list-style:none; display:flex; align-items:center; gap:.5rem;
   }
-  .fields .lbl{
-    font-size:10.5px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-faint);
-    margin-right:4px;
+  details.sv-details > summary::-webkit-details-marker{ display:none; }
+  details.sv-details > summary::before{
+    content:''; width:.75rem; height:.75rem; flex:0 0 auto; transition:transform .15s;
+    border-right:2px solid currentColor; border-bottom:2px solid currentColor; transform:rotate(-45deg);
   }
-  .chip{
-    display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:999px;
-    border:1px solid var(--border); background:#FCFCFB; cursor:pointer; font-size:12px; user-select:none;
-  }
-  .chip input{ margin:0; accent-color:var(--primary); }
-  .chip.on{ background:var(--primary-soft); border-color:#C9C9F2; color:var(--primary); font-weight:500; }
+  details.sv-details[open] > summary::before{ transform:rotate(45deg); }
+  details.sv-details > summary:hover{ background:var(--background-default-grey-hover); }
+  .sv-details__body{ padding:.5rem .25rem 1rem; }
 
-  /* ---------- status bar ---------- */
-  .statusbar{
-    display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; padding:9px 16px;
-    border-bottom:1px solid var(--border); flex:0 0 auto; background:var(--bg);
-  }
-  .progress{ flex:1 1 180px; height:6px; background:#E6E4DC; border-radius:99px; overflow:hidden; min-width:120px; }
-  .progress > div{ height:100%; width:0; background:var(--primary); transition:width .2s; }
-  .stat{ font-size:12px; color:var(--ink-soft); white-space:nowrap; }
-  .stat b{ font-family:var(--font-mono); font-weight:600; color:var(--ink); }
-  .stat.ok b{ color:var(--success); }
-  .stat.ko b{ color:var(--accent); }
-  .stat.diff b{ color:var(--warning); }
-  .toggle{ display:flex; align-items:center; gap:5px; font-size:12px; color:var(--ink-soft); cursor:pointer; }
-  .toggle input{ accent-color:var(--primary); }
+  .sv-checks{ display:flex; flex-wrap:wrap; gap:.5rem 1.5rem; margin-bottom:1.25rem; }
 
-  .msg{ font-size:12.5px; padding:8px 16px; display:none; flex:0 0 auto; }
-  .msg.show{ display:block; }
-  .msg.info{ background:var(--primary-soft); color:var(--primary); }
-  .msg.warning{ background:var(--warning-soft); color:var(--warning); }
-  .msg.error{ background:var(--accent-soft); color:var(--accent); }
-  .msg.success{ background:var(--success-soft); color:var(--success); }
+  .sv-actions{ display:flex; flex-wrap:wrap; align-items:center; gap:1rem; margin:0 0 2rem; }
+  .sv-missing{ font-size:.875rem; color:var(--text-mention-grey); margin:0; }
 
-  /* ---------- table ---------- */
-  .table-wrap{ flex:1 1 auto; overflow:auto; min-height:0; background:var(--surface); }
-  table{ border-collapse:separate; border-spacing:0; width:max-content; min-width:100%; }
-  th, td{
-    border-bottom:1px solid #EFEDE6; border-right:1px solid #EFEDE6; padding:6px 9px;
-    text-align:left; vertical-align:top; max-width:320px;
-  }
-  thead th{
-    position:sticky; top:0; z-index:2; background:#FAFAF7; border-bottom:1px solid var(--border);
-    font-weight:600; font-size:12px; padding:7px 9px 8px;
-  }
-  th.rownum, td.rownum{
-    position:sticky; left:0; z-index:1; background:#FAFAF7; color:var(--ink-faint);
-    font-family:var(--font-mono); font-size:11px; text-align:right; min-width:42px;
-  }
-  thead th.rownum{ z-index:3; }
-  .th-top{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
-  .th-title{ white-space:nowrap; }
-  .th-title small{ display:block; font-weight:400; color:var(--ink-faint); font-size:10.5px; }
-  .copy-btn{
-    border:1px solid #C9C9F2; background:var(--primary-soft); color:var(--primary); border-radius:6px;
-    padding:3px 8px; font-size:11px; font-weight:600; cursor:pointer; white-space:nowrap;
-  }
-  .copy-btn:hover{ background:var(--primary); color:#fff; }
-  .copy-btn.done{ background:var(--success); border-color:var(--success); color:#fff; }
-  .cmp{
-    margin-top:6px; width:100%; font-size:11px; padding:3px 5px; border:1px solid var(--border);
-    border-radius:5px; background:#fff; color:var(--ink-soft); font-weight:400;
-  }
-  .cmp.active{ border-color:var(--warning); color:var(--warning); }
+  /* Résultats */
+  .sv-results{ border-top:1px solid var(--border-default-grey); padding-top:1.5rem; }
+  .sv-results h2{ font-size:1.375rem; margin-bottom:.75rem; }
+  .sv-summary{ display:flex; flex-wrap:wrap; gap:.25rem 1.5rem; font-size:.875rem; margin:0 0 .5rem; }
+  .sv-summary strong{ font-size:1rem; }
+  .sv-progress{ width:100%; height:.5rem; appearance:none; border:none; border-radius:.25rem; overflow:hidden;
+    background:var(--background-contrast-grey); display:block; margin-bottom:1rem; }
+  .sv-progress::-webkit-progress-bar{ background:var(--background-contrast-grey); }
+  .sv-progress::-webkit-progress-value{ background:var(--background-action-high-blue-france); }
+  .sv-progress::-moz-progress-bar{ background:var(--background-action-high-blue-france); }
+  .sv-toolbar{ display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.75rem 1.5rem; margin-bottom:1rem; }
+  .sv-toolbar .fr-checkbox-group{ margin:0; }
+  .sv-howto{ font-size:.875rem; color:var(--text-mention-grey); margin:0 0 1rem; }
 
-  td{ font-size:12.5px; }
-  td.src{ background:#FCFCFA; font-family:var(--font-mono); font-size:12px; }
-  td.mono{ font-family:var(--font-mono); font-size:12px; }
-  td.empty{ color:var(--ink-faint); }
-  td.diff{ background:var(--warning-soft); }
-  td.same{ background:var(--success-soft); }
-  td .was{ display:block; font-size:11px; color:var(--warning); margin-top:2px; }
-  td .was::before{ content:'Grist : '; font-weight:600; }
-  tr:hover td:not(.rownum){ filter:brightness(.98); }
+  .sv-table-wrap{ overflow:auto; max-height:70vh; border:1px solid var(--border-default-grey); }
+  .sv-table{ border-collapse:separate; border-spacing:0; width:max-content; min-width:100%; font-size:.875rem; }
+  .sv-table caption{ text-align:left; }
+  .sv-table th, .sv-table td{
+    padding:.5rem .75rem; text-align:left; vertical-align:top; max-width:20rem;
+    border-bottom:1px solid var(--border-default-grey); border-right:1px solid var(--border-default-grey);
+  }
+  .sv-table thead th{
+    position:sticky; top:0; z-index:2; background:var(--background-alt-grey);
+    border-bottom:2px solid var(--border-plain-grey); font-weight:700; white-space:nowrap;
+  }
+  .sv-table .sv-th{ display:flex; align-items:center; justify-content:space-between; gap:.75rem; }
+  .sv-table .fr-btn--sm{ min-height:1.75rem; padding:.125rem .5rem; font-size:.8125rem; }
+  .sv-table .sv-num{ color:var(--text-mention-grey); text-align:right; width:3rem; }
+  .sv-table td.sv-src{ background:var(--background-alt-grey); }
+  .sv-table td.sv-empty{ color:var(--text-mention-grey); font-style:italic; }
+  .sv-table td.sv-diff{ background:var(--background-contrast-warning); }
+  .sv-table td.sv-same{ background:var(--background-contrast-success); }
+  .sv-was{ display:block; font-size:.75rem; color:var(--text-default-warning); margin-top:.125rem; }
+  .sv-alt{ display:block; font-size:.75rem; color:var(--text-mention-grey); margin-top:.25rem; }
+  .sv-mono{ font-variant-numeric:tabular-nums; white-space:nowrap; }
 
-  .badge{
-    display:inline-block; padding:1px 8px; border-radius:99px; font-size:11px; font-weight:600; white-space:nowrap;
-  }
-  .badge.ok{ background:var(--success-soft); color:var(--success); }
-  .badge.closed{ background:var(--warning-soft); color:var(--warning); }
-  .badge.ko{ background:var(--accent-soft); color:var(--accent); }
-  .badge.wait{ background:#EEEDE7; color:var(--ink-soft); }
-  .badge.none{ background:transparent; color:var(--ink-faint); font-weight:400; }
+  .sv-intro{ background:var(--background-alt-blue-france); padding:1.25rem 1.5rem; margin-bottom:1.5rem; }
+  .sv-intro p{ margin:0; font-size:.9375rem; }
+  .sv-intro ol{ margin:.5rem 0 0; font-size:.9375rem; }
 
-  .placeholder{
-    padding:48px 24px; text-align:center; color:var(--ink-soft); max-width:560px; margin:0 auto;
-  }
-  .placeholder h2{ font-family:var(--font-display); font-weight:600; font-size:19px; color:var(--ink); margin:0 0 8px; }
-  .placeholder ol{ text-align:left; display:inline-block; margin:8px 0 0; padding-left:18px; }
-  .placeholder li{ margin:4px 0; }
+  /* Copie manuelle */
+  dialog.sv-dialog{ border:none; padding:2rem; max-width:36rem; width:calc(100% - 2rem);
+    box-shadow:0 6px 18px 0 rgba(0,0,18,.16); }
+  dialog.sv-dialog::backdrop{ background:rgba(22,22,22,.64); }
+  dialog.sv-dialog textarea{ width:100%; height:12rem; font-family:monospace; font-size:.8125rem; }
 
-  footer{
-    flex:0 0 auto; padding:6px 16px; font-size:11px; color:var(--ink-faint); background:var(--bg);
-    border-top:1px solid var(--border);
-  }
-  footer a{ color:var(--ink-soft); }
-
-  /* ---------- fallback copie ---------- */
-  .modal-bg{
-    position:fixed; inset:0; background:rgba(20,20,30,.35); display:none; align-items:center; justify-content:center;
-    z-index:50; padding:16px;
-  }
-  .modal-bg.show{ display:flex; }
-  .modal{
-    background:#fff; border-radius:10px; box-shadow:var(--shadow); padding:16px; width:min(560px,100%);
-    display:flex; flex-direction:column; gap:10px;
-  }
-  .modal h3{ margin:0; font-family:var(--font-display); font-weight:600; font-size:16px; }
-  .modal textarea{
-    width:100%; height:220px; font-family:var(--font-mono); font-size:12px; border:1px solid var(--border);
-    border-radius:7px; padding:8px; resize:vertical;
-  }
-  .modal .row{ display:flex; justify-content:flex-end; gap:8px; }
-
-  @media (max-width: 640px){
-    .ctl, .ctl select, .ctl input{ min-width:0; width:100%; }
-    .ctl{ flex:1 1 100%; }
-    .ctl.key input{ min-width:0; }
-  }
+  .fr-footer__bottom-copy{ margin-left:0; }
+  footer.sv-footer{ border-top:1px solid var(--border-default-grey); padding:1rem; font-size:.75rem; color:var(--text-mention-grey); }
+  footer.sv-footer a{ font-size:.75rem; }
 </style>
 </head>
 <body>
-<div class="app">
 
-  <header class="app-header">
-    <div>
-      <h1>Vérification SIRET · INSEE</h1>
-      <div class="sub">Raison sociale, adresse, dirigeant, département… depuis la base Sirene</div>
-    </div>
-    <div class="count" id="count">—</div>
-  </header>
-
-  <div class="config">
-    <div class="ctl mode">
-      <label for="sel-mode">Mode</label>
-      <select id="sel-mode">
-        <option value="verify">Vérifier à partir du SIRET</option>
-        <option value="find">Trouver le SIRET (nom, commune, adresse)</option>
-      </select>
-    </div>
-    <div class="ctl">
-      <label for="sel-table">Table</label>
-      <select id="sel-table"><option value="">Chargement…</option></select>
-    </div>
-    <div class="ctl verify-only" id="ctl-siret">
-      <label for="sel-siret">Colonne SIRET</label>
-      <select id="sel-siret" disabled><option value="">—</option></select>
-    </div>
-    <div class="ctl find-only hidden">
-      <label for="sel-f-nom">Raison sociale *</label>
-      <select id="sel-f-nom" data-find="nom" disabled><option value="">—</option></select>
-    </div>
-    <div class="ctl find-only hidden">
-      <label for="sel-f-commune">Code commune INSEE</label>
-      <select id="sel-f-commune" data-find="commune" disabled><option value="">—</option></select>
-    </div>
-    <div class="ctl find-only hidden">
-      <label for="sel-f-cp">Code postal</label>
-      <select id="sel-f-cp" data-find="cp" disabled><option value="">—</option></select>
-    </div>
-    <div class="ctl find-only hidden">
-      <label for="sel-f-adresse">Adresse / lieu-dit</label>
-      <select id="sel-f-adresse" data-find="adresse" disabled><option value="">—</option></select>
-    </div>
-    <div class="ctl">
-      <label for="sel-order">Ordre des lignes</label>
-      <select id="sel-order" disabled></select>
-    </div>
-    <div class="ctl">
-      <label for="sel-source">Source</label>
-      <select id="sel-source">
-        <option value="recherche">API Recherche d'entreprises (Sirene, sans clé)</option>
-        <option value="insee">API Sirene INSEE (clé requise)</option>
-      </select>
-    </div>
-    <div class="ctl key hidden" id="ctl-key">
-      <label for="inp-key">Clé API INSEE</label>
-      <input id="inp-key" type="password" placeholder="X-INSEE-Api-Key-Integration" autocomplete="off">
-    </div>
-    <div class="spacer"></div>
-    <button class="btn btn-ghost" id="btn-reload" title="Relire la table Grist">Recharger</button>
-    <button class="btn btn-primary" id="btn-run" disabled>Vérifier</button>
-  </div>
-
-  <div class="fields" id="fields"><span class="lbl">Colonnes</span></div>
-
-  <div class="statusbar">
-    <div class="progress"><div id="progress-bar"></div></div>
-    <span class="stat">Traité <b id="st-done">0</b>/<b id="st-total">0</b></span>
-    <span class="stat ok">Trouvés <b id="st-ok">0</b></span>
-    <span class="stat ko">Problèmes <b id="st-ko">0</b></span>
-    <span class="stat diff">Écarts <b id="st-diff">0</b></span>
-    <label class="toggle"><input type="checkbox" id="chk-issues"> Seulement problèmes / écarts</label>
-    <button class="btn btn-ghost" id="btn-copy-all" disabled title="Copie toutes les colonnes affichées (séparées par tabulation)">Copier tout le tableau</button>
-  </div>
-
-  <div class="msg" id="msg"></div>
-
-  <div class="table-wrap" id="table-wrap">
-    <div class="placeholder" id="placeholder">
-      <h2>Vérifier ou retrouver des entreprises dans Sirene</h2>
-      <ol>
-        <li>Choisissez le <b>mode</b> puis la <b>table</b>.</li>
-        <li><b>Vérifier</b> : indiquez la colonne SIRET.<br>
-          <b>Trouver le SIRET</b> : indiquez la colonne raison sociale, et si possible le code commune INSEE,
-          le code postal et l'adresse / lieu-dit pour départager les homonymes.</li>
-        <li>Lancez la recherche : chaque ligne est interrogée dans la base Sirene.</li>
-        <li>Cliquez sur <b>Copier</b> en tête d'une colonne, sélectionnez la première cellule
-          de la colonne cible dans Grist et collez (Ctrl/Cmd + V).</li>
-      </ol>
-      <p>Astuce : « comparer à… » sous chaque en-tête surligne les écarts avec une colonne existante.</p>
+<header role="banner" class="fr-header">
+  <div class="fr-header__body">
+    <div class="fr-container fr-container--fluid">
+      <div class="fr-header__body-row">
+        <div class="fr-header__brand">
+          <div class="fr-header__brand-top">
+            <div class="fr-header__logo">
+              <!-- Bloc-marque officiel : Marianne et devise sont fournis par le DSFR.
+                   Intitulé du ministère à mettre à jour si la dénomination change. -->
+              <p class="fr-logo">Ministère<br>de l'Agriculture,<br>de l'Agro-alimentaire<br>et de la Souveraineté<br>alimentaire</p>
+            </div>
+          </div>
+          <div class="fr-header__service">
+            <p class="fr-header__service-title">Vérification d'entreprises</p>
+            <p class="fr-header__service-tagline">À partir du répertoire Sirene de l'Insee</p>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
+</header>
 
-  <footer>
-    Données : base Sirene de l'INSEE, via <a href="https://recherche-entreprises.api.gouv.fr" target="_blank" rel="noopener">recherche-entreprises.api.gouv.fr</a>
-    ou <a href="https://portail-api.insee.fr" target="_blank" rel="noopener">portail-api.insee.fr</a>.
-    Les valeurs copiées suivent l'ordre choisi ci-dessus : triez votre vue Grist de la même façon avant de coller.
-  </footer>
-</div>
+<main id="main" class="sv-main" role="main">
 
-<div class="modal-bg" id="modal">
-  <div class="modal">
-    <h3>Copie manuelle</h3>
-    <div style="font-size:12px;color:var(--ink-soft)">Le navigateur a bloqué la copie automatique. Le texte est sélectionné : faites Ctrl/Cmd + C.</div>
-    <textarea id="modal-text" readonly></textarea>
-    <div class="row"><button class="btn btn-ghost" id="modal-close">Fermer</button></div>
+  <form id="form" novalidate>
+    <fieldset class="fr-segmented fr-mb-3w" id="mode-group">
+      <legend class="fr-segmented__legend">Que souhaitez-vous faire&nbsp;?</legend>
+      <div class="fr-segmented__elements">
+        <div class="fr-segmented__element">
+          <input value="verify" type="radio" id="mode-verify" name="mode" checked>
+          <label class="fr-label" for="mode-verify">Vérifier des SIRET</label>
+        </div>
+        <div class="fr-segmented__element">
+          <input value="find" type="radio" id="mode-find" name="mode">
+          <label class="fr-label" for="mode-find">Trouver des SIRET</label>
+        </div>
+      </div>
+    </fieldset>
+
+    <p class="sv-legend">Les champs marqués d'un astérisque (<span class="sv-req" aria-hidden="true">*</span>) sont obligatoires.</p>
+
+    <div class="sv-grid">
+      <div class="fr-select-group">
+        <label class="fr-label" for="sel-table">Table <span class="sv-req" aria-hidden="true">*</span>
+          <span class="fr-hint-text">La table Grist contenant vos entreprises</span>
+        </label>
+        <select class="fr-select" id="sel-table" required aria-required="true">
+          <option value="">Chargement…</option>
+        </select>
+      </div>
+
+      <div class="fr-select-group verify-only">
+        <label class="fr-label" for="sel-siret">Colonne SIRET <span class="sv-req" aria-hidden="true">*</span>
+          <span class="fr-hint-text">14 chiffres, les espaces sont acceptés</span>
+        </label>
+        <select class="fr-select" id="sel-siret" required aria-required="true" disabled>
+          <option value="">Choisissez d'abord une table</option>
+        </select>
+      </div>
+
+      <div class="fr-select-group find-only sv-hidden">
+        <label class="fr-label" for="sel-f-nom">Colonne raison sociale <span class="sv-req" aria-hidden="true">*</span>
+          <span class="fr-hint-text">Nom de l'entreprise, de l'EARL, du GAEC…</span>
+        </label>
+        <select class="fr-select" id="sel-f-nom" data-find="nom" required aria-required="true" disabled>
+          <option value="">Choisissez d'abord une table</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="find-only sv-hidden">
+      <p class="sv-subtitle">Affiner la recherche</p>
+      <p class="sv-subhint">Facultatif, mais fortement conseillé pour départager les homonymes.</p>
+      <div class="sv-grid">
+        <div class="fr-select-group">
+          <label class="fr-label" for="sel-f-commune">Colonne code commune Insee
+            <span class="fr-hint-text">Exemple : 35238</span>
+          </label>
+          <select class="fr-select" id="sel-f-commune" data-find="commune" disabled><option value="">Aucune</option></select>
+        </div>
+        <div class="fr-select-group">
+          <label class="fr-label" for="sel-f-cp">Colonne code postal
+            <span class="fr-hint-text">Utilisé si le code commune est absent</span>
+          </label>
+          <select class="fr-select" id="sel-f-cp" data-find="cp" disabled><option value="">Aucune</option></select>
+        </div>
+        <div class="fr-select-group">
+          <label class="fr-label" for="sel-f-adresse">Colonne adresse ou lieu-dit
+            <span class="fr-hint-text">Exemple : Lieu-dit La Ville Aubert</span>
+          </label>
+          <select class="fr-select" id="sel-f-adresse" data-find="adresse" disabled><option value="">Aucune</option></select>
+        </div>
+      </div>
+    </div>
+
+    <details class="sv-details" id="adv">
+      <summary>Options avancées</summary>
+      <div class="sv-details__body">
+        <div class="sv-grid">
+          <div class="fr-select-group">
+            <label class="fr-label" for="sel-order">Ordre des lignes
+              <span class="fr-hint-text">Doit correspondre au tri de votre vue Grist pour le collage</span>
+            </label>
+            <select class="fr-select" id="sel-order" disabled></select>
+          </div>
+          <div class="fr-select-group verify-only">
+            <label class="fr-label" for="sel-source">Source des données
+              <span class="fr-hint-text">L'API Insee nécessite une clé personnelle</span>
+            </label>
+            <select class="fr-select" id="sel-source">
+              <option value="recherche">API Recherche d'entreprises (sans clé)</option>
+              <option value="insee">API Sirene de l'Insee</option>
+            </select>
+          </div>
+          <div class="fr-input-group sv-hidden" id="ctl-key">
+            <label class="fr-label" for="inp-key">Clé API Insee <span class="sv-req" aria-hidden="true">*</span>
+              <span class="fr-hint-text">Conservée uniquement dans ce navigateur</span>
+            </label>
+            <input class="fr-input" id="inp-key" type="password" autocomplete="off">
+          </div>
+        </div>
+
+        <fieldset class="fr-fieldset" aria-labelledby="fields-legend">
+          <legend class="fr-fieldset__legend fr-text--regular" id="fields-legend">Informations à afficher</legend>
+          <div class="sv-checks" id="fields"></div>
+        </fieldset>
+
+        <fieldset class="fr-fieldset" aria-labelledby="cmp-legend">
+          <legend class="fr-fieldset__legend fr-text--regular" id="cmp-legend">Comparer avec mes colonnes
+            <span class="fr-hint-text">Les écarts entre Sirene et votre table seront surlignés</span>
+          </legend>
+          <div class="sv-grid" id="compare"></div>
+        </fieldset>
+      </div>
+    </details>
+
+    <div class="sv-actions">
+      <button type="submit" class="fr-btn fr-icon-search-line fr-btn--icon-left" id="btn-run" disabled aria-describedby="missing">
+        Vérifier les SIRET
+      </button>
+      <p class="sv-missing" id="missing" aria-live="polite"></p>
+    </div>
+  </form>
+
+  <div id="msg" aria-live="polite"></div>
+
+  <section class="sv-results sv-hidden" id="results" aria-labelledby="results-title">
+    <h2 id="results-title">Résultats</h2>
+    <p class="sv-summary" id="summary" role="status"></p>
+    <progress class="sv-progress" id="progress" max="100" value="0" aria-label="Avancement de la recherche"></progress>
+
+    <div class="sv-toolbar">
+      <div class="fr-checkbox-group fr-checkbox-group--sm">
+        <input type="checkbox" id="chk-issues">
+        <label class="fr-label" for="chk-issues">Afficher uniquement les lignes à vérifier</label>
+      </div>
+      <button type="button" class="fr-btn fr-btn--sm fr-btn--secondary fr-icon-clipboard-line fr-btn--icon-left" id="btn-copy-all">
+        Copier tout le tableau
+      </button>
+    </div>
+    <p class="sv-howto">Pour coller dans Grist : cliquez sur <strong>Copier</strong> en tête de colonne,
+      sélectionnez la première cellule de la colonne cible, puis <kbd>Ctrl</kbd>&nbsp;+&nbsp;<kbd>V</kbd>.
+      Toutes les lignes sont copiées, dans l'ordre choisi.</p>
+
+    <div class="sv-table-wrap" id="table-wrap" tabindex="0" role="region" aria-labelledby="results-title"></div>
+  </section>
+</main>
+
+<footer class="sv-footer">
+  Données : répertoire Sirene de l'Insee, via
+  <a class="fr-link" href="https://recherche-entreprises.api.gouv.fr" target="_blank" rel="noopener" title="API Recherche d'entreprises - nouvelle fenêtre">l'API Recherche d'entreprises</a>
+  ou <a class="fr-link" href="https://portail-api.insee.fr" target="_blank" rel="noopener" title="Portail des API de l'Insee - nouvelle fenêtre">l'API Sirene de l'Insee</a>.
+</footer>
+
+<dialog class="sv-dialog" id="copy-dialog" aria-labelledby="copy-dialog-title">
+  <h2 class="fr-h5" id="copy-dialog-title">Copie manuelle</h2>
+  <p class="fr-text--sm">Le navigateur a bloqué la copie automatique. Le texte est sélectionné&nbsp;: utilisez <kbd>Ctrl</kbd>&nbsp;+&nbsp;<kbd>C</kbd>.</p>
+  <label class="fr-label fr-sr-only" for="copy-text">Texte à copier</label>
+  <textarea class="fr-input" id="copy-text" readonly></textarea>
+  <div class="fr-mt-2w" style="text-align:right">
+    <button type="button" class="fr-btn fr-btn--secondary" id="copy-close">Fermer</button>
   </div>
-</div>
+</dialog>
 
 <script>
 (function () {
@@ -329,22 +294,22 @@
   // Champs renvoyés
   // ============================================================
   var FIELDS = [
-    { key: 'statut',        label: 'Statut',            on: true,  badge: true },
-    { key: 'confiance',     label: 'Confiance',         on: true,  findOnly: true },
-    { key: 'siret',         label: 'SIRET',             on: false, mono: true },
-    { key: 'siren',         label: 'SIREN',             on: false, mono: true },
-    { key: 'nom',           label: 'Raison sociale',    on: true  },
-    { key: 'enseigne',      label: 'Enseigne',          on: false },
-    { key: 'dirigeant',     label: 'Dirigeant(s)',      on: true  },
-    { key: 'adresse',       label: 'Adresse (voie)',    on: true  },
-    { key: 'code_postal',   label: 'Code postal',       on: true,  mono: true },
-    { key: 'commune',       label: 'Commune',           on: true  },
-    { key: 'departement',   label: 'Département',       on: true,  mono: true },
+    { key: 'statut',        label: 'Statut',             on: true },
+    { key: 'confiance',     label: 'Confiance',          on: true,  findOnly: true },
+    { key: 'siret',         label: 'SIRET',              on: false, mono: true },
+    { key: 'siren',         label: 'SIREN',              on: false, mono: true },
+    { key: 'nom',           label: 'Raison sociale',     on: true  },
+    { key: 'enseigne',      label: 'Enseigne',           on: false },
+    { key: 'dirigeant',     label: 'Dirigeant(s)',       on: true  },
+    { key: 'adresse',       label: 'Adresse',            on: true  },
+    { key: 'code_postal',   label: 'Code postal',        on: true,  mono: true },
+    { key: 'commune',       label: 'Commune',            on: true  },
+    { key: 'departement',   label: 'Département',        on: true,  mono: true },
     { key: 'adresse_complete', label: 'Adresse complète', on: false },
-    { key: 'naf',           label: 'Code NAF',          on: false, mono: true },
-    { key: 'etat',          label: 'État établissement', on: true },
-    { key: 'siege',         label: 'Siège',             on: false },
-    { key: 'date_creation', label: 'Date création',     on: false, mono: true },
+    { key: 'naf',           label: 'Code NAF',           on: false, mono: true },
+    { key: 'etat',          label: 'État',               on: false },
+    { key: 'siege',         label: 'Siège',              on: false },
+    { key: 'date_creation', label: 'Date de création',   on: false, mono: true },
     { key: 'forme_juridique', label: 'Catégorie juridique', on: false, mono: true }
   ];
 
@@ -352,22 +317,26 @@
     ok: 'Actif', closed: 'Fermé', notfound: 'Introuvable', invalid: 'SIRET invalide',
     empty: '', error: 'Erreur', wait: 'En attente'
   };
+  var STATUS_BADGE = {
+    ok: 'fr-badge--success', closed: 'fr-badge--warning', notfound: 'fr-badge--error',
+    invalid: 'fr-badge--error', error: 'fr-badge--error', wait: 'fr-badge--no-icon'
+  };
 
   var state = {
-    mode: 'verify',      // 'verify' : SIRET -> infos ; 'find' : nom (+ commune, adresse) -> SIRET
-    find: { nom: '', commune: '', cp: '', adresse: '' }, // colonnes Grist utilisées en mode 'find'
+    mode: 'verify',
+    find: { nom: '', commune: '', cp: '', adresse: '' },
     tables: [],
     tableId: '',
     siretCol: '',
     order: 'manualSort',
     source: 'recherche',
-    columns: [],         // [{id,label}]
-    data: null,          // fetchTable() brut (colonnes)
-    rows: [],            // [{rowId, raw, siret, grist:{colId:val}}] ordonnées
-    cache: Object.create(null), // "source|siret" -> résultat
-    results: Object.create(null), // siret -> résultat
+    columns: [],
+    data: null,
+    rows: [],
+    cache: Object.create(null),
+    results: Object.create(null),
     visible: {},
-    compare: {},         // fieldKey -> colId
+    compare: {},
     running: false,
     stop: false,
     onlyIssues: false
@@ -435,13 +404,6 @@
     // départements : "1" vs "01"
     if (/^\d+$/.test(na) && /^\d+$/.test(nb)) return +na === +nb;
     return false;
-  }
-
-  function showMsg(text, kind) {
-    var el = $('msg');
-    if (!text) { el.className = 'msg'; el.textContent = ''; return; }
-    el.className = 'msg show ' + (kind || 'info');
-    el.textContent = text;
   }
 
   function cellToText(v) {
@@ -687,6 +649,15 @@
     };
   }
 
+
+  function showMsg(text, kind) {
+    var el = $('msg');
+    if (!text) { el.innerHTML = ''; return; }
+    kind = kind || 'info';
+    el.innerHTML = '<div class="fr-alert fr-alert--' + kind + ' fr-alert--sm fr-mb-3w"' +
+      (kind === 'error' ? ' role="alert"' : '') + '><p>' + esc(text) + '</p></div>';
+  }
+
   // ============================================================
   // Grist : tables & colonnes
   // ============================================================
@@ -710,11 +681,24 @@
     var tables = await grist.docApi.listTables();
     state.tables = tables.filter(function (t) { return t.indexOf('_grist') !== 0; });
     var sel = $('sel-table');
-    sel.innerHTML = '<option value="">— Choisir une table —</option>' + state.tables.map(function (t) {
+    sel.innerHTML = '<option value="">Sélectionnez une table</option>' + state.tables.map(function (t) {
       return '<option value="' + esc(t) + '">' + esc(t) + '</option>';
     }).join('');
     if (state.tableId && state.tables.indexOf(state.tableId) >= 0) sel.value = state.tableId;
     else state.tableId = '';
+  }
+
+  var GUESS = {
+    siret: /siret/i,
+    nom: /raison|soci[ée]t[ée]|entreprise|d[ée]nomination|^nom$/i,
+    commune: /(code|cod).?(insee|commune|com)|insee|cog/i,
+    cp: /code.?postal|^cp$|postal/i,
+    adresse: /adresse|lieu.?dit|voie|^rue$/i
+  };
+  function hasCol(id) { return state.columns.some(function (c) { return c.id === id; }); }
+  function guessCol(re) {
+    var g = state.columns.find(function (c) { return re.test(c.label) || re.test(c.id); });
+    return g ? g.id : '';
   }
 
   async function loadTableData() {
@@ -729,67 +713,51 @@
       return k !== 'id' && k !== 'manualSort' && k.indexOf('gristHelper_') !== 0;
     }).map(function (k) { return { id: k, label: labels[k] || k }; });
 
-    // Colonne SIRET : conserve le choix sinon devine
-    if (!state.columns.some(function (c) { return c.id === state.siretCol; })) {
-      var guess = state.columns.find(function (c) { return /siret/i.test(c.id + ' ' + c.label); });
-      state.siretCol = guess ? guess.id : '';
-    }
-    // Colonnes du mode "trouver" : conserve sinon devine d'après le nom
-    var GUESS = {
-      nom: /raison|soci[ée]t[ée]|entreprise|d[ée]nomination|^nom$|nom.?(de.?l.?)?(entreprise|soci)/i,
-      commune: /(code|cod).?(insee|commune|com)|insee|cog/i,
-      cp: /(code.?postal|^cp$|postal)/i,
-      adresse: /adresse|lieu.?dit|voie|^rue$/i
-    };
+    if (!hasCol(state.siretCol)) state.siretCol = guessCol(GUESS.siret);
     Object.keys(state.find).forEach(function (k) {
-      if (state.columns.some(function (c) { return c.id === state.find[k]; })) return;
-      var g = state.columns.find(function (c) { return GUESS[k].test(c.label) || GUESS[k].test(c.id); });
-      state.find[k] = g ? g.id : '';
+      if (!hasCol(state.find[k])) state.find[k] = guessCol(GUESS[k]);
     });
-    // comparaisons : supprime celles vers des colonnes disparues
     Object.keys(state.compare).forEach(function (k) {
-      if (!state.columns.some(function (c) { return c.id === state.compare[k]; })) delete state.compare[k];
+      if (!hasCol(state.compare[k])) delete state.compare[k];
     });
     refreshColumnSelects();
     buildRows();
   }
 
-  function refreshColumnSelects() {
-    var s = $('sel-siret'), o = $('sel-order');
-    var opts = state.columns.map(function (c) {
-      return '<option value="' + esc(c.id) + '">' + esc(c.label) + '</option>';
+  function colOptions(selected) {
+    return state.columns.map(function (c) {
+      return '<option value="' + esc(c.id) + '"' + (c.id === selected ? ' selected' : '') + '>' + esc(c.label) + '</option>';
     }).join('');
-    s.innerHTML = '<option value="">— Choisir —</option>' + opts;
-    s.value = state.siretCol || '';
-    s.disabled = !state.columns.length;
+  }
+
+  function refreshColumnSelects() {
+    var none = !state.columns.length;
+    var s = $('sel-siret');
+    s.innerHTML = '<option value="">' + (none ? 'Choisissez d\'abord une table' : 'Sélectionnez une colonne') + '</option>' +
+      colOptions(state.siretCol);
+    s.disabled = none;
     Object.keys(state.find).forEach(function (k) {
       var sel = document.querySelector('[data-find="' + k + '"]');
-      sel.innerHTML = '<option value="">' + (k === 'nom' ? '— Choisir —' : '— Aucune —') + '</option>' + opts;
-      sel.value = state.find[k] || '';
-      sel.disabled = !state.columns.length;
+      var first = k === 'nom' ? (none ? 'Choisissez d\'abord une table' : 'Sélectionnez une colonne') : 'Aucune';
+      sel.innerHTML = '<option value="">' + first + '</option>' + colOptions(state.find[k]);
+      sel.disabled = none;
     });
 
+    var o = $('sel-order');
     var hasManual = state.data && state.data.manualSort;
-    var orderOpts = (hasManual ? '<option value="manualSort">Ordre par défaut de la table</option>' : '') +
-      '<option value="id">ID de ligne</option>' +
+    o.innerHTML = (hasManual ? '<option value="manualSort">Ordre par défaut de la table</option>' : '') +
+      '<option value="id">Ordre de création (identifiant)</option>' +
       state.columns.map(function (c) {
-        return '<option value="' + esc(c.id) + '|asc">' + esc(c.label) + ' ↑</option>' +
-               '<option value="' + esc(c.id) + '|desc">' + esc(c.label) + ' ↓</option>';
+        return '<option value="' + esc(c.id) + '|asc">' + esc(c.label) + ' (croissant)</option>' +
+               '<option value="' + esc(c.id) + '|desc">' + esc(c.label) + ' (décroissant)</option>';
       }).join('');
-    o.innerHTML = orderOpts;
     if (state.data && !Array.prototype.some.call(o.options, function (op) { return op.value === state.order; })) {
       state.order = hasManual ? 'manualSort' : 'id';
     }
     o.value = state.order;
-    o.disabled = !state.columns.length;
+    o.disabled = none;
+    renderCompare();
     updateRunButton();
-  }
-
-  function isReady() { return state.mode === 'find' ? !!state.find.nom : !!state.siretCol; }
-  function updateRunButton() {
-    if (state.running) return;
-    $('btn-run').disabled = !isReady();
-    $('btn-run').textContent = state.mode === 'find' ? 'Rechercher' : 'Vérifier';
   }
 
   function buildRows() {
@@ -830,13 +798,13 @@
           adresse: fc.adresse ? clean(cellToText(fc.adresse[i])) : ''
         };
         row.key = 'find|' + JSON.stringify(row.query);
-        row.raw = join([row.query.nom, row.query.adresse, join([row.query.cp, row.query.commune && 'INSEE ' + row.query.commune])], ' · ');
+        row.raw = join([row.query.nom, row.query.adresse,
+          join([row.query.cp, row.query.commune && 'Insee ' + row.query.commune])], ' · ');
       } else {
         row.key = row.siret;
       }
       return row;
     });
-    $('count').textContent = n + ' ligne' + (n > 1 ? 's' : '');
     render();
   }
 
@@ -846,7 +814,7 @@
   }
 
   // ============================================================
-  // Vérification
+  // Recherche
   // ============================================================
   function resultFor(row) {
     if (state.mode === 'find') {
@@ -858,17 +826,45 @@
     return state.results[row.siret] || { statut: 'wait', siret: row.siret };
   }
 
+  function missingFields() {
+    var m = [];
+    if (!state.tableId) m.push('la table');
+    if (state.mode === 'find') { if (state.tableId && !state.find.nom) m.push('la colonne raison sociale'); }
+    else {
+      if (state.tableId && !state.siretCol) m.push('la colonne SIRET');
+      if (state.source === 'insee' && !$('inp-key').value.trim()) m.push('la clé API Insee');
+    }
+    return m;
+  }
+  function isReady() { return !!state.tableId && (state.mode === 'find' ? !!state.find.nom : !!state.siretCol); }
+
+  function updateRunButton() {
+    var btn = $('btn-run');
+    if (state.running) {
+      btn.textContent = 'Arrêter';
+      btn.className = 'fr-btn fr-btn--secondary';
+      btn.disabled = false;
+      $('missing').textContent = '';
+      return;
+    }
+    btn.className = 'fr-btn fr-icon-search-line fr-btn--icon-left';
+    btn.textContent = state.mode === 'find' ? 'Rechercher les SIRET' : 'Vérifier les SIRET';
+    var m = missingFields();
+    btn.disabled = m.length > 0;
+    $('missing').textContent = m.length ? 'À renseigner : ' + m.join(', ') + '.' : '';
+  }
+
   async function run() {
     if (state.running) { state.stop = true; return; }
+    if (missingFields().length) { updateRunButton(); return; }
     var find = state.mode === 'find';
     var source = find ? 'recherche' : state.source;
     var key = $('inp-key').value.trim();
-    if (!find && source === 'insee' && !key) { showMsg('Renseignez votre clé API INSEE (portail-api.insee.fr).', 'warning'); return; }
 
     var todo = [];
     var seen = Object.create(null);
-    state.results = Object.create(null);
     var queries = Object.create(null);
+    state.results = Object.create(null);
     state.rows.forEach(function (r) {
       if (find ? !(r.query && r.query.nom) : (!r.siret || !isValidSiret(r.siret))) return;
       if (seen[r.key]) return;
@@ -879,12 +875,11 @@
     });
 
     state.running = true; state.stop = false;
-    $('btn-run').textContent = 'Arrêter';
-    $('btn-run').className = 'btn btn-danger';
-    showMsg(todo.length ? 'Interrogation de ' + todo.length + (find ? ' entreprise(s)…' : ' SIRET…') : '', 'info');
+    updateRunButton();
+    showMsg('');
     render();
 
-    // API Recherche : 7 req/s max ; API INSEE : 30 req/min
+    // API Recherche d'entreprises : 7 requêtes/s max ; API Insee : 30/min
     var delay = source === 'insee' ? 2100 : 160;
     var errors = 0, fatal = null, lastRender = 0;
 
@@ -898,28 +893,27 @@
         errors++;
         res = { statut: 'error', siret: find ? '' : rk, error: e.message };
         if (/Clé API|Failed to fetch|NetworkError|Load failed/i.test(e.message) && errors >= 3 && k === errors - 1) {
-          fatal = e.message; // toutes les premières requêtes échouent : inutile d'insister
+          fatal = e.message;
         }
       }
       state.results[rk] = res;
       if (fatal) break;
-      if (Date.now() - lastRender > 400 || k === todo.length - 1) { render(); lastRender = Date.now(); }
+      if (Date.now() - lastRender > 500 || k === todo.length - 1) { render(); lastRender = Date.now(); }
       var wait = delay - (Date.now() - t0);
       if (wait > 0 && k < todo.length - 1) await sleep(wait);
     }
 
     state.running = false;
-    $('btn-run').className = 'btn btn-primary';
     updateRunButton();
     if (fatal) {
-      showMsg('Échec des requêtes : ' + fatal +
-        (source === 'insee' ? ' — vérifiez la clé, ou essayez la source « API Recherche d\'entreprises ».' : ''), 'error');
+      showMsg('Le service ne répond pas : ' + fatal +
+        (source === 'insee' ? '. Vérifiez la clé, ou choisissez la source « API Recherche d\'entreprises » dans les options avancées.' : '.'), 'error');
     } else if (state.stop) {
-      showMsg('Vérification interrompue.', 'warning');
+      showMsg('Recherche interrompue.', 'warning');
     } else if (errors) {
       showMsg(errors + ' ligne(s) en erreur. Relancez la recherche pour les réessayer.', 'warning');
     } else {
-      showMsg('');
+      showMsg('Recherche terminée.', 'success');
     }
     render();
   }
@@ -927,155 +921,167 @@
   // ============================================================
   // Rendu
   // ============================================================
-  function visibleFields() {
-    return FIELDS.filter(function (f) { return state.visible[f.key] && (!f.findOnly || state.mode === 'find'); });
-  }
+  function modeFields() { return FIELDS.filter(function (f) { return !f.findOnly || state.mode === 'find'; }); }
+  function visibleFields() { return modeFields().filter(function (f) { return state.visible[f.key]; }); }
 
   function fieldValue(res, f) {
     if (f.key === 'statut') return STATUS[res.statut] || '';
     return res[f.key] == null ? '' : res[f.key];
   }
-
-  function isIssue(row, res) {
-    if (res.statut === 'empty' || res.statut === 'wait') return false;
-    if (res.statut !== 'ok') return true;
-    if (res.confLevel && res.confLevel !== 'high') return true;
-    return visibleFields().some(function (f) {
+  function found(res) { return res.statut === 'ok' || res.statut === 'closed'; }
+  function hasDiff(row, res) {
+    return found(res) && visibleFields().some(function (f) {
       var cmp = state.compare[f.key];
       return cmp && !sameValue(fieldValue(res, f), gristValue(row, cmp));
     });
   }
+  function isIssue(row, res) {
+    if (res.statut === 'empty' || res.statut === 'wait') return false;
+    if (res.statut !== 'ok') return true;
+    if (res.confLevel && res.confLevel !== 'high') return true;
+    return hasDiff(row, res);
+  }
 
   function renderFields() {
-    $('fields').innerHTML = '<span class="lbl">Colonnes</span>' + FIELDS.filter(function (f) {
-      return !f.findOnly || state.mode === 'find';
-    }).map(function (f) {
-      var on = state.visible[f.key];
-      return '<label class="chip' + (on ? ' on' : '') + '"><input type="checkbox" data-field="' + f.key + '"' +
-        (on ? ' checked' : '') + '>' + esc(f.label) + '</label>';
+    $('fields').innerHTML = modeFields().map(function (f) {
+      var id = 'fld-' + f.key;
+      return '<div class="fr-checkbox-group fr-checkbox-group--sm">' +
+        '<input type="checkbox" id="' + id + '" data-field="' + f.key + '"' + (state.visible[f.key] ? ' checked' : '') + '>' +
+        '<label class="fr-label" for="' + id + '">' + esc(f.label) + '</label></div>';
+    }).join('');
+  }
+
+  function renderCompare() {
+    var fields = visibleFields().filter(function (f) { return f.key !== 'statut' && f.key !== 'confiance'; });
+    $('compare').innerHTML = fields.map(function (f) {
+      var id = 'cmp-' + f.key;
+      return '<div class="fr-select-group"><label class="fr-label" for="' + id + '">' + esc(f.label) + '</label>' +
+        '<select class="fr-select" id="' + id + '" data-cmp="' + f.key + '"' + (state.columns.length ? '' : ' disabled') + '>' +
+        '<option value="">Ne pas comparer</option>' + colOptions(state.compare[f.key] || '') + '</select></div>';
     }).join('');
   }
 
   function render() {
-    var wrap = $('table-wrap');
-    var ph = $('placeholder');
-    if (!state.tableId || !isReady() || !state.rows.length) {
-      wrap.innerHTML = '';
-      wrap.appendChild(ph);
-      updateStats();
-      $('btn-copy-all').disabled = true;
+    var section = $('results');
+    if (!isReady() || !state.rows.length) {
+      section.classList.add('sv-hidden');
       return;
     }
+    section.classList.remove('sv-hidden');
     var fields = visibleFields();
-    var cmpOptions = '<option value="">comparer à…</option>' + state.columns.map(function (c) {
-      return '<option value="' + esc(c.id) + '">' + esc(c.label) + '</option>';
-    }).join('');
+    var find = state.mode === 'find';
+    var srcLabel = find ? 'Votre recherche'
+      : 'SIRET dans Grist';
 
-    var srcLabel = state.mode === 'find' ? 'Recherche'
-      : (state.columns.find(function (c) { return c.id === state.siretCol; }) || {}).label || state.siretCol;
-    var h = '<table><thead><tr><th class="rownum">#</th>' +
-      '<th><div class="th-top"><span class="th-title">' + esc(srcLabel) + '<small>' +
-      (state.mode === 'find' ? 'valeurs Grist' : 'colonne Grist') + '</small></span></div></th>';
+    var h = '<table class="sv-table"><caption class="fr-sr-only">Résultats Sirene, une ligne par ligne de la table ' +
+      esc(state.tableId) + '</caption><thead><tr>' +
+      '<th scope="col" class="sv-num">N°</th><th scope="col">' + esc(srcLabel) + '</th>';
     fields.forEach(function (f) {
-      var cmp = state.compare[f.key] || '';
-      h += '<th><div class="th-top"><span class="th-title">' + esc(f.label) + '</span>' +
-        '<button class="copy-btn" data-copy="' + f.key + '" title="Copier la colonne pour la coller dans Grist">Copier</button></div>' +
-        (f.key === 'statut' || f.key === 'confiance' ? '' :
-          '<select class="cmp' + (cmp ? ' active' : '') + '" data-cmp="' + f.key + '">' +
-          cmpOptions.replace('value="' + esc(cmp) + '"', 'value="' + esc(cmp) + '" selected') + '</select>') +
-        '</th>';
+      h += '<th scope="col"><div class="sv-th"><span>' + esc(f.label) + '</span>' +
+        '<button type="button" class="fr-btn fr-btn--sm fr-btn--tertiary" data-copy="' + f.key + '" ' +
+        'aria-label="Copier la colonne ' + esc(f.label) + '">Copier</button></div></th>';
     });
     h += '</tr></thead><tbody>';
 
+    var shown = 0;
     state.rows.forEach(function (row, n) {
       var res = resultFor(row);
       if (state.onlyIssues && !isIssue(row, res)) return;
-      h += '<tr><td class="rownum">' + (n + 1) + '</td>' +
-        '<td class="src' + (row.raw == null || row.raw === '' ? ' empty' : '') + '">' + esc(cellToText(row.raw)) + '</td>';
+      shown++;
+      var srcEmpty = row.raw == null || row.raw === '';
+      h += '<tr><td class="sv-num">' + (n + 1) + '</td>' +
+        '<td class="sv-src' + (srcEmpty ? ' sv-empty' : '') + '">' + (srcEmpty ? 'vide' : esc(cellToText(row.raw))) + '</td>';
       fields.forEach(function (f) {
         if (f.key === 'statut') {
-          var cls = { ok: 'ok', closed: 'closed', notfound: 'ko', invalid: 'ko', error: 'ko', wait: 'wait', empty: 'none' }[res.statut];
-          var label = res.statut === 'empty' ? (state.mode === 'find' ? 'pas de nom' : 'pas de SIRET') : STATUS[res.statut];
-          h += '<td><span class="badge ' + cls + '"' + (res.error ? ' title="' + esc(res.error) + '"' : '') + '>' +
-            esc(label) + '</span></td>';
+          if (res.statut === 'empty') {
+            h += '<td class="sv-empty">' + (find ? 'Pas de raison sociale' : 'Pas de SIRET') + '</td>';
+            return;
+          }
+          h += '<td><p class="fr-badge fr-badge--sm ' + STATUS_BADGE[res.statut] + '"' +
+            (res.error ? ' title="' + esc(res.error) + '"' : '') + '>' + esc(STATUS[res.statut]) + '</p>' +
+            (res.error ? '<span class="sv-alt">' + esc(res.error) + '</span>' : '') + '</td>';
           return;
         }
         if (f.key === 'confiance') {
           if (!res.confiance) { h += '<td></td>'; return; }
-          var alts = (res.alternatives || []);
-          h += '<td><span class="badge ' + { high: 'ok', mid: 'mid', low: 'ko' }[res.confLevel] + '">' + esc(res.confiance) + '</span>' +
-            (alts.length ? '<span class="alt" title="' + esc(alts.join('\n')) + '">' + alts.length +
-              ' autre' + (alts.length > 1 ? 's' : '') + ' candidat' + (alts.length > 1 ? 's' : '') + ' (survoler)</span>' : '') +
+          var alts = res.alternatives || [];
+          var badge = { high: 'fr-badge--success', mid: 'fr-badge--warning', low: 'fr-badge--error' }[res.confLevel];
+          h += '<td><p class="fr-badge fr-badge--sm fr-badge--no-icon ' + badge + '">' + esc(res.confiance) + '</p>' +
+            (alts.length ? '<details class="sv-alt"><summary>' + alts.length + ' autre' + (alts.length > 1 ? 's' : '') +
+              ' candidat' + (alts.length > 1 ? 's' : '') + '</summary>' +
+              alts.map(function (a) { return '<div>' + esc(a) + '</div>'; }).join('') + '</details>' : '') +
             '</td>';
           return;
         }
         var v = fieldValue(res, f);
         var classes = [];
-        if (f.mono) classes.push('mono');
+        if (f.mono) classes.push('sv-mono');
         var extra = '';
         var cmp = state.compare[f.key];
-        if (cmp && (res.statut === 'ok' || res.statut === 'closed')) {
+        if (cmp && found(res)) {
           var g = gristValue(row, cmp);
-          if (sameValue(v, g)) classes.push('same');
-          else { classes.push('diff'); extra = '<span class="was">' + (g ? esc(g) : '<i>vide</i>') + '</span>'; }
+          if (sameValue(v, g)) { classes.push('sv-same'); extra = '<span class="fr-sr-only"> (identique à Grist)</span>'; }
+          else { classes.push('sv-diff'); extra = '<span class="sv-was">Dans Grist : ' + (g ? esc(g) : 'vide') + '</span>'; }
         }
         h += '<td class="' + classes.join(' ') + '">' + esc(v) + extra + '</td>';
       });
       h += '</tr>';
     });
+    if (!shown) {
+      h += '<tr><td colspan="' + (fields.length + 2) + '" class="sv-empty">Aucune ligne à vérifier.</td></tr>';
+    }
     h += '</tbody></table>';
-    wrap.innerHTML = h;
+    $('table-wrap').innerHTML = h;
     updateStats();
-    $('btn-copy-all').disabled = false;
   }
 
   function updateStats() {
-    var total = 0, done = 0, ok = 0, ko = 0, diff = 0;
+    var total = 0, done = 0, ok = 0, issues = 0;
     state.rows.forEach(function (row) {
       var res = resultFor(row);
       if (res.statut === 'empty') return;
       total++;
       if (res.statut !== 'wait') done++;
-      if (res.statut === 'ok' || res.statut === 'closed') ok++;
-      if (res.statut !== 'ok' && res.statut !== 'wait') ko++;
-      if ((res.statut === 'ok' || res.statut === 'closed') && visibleFields().some(function (f) {
-        var cmp = state.compare[f.key];
-        return cmp && !sameValue(fieldValue(res, f), gristValue(row, cmp));
-      })) diff++;
+      if (found(res)) ok++;
+      if (isIssue(row, res)) issues++;
     });
-    $('st-total').textContent = total;
-    $('st-done').textContent = done;
-    $('st-ok').textContent = ok;
-    $('st-ko').textContent = ko;
-    $('st-diff').textContent = diff;
-    $('progress-bar').style.width = (total ? Math.round(done / total * 100) : 0) + '%';
+    var pct = total ? Math.round(done / total * 100) : 0;
+    $('progress').value = pct;
+    $('progress').setAttribute('aria-valuetext', pct + ' %');
+    var empty = state.rows.length - total;
+    $('summary').innerHTML =
+      '<span><strong>' + done + '</strong> / ' + total + ' traitée' + (total > 1 ? 's' : '') + '</span>' +
+      '<span><strong>' + ok + '</strong> trouvée' + (ok > 1 ? 's' : '') + '</span>' +
+      '<span><strong>' + issues + '</strong> à vérifier</span>' +
+      (empty ? '<span>' + empty + ' ligne' + (empty > 1 ? 's' : '') + ' sans ' + (state.mode === 'find' ? 'raison sociale' : 'SIRET') + '</span>' : '');
   }
 
   // ============================================================
   // Copie
   // ============================================================
-  // Une valeur par ligne, dans l'ordre choisi, toutes les lignes (même filtrées à l'écran)
+  // Une valeur par ligne, toutes les lignes (même masquées par le filtre),
   // pour que le collage dans Grist tombe sur les bonnes lignes.
   function tsvCell(v) {
     v = v == null ? '' : String(v);
     return /[\t\n\r"]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
   }
+  function cellFor(row, f) {
+    var res = resultFor(row);
+    if (res.statut === 'wait' || res.statut === 'empty') return '';
+    return tsvCell(fieldValue(res, f));
+  }
   function columnText(key) {
     var f = FIELDS.find(function (x) { return x.key === key; });
-    return state.rows.map(function (row) {
-      var res = resultFor(row);
-      return tsvCell(res.statut === 'wait' ? '' : fieldValue(res, f));
-    }).join('\n');
+    return state.rows.map(function (row) { return cellFor(row, f); }).join('\n');
   }
   function allText() {
     var fields = visibleFields();
     return state.rows.map(function (row) {
-      var res = resultFor(row);
-      return fields.map(function (f) { return tsvCell(res.statut === 'wait' ? '' : fieldValue(res, f)); }).join('\t');
+      return fields.map(function (f) { return cellFor(row, f); }).join('\t');
     }).join('\n');
   }
 
-  async function copy(text, btn) {
+  async function copy(text, btn, what) {
     var ok = false;
     try {
       await navigator.clipboard.writeText(text);
@@ -1088,19 +1094,20 @@
       document.body.removeChild(ta);
     }
     if (!ok) {
-      $('modal-text').value = text;
-      $('modal').classList.add('show');
-      $('modal-text').focus(); $('modal-text').select();
+      $('copy-text').value = text;
+      var dlg = $('copy-dialog');
+      if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+      $('copy-text').focus(); $('copy-text').select();
       return;
     }
     if (btn) {
       var old = btn.textContent;
-      btn.textContent = 'Copié ✓'; btn.classList.add('done');
-      setTimeout(function () { btn.textContent = old; btn.classList.remove('done'); }, 1400);
+      btn.textContent = 'Copié';
+      setTimeout(function () { btn.textContent = old; }, 1500);
     }
     var n = state.rows.length;
-    showMsg(n + ' valeur' + (n > 1 ? 's' : '') + ' copiée' + (n > 1 ? 's' : '') +
-      ' — dans Grist, cliquez sur la 1re cellule de la colonne cible puis Ctrl/Cmd + V.', 'success');
+    showMsg(what + ' copié' + (/^La colonne/.test(what) ? 'e' : '') + ' (' + n + ' ligne' + (n > 1 ? 's' : '') +
+      '). Dans Grist, sélectionnez la première cellule de la colonne cible puis Ctrl + V.', 'success');
   }
 
   // ============================================================
@@ -1127,87 +1134,84 @@
   function saveKey() {
     try { localStorage.setItem('insee-api-key', $('inp-key').value.trim()); } catch (e) { /* ignore */ }
   }
-  function applySource() {
-    var find = state.mode === 'find';
-    $('sel-source').value = find ? 'recherche' : state.source;
-    $('sel-source').disabled = find; // la recherche par nom passe par l'API Recherche d'entreprises
-    $('ctl-key').classList.toggle('hidden', find || state.source !== 'insee');
-  }
+
   function applyMode() {
     var find = state.mode === 'find';
-    $('sel-mode').value = state.mode;
-    document.querySelectorAll('.find-only').forEach(function (el) { el.classList.toggle('hidden', !find); });
-    document.querySelectorAll('.verify-only').forEach(function (el) { el.classList.toggle('hidden', find); });
-    applySource();
+    $('mode-' + state.mode).checked = true;
+    document.querySelectorAll('.find-only').forEach(function (el) { el.classList.toggle('sv-hidden', !find); });
+    document.querySelectorAll('.verify-only').forEach(function (el) { el.classList.toggle('sv-hidden', find); });
+    $('sel-source').value = state.source;
+    $('ctl-key').classList.toggle('sv-hidden', find || state.source !== 'insee');
+    renderFields();
+    renderCompare();
     updateRunButton();
   }
 
   // ============================================================
   // Événements
   // ============================================================
+  function resetResults() { state.results = Object.create(null); }
+
+  $('form').addEventListener('submit', function (e) { e.preventDefault(); run(); });
+  document.querySelectorAll('input[name="mode"]').forEach(function (r) {
+    r.addEventListener('change', function () {
+      if (!this.checked) return;
+      state.mode = this.value;
+      if (state.mode === 'find') state.visible.siret = true; // c'est l'information recherchée
+      resetResults(); showMsg('');
+      applyMode(); buildRows(); saveOptions();
+    });
+  });
   $('sel-table').addEventListener('change', async function () {
     state.tableId = this.value;
-    state.results = Object.create(null);
-    showMsg('');
+    resetResults(); showMsg('');
     try { await loadTableData(); } catch (e) { showMsg('Lecture de la table impossible : ' + e.message, 'error'); }
     saveOptions();
   });
   $('sel-siret').addEventListener('change', function () {
     state.siretCol = this.value;
-    state.results = Object.create(null);
-    updateRunButton();
-    buildRows(); saveOptions();
-  });
-  $('sel-mode').addEventListener('change', function () {
-    state.mode = this.value;
-    if (state.mode === 'find') state.visible.siret = true; // c'est la colonne qu'on cherche
-    state.results = Object.create(null);
-    showMsg('');
-    applyMode(); renderFields(); buildRows(); saveOptions();
+    resetResults(); updateRunButton(); buildRows(); saveOptions();
   });
   document.querySelectorAll('[data-find]').forEach(function (sel) {
     sel.addEventListener('change', function () {
       state.find[this.getAttribute('data-find')] = this.value;
-      state.results = Object.create(null);
-      updateRunButton(); buildRows(); saveOptions();
+      resetResults(); updateRunButton(); buildRows(); saveOptions();
     });
   });
   $('sel-order').addEventListener('change', function () {
     state.order = this.value; buildRows(); saveOptions();
   });
   $('sel-source').addEventListener('change', function () {
-    state.source = this.value; applySource();
-    state.results = Object.create(null);
-    render(); saveOptions();
+    state.source = this.value; resetResults();
+    applyMode(); render(); saveOptions();
   });
+  $('inp-key').addEventListener('input', updateRunButton);
   $('inp-key').addEventListener('change', saveKey);
-  $('btn-run').addEventListener('click', run);
-  $('btn-reload').addEventListener('click', async function () {
-    try {
-      await loadMeta(); await loadTables(); await loadTableData();
-      showMsg('Table rechargée.', 'success');
-    } catch (e) { showMsg('Rechargement impossible : ' + e.message, 'error'); }
-  });
-  $('chk-issues').addEventListener('change', function () { state.onlyIssues = this.checked; render(); });
-  $('btn-copy-all').addEventListener('click', function () { copy(allText(), this); });
 
   $('fields').addEventListener('change', function (e) {
     var k = e.target.getAttribute('data-field');
     if (!k) return;
     state.visible[k] = e.target.checked;
-    renderFields(); render(); saveOptions();
+    renderCompare(); render(); saveOptions();
   });
-  $('table-wrap').addEventListener('click', function (e) {
-    var btn = e.target.closest('[data-copy]');
-    if (btn) copy(columnText(btn.getAttribute('data-copy')), btn);
-  });
-  $('table-wrap').addEventListener('change', function (e) {
+  $('compare').addEventListener('change', function (e) {
     var k = e.target.getAttribute('data-cmp');
     if (!k) return;
     if (e.target.value) state.compare[k] = e.target.value; else delete state.compare[k];
     render(); saveOptions();
   });
-  $('modal-close').addEventListener('click', function () { $('modal').classList.remove('show'); });
+  $('chk-issues').addEventListener('change', function () { state.onlyIssues = this.checked; render(); });
+  $('btn-copy-all').addEventListener('click', function () { copy(allText(), this, 'Le tableau'); });
+  $('table-wrap').addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-copy]');
+    if (!btn) return;
+    var f = FIELDS.find(function (x) { return x.key === btn.getAttribute('data-copy'); });
+    copy(columnText(f.key), btn, 'La colonne « ' + f.label + ' »');
+  });
+  $('copy-close').addEventListener('click', function () {
+    var dlg = $('copy-dialog');
+    if (dlg.close) dlg.close(); else dlg.removeAttribute('open');
+  });
 
   // ============================================================
   // Initialisation Grist
@@ -1225,19 +1229,17 @@
     if (opts.source) state.source = opts.source;
     if (opts.visible) Object.keys(opts.visible).forEach(function (k) { state.visible[k] = !!opts.visible[k]; });
     if (opts.compare) state.compare = Object.assign({}, opts.compare);
-    applyMode(); renderFields(); loadKey();
+    loadKey();
+    applyMode();
     try {
       await loadMeta();
       await loadTables();
       await loadTableData();
     } catch (e) {
-      showMsg('Accès au document impossible. Donnez au widget l\'accès complet (« Full document access »). ' + e.message, 'error');
+      showMsg('Accès au document impossible. Dans le panneau de droite de Grist, choisissez « Accès complet au document ». (' + e.message + ')', 'error');
     }
   }
-
   init();
-
-  renderFields();
 })();
 </script>
 </body>
