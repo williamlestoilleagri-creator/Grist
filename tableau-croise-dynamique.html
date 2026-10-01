@@ -1,0 +1,1484 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-scheme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tableau croisé dynamique</title>
+
+<!-- DSFR : typographie Marianne, couleurs et composants de l'État -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14.4/dist/dsfr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14.4/dist/utility/icons/icons.min.css">
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+
+<style>
+  :root{
+    --blue: #000091;
+    --blue-hover: #1212ff;
+    --blue-soft: var(--background-alt-blue-france, #f5f5fe);
+    --blue-lite: var(--background-action-low-blue-france, #e3e3fd);
+    --ink: var(--text-title-grey, #161616);
+    --ink-2: var(--text-default-grey, #3a3a3a);
+    --ink-3: var(--text-mention-grey, #666);
+    --line: var(--border-default-grey, #ddd);
+    --bg: var(--background-default-grey, #fff);
+    --bg-alt: var(--background-alt-grey, #f6f6f6);
+    --bg-contrast: var(--background-contrast-grey, #eee);
+    --side-w: 320px;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; margin:0; }
+  body{
+    font-family: Marianne, arial, sans-serif; background:var(--bg-alt); color:var(--ink-2);
+    font-size:.875rem; line-height:1.5;
+  }
+  .app{ display:flex; flex-direction:column; height:100vh; min-height:520px; }
+
+  /* ---------- En-tête ---------- */
+  .hd{
+    display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;
+    padding:.625rem 1rem; background:var(--bg); border-bottom:1px solid var(--line);
+    box-shadow:0 2px 6px rgba(0,0,18,.06); position:relative; z-index:2;
+  }
+  .hd-title{ display:flex; align-items:center; gap:.75rem; min-width:0; }
+  .hd-logo{
+    width:2.25rem; height:2.25rem; border-radius:.25rem; background:var(--blue); color:#fff;
+    display:flex; align-items:center; justify-content:center; flex:0 0 auto;
+  }
+  .hd h1{ font-size:1.125rem; line-height:1.3; margin:0; color:var(--ink); }
+  .hd p{ margin:0; font-size:.75rem; color:var(--ink-3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hd-actions{ display:flex; gap:.5rem; flex-wrap:wrap; }
+  .hd-actions .fr-btn{ margin:0; }
+
+  /* ---------- Mise en page ---------- */
+  .body{ display:flex; flex:1 1 auto; min-height:0; }
+  .side{
+    width:var(--side-w); flex:0 0 var(--side-w); overflow:auto; background:var(--bg);
+    border-right:1px solid var(--line); padding:1rem 1rem 2rem;
+  }
+  .main{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; overflow:auto; padding:1rem 1.25rem 1.5rem; gap:.75rem; }
+  @media (max-width: 820px){
+    .body{ flex-direction:column; overflow:auto; }
+    .side{ width:100%; flex:0 0 auto; border-right:none; border-bottom:1px solid var(--line); overflow:visible; }
+    .main{ overflow:visible; padding:1rem; order:1; }
+    .side{ order:2; border-top:1px solid var(--line); }
+  }
+
+  /* ---------- Panneau de réglages ---------- */
+  .step{ padding:.25rem 0 1rem; border-bottom:1px solid var(--line); margin-bottom:1rem; }
+  .step:last-child{ border-bottom:none; }
+  .step-h{ display:flex; align-items:center; gap:.5rem; font-size:.9375rem; font-weight:700; color:var(--ink); margin:0 0 .5rem; }
+  .step-n{
+    width:1.5rem; height:1.5rem; border-radius:50%; background:var(--blue); color:#fff; font-size:.75rem;
+    display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto;
+  }
+  .step-help{ font-size:.75rem; color:var(--ink-3); margin:-.25rem 0 .5rem; }
+  .side .fr-select-group{ margin-bottom:.625rem; }
+  .side .fr-label{ font-size:.8125rem; }
+  .side .fr-select{ font-size:.875rem; padding-top:.375rem; padding-bottom:.375rem; }
+  .pair{ display:flex; gap:.5rem; }
+  .pair > :first-child{ flex:1 1 auto; min-width:0; }
+  .pair > .gran{ flex:0 0 7.5rem; }
+  .gran .fr-select{ background-color:var(--blue-soft); }
+  .side .fr-toggle{ padding:.25rem 0; }
+  .side .fr-toggle__label{ font-size:.8125rem; }
+  .hidden{ display:none !important; }
+
+  /* Filtres */
+  .flt{ border:1px solid var(--line); border-radius:.25rem; margin-bottom:.5rem; background:var(--bg); }
+  .flt.open{ border-color:var(--blue); }
+  .flt-top{ display:flex; align-items:stretch; }
+  .flt-head{
+    flex:1 1 auto; min-width:0; text-align:left; background:none; border:none; cursor:pointer;
+    padding:.375rem .5rem; font:inherit; color:inherit; display:flex; flex-direction:column;
+  }
+  .flt-head:hover{ background:var(--bg-alt); }
+  .flt-name{ font-weight:700; color:var(--ink); font-size:.8125rem; }
+  .flt-sum{ font-size:.75rem; color:var(--blue); }
+  .flt-del{ align-self:center; margin-right:.25rem !important; }
+  .flt-body{ border-top:1px solid var(--line); padding:.5rem; }
+  .flt-tools{ display:flex; gap:.25rem; flex-wrap:wrap; margin-bottom:.375rem; }
+  .flt-tools .fr-btn{ margin:0; }
+  .flt-search{ margin-bottom:.375rem; font-size:.8125rem; }
+  .flt-list{ max-height:14rem; overflow:auto; padding-right:.25rem; }
+  .flt-list .fr-checkbox-group{ margin:0 0 .125rem; }
+  .flt-list .fr-label{ font-size:.8125rem; width:100%; }
+  .flt-count{ margin-left:auto; color:var(--ink-3); font-size:.75rem; padding-left:.5rem; }
+
+  /* ---------- Zone principale ---------- */
+  .presets{ display:flex; align-items:flex-start; gap:.75rem; flex-wrap:wrap; }
+  .presets-lbl{ font-weight:700; color:var(--ink); font-size:.8125rem; padding-top:.25rem; white-space:nowrap; }
+  .presets-lbl::before{ --icon-size:1rem; margin-right:.25rem; vertical-align:-.15rem; }
+  .presets .fr-tags-group{ margin:0; flex:1 1 300px; }
+  .presets .fr-tag{ font-size:.75rem; }
+
+  .card{ background:var(--bg); border:1px solid var(--line); border-radius:.25rem; }
+  .question{ padding:.875rem 1rem; display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap; border-left:4px solid var(--blue); }
+  .question .q{ margin:0; font-size:1rem; color:var(--ink); line-height:1.45; max-width:62rem; }
+  .question .q strong{ color:var(--blue); }
+  .question .meta{ margin:.25rem 0 0; font-size:.75rem; color:var(--ink-3); }
+  .question .fr-segmented{ margin:0; }
+
+  .notes:empty{ display:none; }
+  .notes .fr-notice{ margin-bottom:.25rem; }
+  .note{ font-size:.8125rem; padding:.5rem .75rem; border-radius:.25rem; background:var(--blue-soft); color:var(--ink-2); margin-bottom:.375rem; display:flex; gap:.5rem; }
+  .note::before{ --icon-size:1rem; color:var(--blue); flex:0 0 auto; margin-top:.15rem; }
+
+  .table-tools{ display:flex; justify-content:space-between; align-items:center; gap:.5rem; flex-wrap:wrap; }
+  .legend{ display:flex; align-items:center; gap:.5rem; font-size:.75rem; color:var(--ink-3); }
+  .legend-bar{ width:7rem; height:.5rem; border-radius:.25rem; background:linear-gradient(90deg, rgba(0,0,145,.05), rgba(0,0,145,.75)); }
+  .table-tools .fr-btn{ margin:0; }
+
+  .table-wrap{ overflow:auto; max-height:70vh; position:relative; }
+  table.pv{ border-collapse:separate; border-spacing:0; width:max-content; min-width:100%; font-size:.8125rem; font-variant-numeric:tabular-nums; }
+  .pv th, .pv td{ padding:.4rem .75rem; border-bottom:1px solid var(--line); white-space:nowrap; }
+  .pv thead th{
+    position:sticky; top:0; z-index:3; background:var(--bg-contrast); color:var(--ink); font-weight:700; text-align:right;
+    border-bottom:2px solid var(--blue); vertical-align:bottom;
+  }
+  .pv thead tr:nth-child(2) th{ top:var(--h1, 2.1rem); }
+  .pv thead th.colgroup{ text-align:center; color:var(--blue); border-bottom:1px solid var(--line); font-size:.75rem; text-transform:uppercase; letter-spacing:.02em; }
+  .pv thead th.corner{ text-align:left; left:0; z-index:4; }
+  .pv th.rh{
+    position:sticky; left:0; z-index:2; background:var(--bg); text-align:left; font-weight:500; color:var(--ink);
+    max-width:22rem; overflow:hidden; text-overflow:ellipsis; border-right:1px solid var(--line);
+  }
+  .pv td{ text-align:right; cursor:pointer; position:relative; }
+  .pv td.v:hover, .pv td.v.sel{ outline:2px solid var(--blue); outline-offset:-2px; }
+  .pv td.empty{ color:var(--ink-3); cursor:default; }
+  .pv td.tot, .pv th.tot{ background:var(--blue-soft); font-weight:700; border-left:2px solid var(--blue-lite); }
+  .pv thead th.tot{ background:var(--blue-lite); }
+  .pv tr.grp th.rh, .pv tr.grp td{ background:var(--bg-alt); font-weight:700; }
+  .pv tr.grp td.tot{ background:var(--blue-lite); }
+  .pv tr.grp th.rh{ cursor:pointer; }
+  .pv tr.leaf2 th.rh{ padding-left:2.25rem; font-weight:400; }
+  .pv tfoot td, .pv tfoot th{ position:sticky; bottom:0; background:var(--blue-lite); font-weight:700; border-top:2px solid var(--blue); z-index:2; }
+  .pv tfoot th.rh{ z-index:3; background:var(--blue-lite); }
+  .pv tbody tr:hover th.rh{ color:var(--blue); }
+  .caret{ display:inline-block; width:1rem; color:var(--blue); transition:transform .15s; }
+  .caret.closed{ transform:rotate(-90deg); }
+  .empty-lbl{ font-style:italic; color:var(--ink-3); }
+  .bar{ display:block; height:3px; background:var(--blue); border-radius:2px; margin-top:2px; margin-left:auto; opacity:.7; }
+
+  .reading{ padding:.625rem 1rem; font-size:.875rem; min-height:2.75rem; display:flex; gap:.5rem; align-items:flex-start; }
+  .reading::before{ --icon-size:1.1rem; color:var(--blue); flex:0 0 auto; margin-top:.1rem; }
+  .reading strong{ color:var(--ink); }
+  .reading .hint{ color:var(--ink-3); }
+
+  .detail{ padding:1rem; }
+  .detail-hd{ display:flex; justify-content:space-between; align-items:flex-start; gap:.75rem; flex-wrap:wrap; margin-bottom:.5rem; }
+  .detail-hd h3{ font-size:1rem; margin:0; color:var(--ink); }
+  .detail-hd p{ margin:0; font-size:.8125rem; color:var(--ink-3); }
+  .detail-actions{ display:flex; gap:.5rem; flex-wrap:wrap; }
+  .detail-actions .fr-btn{ margin:0; }
+  .detail-wrap{ overflow:auto; max-height:22rem; border:1px solid var(--line); border-radius:.25rem; }
+  table.dt{ border-collapse:collapse; width:100%; font-size:.8125rem; }
+  .dt th{ position:sticky; top:0; background:var(--bg-contrast); text-align:left; padding:.375rem .625rem; color:var(--ink); white-space:nowrap; }
+  .dt td{ padding:.375rem .625rem; border-top:1px solid var(--line); max-width:20rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .dt td.n{ text-align:right; font-variant-numeric:tabular-nums; }
+  .dt tbody tr{ cursor:pointer; }
+  .dt tbody tr:hover{ background:var(--blue-soft); }
+
+  .placeholder{ padding:3rem 1rem; text-align:center; color:var(--ink-3); }
+  .placeholder strong{ display:block; color:var(--ink); font-size:1rem; margin-bottom:.25rem; }
+  .toast{
+    position:fixed; bottom:1rem; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff;
+    padding:.5rem 1rem; border-radius:.25rem; font-size:.8125rem; opacity:0; transition:opacity .2s; pointer-events:none; z-index:10;
+  }
+  .toast.on{ opacity:1; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="hd">
+    <div class="hd-title">
+      <span class="hd-logo fr-icon-table-line" aria-hidden="true"></span>
+      <div style="min-width:0">
+        <h1>Tableau croisé dynamique</h1>
+        <p id="hdSub">Chargement des données…</p>
+      </div>
+    </div>
+    <div class="hd-actions">
+      <button type="button" id="btnCopy" class="fr-btn fr-btn--tertiary fr-btn--sm fr-btn--icon-left fr-icon-clipboard-line">Copier</button>
+      <button type="button" id="btnCsv" class="fr-btn fr-btn--secondary fr-btn--sm fr-btn--icon-left fr-icon-download-line">Exporter en CSV</button>
+      <button type="button" id="btnReset" class="fr-btn fr-btn--tertiary fr-btn--sm fr-btn--icon-left fr-icon-refresh-line">Réinitialiser</button>
+    </div>
+  </header>
+
+  <div class="body">
+    <aside class="side" id="side" aria-label="Réglages du tableau"></aside>
+
+    <main class="main">
+      <div class="presets" id="presetsBox">
+        <span class="presets-lbl fr-icon-lightbulb-line">Questions rapides</span>
+        <ul class="fr-tags-group" id="presetList"></ul>
+      </div>
+
+      <div class="card question">
+        <div>
+          <p class="q" id="question"></p>
+          <p class="meta" id="questionMeta"></p>
+        </div>
+        <fieldset class="fr-segmented fr-segmented--sm fr-segmented--no-legend" id="showMode">
+          <legend class="fr-segmented__legend">Afficher</legend>
+          <div class="fr-segmented__elements">
+            <div class="fr-segmented__element"><input value="value" type="radio" id="sm-value" name="sm"><label class="fr-label" for="sm-value">Valeurs</label></div>
+            <div class="fr-segmented__element"><input value="total" type="radio" id="sm-total" name="sm"><label class="fr-label" for="sm-total">% du total</label></div>
+            <div class="fr-segmented__element"><input value="row" type="radio" id="sm-row" name="sm"><label class="fr-label" for="sm-row">% par ligne</label></div>
+            <div class="fr-segmented__element"><input value="col" type="radio" id="sm-col" name="sm"><label class="fr-label" for="sm-col">% par colonne</label></div>
+          </div>
+        </fieldset>
+      </div>
+
+      <div class="notes" id="notes"></div>
+
+      <div class="card">
+        <div class="table-tools" style="padding:.5rem .75rem;border-bottom:1px solid var(--line)">
+          <div class="legend" id="legend"><span>faible</span><span class="legend-bar"></span><span>élevé</span></div>
+          <div id="treeTools"></div>
+        </div>
+        <div class="table-wrap" id="tableWrap"></div>
+        <div class="reading fr-icon-information-line" id="reading" aria-live="polite"></div>
+      </div>
+
+      <section class="card detail" id="detail" hidden></section>
+    </main>
+  </div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* =====================================================================
+     Constantes et utilitaires
+     ===================================================================== */
+  var SEP = '\u001f', CSEP = '\u001e';
+  var MAX_COLS = 80, MAX_ROWS = 1500, MAX_DETAIL = 300;
+  var EMPTY_KEY = { k: '\u0000', l: '(vide)', s: [2, 0], empty: true };
+  var ERR_KEY = { k: '\u0000err', l: '(erreur)', s: [3, 0], empty: true };
+  var ALL_KEY = { k: '*', l: 'Ensemble', s: [0, 0] };
+  var MONTHS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+  var nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
+  var nf2 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 });
+  var pf = new Intl.NumberFormat('fr-FR', { style: 'percent', maximumFractionDigits: 1 });
+
+  var AGG_LABELS = {
+    count: 'Nombre de lignes', sum: 'Somme', mean: 'Moyenne',
+    min: 'Minimum', max: 'Maximum', distinct: 'Nombre de valeurs distinctes'
+  };
+  var GRAN = {
+    date: [['year', 'Année'], ['quarter', 'Trimestre'], ['month', 'Mois'], ['week', 'Semaine'], ['day', 'Jour']],
+    num: [['exact', 'Valeur exacte'], ['bins', 'Par tranches']]
+  };
+  var KIND_GROUPS = [
+    ['choice', 'Catégories (listes de choix)'], ['ref', 'Références'], ['bool', 'Oui / Non'],
+    ['date', 'Dates'], ['text', 'Textes'], ['num', 'Nombres'], ['list', 'Listes à choix multiples']
+  ];
+
+  /* Questions rapides adaptées aux tables du document (affichées si les colonnes existent) */
+  var PRESETS = [
+    { t: 'Dossiers par département et état DN', rows: ['dep2'], col: 'Etat_DN' },
+    { t: "Où en est l'instruction ?", rows: ['Etat_dossier'], col: 'dep2' },
+    { t: 'Éligibilité par département', rows: ['dep2'], col: 'Eligible' },
+    { t: 'Aide accordée par département', rows: ['dep2'], col: 'Selectionne2', agg: 'sum', measure: 'Aide_accordee' },
+    { t: 'Aide demandée par enveloppe', rows: ['dep2', 'Enveloppe'], agg: 'sum', measure: 'Aide_demandee' },
+    { t: 'Dépôts par mois', rows: ['Date_depot_DN'], rowGran: ['month'], col: 'dep2' },
+    { t: 'Anomalies détectées', rows: ['Anomalie'], col: 'dep2' },
+    { t: 'Pièces à vérifier', rows: ['PJ_a_verifier'], col: 'dep2' },
+    { t: 'Création des tiers Chorus', rows: ['Etat_Tiers'], col: 'dep2' },
+    { t: 'Avancement des paiements (EJ)', rows: ['Etat_EJ'], col: 'dep2' },
+    { t: 'Situation BODACC', rows: ['Statut_BODACC'], col: 'dep2' },
+    { t: 'Nouvel installé (MSA)', rows: ['Nouvel_installe'], col: 'dep2' },
+    { t: 'Catégories Ille-et-Vilaine (35)', rows: ['Categ_Dep35'], col: 'Calcul_eligibilite_35' },
+    { t: 'Productions déclarées', rows: ['Productions_declarees'], col: 'Code_dpt' },
+    { t: 'Demandes MSA par caisse', rows: ['Caisse_MSA'], col: 'Code_dpt' },
+    { t: 'États des dossiers DN', rows: ['state'], col: 'Code_dpt' },
+    { t: 'Dossiers déposés par mois', rows: ['date_depot'], rowGran: ['month'], col: 'Code_dpt' },
+    { t: 'Montants des enveloppes', rows: ['dep', 'libelle'], agg: 'sum', measure: 'montant' },
+    { t: 'Données MSA par année de PEC', rows: ['Annee_d_attribution_PEC'], col: 'Prise_en_charge_de_cotisations_sociales' },
+    { t: 'Utilisateurs par département', rows: ['Departement'], col: 'Role' },
+    { t: 'Évolutions par état', rows: ['Etat_d_avancement'], col: 'Services_concernes' }
+  ];
+
+  function defaultCfg() {
+    return {
+      rows: [null, null], rowGran: ['month', 'month'], col: null, colGran: 'month',
+      agg: 'count', measure: null, show: 'value', filters: [],
+      sort: 'label', explode: true, heat: true, hideEmpty: false
+    };
+  }
+
+  var S = {
+    tableId: null, cols: [], colMap: {}, records: [], cfg: defaultCfg(),
+    savedCfg: null, collapsed: {}, openFilter: -1, cells: [], pivot: null,
+    selCell: -1, metaFromDoc: false, initialized: false
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function cmpKeys(a, b) {
+    if (a.s[0] !== b.s[0]) return a.s[0] - b.s[0];
+    var x = a.s[1], y = b.s[1];
+    if (typeof x === 'number' && typeof y === 'number') return x - y;
+    return String(x).localeCompare(String(y), 'fr', { numeric: true, sensitivity: 'base' });
+  }
+  function toast(msg) {
+    var t = $('toast'); t.textContent = msg; t.classList.add('on');
+    clearTimeout(toast._t); toast._t = setTimeout(function () { t.classList.remove('on'); }, 2200);
+  }
+  function plural(n, one, many) { return n > 1 ? many : one; }
+
+  /* =====================================================================
+     Lecture des valeurs Grist
+     ===================================================================== */
+  function unwrap(v) {
+    if (v == null) return null;
+    if (Array.isArray(v)) {
+      if (v[0] === 'L') return v.slice(1).map(unwrap);
+      if (v[0] === 'E') return { err: true };
+      if (v[0] === 'd' || v[0] === 'D') return new Date(v[1] * 1000);
+      if (v[0] === 'R') return v[2] ? '#' + v[2] : null;
+      if (v[0] === 'r') return (v[2] || []).map(function (x) { return '#' + x; });
+      return v.map(unwrap);
+    }
+    if (v instanceof Date) return v;
+    if (typeof v === 'object') {
+      if (v.err || v.error || v.name === 'RaisedException') return { err: true };
+      if ('id' in v) return v.id ? '#' + v.id : null;
+      try { return JSON.stringify(v); } catch (e) { return String(v); }
+    }
+    return v;
+  }
+  function raw(rec, col) {
+    var v = (col.displayCol && rec[col.displayCol] !== undefined) ? rec[col.displayCol] : rec[col.id];
+    return unwrap(v);
+  }
+  function toNum(v) {
+    if (typeof v === 'number') return v;
+    if (typeof v === 'boolean') return v ? 1 : 0;
+    if (typeof v === 'string') {
+      var t = v.replace(/[\s  €%]/g, '').replace(',', '.');
+      if (t && /^-?\d*\.?\d+(e-?\d+)?$/i.test(t)) return parseFloat(t);
+    }
+    return NaN;
+  }
+  function toDate(v) {
+    if (v == null || v === '') return null;
+    if (v instanceof Date) return isNaN(v) ? null : v;
+    if (typeof v === 'number') return new Date(v * 1000);
+    if (typeof v === 'string') {
+      var m = v.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/);
+      if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0)));
+      var f = v.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+      if (f) return new Date(Date.UTC(+f[3], +f[2] - 1, +f[1]));
+    }
+    return null;
+  }
+  function dateParts(d, utc) {
+    return utc ? [d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes()]
+               : [d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes()];
+  }
+  function isoWeek(y, m, d) {
+    var t = new Date(Date.UTC(y, m, d));
+    var dn = (t.getUTCDay() + 6) % 7;
+    t.setUTCDate(t.getUTCDate() - dn + 3);
+    var wy = t.getUTCFullYear();
+    var first = new Date(Date.UTC(wy, 0, 4));
+    var w = 1 + Math.round(((t - first) / 864e5 - 3 + ((first.getUTCDay() + 6) % 7)) / 7);
+    return [wy, w];
+  }
+
+  /* --- Formatage --- */
+  function fmtNumCol(n, col) {
+    var wo = (col && col.wo) || {};
+    try {
+      var o = {};
+      if (wo.decimals != null) o.minimumFractionDigits = wo.decimals;
+      o.maximumFractionDigits = wo.maxDecimals != null ? Math.max(wo.maxDecimals, o.minimumFractionDigits || 0) : Math.max(2, o.minimumFractionDigits || 0);
+      if (wo.numMode === 'currency') { o.style = 'currency'; o.currency = wo.currency || 'EUR'; }
+      else if (wo.numMode === 'percent') { o.style = 'percent'; }
+      return new Intl.NumberFormat('fr-FR', o).format(n);
+    } catch (e) { return nf2.format(n); }
+  }
+  function isMoney(col) {
+    if (!col) return false;
+    if (col.wo && col.wo.numMode === 'currency') return true;
+    return /aide|montant|minimis|enveloppe|dette|chiffre|revenu|plafond|forfait|bonus/i.test(col.id);
+  }
+  function fmtMeasure(v) {
+    if (v == null || !isFinite(v)) return '';
+    var c = S.cfg;
+    if (c.agg === 'count' || c.agg === 'distinct') return nf0.format(v);
+    var col = S.colMap[c.measure];
+    if (col && col.kind === 'bool') return c.agg === 'mean' ? pf.format(v) : nf0.format(v);
+    if (col && col.wo && col.wo.numMode) return fmtNumCol(v, col);
+    if (isMoney(col)) return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: Math.abs(v) >= 1000 ? 0 : 2 }).format(v);
+    return nf2.format(v);
+  }
+  function fmtPlain(n) { return nf2.format(n); }
+  function fmtCell(rec, col) {
+    var v = raw(rec, col);
+    if (v == null || v === '') return '';
+    if (v.err) return '(erreur)';
+    if (Array.isArray(v)) return v.filter(function (x) { return x != null && x !== ''; }).join(', ');
+    if (col.kind === 'date') {
+      var d = toDate(v); if (!d) return String(v);
+      var p = dateParts(d, col.utc);
+      return pad(p[2]) + '/' + pad(p[1] + 1) + '/' + p[0] + (col.utc ? '' : ' ' + pad(p[3]) + ':' + pad(p[4]));
+    }
+    if (typeof v === 'boolean') return v ? 'Oui' : 'Non';
+    if (typeof v === 'number') return fmtNumCol(v, col);
+    return String(v);
+  }
+
+  /* =====================================================================
+     Métadonnées des colonnes
+     ===================================================================== */
+  function kindFromType(type) {
+    if (!type) return 'any';
+    var base = type.split(':')[0];
+    switch (base) {
+      case 'Numeric': case 'Int': return 'num';
+      case 'Bool': return 'bool';
+      case 'Date': case 'DateTime': return 'date';
+      case 'Choice': return 'choice';
+      case 'ChoiceList': case 'RefList': return 'list';
+      case 'Ref': return 'ref';
+      case 'Text': return 'text';
+      case 'Attachments': case 'ManualSortPos': case 'PositionNumber': case 'Id': return 'skip';
+      default: return 'any';
+    }
+  }
+  function inferKind(col, records) {
+    var n = 0, nums = 0, dates = 0, bools = 0, lists = 0, isoTxt = 0;
+    for (var i = 0; i < records.length && n < 400; i++) {
+      var v = raw(records[i], col);
+      if (v == null || v === '' || v.err) continue;
+      n++;
+      if (Array.isArray(v)) lists++;
+      else if (v instanceof Date) dates++;
+      else if (typeof v === 'boolean') bools++;
+      else if (typeof v === 'number') nums++;
+      else if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) isoTxt++;
+    }
+    if (!n) return 'text';
+    if (lists / n > 0.5) return 'list';
+    if (dates / n > 0.8) return 'date';
+    if (bools / n > 0.8) return 'bool';
+    if (nums / n > 0.8) return 'num';
+    if (isoTxt / n > 0.8) return 'date';
+    return 'text';
+  }
+  function prettyLabel(id) { return String(id).replace(/_/g, ' ').replace(/\s+/g, ' ').trim(); }
+
+  async function getTableId() {
+    var id = null;
+    try { id = await grist.selectedTable.getTableId(); } catch (e) {}
+    if (!id) { try { id = await grist.getTable().getTableId(); } catch (e) {} }
+    return id;
+  }
+
+  async function loadMeta(records) {
+    var tableId = await getTableId();
+    var cols = null;
+    if (tableId) {
+      try {
+        var T = await grist.docApi.fetchTable('_grist_Tables');
+        var C = await grist.docApi.fetchTable('_grist_Tables_column');
+        var tRef = T.id[T.tableId.indexOf(tableId)];
+        var rowOf = {}; C.id.forEach(function (id, i) { rowOf[id] = i; });
+        cols = [];
+        C.id.forEach(function (id, i) {
+          if (C.parentId[i] !== tRef) return;
+          var colId = C.colId[i];
+          if (/^gristHelper_/.test(colId) || colId === 'manualSort') return;
+          var wo = {}; try { wo = JSON.parse(C.widgetOptions[i] || '{}') || {}; } catch (e) {}
+          var dc = C.displayCol && C.displayCol[i] ? C.colId[rowOf[C.displayCol[i]]] : null;
+          cols.push({
+            id: colId, label: C.label[i] || prettyLabel(colId), type: C.type[i], wo: wo,
+            displayCol: dc, pos: C.parentPos ? C.parentPos[i] : i
+          });
+        });
+        cols.sort(function (a, b) { return a.pos - b.pos; });
+        S.metaFromDoc = true;
+      } catch (e) {
+        cols = null; S.metaFromDoc = false;
+      }
+    }
+    if (!cols || !cols.length) {
+      // Repli : déduction à partir des enregistrements reçus
+      var keys = {};
+      records.slice(0, 50).forEach(function (r) { Object.keys(r).forEach(function (k) { keys[k] = 1; }); });
+      cols = Object.keys(keys).filter(function (k) { return k !== 'id' && !/^gristHelper_/.test(k) && k !== 'manualSort'; })
+        .map(function (k, i) { return { id: k, label: prettyLabel(k), type: 'Any', wo: {}, displayCol: null, pos: i }; });
+    }
+    cols.forEach(function (c) {
+      var k = kindFromType(c.type);
+      c.utc = !/^DateTime/.test(c.type || '');
+      if (k === 'any' || k === 'text') {
+        var inf = inferKind(c, records);
+        k = (k === 'text' && inf !== 'date') ? 'text' : inf;
+      }
+      c.kind = k;
+      if (c.wo && Array.isArray(c.wo.choices) && c.wo.choices.length) {
+        c.choiceIdx = new Map(c.wo.choices.map(function (x, i) { return [String(x), i]; }));
+      }
+    });
+    S.tableId = tableId;
+    S.cols = cols.filter(function (c) { return c.kind !== 'skip'; });
+    S.colMap = {};
+    S.cols.forEach(function (c) { S.colMap[c.id] = c; });
+  }
+
+  /* =====================================================================
+     Dimensions (regroupements)
+     ===================================================================== */
+  function mkDim(colId, gran) {
+    var col = S.colMap[colId];
+    if (!col) return null;
+    var g = gran;
+    if (col.kind === 'date' && !GRAN.date.some(function (x) { return x[0] === g; })) g = 'month';
+    if (col.kind === 'num' && g !== 'bins') g = 'exact';
+    return { col: col, gran: g, step: null };
+  }
+  function textKey(v, col) {
+    var t = String(v).trim();
+    if (!t) return EMPTY_KEY;
+    if (col.choiceIdx) {
+      var i = col.choiceIdx.get(t);
+      return { k: 't' + t, l: t, s: i != null ? [0, i] : [1, t] };
+    }
+    return { k: 't' + t, l: t, s: [0, t] };
+  }
+  function dateKey(d, gran, utc) {
+    var p = dateParts(d, utc), y = p[0], m = p[1], day = p[2];
+    switch (gran) {
+      case 'year': return { k: 'y' + y, l: String(y), s: [0, y] };
+      case 'quarter': var q = Math.floor(m / 3) + 1; return { k: 'q' + y + q, l: 'T' + q + ' ' + y, s: [0, y * 10 + q] };
+      case 'week': var w = isoWeek(y, m, day); return { k: 'w' + w[0] + '-' + w[1], l: 'Semaine ' + w[1] + ' (' + w[0] + ')', s: [0, w[0] * 100 + w[1]] };
+      case 'day': return { k: 'd' + y + '-' + m + '-' + day, l: pad(day) + '/' + pad(m + 1) + '/' + y, s: [0, y * 10000 + m * 100 + day] };
+      default: return { k: 'm' + y + '-' + m, l: MONTHS[m] + ' ' + y, s: [0, y * 100 + m] };
+    }
+  }
+  function scalarKey(v, dim) {
+    var col = dim.col;
+    if (v == null || v === '') return EMPTY_KEY;
+    if (v.err) return ERR_KEY;
+    switch (col.kind) {
+      case 'date':
+        var d = toDate(v);
+        return d ? dateKey(d, dim.gran, col.utc) : textKey(v, col);
+      case 'bool':
+        if (v === true) return { k: '1', l: 'Oui', s: [0, 0] };
+        if (v === false) return { k: '0', l: 'Non', s: [0, 1] };
+        return textKey(v, col);
+      case 'num':
+        var n = toNum(v);
+        if (!isFinite(n)) return textKey(v, col);
+        if (dim.gran === 'bins' && dim.step) {
+          var lo = Math.floor(n / dim.step) * dim.step;
+          return { k: 'b' + lo, l: fmtPlain(lo) + ' – ' + fmtPlain(lo + dim.step), s: [0, lo] };
+        }
+        return { k: 'n' + n, l: fmtNumCol(n, col), s: [0, n] };
+      default:
+        if (v instanceof Date) return dateKey(v, 'day', true);
+        return textKey(v, col);
+    }
+  }
+  function dimKeys(rec, dim, forceExplode) {
+    var v = raw(rec, dim.col);
+    if (v && v.err) return [ERR_KEY];
+    if (Array.isArray(v)) {
+      var items = v.filter(function (x) { return x != null && x !== ''; });
+      if (!items.length) return [EMPTY_KEY];
+      if (S.cfg.explode || forceExplode) {
+        var seen = {}, out = [];
+        items.forEach(function (x) { var k = scalarKey(x, dim); if (!seen[k.k]) { seen[k.k] = 1; out.push(k); } });
+        return out;
+      }
+      var j = items.join(', ');
+      return [{ k: 'L' + j, l: j, s: [0, j] }];
+    }
+    return [scalarKey(v, dim)];
+  }
+  function niceStep(x) {
+    if (!(x > 0)) return 1;
+    var p = Math.pow(10, Math.floor(Math.log10(x))), r = x / p;
+    return (r <= 1 ? 1 : r <= 2 ? 2 : r <= 2.5 ? 2.5 : r <= 5 ? 5 : 10) * p;
+  }
+  function computeStep(col, idx) {
+    var mn = Infinity, mx = -Infinity;
+    idx.forEach(function (i) {
+      var n = toNum(raw(S.records[i], col));
+      if (isFinite(n)) { if (n < mn) mn = n; if (n > mx) mx = n; }
+    });
+    if (!isFinite(mn)) return null;
+    return niceStep((mx - mn) / 8 || Math.abs(mx) || 1);
+  }
+  function distinctCount(col, limit) {
+    var set = new Set(), dim = { col: col, gran: 'month' };
+    for (var i = 0; i < S.records.length && i < (limit || 3000); i++) {
+      dimKeys(S.records[i], dim, true).forEach(function (k) { if (!k.empty) set.add(k.k); });
+    }
+    return set.size;
+  }
+  function defaultGran(col) {
+    if (!col) return 'month';
+    if (col.kind === 'date') return 'month';
+    if (col.kind === 'num') return distinctCount(col, 2000) > 25 ? 'bins' : 'exact';
+    return 'month';
+  }
+
+  /* =====================================================================
+     Calcul du tableau croisé
+     ===================================================================== */
+  function aggregate(idx) {
+    var c = S.cfg;
+    if (!idx || !idx.length) return null;
+    if (c.agg === 'count') return idx.length;
+    var col = S.colMap[c.measure];
+    if (!col) return idx.length;
+    if (c.agg === 'distinct') {
+      var set = new Set(), dim = { col: col, gran: 'day' };
+      idx.forEach(function (i) { dimKeys(S.records[i], dim, true).forEach(function (k) { if (!k.empty) set.add(k.k); }); });
+      return set.size;
+    }
+    var sum = 0, n = 0, mn = Infinity, mx = -Infinity;
+    for (var j = 0; j < idx.length; j++) {
+      var x = toNum(raw(S.records[idx[j]], col));
+      if (!isFinite(x)) continue;
+      sum += x; n++; if (x < mn) mn = x; if (x > mx) mx = x;
+    }
+    if (c.agg === 'sum') return sum;
+    if (!n) return null;
+    if (c.agg === 'mean') return sum / n;
+    return c.agg === 'min' ? mn : mx;
+  }
+
+  function compute() {
+    var c = S.cfg;
+    var rowDims = [0, 1].map(function (i) { return c.rows[i] ? mkDim(c.rows[i], c.rowGran[i]) : null; }).filter(Boolean);
+    var colDim = c.col ? mkDim(c.col, c.colGran) : null;
+    var filters = c.filters.filter(function (f) { return S.colMap[f.col]; }).map(function (f) {
+      return { dim: mkDim(f.col, f.gran), ex: new Set(f.exclude || []) };
+    }).filter(function (f) { return f.ex.size; });
+
+    var recIdx = [];
+    S.records.forEach(function (r, i) {
+      for (var j = 0; j < filters.length; j++) {
+        var f = filters[j];
+        if (!dimKeys(r, f.dim, true).some(function (k) { return !f.ex.has(k.k); })) return;
+      }
+      recIdx.push(i);
+    });
+    rowDims.concat(colDim ? [colDim] : []).forEach(function (d) {
+      if (d.col.kind === 'num' && d.gran === 'bins') d.step = computeStep(d.col, recIdx);
+    });
+
+    var L1 = new Map(), L2 = new Map(), CL = new Map();
+    var cell = new Map(), rowT = new Map(), subC = new Map(), subT = new Map(), colT = new Map(), grand = [];
+    function add(m, k, i) { var a = m.get(k); if (!a) { a = []; m.set(k, a); } if (a[a.length - 1] !== i) a.push(i); }
+    function keysOf(r, d) {
+      var ks = dimKeys(r, d);
+      return c.hideEmpty ? ks.filter(function (k) { return !k.empty; }) : ks;
+    }
+    var used = 0, multi = false;
+    recIdx.forEach(function (i) {
+      var r = S.records[i];
+      var k1 = rowDims[0] ? keysOf(r, rowDims[0]) : [ALL_KEY];
+      var k2 = rowDims[1] ? keysOf(r, rowDims[1]) : null;
+      var kc = colDim ? keysOf(r, colDim) : [ALL_KEY];
+      if (!k1.length || (k2 && !k2.length) || !kc.length) return;
+      if (k1.length > 1 || (k2 && k2.length > 1) || kc.length > 1) multi = true;
+      used++;
+      grand.push(i);
+      kc.forEach(function (x) { if (!CL.has(x.k)) CL.set(x.k, x); add(colT, x.k, i); });
+      k1.forEach(function (a) {
+        if (!L1.has(a.k)) L1.set(a.k, { k: a.k, l: a.l, s: a.s, empty: a.empty, children: [] });
+        if (k2) {
+          k2.forEach(function (b) {
+            var rk = a.k + SEP + b.k;
+            if (!L2.has(rk)) { var o = { k: rk, l: b.l, s: b.s, empty: b.empty, parent: a.k }; L2.set(rk, o); L1.get(a.k).children.push(o); }
+            add(rowT, rk, i);
+            kc.forEach(function (x) { add(cell, rk + CSEP + x.k, i); });
+          });
+          add(subT, a.k, i);
+          kc.forEach(function (x) { add(subC, a.k + CSEP + x.k, i); });
+        } else {
+          add(rowT, a.k, i);
+          kc.forEach(function (x) { add(cell, a.k + CSEP + x.k, i); });
+        }
+      });
+    });
+
+    var two = rowDims.length === 2;
+    var valCache = new Map();
+    function val(m, k) {
+      var key = m === rowT ? 'r' + k : m === subT ? 's' + k : m === colT ? 'c' + k : null;
+      if (key && valCache.has(key)) return valCache.get(key);
+      var v = aggregate(m.get(k));
+      if (key) valCache.set(key, v);
+      return v;
+    }
+    var byValueDesc = function (getter) {
+      return function (a, b) {
+        if (!!a.empty !== !!b.empty) return a.empty ? 1 : -1;
+        var x = getter(a), y = getter(b);
+        if (x == null && y == null) return cmpKeys(a, b);
+        if (x == null) return 1; if (y == null) return -1;
+        return (y - x) || cmpKeys(a, b);
+      };
+    };
+    var groups = Array.from(L1.values());
+    if (c.sort === 'value') {
+      groups.sort(byValueDesc(function (g) { return val(two ? subT : rowT, g.k); }));
+      groups.forEach(function (g) { g.children.sort(byValueDesc(function (ch) { return val(rowT, ch.k); })); });
+    } else if (c.sort === 'labelDesc') {
+      groups.sort(function (a, b) { return (!!a.empty - !!b.empty) || -cmpKeys(a, b); });
+      groups.forEach(function (g) { g.children.sort(function (a, b) { return (!!a.empty - !!b.empty) || -cmpKeys(a, b); }); });
+    } else {
+      groups.sort(cmpKeys);
+      groups.forEach(function (g) { g.children.sort(cmpKeys); });
+    }
+    var cols = Array.from(CL.values());
+    if (c.sort === 'value' && colDim && colDim.col.kind !== 'date') cols.sort(byValueDesc(function (x) { return val(colT, x.k); }));
+    else cols.sort(cmpKeys);
+    var colsTruncated = 0;
+    if (cols.length > MAX_COLS) { colsTruncated = cols.length - MAX_COLS; cols = cols.slice(0, MAX_COLS); }
+
+    S.pivot = {
+      rowDims: rowDims, colDim: colDim, two: two, groups: groups, cols: cols, colsTruncated: colsTruncated,
+      cell: cell, rowT: rowT, subC: subC, subT: subT, colT: colT, grand: grand, val: val,
+      recCount: recIdx.length, used: used, multi: multi, filtersActive: filters.length
+    };
+  }
+
+  /* =====================================================================
+     Rendu : panneau de réglages
+     ===================================================================== */
+  function colOptions(pred, selected, noneLabel) {
+    var h = noneLabel != null ? '<option value="">' + esc(noneLabel) + '</option>' : '';
+    KIND_GROUPS.forEach(function (g) {
+      var cs = S.cols.filter(function (c) { return c.kind === g[0] && pred(c); });
+      if (!cs.length) return;
+      h += '<optgroup label="' + esc(g[1]) + '">' + cs.map(function (c) {
+        return '<option value="' + esc(c.id) + '"' + (c.id === selected ? ' selected' : '') + '>' + esc(c.label) + '</option>';
+      }).join('') + '</optgroup>';
+    });
+    return h;
+  }
+  function granSelect(id, colId, gran) {
+    var col = S.colMap[colId];
+    if (!col || !GRAN[col.kind]) return '';
+    var opts = GRAN[col.kind].map(function (g) {
+      return '<option value="' + g[0] + '"' + (g[0] === gran ? ' selected' : '') + '>' + g[1] + '</option>';
+    }).join('');
+    return '<div class="gran"><select class="fr-select" id="' + id + '" title="Niveau de détail" aria-label="Niveau de détail">' + opts + '</select></div>';
+  }
+  function selectGroup(id, label, optionsHtml, extra, help) {
+    return '<div class="fr-select-group"><label class="fr-label" for="' + id + '">' + label +
+      (help ? '<span class="fr-hint-text">' + help + '</span>' : '') + '</label>' +
+      '<div class="pair"><select class="fr-select" id="' + id + '">' + optionsHtml + '</select>' + (extra || '') + '</div></div>';
+  }
+  function toggle(id, label, checked, help) {
+    return '<div class="fr-toggle fr-toggle--label-left"><input type="checkbox" class="fr-toggle__input" id="' + id + '"' + (checked ? ' checked' : '') +
+      (help ? ' aria-describedby="' + id + '-hint"' : '') + '><label class="fr-toggle__label" for="' + id +
+      '" data-fr-checked-label="Oui" data-fr-unchecked-label="Non">' + label + '</label>' +
+      (help ? '<p class="fr-hint-text" id="' + id + '-hint">' + help + '</p>' : '') + '</div>';
+  }
+  function isMeasurable(c) { return c.kind === 'num' || c.kind === 'bool'; }
+
+  function renderSide() {
+    var c = S.cfg, side = $('side');
+    if (!S.cols.length) { side.innerHTML = '<p class="step-help">Aucune colonne disponible.</p>'; return; }
+    var aggOpts = Object.keys(AGG_LABELS).map(function (k) {
+      return '<option value="' + k + '"' + (k === c.agg ? ' selected' : '') + '>' + AGG_LABELS[k] + '</option>';
+    }).join('');
+    var measPred = c.agg === 'distinct' ? function () { return true; } : isMeasurable;
+    var h = '';
+    h += '<section class="step"><h2 class="step-h"><span class="step-n">1</span>Que voulez-vous compter ?</h2>';
+    h += selectGroup('cfgAgg', 'Calcul', aggOpts);
+    h += '<div class="' + (c.agg === 'count' ? 'hidden' : '') + '">' +
+      selectGroup('cfgMeasure', 'Sur la colonne', colOptions(measPred, c.measure, null), '',
+        c.agg !== 'distinct' ? 'Colonnes numériques ou Oui/Non (Oui = 1)' : '') + '</div>';
+    h += '</section>';
+
+    h += '<section class="step"><h2 class="step-h"><span class="step-n">2</span>Regrouper en lignes par</h2>';
+    h += selectGroup('cfgRow0', 'Regroupement principal', colOptions(function () { return true; }, c.rows[0], '— Aucun —'), granSelect('cfgRowGran0', c.rows[0], c.rowGran[0]));
+    if (c.rows[0]) {
+      h += selectGroup('cfgRow1', 'Puis détailler par <span class="fr-hint-text" style="display:inline">(facultatif)</span>',
+        colOptions(function (x) { return x.id !== c.rows[0]; }, c.rows[1], '— Aucun —'), granSelect('cfgRowGran1', c.rows[1], c.rowGran[1]));
+    }
+    h += '</section>';
+
+    h += '<section class="step"><h2 class="step-h"><span class="step-n">3</span>Comparer en colonnes</h2>';
+    h += '<p class="step-help">Facultatif : répartit chaque ligne selon une autre colonne.</p>';
+    h += selectGroup('cfgCol', 'Colonnes du tableau', colOptions(function () { return true; }, c.col, '— Aucune —'), granSelect('cfgColGran', c.col, c.colGran));
+    h += '</section>';
+
+    h += '<section class="step"><h2 class="step-h"><span class="step-n">4</span>Filtrer les données</h2>';
+    h += '<div id="filtersBox"></div></section>';
+
+    h += '<section class="step"><h2 class="step-h"><span class="step-n">5</span>Présentation</h2>';
+    h += selectGroup('cfgSort', 'Trier les lignes',
+      [['label', 'Ordre naturel (A → Z, dates, choix)'], ['labelDesc', 'Ordre inverse (Z → A)'], ['value', 'Plus grandes valeurs en premier']].map(function (o) {
+        return '<option value="' + o[0] + '"' + (o[0] === c.sort ? ' selected' : '') + '>' + o[1] + '</option>';
+      }).join(''));
+    h += toggle('cfgHeat', 'Colorer selon la valeur', c.heat, 'Plus la case est foncée, plus la valeur est élevée.');
+    h += toggle('cfgExplode', 'Séparer les choix multiples', c.explode, 'Une ligne « A, B » compte dans A et dans B.');
+    h += toggle('cfgHideEmpty', 'Ignorer les valeurs vides', c.hideEmpty);
+    h += '</section>';
+    side.innerHTML = h;
+    renderFilters();
+  }
+
+  function filterValues(f) {
+    var dim = mkDim(f.col, f.gran);
+    if (!dim) return [];
+    if (dim.col.kind === 'num' && dim.gran === 'bins') dim.step = computeStep(dim.col, S.records.map(function (_, i) { return i; }));
+    var m = new Map();
+    S.records.forEach(function (r) {
+      dimKeys(r, dim, true).forEach(function (k) {
+        var e = m.get(k.k); if (!e) { e = { k: k.k, l: k.l, s: k.s, empty: k.empty, n: 0 }; m.set(k.k, e); } e.n++;
+      });
+    });
+    return Array.from(m.values()).sort(cmpKeys);
+  }
+  function filterSummary(f, vals) {
+    var ex = new Set(f.exclude || []);
+    var kept = vals.filter(function (v) { return !ex.has(v.k); });
+    if (!ex.size) return 'Toutes les valeurs';
+    if (!kept.length) return 'Aucune valeur (tableau vide)';
+    if (kept.length === 1) return '« ' + kept[0].l + ' » uniquement';
+    if (kept.length <= 3) return kept.map(function (v) { return v.l; }).join(', ');
+    return kept.length + ' valeurs sur ' + vals.length;
+  }
+  function renderFilters() {
+    var box = $('filtersBox'); if (!box) return;
+    var c = S.cfg, h = '';
+    c.filters.forEach(function (f, i) {
+      var col = S.colMap[f.col]; if (!col) return;
+      var vals = filterValues(f), open = S.openFilter === i;
+      var ex = new Set(f.exclude || []);
+      h += '<div class="flt' + (open ? ' open' : '') + '" data-i="' + i + '">';
+      h += '<div class="flt-top"><button type="button" class="flt-head" data-act="openFilter" data-i="' + i + '" aria-expanded="' + open + '">' +
+        '<span class="flt-name">' + esc(col.label) + '</span><span class="flt-sum" id="fltSum' + i + '">' + esc(filterSummary(f, vals)) + '</span></button>' +
+        '<button type="button" class="flt-del fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-icon-close-line" data-act="delFilter" data-i="' + i + '" title="Retirer ce filtre">Retirer ce filtre</button></div>';
+      if (open) {
+        h += '<div class="flt-body">';
+        if (GRAN[col.kind]) h += '<div class="fr-select-group" style="margin-bottom:.375rem">' + granSelect('fltGran' + i, f.col, f.gran).replace('class="gran"', 'class="gran" style="flex:1"') + '</div>';
+        if (vals.length > 8) h += '<input class="fr-input flt-search" type="search" placeholder="Rechercher une valeur…" data-act="fltSearch" data-i="' + i + '">';
+        h += '<div class="flt-tools"><button type="button" class="fr-btn fr-btn--tertiary fr-btn--sm" data-act="fltAll" data-i="' + i + '">Tout cocher</button>' +
+          '<button type="button" class="fr-btn fr-btn--tertiary fr-btn--sm" data-act="fltNone" data-i="' + i + '">Tout décocher</button></div>';
+        h += '<div class="flt-list" id="fltList' + i + '">';
+        vals.forEach(function (v, j) {
+          var id = 'f' + i + '_' + j;
+          h += '<div class="fr-checkbox-group fr-checkbox-group--sm" data-l="' + esc(v.l.toLowerCase()) + '"><input type="checkbox" id="' + id + '" data-act="fltVal" data-i="' + i + '" data-k="' + esc(v.k) + '"' + (ex.has(v.k) ? '' : ' checked') + '>' +
+            '<label class="fr-label" for="' + id + '"><span' + (v.empty ? ' class="empty-lbl"' : '') + '>' + esc(v.l) + '</span><span class="flt-count">' + nf0.format(v.n) + '</span></label></div>';
+        });
+        h += '</div></div>';
+      }
+      h += '</div>';
+    });
+    h += '<div class="fr-select-group" style="margin:0"><label class="fr-label" for="addFilter">Ajouter un filtre</label>' +
+      '<select class="fr-select" id="addFilter">' + colOptions(function () { return true; }, '', '+ Choisir une colonne…') + '</select></div>';
+    box.innerHTML = h;
+  }
+
+  /* =====================================================================
+     Rendu : questions rapides, phrase, tableau
+     ===================================================================== */
+  function presetValid(p) {
+    var ids = p.rows.concat(p.col ? [p.col] : []).concat(p.measure ? [p.measure] : []);
+    return ids.every(function (id) { return S.colMap[id]; });
+  }
+  function genericPresets() {
+    var out = [];
+    var cats = S.cols.filter(function (c) { return (c.kind === 'choice' || c.kind === 'bool' || c.kind === 'ref' || c.kind === 'text') && distinctCount(c, 1500) <= 30 && distinctCount(c, 1500) >= 2; });
+    var dates = S.cols.filter(function (c) { return c.kind === 'date'; });
+    var nums = S.cols.filter(function (c) { return c.kind === 'num'; });
+    if (cats[0]) out.push({ t: 'Répartition par ' + cats[0].label, rows: [cats[0].id], col: cats[1] ? cats[1].id : null });
+    if (cats[1]) out.push({ t: 'Répartition par ' + cats[1].label, rows: [cats[1].id] });
+    if (dates[0]) out.push({ t: 'Évolution par mois (' + dates[0].label + ')', rows: [dates[0].id], rowGran: ['month'], col: cats[0] ? cats[0].id : null });
+    if (nums[0] && cats[0]) out.push({ t: 'Somme de ' + nums[0].label + ' par ' + cats[0].label, rows: [cats[0].id], agg: 'sum', measure: nums[0].id });
+    return out;
+  }
+  function presetMatches(p) {
+    var c = S.cfg;
+    return c.rows[0] === p.rows[0] && (c.rows[1] || null) === (p.rows[1] || null) && (c.col || null) === (p.col || null) &&
+      c.agg === (p.agg || 'count') && (p.agg ? c.measure === p.measure : true);
+  }
+  function renderPresets() {
+    var list = PRESETS.filter(presetValid);
+    if (list.length < 3) list = list.concat(genericPresets());
+    S.presets = list.slice(0, 12);
+    $('presetsBox').classList.toggle('hidden', !S.presets.length);
+    $('presetList').innerHTML = S.presets.map(function (p, i) {
+      return '<li><button type="button" class="fr-tag fr-tag--sm" data-preset="' + i + '" aria-pressed="' + presetMatches(p) + '">' + esc(p.t) + '</button></li>';
+    }).join('');
+  }
+
+  function measureLabel(short) {
+    var c = S.cfg, col = S.colMap[c.measure];
+    if (c.agg === 'count' || !col) return 'Nombre de lignes';
+    if (col.kind === 'bool' && c.agg === 'sum') return 'Nombre de « Oui » pour ' + col.label;
+    if (col.kind === 'bool' && c.agg === 'mean') return 'Taux de « Oui » pour ' + col.label;
+    return (short ? AGG_LABELS[c.agg] : AGG_LABELS[c.agg]) + ' de ' + col.label;
+  }
+  function pctAllowed() {
+    var c = S.cfg, col = S.colMap[c.measure];
+    return c.agg === 'count' || (c.agg === 'sum' && col && col.kind !== 'date');
+  }
+  function dimLabel(d) {
+    var lab = d.col.label;
+    if (d.col.kind === 'date') {
+      var g = GRAN.date.filter(function (x) { return x[0] === d.gran; })[0];
+      return lab + ' (' + (g ? g[1].toLowerCase() : 'mois') + ')';
+    }
+    if (d.col.kind === 'num' && d.gran === 'bins') return lab + ' (par tranches)';
+    return lab;
+  }
+
+  function renderQuestion() {
+    var c = S.cfg, P = S.pivot;
+    var h = '<strong>' + esc(measureLabel()) + '</strong>';
+    if (P.rowDims[0]) h += ' par <strong>' + esc(dimLabel(P.rowDims[0])) + '</strong>';
+    if (P.rowDims[1]) h += ' puis par <strong>' + esc(dimLabel(P.rowDims[1])) + '</strong>';
+    if (P.colDim) h += ', comparé selon <strong>' + esc(dimLabel(P.colDim)) + '</strong>';
+    var mode = pctAllowed() ? c.show : 'value';
+    if (mode === 'total') h += ' — en % du total général';
+    if (mode === 'row') h += ' — en % de chaque ligne';
+    if (mode === 'col') h += ' — en % de chaque colonne';
+    $('question').innerHTML = h;
+    var meta = nf0.format(P.recCount) + ' ' + plural(P.recCount, 'ligne analysée', 'lignes analysées');
+    if (P.recCount !== S.records.length) meta += ' sur ' + nf0.format(S.records.length);
+    if (P.filtersActive) meta += ' · ' + P.filtersActive + ' ' + plural(P.filtersActive, 'filtre actif', 'filtres actifs');
+    if (P.used !== P.recCount) meta += ' · ' + nf0.format(P.recCount - P.used) + ' sans valeur ignorée(s)';
+    $('questionMeta').textContent = meta;
+
+    var allowed = pctAllowed();
+    document.querySelectorAll('#showMode input').forEach(function (inp) {
+      var needCol = inp.value === 'col' && !P.colDim;
+      var needRow = inp.value === 'row' && !P.colDim;
+      inp.disabled = (!allowed && inp.value !== 'value') || needCol || needRow;
+      inp.checked = inp.value === mode;
+    });
+  }
+
+  function renderNotes() {
+    var P = S.pivot, notes = [];
+    if (P.multi && S.cfg.explode) notes.push(['fr-icon-information-line', 'Certaines lignes contiennent plusieurs choix : elles apparaissent dans plusieurs cases, mais ne sont comptées qu’une seule fois dans les totaux. La somme des cases peut donc dépasser le total.']);
+    if (P.colsTruncated) notes.push(['fr-icon-warning-line', P.colsTruncated + ' colonnes supplémentaires ne sont pas affichées (maximum ' + MAX_COLS + '). Choisissez un regroupement plus large (année, mois, tranches…) ou ajoutez un filtre.']);
+    if (!S.metaFromDoc && S.records.length) notes.push(['fr-icon-information-line', 'Accès complet non accordé : les libellés et types des colonnes sont déduits des données. Donnez l’accès « complet » au widget pour de meilleurs résultats (références, ordre des choix, formats).']);
+    $('notes').innerHTML = notes.map(function (n) { return '<div class="note ' + n[0] + '">' + esc(n[1]) + '</div>'; }).join('');
+  }
+
+  function heatStyle(x, max) {
+    if (!S.cfg.heat || x == null || !(max > 0) || x <= 0) return '';
+    var r = Math.min(1, x / max), a = 0.04 + 0.62 * r;
+    return ' style="background:rgba(0,0,145,' + a.toFixed(3) + ');' + (a > 0.4 ? 'color:#fff;' : '') + '"';
+  }
+
+  function renderTable() {
+    var P = S.pivot, c = S.cfg, wrap = $('tableWrap');
+    S.cells = []; S.selCell = -1;
+    $('legend').style.visibility = c.heat ? 'visible' : 'hidden';
+    if (!S.records.length) {
+      wrap.innerHTML = '<div class="placeholder"><strong>Aucune donnée</strong>La table sélectionnée est vide ou le widget n’est relié à aucune table.</div>';
+      $('treeTools').innerHTML = ''; setReading(null); return;
+    }
+    if (!P.used) {
+      wrap.innerHTML = '<div class="placeholder"><strong>Aucune ligne ne correspond</strong>Vos filtres excluent toutes les lignes. Modifiez-les dans l’étape 4.</div>';
+      $('treeTools').innerHTML = ''; setReading(null); return;
+    }
+    var mode = pctAllowed() ? c.show : 'value';
+    if (!P.colDim && (mode === 'row' || mode === 'col')) mode = 'value';
+    var G = aggregate(P.grand);
+    var cols = P.colDim ? P.cols : [];
+    var colBase = {};
+    cols.forEach(function (ck) { colBase[ck.k] = P.val(P.colT, ck.k); });
+
+    function disp(v, rb, cb) {
+      if (v == null) return null;
+      if (mode === 'value') return v;
+      var base = mode === 'total' ? G : mode === 'row' ? rb : cb;
+      return base ? v / base : null;
+    }
+    function fmt(x) { return x == null ? '' : mode === 'value' ? fmtMeasure(x) : pf.format(x); }
+
+    // Modèle des lignes
+    var d1 = P.rowDims[0], d2 = P.rowDims[1];
+    var model = [];
+    function mkCells(prefixMap, key, rowBase) {
+      return cols.map(function (ck) {
+        var idx = prefixMap.get(key + CSEP + ck.k) || [];
+        var v = idx.length ? aggregate(idx) : null;
+        return { idx: idx, v: v, d: disp(v, rowBase, colBase[ck.k]), ck: ck };
+      });
+    }
+    var rendered = 0;
+    P.groups.forEach(function (g) {
+      if (rendered > MAX_ROWS) return;
+      var c1 = d1 ? [{ d: dimLabel(d1), l: g.l }] : [];
+      if (P.two) {
+        var gi = P.subT.get(g.k) || [], gv = P.val(P.subT, g.k);
+        model.push({ type: 'grp', key: g.k, label: g.l, empty: g.empty, conds: c1, n: g.children.length, tot: { idx: gi, v: gv, d: disp(gv, gv, G) }, cells: mkCells(P.subC, g.k, gv) });
+        rendered++;
+        if (!S.collapsed[g.k]) g.children.forEach(function (ch) {
+          var ri = P.rowT.get(ch.k) || [], rv = P.val(P.rowT, ch.k);
+          model.push({ type: 'leaf2', label: ch.l, empty: ch.empty, conds: c1.concat([{ d: dimLabel(d2), l: ch.l }]), tot: { idx: ri, v: rv, d: disp(rv, rv, G) }, cells: mkCells(P.cell, ch.k, rv) });
+          rendered++;
+        });
+      } else {
+        var ri2 = P.rowT.get(g.k) || [], rv2 = P.val(P.rowT, g.k);
+        model.push({ type: 'leaf', label: g.l, empty: g.empty, conds: c1, tot: { idx: ri2, v: rv2, d: disp(rv2, rv2, G) }, cells: mkCells(P.cell, g.k, rv2) });
+        rendered++;
+      }
+    });
+
+    // Maximums pour la coloration et les barres
+    var maxCell = 0, maxTot = 0;
+    model.forEach(function (r) {
+      if (r.type !== 'grp') r.cells.forEach(function (x) { if (x.d != null && x.d > maxCell) maxCell = x.d; });
+      if (r.type !== 'grp' || !P.two) { if (r.tot.d != null && r.tot.d > maxTot) maxTot = r.tot.d; }
+    });
+    var maxGrp = 0;
+    if (P.two) model.forEach(function (r) { if (r.type === 'grp' && r.tot.d > maxGrp) maxGrp = r.tot.d; });
+
+    function cellTd(x, conds, cls, style) {
+      if (x.v == null) return '<td class="empty' + (cls ? ' ' + cls : '') + '" aria-label="vide"></td>';
+      var n = S.cells.length;
+      S.cells.push({ idx: x.idx, v: x.v, conds: conds, rowConds: conds.slice(0, conds.length - (x.ck ? 1 : 0)), rb: x.rb });
+      return '<td class="v' + (cls ? ' ' + cls : '') + '" data-c="' + n + '"' + (style || '') + '>' + fmt(x.d) + (x.bar || '') + '</td>';
+    }
+    function bar(d, max) {
+      if (d == null || !(max > 0) || d <= 0) return '';
+      return '<span class="bar" style="width:' + Math.max(4, Math.round(70 * d / max)) + '%"></span>';
+    }
+
+    var rowHead = P.rowDims.map(dimLabel).join(' › ') || '';
+    var totLabel = P.colDim ? 'Total' : esc(mode === 'value' ? measureLabel() : (mode === 'total' ? '% du total' : measureLabel()));
+    var h = '<table class="pv"><thead>';
+    if (P.colDim) {
+      h += '<tr><th class="corner" rowspan="2">' + esc(rowHead) + '</th><th class="colgroup" colspan="' + cols.length + '">' + esc(dimLabel(P.colDim)) + '</th><th class="tot" rowspan="2">Total</th></tr><tr>';
+      h += cols.map(function (ck) { return '<th' + (ck.empty ? ' class="empty-lbl"' : '') + '>' + esc(ck.l) + '</th>'; }).join('') + '</tr>';
+    } else {
+      h += '<tr><th class="corner">' + esc(rowHead) + '</th><th class="tot">' + totLabel + '</th></tr>';
+    }
+    h += '</thead><tbody>';
+    model.forEach(function (r) {
+      var rowCls = r.type === 'grp' ? 'grp' : r.type === 'leaf2' ? 'leaf2' : '';
+      h += '<tr class="' + rowCls + '">';
+      if (r.type === 'grp') {
+        var closed = !!S.collapsed[r.key];
+        h += '<th class="rh" data-grp="' + esc(r.key) + '" title="' + (closed ? 'Déplier' : 'Replier') + '"><span class="caret' + (closed ? ' closed' : '') + '">▾</span>' +
+          '<span' + (r.empty ? ' class="empty-lbl"' : '') + '>' + esc(r.label) + '</span> <span style="font-weight:400;color:var(--ink-3)">(' + r.n + ')</span></th>';
+      } else {
+        h += '<th class="rh" title="' + esc(r.label) + '"><span' + (r.empty ? ' class="empty-lbl"' : '') + '>' + esc(r.label) + '</span></th>';
+      }
+      r.cells.forEach(function (x) {
+        x.rb = r.tot.v;
+        h += cellTd(x, r.conds.concat([{ d: dimLabel(P.colDim), l: x.ck.l }]), '', r.type === 'grp' ? '' : heatStyle(x.d, maxCell));
+      });
+      var t = { idx: r.tot.idx, v: r.tot.v, d: r.tot.d, rb: r.tot.v };
+      t.bar = P.colDim ? '' : bar(r.tot.d, r.type === 'grp' ? maxGrp : maxTot);
+      var totStyle = (!P.colDim && r.type !== 'grp') ? heatStyle(r.tot.d, maxTot) : '';
+      h += cellTd(t, r.conds, 'tot', totStyle);
+      h += '</tr>';
+    });
+    h += '</tbody>';
+    if (d1) {
+      h += '<tfoot><tr><th class="rh">Total général</th>';
+      cols.forEach(function (ck) {
+        var idx = P.colT.get(ck.k) || [], v = colBase[ck.k];
+        h += cellTd({ idx: idx, v: v, d: disp(v, G, v), ck: ck, rb: G }, [{ d: dimLabel(P.colDim), l: ck.l }], '');
+      });
+      h += cellTd({ idx: P.grand, v: G, d: disp(G, G, G), rb: G }, [], 'tot');
+      h += '</tr></tfoot>';
+    }
+    h += '</table>';
+    if (rendered > MAX_ROWS) h += '<p class="step-help" style="padding:.5rem .75rem">Affichage limité aux ' + MAX_ROWS + ' premières lignes. Utilisez un regroupement plus large ou des filtres.</p>';
+    wrap.innerHTML = h;
+
+    var th1 = wrap.querySelector('thead th.colgroup');
+    if (th1) wrap.querySelector('table').style.setProperty('--h1', th1.offsetHeight + 'px');
+
+    $('treeTools').innerHTML = P.two ?
+      '<button type="button" class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-btn--icon-left fr-icon-arrow-down-s-line" data-tree="open">Tout déplier</button>' +
+      '<button type="button" class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-btn--icon-left fr-icon-arrow-right-s-line" data-tree="close">Tout replier</button>' : '';
+    setReading(null);
+  }
+
+  /* --- Phrase de lecture --- */
+  function describe(info) {
+    var c = S.cfg, P = S.pivot, v = info.v;
+    var conds = info.conds.filter(function (x) { return x.d; });
+    var where = conds.length ? conds.map(function (x) { return '« ' + esc(x.d) + ' » = <strong>' + esc(x.l) + '</strong>'; }).join(' et ') : 'l’ensemble des lignes analysées';
+    var s;
+    if (c.agg === 'count') {
+      s = '<strong>' + nf0.format(v) + '</strong> ' + plural(v, 'ligne correspond', 'lignes correspondent') + ' à ' + where;
+    } else {
+      s = esc(measureLabel()) + ' : <strong>' + fmtMeasure(v) + '</strong> pour ' + where + ' (' + nf0.format(info.idx.length) + ' ' + plural(info.idx.length, 'ligne', 'lignes') + ')';
+    }
+    if (pctAllowed()) {
+      var G = aggregate(P.grand), parts = [];
+      if (G && conds.length) parts.push('<strong>' + pf.format(v / G) + '</strong> du total');
+      if (P.colDim && info.rb && info.rowConds.length && info.conds.length > info.rowConds.length) {
+        parts.push('<strong>' + pf.format(v / info.rb) + '</strong> de la ligne « ' + esc(info.rowConds[info.rowConds.length - 1].l) + ' »');
+      }
+      if (parts.length) s += ', soit ' + parts.join(' et ');
+    }
+    return s + '.';
+  }
+  function setReading(info) {
+    var el = $('reading');
+    if (!info) {
+      el.innerHTML = '<span class="hint">Survolez une case pour lire sa signification en clair. Cliquez dessus pour afficher les lignes concernées.</span>';
+      return;
+    }
+    el.innerHTML = '<span>' + describe(info) + '</span>';
+  }
+
+  /* --- Détail des lignes d'une case --- */
+  function detailCols() {
+    var c = S.cfg, ids = [];
+    function push(id) { if (id && S.colMap[id] && ids.indexOf(id) < 0) ids.push(id); }
+    S.cols.filter(function (x) { return /dossier_number|raison|denomination|nom|libelle|titre|siret|pacage/i.test(x.id) && x.kind !== 'list'; })
+      .slice(0, 3).forEach(function (x) { push(x.id); });
+    c.rows.forEach(push); push(c.col); if (c.agg !== 'count') push(c.measure);
+    for (var i = 0; ids.length < 4 && i < S.cols.length; i++) push(S.cols[i].id);
+    return ids.slice(0, 8).map(function (id) { return S.colMap[id]; });
+  }
+  function openDetail(n) {
+    var info = S.cells[n]; if (!info) return;
+    S.selCell = n;
+    document.querySelectorAll('.pv td.sel').forEach(function (td) { td.classList.remove('sel'); });
+    var td = document.querySelector('.pv td[data-c="' + n + '"]'); if (td) td.classList.add('sel');
+    var cols = detailCols(), box = $('detail');
+    var where = info.conds.filter(function (x) { return x.d; }).map(function (x) { return esc(x.d) + ' = « ' + esc(x.l) + ' »'; }).join(' · ') || 'Toutes les lignes';
+    var shown = info.idx.slice(0, MAX_DETAIL);
+    var h = '<div class="detail-hd"><div><h3>Détail : ' + nf0.format(info.idx.length) + ' ' + plural(info.idx.length, 'ligne', 'lignes') + '</h3><p>' + where + '</p></div>' +
+      '<div class="detail-actions">' +
+      (typeof grist.setSelectedRows === 'function' ? '<button type="button" class="fr-btn fr-btn--secondary fr-btn--sm fr-btn--icon-left fr-icon-filter-line" id="btnSelectRows" title="Filtre les widgets liés à ce tableau croisé">Sélectionner dans Grist</button>' : '') +
+      '<button type="button" class="fr-btn fr-btn--tertiary fr-btn--sm fr-btn--icon-left fr-icon-close-line" id="btnCloseDetail">Fermer</button></div></div>';
+    h += '<div class="detail-wrap"><table class="dt"><thead><tr>' + cols.map(function (c) { return '<th>' + esc(c.label) + '</th>'; }).join('') + '</tr></thead><tbody>';
+    shown.forEach(function (i) {
+      var r = S.records[i];
+      h += '<tr data-row="' + r.id + '" title="Cliquer pour aller à cette ligne dans Grist">' + cols.map(function (c) {
+        var t = fmtCell(r, c);
+        return '<td' + (c.kind === 'num' ? ' class="n"' : '') + ' title="' + esc(t) + '">' + esc(t) + '</td>';
+      }).join('') + '</tr>';
+    });
+    h += '</tbody></table></div>';
+    if (info.idx.length > MAX_DETAIL) h += '<p class="step-help" style="margin-top:.5rem">Seules les ' + MAX_DETAIL + ' premières lignes sont affichées.</p>';
+    box.innerHTML = h; box.hidden = false;
+    box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  /* =====================================================================
+     Export
+     ===================================================================== */
+  function matrix() {
+    var P = S.pivot, c = S.cfg; if (!P || !P.used) return null;
+    var mode = pctAllowed() ? c.show : 'value';
+    if (!P.colDim && (mode === 'row' || mode === 'col')) mode = 'value';
+    var G = aggregate(P.grand), cols = P.colDim ? P.cols : [];
+    var cb = {}; cols.forEach(function (ck) { cb[ck.k] = P.val(P.colT, ck.k); });
+    function d(v, rb, colb) {
+      if (v == null) return '';
+      if (mode !== 'value') { var base = mode === 'total' ? G : mode === 'row' ? rb : colb; v = base ? v / base * 100 : null; if (v == null) return ''; }
+      return Math.round(v * 100) / 100;
+    }
+    var suffix = mode === 'value' ? '' : ' (%)';
+    var head = P.rowDims.map(dimLabel);
+    if (!head.length) head = [''];
+    var out = [head.concat(P.colDim ? cols.map(function (ck) { return ck.l + suffix; }) : []).concat([(P.colDim ? 'Total' : measureLabel()) + suffix])];
+    P.groups.forEach(function (g) {
+      if (P.two) {
+        g.children.forEach(function (ch) {
+          var rv = P.val(P.rowT, ch.k);
+          out.push([g.l, ch.l].concat(cols.map(function (ck) { return d(aggregate(P.cell.get(ch.k + CSEP + ck.k)), rv, cb[ck.k]); })).concat([d(rv, rv, G)]));
+        });
+        var sv = P.val(P.subT, g.k);
+        out.push([g.l, 'Sous-total'].concat(cols.map(function (ck) { return d(aggregate(P.subC.get(g.k + CSEP + ck.k)), sv, cb[ck.k]); })).concat([d(sv, sv, G)]));
+      } else {
+        var rv2 = P.val(P.rowT, g.k);
+        out.push([g.l].concat(cols.map(function (ck) { return d(aggregate(P.cell.get(g.k + CSEP + ck.k)), rv2, cb[ck.k]); })).concat([d(rv2, rv2, G)]));
+      }
+    });
+    if (P.rowDims.length) {
+      out.push(['Total général'].concat(P.two ? [''] : []).concat(cols.map(function (ck) { return d(cb[ck.k], G, cb[ck.k]); })).concat([d(G, G, G)]));
+    }
+    return out;
+  }
+  function cellText(v, sep) {
+    if (typeof v === 'number') return String(v).replace('.', ',');
+    var s = String(v == null ? '' : v);
+    if (sep === ';' && /[;"\n]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+    if (sep === '\t') s = s.replace(/[\t\n]/g, ' ');
+    return s;
+  }
+  function exportCsv() {
+    var m = matrix(); if (!m) { toast('Rien à exporter.'); return; }
+    var csv = '﻿' + m.map(function (r) { return r.map(function (v) { return cellText(v, ';'); }).join(';'); }).join('\r\n');
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'tableau-croise-' + (S.tableId || 'grist') + '.csv';
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    toast('Export CSV lancé. Si rien ne se passe, utilisez « Copier » puis collez dans un tableur.');
+  }
+  function copyTable() {
+    var m = matrix(); if (!m) { toast('Rien à copier.'); return; }
+    var tsv = m.map(function (r) { return r.map(function (v) { return cellText(v, '\t'); }).join('\t'); }).join('\n');
+    function fallback() {
+      var ta = document.createElement('textarea'); ta.value = tsv; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); toast('Tableau copié : collez-le dans un tableur.'); } catch (e) { toast('Copie impossible dans ce navigateur.'); }
+      ta.remove();
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(tsv).then(function () { toast('Tableau copié : collez-le dans un tableur.'); }, fallback);
+    } else fallback();
+  }
+
+  /* =====================================================================
+     Configuration : validation, sauvegarde
+     ===================================================================== */
+  function sanitize(cfg) {
+    var c = Object.assign(defaultCfg(), cfg || {});
+    c.rows = [0, 1].map(function (i) { var id = (cfg && cfg.rows || [])[i]; return S.colMap[id] ? id : null; });
+    if (!c.rows[0] && c.rows[1]) c.rows = [c.rows[1], null];
+    if (c.rows[1] === c.rows[0]) c.rows[1] = null;
+    c.rowGran = [0, 1].map(function (i) { return ((cfg && cfg.rowGran) || [])[i] || defaultGran(S.colMap[c.rows[i]]); });
+    if (!S.colMap[c.col]) c.col = null;
+    if (!c.colGran) c.colGran = defaultGran(S.colMap[c.col]);
+    if (!AGG_LABELS[c.agg]) c.agg = 'count';
+    var mc = S.colMap[c.measure];
+    if (c.agg !== 'count' && (!mc || (c.agg !== 'distinct' && !isMeasurable(mc)))) {
+      var first = S.cols.filter(c.agg === 'distinct' ? function () { return true; } : isMeasurable)[0];
+      if (first) c.measure = first.id; else { c.agg = 'count'; c.measure = null; }
+    }
+    c.filters = (c.filters || []).filter(function (f) { return f && S.colMap[f.col]; })
+      .map(function (f) { return { col: f.col, gran: f.gran || defaultGran(S.colMap[f.col]), exclude: Array.isArray(f.exclude) ? f.exclude : [] }; });
+    if (['value', 'total', 'row', 'col'].indexOf(c.show) < 0) c.show = 'value';
+    return c;
+  }
+  function autoCfg() {
+    var list = PRESETS.filter(presetValid);
+    if (list.length) return presetCfg(list[0]);
+    var g = genericPresets();
+    if (g.length) return presetCfg(g[0]);
+    return sanitize({ rows: [S.cols[0] && S.cols[0].id] });
+  }
+  function presetCfg(p) {
+    var keep = S.cfg || defaultCfg();
+    return sanitize({
+      rows: [p.rows[0], p.rows[1] || null],
+      rowGran: [(p.rowGran || [])[0] || defaultGran(S.colMap[p.rows[0]]), (p.rowGran || [])[1] || defaultGran(S.colMap[p.rows[1]])],
+      col: p.col || null, colGran: defaultGran(S.colMap[p.col]),
+      agg: p.agg || 'count', measure: p.measure || null, show: 'value',
+      filters: keep.filters, sort: keep.sort, explode: keep.explode, heat: keep.heat, hideEmpty: keep.hideEmpty
+    });
+  }
+
+  var saveTimer = null, lastSaved = '';
+  function save() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      var json = JSON.stringify(S.cfg);
+      if (json === lastSaved) return;
+      lastSaved = json;
+      try { localStorage.setItem('tcd-grist:' + (S.tableId || ''), json); } catch (e) {}
+      try {
+        var p = grist.setOption ? grist.setOption('pivot', S.cfg) : grist.setOptions({ pivot: S.cfg });
+        if (p && p.catch) p.catch(function () {});
+      } catch (e) {}
+    }, 700);
+  }
+  function loadLocal() {
+    try { var s = localStorage.getItem('tcd-grist:' + (S.tableId || '')); return s ? JSON.parse(s) : null; } catch (e) { return null; }
+  }
+
+  /* =====================================================================
+     Rafraîchissement
+     ===================================================================== */
+  function refreshTable() {
+    compute();
+    renderQuestion();
+    renderNotes();
+    renderTable();
+    renderPresets();
+    var det = $('detail'); det.hidden = true; det.innerHTML = '';
+    var c = S.cfg;
+    $('hdSub').textContent = (S.tableId ? 'Table ' + S.tableId + ' · ' : '') + nf0.format(S.records.length) + ' ' + plural(S.records.length, 'ligne', 'lignes') + ' · ' + S.cols.length + ' colonnes';
+  }
+  function refreshAll() { renderSide(); refreshTable(); }
+  function update(mutator, sideToo) {
+    mutator(S.cfg);
+    S.cfg = sanitize(S.cfg);
+    if (sideToo) renderSide();
+    refreshTable();
+    save();
+  }
+
+  /* =====================================================================
+     Événements
+     ===================================================================== */
+  $('side').addEventListener('change', function (e) {
+    var t = e.target, id = t.id, v = t.value;
+    switch (id) {
+      case 'cfgAgg': update(function (c) { c.agg = v; if (v !== 'count' && v !== 'sum' && v !== 'distinct') c.show = 'value'; }, true); return;
+      case 'cfgMeasure': update(function (c) { c.measure = v; }, false); return;
+      case 'cfgRow0': update(function (c) { c.rows[0] = v || null; if (!v) c.rows[1] = null; c.rowGran[0] = defaultGran(S.colMap[v]); S.collapsed = {}; }, true); return;
+      case 'cfgRow1': update(function (c) { c.rows[1] = v || null; c.rowGran[1] = defaultGran(S.colMap[v]); S.collapsed = {}; }, true); return;
+      case 'cfgRowGran0': update(function (c) { c.rowGran[0] = v; }, false); return;
+      case 'cfgRowGran1': update(function (c) { c.rowGran[1] = v; }, false); return;
+      case 'cfgCol': update(function (c) { c.col = v || null; c.colGran = defaultGran(S.colMap[v]); if (!v && (c.show === 'row' || c.show === 'col')) c.show = 'value'; }, true); return;
+      case 'cfgColGran': update(function (c) { c.colGran = v; }, false); return;
+      case 'cfgSort': update(function (c) { c.sort = v; }, false); return;
+      case 'cfgHeat': update(function (c) { c.heat = t.checked; }, false); return;
+      case 'cfgExplode': update(function (c) { c.explode = t.checked; }, false); return;
+      case 'cfgHideEmpty': update(function (c) { c.hideEmpty = t.checked; }, false); return;
+      case 'addFilter':
+        if (!v) return;
+        update(function (c) { c.filters.push({ col: v, gran: defaultGran(S.colMap[v]) === 'bins' ? 'bins' : (S.colMap[v].kind === 'date' ? 'year' : 'month'), exclude: [] }); S.openFilter = c.filters.length - 1; }, false);
+        renderFilters();
+        return;
+    }
+    if (/^fltGran\d+$/.test(id)) {
+      var gi = +id.slice(7);
+      update(function (c) { c.filters[gi].gran = v; c.filters[gi].exclude = []; }, false);
+      renderFilters(); return;
+    }
+    if (t.dataset.act === 'fltVal') {
+      var i = +t.dataset.i, k = t.dataset.k, f = S.cfg.filters[i];
+      var ex = new Set(f.exclude);
+      if (t.checked) ex.delete(k); else ex.add(k);
+      update(function (c) { c.filters[i].exclude = Array.from(ex); }, false);
+      var sum = $('fltSum' + i); if (sum) sum.textContent = filterSummary(S.cfg.filters[i], filterValues(S.cfg.filters[i]));
+    }
+  });
+  $('side').addEventListener('input', function (e) {
+    var t = e.target;
+    if (t.dataset.act !== 'fltSearch') return;
+    var q = t.value.trim().toLowerCase();
+    document.querySelectorAll('#fltList' + t.dataset.i + ' .fr-checkbox-group').forEach(function (el) {
+      el.style.display = !q || el.dataset.l.indexOf(q) >= 0 ? '' : 'none';
+    });
+  });
+  $('side').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-act]'); if (!b || b.tagName === 'INPUT') return;
+    var i = +b.dataset.i;
+    switch (b.dataset.act) {
+      case 'openFilter': S.openFilter = S.openFilter === i ? -1 : i; renderFilters(); break;
+      case 'delFilter': update(function (c) { c.filters.splice(i, 1); }, false); S.openFilter = -1; renderFilters(); break;
+      case 'fltAll': update(function (c) { c.filters[i].exclude = []; }, false); renderFilters(); break;
+      case 'fltNone':
+        var visible = Array.prototype.map.call(document.querySelectorAll('#fltList' + i + ' .fr-checkbox-group'), function (el) {
+          return el.style.display === 'none' ? null : el.querySelector('input').dataset.k;
+        }).filter(function (x) { return x != null; });
+        update(function (c) { c.filters[i].exclude = Array.from(new Set(c.filters[i].exclude.concat(visible))); }, false);
+        renderFilters(); break;
+    }
+  });
+
+  $('presetList').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-preset]'); if (!b) return;
+    var p = S.presets[+b.dataset.preset]; if (!p) return;
+    S.cfg = presetCfg(p); S.collapsed = {};
+    refreshAll(); save();
+  });
+  $('showMode').addEventListener('change', function (e) {
+    if (e.target.name === 'sm') update(function (c) { c.show = e.target.value; }, false);
+  });
+
+  var wrap = $('tableWrap');
+  wrap.addEventListener('mouseover', function (e) {
+    var td = e.target.closest('td[data-c]');
+    if (td) setReading(S.cells[+td.dataset.c]);
+  });
+  wrap.addEventListener('mouseleave', function () {
+    setReading(S.selCell >= 0 ? S.cells[S.selCell] : null);
+  });
+  wrap.addEventListener('click', function (e) {
+    var g = e.target.closest('th[data-grp]');
+    if (g) { var k = g.dataset.grp; S.collapsed[k] = !S.collapsed[k]; renderTable(); return; }
+    var td = e.target.closest('td[data-c]');
+    if (td) { openDetail(+td.dataset.c); setReading(S.cells[+td.dataset.c]); }
+  });
+  $('treeTools').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-tree]'); if (!b) return;
+    S.collapsed = {};
+    if (b.dataset.tree === 'close') S.pivot.groups.forEach(function (g) { S.collapsed[g.k] = true; });
+    renderTable();
+  });
+  $('detail').addEventListener('click', function (e) {
+    if (e.target.closest('#btnCloseDetail')) {
+      $('detail').hidden = true; S.selCell = -1;
+      document.querySelectorAll('.pv td.sel').forEach(function (td) { td.classList.remove('sel'); });
+      setReading(null); return;
+    }
+    if (e.target.closest('#btnSelectRows')) {
+      var info = S.cells[S.selCell]; if (!info) return;
+      var ids = info.idx.map(function (i) { return S.records[i].id; });
+      Promise.resolve(grist.setSelectedRows(ids)).then(function () {
+        toast(ids.length + ' ' + plural(ids.length, 'ligne sélectionnée', 'lignes sélectionnées') + ' : les widgets liés sont filtrés.');
+      }, function () { toast('Liez un autre widget à celui-ci (« Sélectionner par ») pour l’utiliser.'); });
+      return;
+    }
+    var tr = e.target.closest('tr[data-row]');
+    if (tr) { try { grist.setCursorPos({ rowId: +tr.dataset.row }); } catch (err) {} }
+  });
+  $('btnCsv').addEventListener('click', exportCsv);
+  $('btnCopy').addEventListener('click', copyTable);
+  $('btnReset').addEventListener('click', function () {
+    S.cfg = defaultCfg(); S.cfg = autoCfg(); S.collapsed = {}; S.openFilter = -1;
+    refreshAll(); save(); toast('Tableau réinitialisé.');
+  });
+
+  /* =====================================================================
+     Connexion à Grist
+     ===================================================================== */
+  var optionsArrived = false;
+  grist.ready({ requiredAccess: 'full', allowSelectBy: true });
+
+  grist.onOptions(function (opts) {
+    optionsArrived = true;
+    var incoming = opts && opts.pivot;
+    if (!incoming) return;
+    var json = JSON.stringify(incoming);
+    if (json === lastSaved) return;
+    lastSaved = json;
+    S.savedCfg = incoming;
+    if (S.initialized) { S.cfg = sanitize(incoming); refreshAll(); }
+  });
+
+  var lastTable = null;
+  grist.onRecords(async function (records) {
+    S.records = records || [];
+    var tid = await getTableId();
+    if (!S.initialized || tid !== lastTable || !S.cols.length) {
+      await loadMeta(S.records);
+      lastTable = tid;
+      var stored = S.savedCfg || loadLocal();
+      S.cfg = stored ? sanitize(stored) : autoCfg();
+      if (!S.cfg.rows[0] && !S.cfg.col) S.cfg = autoCfg();
+      S.initialized = true;
+      refreshAll();
+    } else {
+      S.cfg = sanitize(S.cfg);
+      refreshAll();
+    }
+  }, { includeColumns: 'all', expandRefs: false });
+})();
+</script>
+</body>
+</html>
