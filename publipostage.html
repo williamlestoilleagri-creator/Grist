@@ -238,26 +238,6 @@
         </div>
         <p class="fr-hint-text fr-mt-2w fr-mb-0" id="tableInfo"></p>
       </div>
-
-      <div class="pp-bloc">
-        <h2>Modèles enregistrés</h2>
-        <p class="fr-text--sm">Un modèle mémorise la table, les colonnes, le message et la signature. Il est stocké dans les options du widget, dans le document Grist.</p>
-        <div class="pp-inline pp-mb">
-          <div class="fr-select-group">
-            <label class="fr-label" for="modelSelect">Modèle</label>
-            <select class="fr-select" id="modelSelect"><option value="">— Aucun modèle —</option></select>
-          </div>
-          <button type="button" class="fr-btn fr-btn--secondary" id="modelLoad">Charger</button>
-          <button type="button" class="fr-btn fr-btn--tertiary fr-icon-delete-bin-line fr-btn--icon-left" id="modelDelete">Supprimer</button>
-        </div>
-        <div class="pp-inline">
-          <div class="fr-input-group">
-            <label class="fr-label" for="modelName">Enregistrer sous</label>
-            <input class="fr-input" type="text" id="modelName" placeholder="ex : Décision individuelle">
-          </div>
-          <button type="button" class="fr-btn fr-icon-save-line fr-btn--icon-left" id="modelSave">Enregistrer</button>
-        </div>
-      </div>
     </div>
 
     <div class="pp-bloc">
@@ -813,7 +793,7 @@ function showTab(name) {
     if (!tplList.loaded) loadTemplates().catch(e => { $('tplMsg').innerHTML = alertHTML('err', esc(e.message || e)); });
     if (cfg.tpl && !tplRt) restoreActiveTemplate();
   }
-  if (name === 'generer') renderRecList();
+  if (name === 'generer') { refreshSelection(); renderRecList(); }
   if (name === 'signature') {
     resizeSigCanvas();
     if (!sigTbl.loaded) loadSigTable().catch(e => { $('sigTblMsg').innerHTML = alertHTML('err', esc(e.message || e)); });
@@ -1097,51 +1077,6 @@ function showError(e) {
   setStatus('Erreur : ' + (e && e.message || e));
 }
 
-/* ----- Modèles ----- */
-function renderModels() {
-  const names = Object.keys(cfg.models || {}).sort();
-  $('modelSelect').innerHTML = '<option value="">— Aucun modèle —</option>' +
-    names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
-}
-$('modelSave').onclick = () => {
-  const name = $('modelName').value.trim() || $('modelSelect').value;
-  if (!name) { $('modelName').focus(); return; }
-  syncEditorToCfg();
-  cfg.models[name] = {
-    source: cfg.source, tableId: cfg.tableId, cols: cfg.cols.slice(), labelCol: cfg.labelCol,
-    html: cfg.html, sig: JSON.parse(JSON.stringify(cfg.sig)), exp: Object.assign({}, cfg.exp),
-    sel: JSON.parse(JSON.stringify(cfg.sel)), tpl: cfg.tpl ? JSON.parse(JSON.stringify(cfg.tpl)) : null
-  };
-  cfg.currentModel = name;
-  renderModels(); $('modelSelect').value = name; $('modelName').value = '';
-  saveConfig(); setStatus('Modèle « ' + name + ' » enregistré');
-};
-$('modelLoad').onclick = () => {
-  const m = cfg.models[$('modelSelect').value];
-  if (!m) return;
-  Object.assign(cfg, { source: m.source, tableId: m.tableId, cols: m.cols.slice(), labelCol: m.labelCol, html: m.html });
-  cfg.sig = Object.assign({}, cfg.sig, m.sig);
-  cfg.exp = Object.assign({}, cfg.exp, m.exp);
-  if (m.sel) cfg.sel = Object.assign({}, cfg.sel, JSON.parse(JSON.stringify(m.sel)));
-  cfg.tpl = m.tpl ? JSON.parse(JSON.stringify(m.tpl)) : null;
-  tplRt = null;
-  cfg.currentModel = $('modelSelect').value;
-  excluded.clear();
-  applyCfgToUI(); saveConfig(); loadData().catch(showError);
-  setStatus('Modèle « ' + $('modelSelect').value + ' » chargé');
-};
-$('modelDelete').onclick = () => {
-  const n = $('modelSelect').value;
-  if (!n) return;
-  if ($('modelDelete').dataset.confirm !== n) {
-    $('modelDelete').dataset.confirm = n;
-    $('modelDelete').textContent = 'Confirmer ?';
-    setTimeout(() => { $('modelDelete').textContent = 'Supprimer'; delete $('modelDelete').dataset.confirm; }, 3000);
-    return;
-  }
-  delete cfg.models[n]; renderModels(); saveConfig();
-  $('modelDelete').textContent = 'Supprimer'; delete $('modelDelete').dataset.confirm;
-};
 
 /* ========================================================================
  * Éditeur
@@ -1802,7 +1737,7 @@ async function normalizeIRImages(ir) {
 function selectedRows() { return filteredRows.filter(r => !excluded.has(r.id)); }
 
 /* ----- Historique des dossiers générés ----- */
-function historyKey() { return (data.tableId || '') + '|' + (cfg.currentModel || ''); }
+function historyKey() { return (data.tableId || '') + '|' + (cfg.tpl && cfg.tpl.rowId ? 'modele-' + cfg.tpl.rowId : ''); }
 function historyMap() { return cfg.history[historyKey()] || {}; }
 function markValueDone(row) {
   const col = data.cols.find(c => c.id === cfg.sel.mark);
@@ -1978,7 +1913,7 @@ function updateRecCount() {
 }
 function renderSelInfo() {
   const n = Object.keys(historyMap()).length;
-  $('selDoneHint').textContent = 'Historique ' + (cfg.currentModel ? 'du modèle « ' + cfg.currentModel + ' »' : 'sans modèle') +
+  $('selDoneHint').textContent = 'Historique ' + (cfg.tpl ? 'du modèle « ' + cfg.tpl.title + ' »' : 'sans modèle de document') +
     ' : ' + n + ' dossier(s) déjà généré(s) dans cette table' + (cfg.sel.mark ? ', plus ceux renseignés dans la colonne choisie.' : '.');
   const nums = parseNumbers(cfg.sel.numbers);
   $('selNumMsg').innerHTML = !nums.length ? '' : (numMissing.length
@@ -4540,7 +4475,7 @@ function applyCfgToUI() {
   $('expMessage').checked = !!cfg.exp.message;
   $('expFont').value = cfg.exp.font || 'Marianne';
   applyFontClass();
-  renderSig(); renderModels();
+  renderSig();
   renderTplState();
 }
 function renderAll() {
