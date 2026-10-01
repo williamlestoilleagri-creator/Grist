@@ -1,0 +1,2554 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-scheme="light" data-fr-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Visualiseur cartographique</title>
+
+<!-- Système de design de l'État (DSFR) : police Marianne, couleurs, composants -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/dsfr.min.css" crossorigin="anonymous">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/utility/icons/icons.min.css" crossorigin="anonymous">
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="anonymous">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chroma-js/2.4.2/chroma.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+
+<style>
+  :root{
+    --bf: #000091;            /* bleu France */
+    --bf-hover: #1212FF;
+    --bf-975: #F5F5FE;
+    --bf-950: #ECECFE;
+    --bf-925: #E3E3FD;
+    --g-1000: #FFFFFF;
+    --g-975: #F6F6F6;
+    --g-950: #EEEEEE;
+    --g-925: #E5E5E5;
+    --g-850: #CECECE;
+    --g-625: #929292;
+    --g-425: #666666;
+    --g-200: #3A3A3A;
+    --g-50: #161616;
+    --success: #18753C;
+    --warning: #B34000;
+    --error: #CE0500;
+    --nodata: #E5E5E5;
+    --side-w: 392px;
+    --detail-h: 330px;
+    --shadow: 0 6px 18px 0 rgba(0,0,18,.16);
+  }
+  *{ box-sizing:border-box; }
+  [hidden]{ display:none !important; }
+  html,body{ height:100%; margin:0; }
+  body{ background:var(--g-975); color:var(--g-50); font-size:14px; overflow:hidden; }
+
+  .app{ display:flex; flex-direction:column; height:100vh; min-height:520px; }
+
+  /* ---------- En-tête ---------- */
+  .vz-header{
+    flex:0 0 auto; display:flex; align-items:center; gap:12px; padding:8px 14px;
+    background:var(--g-1000); border-bottom:1px solid var(--g-925);
+    box-shadow:0 2px 6px rgba(0,0,18,.06); position:relative; z-index:1200;
+  }
+  .vz-header .vz-brand{ display:flex; align-items:center; gap:10px; min-width:0; flex:1 1 auto; }
+  .vz-brand .vz-logo{
+    width:34px; height:34px; border-radius:4px; background:var(--bf); color:#fff;
+    display:flex; align-items:center; justify-content:center; flex:0 0 auto;
+  }
+  .vz-brand .vz-logo::before{ --icon-size:1.25rem; }
+  .vz-brand h1{ font-size:1rem; line-height:1.25rem; margin:0; color:var(--g-50); }
+  .vz-brand .vz-sub{ font-size:.75rem; line-height:1rem; color:var(--g-425); margin:0;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .vz-header .vz-actions{ display:flex; gap:6px; flex:0 0 auto; flex-wrap:wrap; justify-content:flex-end; }
+  .vz-header .fr-btn{ margin:0; }
+
+  /* ---------- Corps ---------- */
+  .vz-body{ flex:1 1 auto; display:flex; min-height:0; position:relative; }
+  .vz-side{
+    width:var(--side-w); flex:0 0 var(--side-w); background:var(--g-1000);
+    border-right:1px solid var(--g-925); display:flex; flex-direction:column; min-height:0;
+    transition:margin-left .2s ease;
+  }
+  .app.side-closed .vz-side{ margin-left:calc(-1 * var(--side-w)); }
+  .vz-main{ flex:1 1 auto; display:flex; flex-direction:column; min-width:0; position:relative; }
+
+  /* Onglets */
+  .vz-tabs{ display:flex; border-bottom:1px solid var(--g-925); flex:0 0 auto; background:var(--g-1000); }
+  .vz-tab{
+    flex:1 1 0; border:0; background:var(--g-975); padding:10px 6px 9px; font-size:.8125rem; font-weight:700;
+    color:var(--g-200); cursor:pointer; border-bottom:2px solid transparent; display:flex; flex-direction:column;
+    align-items:center; gap:2px; line-height:1.1;
+  }
+  .vz-tab .vz-step{ font-size:.6875rem; font-weight:500; color:var(--g-425); }
+  .vz-tab[aria-selected="true"]{ background:var(--g-1000); color:var(--bf); border-bottom-color:var(--bf); }
+  .vz-tab:hover{ background:var(--g-950); }
+  .vz-tab[aria-selected="true"]:hover{ background:var(--g-1000); }
+  .vz-panels{ flex:1 1 auto; overflow-y:auto; min-height:0; }
+  .vz-panel{ display:none; padding:14px 16px 24px; }
+  .vz-panel.active{ display:block; }
+  .vz-panel h2{ font-size:.9375rem; line-height:1.4; margin:18px 0 8px; color:var(--g-50); display:flex; align-items:center; gap:6px; }
+  .vz-panel h2:first-child{ margin-top:0; }
+  .vz-panel h2 .fr-badge{ margin-left:auto; }
+  .vz-hint{ font-size:.75rem; line-height:1.1rem; color:var(--g-425); margin:2px 0 8px; }
+  .vz-panel .fr-select-group, .vz-panel .fr-input-group{ margin-bottom:12px; }
+  .vz-panel .fr-label{ font-size:.8125rem; }
+  .vz-panel .fr-select, .vz-panel .fr-input{ font-size:.8125rem; padding-top:.375rem; padding-bottom:.375rem; }
+  .vz-row{ display:flex; gap:8px; }
+  .vz-row > *{ flex:1 1 0; min-width:0; }
+  .vz-sep{ border:0; border-top:1px solid var(--g-925); margin:16px 0; }
+
+  /* Liste des tables */
+  .vz-tables{ display:flex; flex-direction:column; gap:6px; }
+  .vz-tbl{
+    display:flex; align-items:flex-start; gap:10px; width:100%; text-align:left; border:1px solid var(--g-925);
+    background:var(--g-1000); padding:8px 10px; cursor:pointer; border-radius:4px; font:inherit; color:inherit;
+  }
+  .vz-tbl:hover:not([disabled]){ background:var(--bf-975); border-color:var(--bf-925); }
+  .vz-tbl[aria-current="true"]{ border-color:var(--bf); box-shadow:inset 3px 0 0 var(--bf); background:var(--bf-975); }
+  .vz-tbl[disabled]{ cursor:not-allowed; background:var(--g-975); color:var(--g-425); }
+  .vz-tbl .vz-tbl-ico{ color:var(--bf); margin-top:1px; }
+  .vz-tbl[disabled] .vz-tbl-ico{ color:var(--g-625); }
+  .vz-tbl .vz-tbl-main{ flex:1 1 auto; min-width:0; }
+  .vz-tbl .vz-tbl-name, .vz-tbl .vz-tbl-meta{ display:block; }
+  .vz-tbl .vz-tbl-name{ font-weight:700; font-size:.8125rem; word-break:break-all; }
+  .vz-tbl .vz-tbl-meta{ font-size:.71875rem; color:var(--g-425); line-height:1.05rem; }
+  details.vz-details{ margin-top:10px; }
+  details.vz-details > summary{ cursor:pointer; font-size:.8125rem; font-weight:700; color:var(--g-200); padding:6px 0; }
+
+  /* Rôles géographiques */
+  .vz-geo-role{ display:grid; grid-template-columns: 112px 1fr auto; gap:6px; align-items:center; margin-bottom:6px; }
+  .vz-geo-role .vz-geo-lbl{ font-size:.75rem; font-weight:700; color:var(--g-200); }
+  .vz-geo-role .fr-select{ margin:0; font-size:.75rem; padding:.25rem 2rem .25rem .5rem; }
+  .vz-rate{ font-size:.6875rem; font-weight:700; min-width:44px; text-align:right; }
+  .vz-rate.ok{ color:var(--success); } .vz-rate.ko{ color:var(--error); } .vz-rate.na{ color:var(--g-625); }
+
+  .vz-tags{ display:flex; flex-wrap:wrap; gap:4px; margin:4px 0 8px; }
+  .vz-tags .fr-tag{ margin:0; }
+
+  /* Indicateurs */
+  .vz-ind-tools{ display:flex; gap:6px; align-items:center; margin-bottom:8px; }
+  .vz-ind-tools .fr-input{ margin:0; }
+  .vz-chips{ display:flex; gap:4px; margin-bottom:10px; flex-wrap:wrap; }
+  .vz-ind{ border:1px solid var(--g-925); border-radius:4px; padding:8px 10px 6px; margin-bottom:6px; background:var(--g-1000); }
+  .vz-ind.sel{ border-color:var(--bf); background:var(--bf-975); }
+  .vz-ind.disabled{ background:var(--g-975); }
+  .vz-ind-head{ display:flex; gap:6px; align-items:flex-start; }
+  .vz-ind-head .fr-checkbox-group{ flex:1 1 auto; min-width:0; }
+  .vz-ind-head .fr-checkbox-group .fr-label{ font-size:.8125rem; word-break:break-word; }
+  .vz-ind .vz-colid{ display:block; font-size:.6875rem; color:var(--g-425); font-weight:400; }
+  .vz-ind .vz-reason{ font-size:.71875rem; color:var(--g-425); margin:3px 0 2px 28px; line-height:1rem; }
+  .vz-ind-opts{ display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:6px 0 4px 28px; }
+  .vz-ind-opts .fr-select{ margin:0; font-size:.75rem; padding:.25rem 1.8rem .25rem .5rem; }
+  .vz-ind-opts .full{ grid-column:1 / -1; }
+
+  /* Palettes */
+  .vz-pals{ display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .vz-pal{ border:1px solid var(--g-925); background:var(--g-1000); padding:5px 6px; cursor:pointer; text-align:left; border-radius:4px; font:inherit; }
+  .vz-pal[aria-pressed="true"]{ border-color:var(--bf); box-shadow:0 0 0 1px var(--bf); }
+  .vz-pal .vz-pal-bar{ display:flex; height:12px; border-radius:2px; overflow:hidden; }
+  .vz-pal .vz-pal-bar span{ flex:1 1 0; }
+  .vz-pal .vz-pal-name{ font-size:.6875rem; color:var(--g-200); margin-top:3px; display:block; }
+  .vz-pal-group{ font-size:.6875rem; text-transform:uppercase; letter-spacing:.04em; color:var(--g-425); margin:10px 0 4px; font-weight:700; }
+
+  input[type=range].vz-range{ width:100%; accent-color:var(--bf); margin:4px 0 0; }
+  .vz-range-lbl{ display:flex; justify-content:space-between; font-size:.8125rem; font-weight:500; }
+  .vz-range-lbl output{ font-weight:700; color:var(--bf); }
+
+  /* ---------- Carte ---------- */
+  .vz-map-wrap{ flex:1 1 auto; position:relative; min-height:200px; background:#E8ECEF; }
+  #map{ position:absolute; inset:0; background:#E8ECEF; font-family:Marianne, arial, sans-serif; }
+  .leaflet-container{ font-family:Marianne, arial, sans-serif; }
+  .leaflet-control-attribution{ font-size:10px; }
+
+  .vz-card{
+    position:absolute; top:12px; left:12px; z-index:800; width:290px; max-height:calc(100% - 24px);
+    display:flex; flex-direction:column; background:var(--g-1000); box-shadow:var(--shadow);
+  }
+  .vz-card-top{ background:var(--bf); color:#fff; display:flex; align-items:center; gap:4px; padding:4px 6px 4px 10px; }
+  .vz-card-top .vz-card-ttl{ font-size:.75rem; font-weight:700; flex:1 1 auto; }
+  .vz-card-top button{ background:none; border:0; color:#fff; cursor:pointer; padding:4px; display:flex; }
+  .vz-card-top button:hover{ background:rgba(255,255,255,.15); }
+  .vz-card-body{ padding:10px 12px 12px; overflow-y:auto; }
+  .vz-card.collapsed .vz-card-body{ display:none; }
+  .vz-card h3{ font-size:.875rem; line-height:1.25rem; margin:0 0 4px; }
+  .vz-card .vz-meta{ display:flex; flex-wrap:wrap; gap:4px 10px; font-size:.6875rem; color:var(--g-425); margin-bottom:8px; }
+  .vz-card .vz-meta span::before{ --icon-size:.75rem; margin-right:2px; }
+  .vz-legend{ list-style:none; margin:0 0 10px; padding:0; }
+  .vz-legend li{ display:flex; align-items:center; gap:8px; font-size:.75rem; padding:2px 4px; cursor:pointer; border-radius:2px; line-height:1.1rem; margin:0; }
+  .vz-legend li:hover{ background:var(--g-975); }
+  .vz-legend li.off{ opacity:.35; }
+  .vz-legend li.focus{ background:var(--bf-950); }
+  .vz-legend .sw{ width:18px; height:12px; flex:0 0 auto; border:1px solid rgba(0,0,0,.08); }
+  .vz-legend .sw.nodata{ background:repeating-linear-gradient(45deg,#E5E5E5 0 3px,#F6F6F6 3px 6px); }
+  .vz-legend .sw.circle{ border-radius:50%; width:12px; margin:0 3px; }
+  .vz-legend .lab{ flex:1 1 auto; }
+  .vz-legend .cnt{ color:var(--g-425); font-size:.6875rem; }
+  .vz-card .vz-src{ font-size:.6875rem; color:var(--g-425); margin:6px 0 8px; line-height:1rem; }
+  .vz-card .fr-select-group{ margin:0; }
+  .vz-card .fr-select{ font-size:.8125rem; padding-top:.375rem; padding-bottom:.375rem; }
+  .vz-card .fr-label{ font-size:.75rem; font-weight:700; }
+
+  .vz-ctrls{ position:absolute; top:12px; right:12px; z-index:800; display:flex; flex-direction:column; gap:8px; }
+  .vz-ctrl-grp{ display:flex; flex-direction:column; background:var(--g-1000); box-shadow:var(--shadow); }
+  .vz-ctrl-grp button{
+    width:34px; height:34px; border:0; border-bottom:1px solid var(--g-925); background:var(--g-1000); color:var(--g-50);
+    cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;
+  }
+  .vz-ctrl-grp button:last-child{ border-bottom:0; }
+  .vz-ctrl-grp button:hover{ background:var(--g-950); }
+  .vz-ctrl-grp button::before{ --icon-size:1rem; }
+  .vz-pop{
+    position:absolute; right:44px; background:var(--g-1000); box-shadow:var(--shadow); padding:8px; width:230px; z-index:900; display:none;
+  }
+  .vz-pop.open{ display:block; }
+  .vz-pop .fr-radio-group{ margin:2px 0; }
+  .vz-pop button.vz-menu{ display:block; width:100%; text-align:left; border:0; background:none; padding:7px 8px; font-size:.8125rem; cursor:pointer; color:var(--g-50); }
+  .vz-pop button.vz-menu:hover{ background:var(--g-975); }
+  .vz-pop button.vz-menu[aria-pressed="true"]{ color:var(--bf); font-weight:700; }
+
+  .vz-search{ position:absolute; top:12px; right:58px; z-index:800; width:min(300px, 40%); }
+  .vz-search .fr-input{ margin:0; box-shadow:var(--shadow), inset 0 -2px 0 0 var(--bf); background:var(--g-1000); font-size:.8125rem; }
+  .vz-sugg{ position:absolute; left:0; right:0; top:100%; background:var(--g-1000); box-shadow:var(--shadow); max-height:260px; overflow-y:auto; display:none; }
+  .vz-sugg.open{ display:block; }
+  .vz-sugg button{ display:flex; justify-content:space-between; gap:8px; width:100%; text-align:left; border:0; background:none; padding:6px 10px; font-size:.8125rem; cursor:pointer; }
+  .vz-sugg button:hover, .vz-sugg button.active{ background:var(--bf-975); }
+  .vz-sugg small{ color:var(--g-425); }
+
+  .vz-status{
+    position:absolute; left:12px; bottom:14px; z-index:800; background:rgba(255,255,255,.95); box-shadow:var(--shadow);
+    font-size:.71875rem; padding:4px 10px; display:flex; gap:8px; align-items:center; border:0; cursor:pointer; color:var(--g-200);
+  }
+  .vz-status:hover{ background:#fff; }
+  .vz-status .dot{ width:8px; height:8px; border-radius:50%; background:var(--success); }
+  .vz-status .dot.warn{ background:var(--warning); }
+
+  .vz-overlay{
+    position:absolute; inset:0; z-index:1000; display:none; align-items:center; justify-content:center;
+    background:rgba(246,246,246,.86); padding:24px;
+  }
+  .vz-overlay.open{ display:flex; }
+  .vz-overlay .vz-ov-box{ background:var(--g-1000); box-shadow:var(--shadow); max-width:560px; width:100%; padding:20px 24px; }
+  .vz-overlay .vz-ov-box h2{ font-size:1.125rem; margin:0 0 8px; }
+  .vz-overlay .vz-ov-box p{ font-size:.875rem; }
+  .vz-overlay .vz-ov-box ul{ font-size:.8125rem; margin:0 0 12px; }
+  .vz-spin{ width:28px; height:28px; border-radius:50%; border:3px solid var(--bf-925); border-top-color:var(--bf); animation:vzspin .8s linear infinite; margin-bottom:10px; }
+  @keyframes vzspin{ to{ transform:rotate(360deg); } }
+
+  .vz-tip{ font-family:Marianne, arial, sans-serif; font-size:.75rem; line-height:1.1rem; }
+  .vz-tip strong{ font-size:.8125rem; }
+  .vz-tip .v{ color:var(--bf); font-weight:700; }
+  .leaflet-tooltip.vz-label{ background:none; border:0; box-shadow:none; padding:0; font-weight:700; font-size:10px; color:var(--g-50);
+    text-shadow:0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff; font-family:Marianne, arial, sans-serif; }
+  .leaflet-tooltip.vz-label::before{ display:none; }
+
+  /* ---------- Panneau détail ---------- */
+  .vz-detail-toggle{
+    position:absolute; left:50%; transform:translate(-50%, 50%); bottom:0; z-index:850; width:36px; height:36px; border-radius:50%;
+    background:var(--bf); color:#fff; border:2px solid #fff; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:var(--shadow);
+  }
+  .vz-detail-toggle::before{ transition:transform .2s; }
+  .app.detail-closed .vz-detail-toggle::before{ transform:rotate(180deg); }
+  .vz-detail{
+    flex:0 0 var(--detail-h); height:var(--detail-h); background:var(--g-1000); border-top:1px solid var(--g-925);
+    overflow-y:auto; padding:22px 20px 16px; position:relative;
+  }
+  .app.detail-closed .vz-detail{ display:none; }
+  .app.detail-closed .vz-detail-toggle{ bottom:22px; }
+  .vz-d-head{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+  .vz-d-kicker{ font-size:.75rem; font-weight:700; color:var(--g-425); width:100%; margin:0 0 -8px; }
+  .vz-d-title{ font-size:1.375rem; line-height:1.75rem; margin:0; padding-left:12px; border-left:4px solid var(--bf); }
+  .vz-d-head .vz-chips{ margin:0; margin-left:auto; }
+  .vz-d-chip{ background:var(--g-50); color:#fff; font-size:.75rem; font-weight:700; padding:4px 10px; display:inline-flex; gap:4px; align-items:center; }
+  .vz-d-chip::before{ --icon-size:.875rem; }
+  .vz-d-chip.light{ background:var(--bf-950); color:var(--bf); }
+  .vz-d-grid{ display:grid; grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.4fr) minmax(240px, 1.2fr); gap:20px; align-items:start; }
+  .vz-kpis{ display:flex; flex-direction:column; gap:10px; }
+  .vz-kpi{ text-align:center; padding:6px 4px; }
+  .vz-kpi .k-val{ font-size:1.75rem; line-height:2rem; font-weight:800; color:var(--bf); }
+  .vz-kpi .k-val small{ font-size:.875rem; font-weight:700; margin-left:2px; }
+  .vz-kpi .k-lbl{ font-size:.8125rem; font-weight:700; color:var(--g-50); line-height:1.1rem; margin-top:2px; }
+  .vz-kpi .k-sub{ font-size:.6875rem; font-style:italic; color:var(--g-425); line-height:1rem; }
+  .vz-kpi.mini .k-val{ font-size:1.125rem; line-height:1.4rem; }
+  .vz-kpi-grid{ display:grid; grid-template-columns:1fr 1fr; gap:4px 10px; }
+  .vz-chart-box{ position:relative; }
+  .vz-chart-box .vz-chart{ position:relative; height:200px; }
+  .vz-chart-cap{ text-align:center; font-size:.75rem; font-weight:700; margin-top:6px; line-height:1.1rem; }
+  .vz-chart-cap em{ display:block; font-weight:400; color:var(--g-425); }
+  .vz-def{ font-size:.75rem; line-height:1.15rem; color:var(--g-200); }
+  .vz-def h4{ font-size:.8125rem; margin:0 0 4px; color:var(--bf); display:flex; gap:4px; align-items:center; }
+  .vz-def h4::before{ --icon-size:.875rem; }
+  .vz-def p{ margin:0 0 10px; font-size:.75rem; }
+  .vz-recs{ margin-top:14px; }
+  .vz-recs table{ width:100%; border-collapse:collapse; font-size:.75rem; }
+  .vz-recs th{ text-align:left; background:var(--g-975); padding:5px 8px; border-bottom:2px solid var(--g-50); white-space:nowrap; }
+  .vz-recs td{ padding:4px 8px; border-bottom:1px solid var(--g-925); max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .vz-recs tr.clickable{ cursor:pointer; }
+  .vz-recs tr.clickable:hover td{ background:var(--bf-975); }
+  .vz-recs .vz-table-wrap{ overflow-x:auto; }
+
+  .vz-empty{ color:var(--g-425); font-size:.8125rem; font-style:italic; }
+  .vz-alert{ margin:8px 0 12px; }
+  .vz-alert p{ font-size:.8125rem; }
+  .fr-alert--sm .fr-alert__title{ font-size:.8125rem; }
+  .vz-mono{ font-family:ui-monospace, Menlo, monospace; font-size:.71875rem; }
+
+  .vz-toast{
+    position:fixed; left:50%; bottom:20px; transform:translateX(-50%); z-index:3000; background:var(--g-50); color:#fff;
+    padding:8px 14px; font-size:.8125rem; box-shadow:var(--shadow); display:none; max-width:90vw;
+  }
+  .vz-toast.open{ display:block; }
+
+  .app.maximized .vz-side{ margin-left:calc(-1 * var(--side-w)); }
+  .app.maximized .vz-detail{ display:none; }
+
+  @media (max-width: 900px){
+    :root{ --side-w: 320px; }
+    .vz-d-grid{ grid-template-columns:1fr; }
+    .vz-card{ width:240px; }
+    .vz-search{ width:46%; }
+  }
+  @media (max-width: 640px){
+    .vz-side{ position:absolute; top:0; bottom:0; left:0; z-index:1100; box-shadow:var(--shadow); }
+    .vz-header .vz-actions .fr-btn{ font-size:0; padding-left:.5rem; padding-right:.5rem; }
+    .vz-header .vz-actions .fr-btn::before{ margin:0; }
+    .vz-card{ width:210px; }
+    .vz-brand .vz-sub{ display:none; }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- ===================== EN-TÊTE ===================== -->
+  <header class="vz-header">
+    <div class="vz-brand">
+      <span class="vz-logo fr-icon-road-map-line" aria-hidden="true"></span>
+      <div style="min-width:0">
+        <h1>Visualiseur cartographique</h1>
+        <p class="vz-sub" id="hdr-sub">Aucune table sélectionnée</p>
+      </div>
+    </div>
+    <div class="vz-actions">
+      <button class="fr-btn fr-btn--sm fr-btn--secondary fr-btn--icon-left fr-icon-settings-5-line" id="btn-side" type="button" aria-expanded="true">Paramétrer</button>
+      <button class="fr-btn fr-btn--sm fr-btn--tertiary fr-btn--icon-left fr-icon-refresh-line" id="btn-refresh" type="button">Actualiser</button>
+      <button class="fr-btn fr-btn--sm fr-btn--tertiary fr-btn--icon-left fr-icon-download-line" id="btn-export" type="button">Exporter</button>
+    </div>
+  </header>
+
+  <div class="vz-body">
+    <!-- ===================== PANNEAU LATÉRAL ===================== -->
+    <aside class="vz-side" id="side" aria-label="Paramétrage de la carte">
+      <div class="vz-tabs" role="tablist">
+        <button class="vz-tab" role="tab" aria-selected="true" data-tab="data"><span class="vz-step">Étape 1</span>Données</button>
+        <button class="vz-tab" role="tab" aria-selected="false" data-tab="ind"><span class="vz-step">Étape 2</span>Indicateurs</button>
+        <button class="vz-tab" role="tab" aria-selected="false" data-tab="style"><span class="vz-step">Étape 3</span>Représentation</button>
+      </div>
+      <div class="vz-panels">
+        <!-- Étape 1 -->
+        <section class="vz-panel active" id="panel-data" role="tabpanel">
+          <h2>Table à cartographier</h2>
+          <p class="vz-hint">Seules les tables contenant une information géographique (code INSEE, code postal, commune, département ou coordonnées) sont acceptées.</p>
+          <div class="vz-tables" id="tables"></div>
+          <details class="vz-details" id="tables-refused-box">
+            <summary id="tables-refused-sum">Tables refusées</summary>
+            <div class="vz-tables" id="tables-refused"></div>
+          </details>
+          <div id="geo-box"></div>
+        </section>
+
+        <!-- Étape 2 -->
+        <section class="vz-panel" id="panel-ind" role="tabpanel">
+          <div id="ind-box"><p class="vz-empty">Choisissez d'abord une table géolocalisable.</p></div>
+        </section>
+
+        <!-- Étape 3 -->
+        <section class="vz-panel" id="panel-style" role="tabpanel">
+          <div id="style-box"><p class="vz-empty">Choisissez d'abord une table et au moins un indicateur.</p></div>
+        </section>
+      </div>
+    </aside>
+
+    <!-- ===================== CARTE ===================== -->
+    <main class="vz-main">
+      <div class="vz-map-wrap" id="map-wrap">
+        <div id="map"></div>
+
+        <div class="vz-card" id="legend-card" hidden>
+          <div class="vz-card-top">
+            <span class="vz-card-ttl" id="card-table">—</span>
+            <button type="button" id="card-collapse" title="Réduire la légende" aria-label="Réduire la légende" class="vz-noexport"><span class="fr-icon-subtract-line fr-icon--sm" aria-hidden="true"></span></button>
+          </div>
+          <div class="vz-card-body">
+            <h3 id="card-title">—</h3>
+            <div class="vz-meta">
+              <span class="fr-icon-edit-line" id="card-agg"></span>
+              <span class="fr-icon-global-line" id="card-scale"></span>
+            </div>
+            <ul class="vz-legend" id="legend"></ul>
+            <div class="vz-range-lbl"><label for="opacity">Opacité</label><output id="opacity-out">85 %</output></div>
+            <input class="vz-range" type="range" id="opacity" min="0" max="100" step="5" value="85">
+            <p class="vz-src" id="card-src"></p>
+            <div class="fr-select-group vz-noexport">
+              <label class="fr-label" for="card-analyses">Analyses</label>
+              <select class="fr-select" id="card-analyses"></select>
+            </div>
+          </div>
+        </div>
+
+        <div class="vz-search vz-noexport" id="search-box" hidden>
+          <input class="fr-input" type="search" id="search" placeholder="Rechercher un territoire…" autocomplete="off" aria-label="Rechercher un territoire">
+          <div class="vz-sugg" id="sugg" role="listbox"></div>
+        </div>
+
+        <div class="vz-ctrls vz-noexport">
+          <div class="vz-ctrl-grp">
+            <button type="button" id="z-in" class="fr-icon-add-line" title="Zoom avant" aria-label="Zoom avant"></button>
+            <button type="button" id="z-home" class="fr-icon-home-4-line" title="Vue d'ensemble des données" aria-label="Vue d'ensemble"></button>
+            <button type="button" id="z-out" class="fr-icon-subtract-line" title="Zoom arrière" aria-label="Zoom arrière"></button>
+          </div>
+          <div class="vz-ctrl-grp">
+            <button type="button" id="c-base" class="fr-icon-map-pin-2-line" title="Fond de carte" aria-label="Fond de carte"></button>
+            <button type="button" id="c-png" class="fr-icon-image-line" title="Télécharger la carte (PNG)" aria-label="Télécharger la carte en image"></button>
+            <button type="button" id="c-max" class="fr-icon-fullscreen-line" title="Agrandir la carte" aria-label="Agrandir la carte"></button>
+          </div>
+          <div class="vz-pop" id="pop-base" style="top:86px"></div>
+          <div class="vz-pop" id="pop-export" style="top:86px"></div>
+        </div>
+
+        <button class="vz-status vz-noexport" id="status" type="button" hidden><span class="dot" id="status-dot"></span><span id="status-txt"></span></button>
+
+        <div class="vz-overlay" id="overlay"><div class="vz-ov-box" id="overlay-box"></div></div>
+
+        <button class="vz-detail-toggle fr-icon-arrow-down-s-line vz-noexport" id="detail-toggle" type="button" title="Afficher / masquer le détail" aria-label="Afficher ou masquer le panneau de détail"></button>
+      </div>
+
+      <section class="vz-detail" id="detail" aria-live="polite"></section>
+    </main>
+  </div>
+</div>
+<div class="vz-toast" id="toast" role="status"></div>
+
+<script>
+'use strict';
+
+/* =====================================================================
+ * Paramètres généraux
+ * ===================================================================== */
+// Périmètre de recherche par défaut quand la table ne contient qu'un nom de commune
+// sans département (Région Bretagne).
+const DEFAULT_PERIMETER = ['22', '29', '35', '56'];
+// Au-delà de ce nombre de départements, on demande confirmation avant de charger les contours communaux.
+const MAX_DEPTS_NO_CONFIRM = 12;
+
+const GEO_SRC = {
+  depts: [
+    'https://etalab-datasets.geo.data.gouv.fr/contours-administratifs/latest/geojson/departements-1000m.geojson',
+    'https://etalab-datasets.geo.data.gouv.fr/contours-administratifs/latest/geojson/departements-100m.geojson',
+    'https://cdn.jsdelivr.net/gh/gregoiredavid/france-geojson@master/departements-version-simplifiee.geojson',
+  ],
+  communesIndex: d => 'https://geo.api.gouv.fr/departements/' + d + '/communes?fields=nom,code,codesPostaux,codeEpci,population,surface,centre,codeDepartement',
+  communesContours: d => 'https://geo.api.gouv.fr/departements/' + d + '/communes?format=geojson&geometry=contour&fields=code',
+  epcis: 'https://geo.api.gouv.fr/epcis?fields=nom,code',
+};
+
+const IGN = 'https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}';
+const BASEMAPS = {
+  gris:  { label: 'Gris clair', url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', opt: { subdomains: 'abcd', maxZoom: 19, attribution: '© OpenStreetMap © CARTO' } },
+  gris2: { label: 'Gris clair sans libellés', url: 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', opt: { subdomains: 'abcd', maxZoom: 19, attribution: '© OpenStreetMap © CARTO' } },
+  plan:  { label: 'Plan IGN', url: IGN + '&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&FORMAT=image/png', opt: { maxZoom: 19, attribution: '© IGN – Géoplateforme' } },
+  ortho: { label: 'Photographies aériennes', url: IGN + '&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&FORMAT=image/jpeg', opt: { maxZoom: 19, attribution: '© IGN – Géoplateforme' } },
+  aucun: { label: 'Aucun fond de carte', url: null },
+};
+
+const DEPTS = [
+  ['01','Ain'],['02','Aisne'],['03','Allier'],['04','Alpes-de-Haute-Provence'],['05','Hautes-Alpes'],['06','Alpes-Maritimes'],
+  ['07','Ardèche'],['08','Ardennes'],['09','Ariège'],['10','Aube'],['11','Aude'],['12','Aveyron'],['13','Bouches-du-Rhône'],
+  ['14','Calvados'],['15','Cantal'],['16','Charente'],['17','Charente-Maritime'],['18','Cher'],['19','Corrèze'],['2A','Corse-du-Sud'],
+  ['2B','Haute-Corse'],['21',"Côte-d'Or"],['22',"Côtes-d'Armor"],['23','Creuse'],['24','Dordogne'],['25','Doubs'],['26','Drôme'],
+  ['27','Eure'],['28','Eure-et-Loir'],['29','Finistère'],['30','Gard'],['31','Haute-Garonne'],['32','Gers'],['33','Gironde'],
+  ['34','Hérault'],['35','Ille-et-Vilaine'],['36','Indre'],['37','Indre-et-Loire'],['38','Isère'],['39','Jura'],['40','Landes'],
+  ['41','Loir-et-Cher'],['42','Loire'],['43','Haute-Loire'],['44','Loire-Atlantique'],['45','Loiret'],['46','Lot'],
+  ['47','Lot-et-Garonne'],['48','Lozère'],['49','Maine-et-Loire'],['50','Manche'],['51','Marne'],['52','Haute-Marne'],
+  ['53','Mayenne'],['54','Meurthe-et-Moselle'],['55','Meuse'],['56','Morbihan'],['57','Moselle'],['58','Nièvre'],['59','Nord'],
+  ['60','Oise'],['61','Orne'],['62','Pas-de-Calais'],['63','Puy-de-Dôme'],['64','Pyrénées-Atlantiques'],['65','Hautes-Pyrénées'],
+  ['66','Pyrénées-Orientales'],['67','Bas-Rhin'],['68','Haut-Rhin'],['69','Rhône'],['70','Haute-Saône'],['71','Saône-et-Loire'],
+  ['72','Sarthe'],['73','Savoie'],['74','Haute-Savoie'],['75','Paris'],['76','Seine-Maritime'],['77','Seine-et-Marne'],
+  ['78','Yvelines'],['79','Deux-Sèvres'],['80','Somme'],['81','Tarn'],['82','Tarn-et-Garonne'],['83','Var'],['84','Vaucluse'],
+  ['85','Vendée'],['86','Vienne'],['87','Haute-Vienne'],['88','Vosges'],['89','Yonne'],['90','Territoire de Belfort'],
+  ['91','Essonne'],['92','Hauts-de-Seine'],['93','Seine-Saint-Denis'],['94','Val-de-Marne'],['95',"Val-d'Oise"],
+  ['971','Guadeloupe'],['972','Martinique'],['973','Guyane'],['974','La Réunion'],['976','Mayotte'],
+];
+const DEPT_BY_CODE = Object.fromEntries(DEPTS);
+const DEPT_BY_NAME = {};
+DEPTS.forEach(([c, n]) => { DEPT_BY_NAME[normName(n)] = c; });
+
+const SCALES = {
+  commune: { label: 'Commune', icon: 'fr-icon-map-pin-2-line' },
+  epci:    { label: 'EPCI', icon: 'fr-icon-community-line' },
+  dept:    { label: 'Département', icon: 'fr-icon-france-line' },
+  points:  { label: 'Points (coordonnées)', icon: 'fr-icon-map-pin-user-line' },
+};
+
+const ROLES = {
+  insee:  { label: 'Code INSEE',  rx: /(insee|com_?code|code_?com(mune)?($|_)|code_?geo|(^|_)cog($|_)|codgeo|depcom)/ },
+  postal: { label: 'Code postal', rx: /(postal|code_?post|(^|_)cp($|_)|zip)/ },
+  name:   { label: 'Commune (nom)', rx: /(commune|ville|city|localite|com_?name|nom_?com|libelle_?com|municipal)/ },
+  dept:   { label: 'Département', rx: /((^|_)(dep|dept|dpt|depart|code_?dep|code_?dpt|num_?dep)\d*($|_))|departement/ },
+  lat:    { label: 'Latitude',    rx: /((^|_)lat($|_|itude))/ },
+  lon:    { label: 'Longitude',   rx: /((^|_)(lon|lng|long)($|_|gitude))/ },
+};
+const ROLE_TYPES = {
+  insee: ['Text','Numeric','Int','Choice','Any','Ref'],
+  postal: ['Text','Numeric','Int','Choice','Any','Ref'],
+  dept: ['Text','Numeric','Int','Choice','Any','Ref'],
+  name: ['Text','Choice','Any','Ref'],
+  lat: ['Numeric','Any','Text'],
+  lon: ['Numeric','Any','Text'],
+};
+
+const AGG = {
+  count:          { label: "Nombre d'enregistrements", additive: true },
+  sum:            { label: 'Somme', additive: true },
+  mean:           { label: 'Moyenne' },
+  median:         { label: 'Médiane' },
+  min:            { label: 'Minimum' },
+  max:            { label: 'Maximum' },
+  filled:         { label: 'Nombre de valeurs renseignées', additive: true },
+  distinct:       { label: 'Nombre de valeurs distinctes' },
+  true_count:     { label: 'Nombre de « Oui »', additive: true },
+  true_pct:       { label: 'Part de « Oui »', pct: true },
+  eq_count:       { label: 'Nombre pour une modalité', additive: true, mod: true },
+  eq_pct:         { label: 'Part d\'une modalité', pct: true, mod: true },
+  contains_count: { label: 'Nombre contenant une modalité', additive: true, mod: true },
+  contains_pct:   { label: 'Part contenant une modalité', pct: true, mod: true },
+};
+const AGGS_BY_KIND = {
+  num:   ['sum', 'mean', 'median', 'min', 'max', 'filled'],
+  bool:  ['true_pct', 'true_count'],
+  cat:   ['eq_pct', 'eq_count', 'distinct', 'filled'],
+  multi: ['contains_pct', 'contains_count', 'filled'],
+  text:  ['filled', 'distinct'],
+  date:  ['filled'],
+  id:    ['filled', 'distinct'],
+};
+const PER = {
+  none:    { label: 'Valeur brute' },
+  pop1000: { label: 'Pour 1 000 habitants', unit: '‰ hab.' },
+  km2:     { label: 'Par km²', unit: '/km²' },
+  share:   { label: 'Part du total (%)', unit: '%' },
+};
+
+const METHODS = {
+  quantile:  { label: 'Quantiles (effectifs égaux)', hint: 'Chaque classe contient à peu près le même nombre de territoires. Recommandé par défaut.' },
+  jenks:     { label: 'Seuils naturels (Jenks)', hint: 'Regroupe les valeurs proches et sépare les ruptures de la distribution.' },
+  equal:     { label: 'Amplitudes égales', hint: 'Toutes les classes ont la même largeur. Adapté aux distributions régulières.' },
+  nice:      { label: 'Amplitudes égales arrondies', hint: 'Classes de même largeur, sur des seuils « ronds » (1, 2, 2,5, 5 × 10ⁿ).' },
+  stddev:    { label: 'Écart-type (autour de la moyenne)', hint: 'Classes d\'un écart-type centrées sur la moyenne. Met en évidence les écarts à la moyenne.' },
+  geometric: { label: 'Progression géométrique', hint: 'Classes de plus en plus larges. Adapté aux distributions très dissymétriques (valeurs > 0).' },
+  unique:    { label: 'Valeurs uniques', hint: 'Une classe par valeur (si peu de valeurs distinctes).' },
+  manual:    { label: 'Seuils manuels', hint: 'Saisissez vous-même les bornes des classes.' },
+};
+
+const PALETTES = {
+  'bleu-france':  { group: 'seq', name: 'Bleu France',   colors: ['#ECECFE', '#8585F6', '#000091', '#141432'] },
+  'ecume':        { group: 'seq', name: 'Écume',          colors: ['#E9EDFE', '#8B9EE0', '#465F9D', '#222F55'] },
+  'menthe':       { group: 'seq', name: 'Menthe',         colors: ['#DFFDF7', '#73C2B2', '#009081', '#173F38'] },
+  'emeraude':     { group: 'seq', name: 'Émeraude',       colors: ['#E3FDEB', '#6FCB93', '#00A95F', '#1D4B30'] },
+  'tilleul':      { group: 'seq', name: 'Tilleul',        colors: ['#FEF7DA', '#D8CB68', '#B7A73F', '#4F4620'] },
+  'tournesol':    { group: 'seq', name: 'Tournesol',      colors: ['#FEF6E3', '#EFCB5B', '#C8AA39', '#5E4E17'] },
+  'terre-battue': { group: 'seq', name: 'Terre battue',   colors: ['#FEECE2', '#F2A07E', '#E4794A', '#7A3317'] },
+  'tuile':        { group: 'seq', name: 'Tuile',          colors: ['#FEE9E6', '#E7927F', '#CE614A', '#62231A'] },
+  'glycine':      { group: 'seq', name: 'Glycine',        colors: ['#FEE7FC', '#C985C3', '#A558A0', '#4D2549'] },
+  'marianne':     { group: 'seq', name: 'Rouge Marianne', colors: ['#FEE9E9', '#F3777D', '#E1000F', '#5C0006'] },
+  'cafe-creme':   { group: 'seq', name: 'Café crème',     colors: ['#FBF6ED', '#E1C99F', '#B39965', '#5C4C33'] },
+  'gris':         { group: 'seq', name: 'Gris',           colors: ['#F6F6F6', '#B5B5B5', '#666666', '#161616'] },
+  'menthe-glycine': { group: 'multi', name: 'Menthe › Glycine › Nuit', colors: ['#EFEBE1', '#9FD8CE', '#4CA6A6', '#7B6AA5', '#2D2B52'] },
+  'tilleul-ecume':  { group: 'multi', name: 'Tilleul › Écume',          colors: ['#FEF7DA', '#B7D58F', '#4BA79A', '#465F9D', '#222F55'] },
+  'tournesol-tuile':{ group: 'multi', name: 'Tournesol › Tuile',        colors: ['#FEF6E3', '#F6D58A', '#E4794A', '#CE614A', '#62231A'] },
+  'cumulus-bf':     { group: 'multi', name: 'Cumulus › Bleu France',    colors: ['#F1F5FD', '#9FC0EC', '#417DC4', '#000091'] },
+  'marianne-bf':  { group: 'div', name: 'Rouge Marianne ↔ Bleu France', colors: ['#E1000F', '#F7BFC3', '#F6F6F6', '#B9B9F8', '#000091'] },
+  'tuile-menthe': { group: 'div', name: 'Tuile ↔ Menthe',               colors: ['#CE614A', '#F4C3B7', '#F6F6F6', '#A9DCD1', '#009081'] },
+  'tb-ecume':     { group: 'div', name: 'Terre battue ↔ Écume',         colors: ['#E4794A', '#F8CDB8', '#F6F6F6', '#B9C7EE', '#465F9D'] },
+  'glycine-tilleul': { group: 'div', name: 'Glycine ↔ Tilleul',         colors: ['#A558A0', '#E8C7E5', '#F6F6F6', '#E3DDA6', '#B7A73F'] },
+};
+
+const TYPE_LABEL = {
+  Text: 'Texte', Numeric: 'Numérique', Int: 'Entier', Bool: 'Booléen', Date: 'Date', DateTime: 'Date et heure',
+  Choice: 'Choix', ChoiceList: 'Choix multiples', Ref: 'Référence', RefList: 'Références', Attachments: 'Pièces jointes', Any: 'Formule',
+};
+
+const ID_RX = /((^|_)(id|id\d|uuid|siret|siren|pacage|numero|num|no|n|tel|telephone|portable|mobile|fixe|mail|email|iban|bic|rib|ordre|cle|key|lien|url|link|dossier_number|dossier_id|champ_id|fourn|adresse|address)($|_))|siret|siren|pacage|e_?mail|telephone|iban/;
+const YEAR_RX = /((^|_)(annee|an|year|millesime|exercice)($|_))/;
+const MEAN_RX = /(taux|pourcent|pct|part|ratio|moyen|prix|age|rendement|densite|indice|score|note|pourcentage|verif)/;
+
+/* =====================================================================
+ * État
+ * ===================================================================== */
+const S = {
+  gr: null,               // API Grist (ou null en démo)
+  demo: false,
+  linkedTableId: null,
+  meta: { tables: [], cols: {} },  // cols[tableId] = [{colId,label,type,base,...}]
+  prescan: {},            // tableId -> {status, reason, roles}
+  cfg: null,
+  table: null,            // table chargée
+  prof: {},               // profils des colonnes
+  geo: null,              // diagnostic géo
+  rec: null,              // localisation des enregistrements
+  terr: new Map(),        // territoires calculés
+  values: {},             // indId -> Map(key -> valeur)
+  cls: null,              // classification de l'indicateur actif
+  hidden: new Set(),      // classes masquées (légende)
+  focusClass: null,
+  selected: null,
+  geom: { dept: null, idx: {}, contours: {}, byCode: new Map(), byPostal: new Map(), byName: new Map(), epci: null },
+  map: null, base: null, layer: null, circles: null, labels: null, featLayers: new Map(),
+  charts: [],
+  refused: {},            // tables refusées après lecture des valeurs (session en cours)
+};
+
+function defaultCfg() {
+  return { v: 1, tableId: null, display: { opacity: 0.85, basemap: 'gris', repr: 'aplat', empty: 'nodata', borders: true, labels: 'none', radius: 28 }, byTable: {} };
+}
+function defaultClassif(ind) {
+  const div = ind && ind.agg === 'sum' && S.prof[ind.col] && S.prof[ind.col].hasNeg;
+  return { method: 'quantile', k: 5, palette: div ? 'tuile-menthe' : 'menthe-glycine', reverse: false, round: 'auto', zero: false,
+           lo: null, hi: null, showMin: null, showMax: null, manual: [], center: 'zero', centerValue: 0 };
+}
+function T() {
+  const id = S.cfg.tableId;
+  if (!id) return null;
+  if (!S.cfg.byTable[id]) S.cfg.byTable[id] = { geoMap: null, scale: null, perimeter: [], filter: { col: null, values: [] }, indicators: [], active: null };
+  return S.cfg.byTable[id];
+}
+
+/* =====================================================================
+ * Utilitaires
+ * ===================================================================== */
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function normName(s) {
+  return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase()
+    .replace(/\bCEDEX\b.*$/, '').replace(/\b\d{5}\b/g, ' ')
+    .replace(/[^A-Z0-9]+/g, ' ').replace(/\bSTE\b/g, 'SAINTE').replace(/\bST\b/g, 'SAINT').trim().replace(/\s+/g, ' ');
+}
+function normKey(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+function isNum(x) { return typeof x === 'number' && isFinite(x); }
+function toNum(x) {
+  if (isNum(x)) return x;
+  if (typeof x === 'string') {
+    const s = x.replace(/[\s  €%]/g, '').replace(',', '.');
+    if (s && /^[-+]?\d*\.?\d+(e[-+]?\d+)?$/i.test(s)) return parseFloat(s);
+  }
+  return null;
+}
+const NF = {};
+function fmt(v, dec) {
+  if (v == null || !isFinite(v)) return '—';
+  if (dec == null) { const a = Math.abs(v); dec = a >= 100 ? 0 : a >= 10 ? 1 : a >= 1 ? 2 : a === 0 ? 0 : 3; }
+  const k = 'd' + dec;
+  if (!NF[k]) NF[k] = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: dec, minimumFractionDigits: 0 });
+  return NF[k].format(v);
+}
+function toast(msg, ms) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('open');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('open'), ms || 3500);
+}
+function debounce(fn, ms) { let t; return function () { const a = arguments; clearTimeout(t); t = setTimeout(() => fn.apply(this, a), ms); }; }
+async function fetchJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('HTTP ' + r.status + ' — ' + url);
+  return r.json();
+}
+function download(name, content, mime) {
+  const blob = content instanceof Blob ? content : new Blob([content], { type: mime });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+function baseType(t) { return String(t || 'Any').split(':')[0]; }
+
+/* Normalisation des codes géographiques */
+function normDept(v) {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') { if (!isFinite(v)) return null; v = String(Math.trunc(v)); if (v.length === 1) v = '0' + v; }
+  const s = String(v).trim().toUpperCase();
+  let m = s.match(/^0?(97[1-6]|2[AB]|\d{2})(?!\d)/);
+  if (m && DEPT_BY_CODE[m[1]]) return m[1];
+  m = s.match(/\((97[1-6]|2[AB]|\d{2})\)/);
+  if (m && DEPT_BY_CODE[m[1]]) return m[1];
+  const k = normName(s);
+  if (DEPT_BY_NAME[k]) return DEPT_BY_NAME[k];
+  return null;
+}
+function normInsee(v) {
+  if (v == null || v === '') return null;
+  let s = typeof v === 'number' ? String(Math.trunc(v)) : String(v).trim().toUpperCase();
+  if (/^\d{4}$/.test(s)) s = '0' + s;
+  if (!/^(\d{5}|2[AB]\d{3})$/.test(s)) return null;
+  if (/^751(0[1-9]|1\d|20)$/.test(s)) return '75056';      // arrondissements de Paris
+  if (/^6938[1-9]$/.test(s)) return '69123';               // Lyon
+  if (/^132(0[1-9]|1[0-6])$/.test(s)) return '13055';      // Marseille
+  return s;
+}
+function normPostal(v) {
+  if (v == null || v === '') return null;
+  let s = typeof v === 'number' ? String(Math.trunc(v)) : String(v).trim();
+  if (/^\d{4}$/.test(s)) s = '0' + s;
+  return /^\d{5}$/.test(s) ? s : null;
+}
+function deptOfInsee(c) { return c.startsWith('97') ? c.slice(0, 3) : c.slice(0, 2); }
+function deptOfPostal(p) {
+  if (p.startsWith('97')) return DEPT_BY_CODE[p.slice(0, 3)] ? p.slice(0, 3) : null;
+  if (p.startsWith('20')) return parseInt(p, 10) < 20200 ? '2A' : '2B';
+  return DEPT_BY_CODE[p.slice(0, 2)] ? p.slice(0, 2) : null;
+}
+function isPlaceName(x) { return typeof x === 'string' && /[A-Za-zÀ-ÿ]{2}/.test(x) && !/^\s*[\d\s.,-]+\s*$/.test(x); }
+function toLat(x) { const n = toNum(x); return n != null && n >= -90 && n <= 90 && n !== 0 ? n : null; }
+function toLon(x) { const n = toNum(x); return n != null && n >= -180 && n <= 180 && n !== 0 ? n : null; }
+const ROLE_NORM = {
+  insee: normInsee, postal: normPostal, dept: normDept,
+  name: x => (isPlaceName(x) ? normName(x) : null), lat: toLat, lon: toLon,
+};
+
+/* =====================================================================
+ * Accès aux données (Grist ou démo)
+ * ===================================================================== */
+async function fetchTable(tableId) {
+  if (S.demo) return DEMO.tables[tableId];
+  return S.gr.docApi.fetchTable(tableId);
+}
+
+async function loadMeta() {
+  const t = await fetchTable('_grist_Tables');
+  const c = await fetchTable('_grist_Tables_column');
+  const tables = [];
+  const byRef = {};
+  for (let i = 0; i < t.id.length; i++) {
+    const tableId = t.tableId[i];
+    if (!tableId || tableId.startsWith('GristHidden') || tableId.startsWith('_grist')) continue;
+    const tb = { ref: t.id[i], tableId, summary: !!(t.summarySourceTable && t.summarySourceTable[i]) };
+    tables.push(tb); byRef[tb.ref] = tb;
+  }
+  const colsByRef = {};
+  const cols = {};
+  for (let i = 0; i < c.id.length; i++) {
+    const tb = byRef[c.parentId[i]];
+    const colId = c.colId[i];
+    const col = {
+      ref: c.id[i], tableId: tb ? tb.tableId : null, colId,
+      label: (c.label && c.label[i]) || colId, type: c.type[i] || 'Any', base: baseType(c.type[i]),
+      pos: c.parentPos ? c.parentPos[i] : i, visibleCol: c.visibleCol ? c.visibleCol[i] : 0,
+      isFormula: c.isFormula ? !!c.isFormula[i] : false,
+    };
+    colsByRef[col.ref] = col;
+    if (!tb) continue;
+    if (colId === 'manualSort' || colId.startsWith('gristHelper_')) continue;
+    if (tb.summary && colId === 'group') continue;
+    (cols[tb.tableId] = cols[tb.tableId] || []).push(col);
+  }
+  Object.values(cols).forEach(a => a.sort((x, y) => x.pos - y.pos));
+  tables.sort((a, b) => a.tableId.localeCompare(b.tableId));
+  S.meta = { tables, cols, colsByRef };
+  tables.forEach(tb => { S.prescan[tb.tableId] = prescanTable(tb.tableId); });
+}
+
+/* Pré-analyse sur les noms et types de colonnes (sans lire les données) */
+function prescanTable(tableId) {
+  const cols = S.meta.cols[tableId] || [];
+  const roles = {};
+  for (const c of cols) {
+    const k = normKey(c.colId + ' ' + (c.label !== c.colId ? c.label : '')).replace(/\s+/g, '_');
+    for (const r in ROLES) {
+      if (!ROLE_TYPES[r].includes(c.base)) continue;
+      if (ROLES[r].rx.test(k)) (roles[r] = roles[r] || []).push(c.colId);
+    }
+  }
+  const has = Object.keys(roles);
+  const okPair = roles.lat && roles.lon;
+  const usable = has.filter(r => r !== 'lat' && r !== 'lon').length || okPair;
+  if (!cols.length) return { status: 'refused', reason: 'Table vide (aucune colonne)', roles };
+  if (!usable) return { status: 'refused', reason: 'Aucune colonne géographique (code INSEE, code postal, commune, département, coordonnées)', roles };
+  const parts = [];
+  if (roles.insee) parts.push('code INSEE'); if (roles.postal) parts.push('code postal');
+  if (roles.name) parts.push('commune'); if (roles.dept) parts.push('département'); if (okPair) parts.push('coordonnées');
+  return { status: 'probable', reason: 'Colonnes détectées : ' + parts.join(', '), roles };
+}
+
+function decodeCell(x) {
+  if (Array.isArray(x)) {
+    const t = x[0];
+    if (t === 'L') return x.slice(1);
+    if (t === 'R' || t === 'r') return x[2];
+    if (t === 'D' || t === 'd') return x[1];
+    return null; // erreurs, valeurs en attente…
+  }
+  return x;
+}
+
+async function loadTable(tableId) {
+  const raw = await fetchTable(tableId);
+  const cols = S.meta.cols[tableId] || [];
+  const n = raw.id ? raw.id.length : 0;
+  const v = {};
+  const refCache = {};
+  for (const c of cols) {
+    const arr = raw[c.colId] || new Array(n).fill(null);
+    let out = arr.map(decodeCell);
+    if (c.base === 'Ref' || c.base === 'RefList') {
+      const target = c.type.split(':')[1];
+      const vis = S.meta.colsByRef[c.visibleCol];
+      let map = null;
+      if (target && vis) {
+        const key = target + '.' + vis.colId;
+        try {
+          if (!refCache[key]) {
+            const tt = await fetchTable(target);
+            const m = new Map();
+            (tt.id || []).forEach((id, i) => { const d = decodeCell(tt[vis.colId] ? tt[vis.colId][i] : null); m.set(id, d == null ? '' : (Array.isArray(d) ? d.join(', ') : String(d))); });
+            refCache[key] = m;
+          }
+          map = refCache[key];
+        } catch (e) { map = null; }
+      }
+      const disp = id => (!id ? null : map ? (map.get(id) || null) : target + '[' + id + ']');
+      out = c.base === 'Ref' ? out.map(disp) : out.map(a => (Array.isArray(a) ? a.map(disp).filter(Boolean) : null));
+    }
+    v[c.colId] = out;
+  }
+  S.table = { tableId, cols, n, ids: raw.id || [], v };
+  S.prof = profileColumns();
+}
+
+/* =====================================================================
+ * Profil des colonnes et recommandations d'indicateurs
+ * ===================================================================== */
+function profileColumns() {
+  const out = {};
+  const n = S.table.n;
+  for (const c of S.table.cols) {
+    const a = S.table.v[c.colId];
+    let ne = 0, nums = 0, numStr = 0, bools = 0, arrs = 0, strs = 0, trues = 0, hasNeg = false;
+    const freq = new Map();
+    const bump = k => { if (freq.size < 2000 || freq.has(k)) freq.set(k, (freq.get(k) || 0) + 1); };
+    for (const x of a) {
+      if (x == null || x === '' || (Array.isArray(x) && !x.length)) continue;
+      ne++;
+      if (Array.isArray(x)) { arrs++; x.forEach(y => bump(String(y))); continue; }
+      if (typeof x === 'number') { nums++; if (x < 0) hasNeg = true; }
+      else if (typeof x === 'boolean') { bools++; if (x) trues++; }
+      else if (typeof x === 'string') { strs++; const nn = toNum(x); if (nn != null) { numStr++; if (nn < 0) hasNeg = true; } }
+      bump(typeof x === 'object' ? JSON.stringify(x) : String(x));
+    }
+    const distinct = freq.size;
+    const catLike = distinct <= 30 && distinct <= Math.max(2, ne * 0.5);
+    let kind;
+    switch (c.base) {
+      case 'Attachments': kind = 'attach'; break;
+      case 'Bool': kind = 'bool'; break;
+      case 'Numeric': case 'Int': kind = 'num'; break;
+      case 'Date': case 'DateTime': kind = 'date'; break;
+      case 'ChoiceList': case 'RefList': kind = 'multi'; break;
+      case 'Choice': case 'Ref': kind = 'cat'; break;
+      case 'Text': kind = (strs && numStr / strs > 0.8 && !catLike) ? 'num' : (catLike ? 'cat' : 'text'); break;
+      default:
+        kind = arrs > ne / 2 ? 'multi' : bools > ne / 2 ? 'bool' : (nums + numStr) > ne / 2 ? 'num' : catLike ? 'cat' : 'text';
+    }
+    const mods = Array.from(freq.entries()).sort((x, y) => y[1] - x[1]).slice(0, 60).map(e => e[0]);
+    out[c.colId] = { kind, ne, fill: n ? ne / n : 0, distinct, mods, freq, trues, hasNeg };
+  }
+  return out;
+}
+
+function geoRoleOf(colId) {
+  const g = T() && T().geoMap;
+  if (!g) return null;
+  for (const r in g) if (g[r] === colId) return r;
+  return null;
+}
+
+function recommend(c) {
+  const p = S.prof[c.colId];
+  const k = normKey(c.colId);
+  const pc = Math.round(p.fill * 100) + ' %';
+  const role = geoRoleOf(c.colId);
+  if (role) return { status: 'geo', reason: 'Colonne utilisée pour localiser les enregistrements (' + ROLES[role].label + ').', aggs: [] };
+  if (p.kind === 'attach') return { status: 'no', reason: 'Pièces jointes : non cartographiable.', aggs: [] };
+  if (!p.ne) return { status: 'no', reason: 'Colonne entièrement vide.', aggs: [] };
+  const idLike = ID_RX.test(k) && p.kind !== 'bool';
+  if (idLike) return { status: 'warn', reason: 'Identifiant, code ou coordonnée : aucune signification statistique. Seul un comptage est possible.', aggs: AGGS_BY_KIND.id, def: 'filled' };
+  if (p.kind === 'date') return { status: 'warn', reason: 'Date : seul le nombre de valeurs renseignées est cartographiable.', aggs: AGGS_BY_KIND.date, def: 'filled' };
+  if (p.kind === 'text') return { status: 'warn', reason: 'Texte libre (' + p.distinct + ' valeurs différentes) : seul un comptage est possible.', aggs: AGGS_BY_KIND.text, def: 'filled' };
+  if (p.kind === 'bool') {
+    if (p.trues === 0 || p.trues === p.ne) return { status: 'warn', reason: 'Toujours « ' + (p.trues ? 'Oui' : 'Non') + ' » : aucune variation à cartographier.', aggs: AGGS_BY_KIND.bool, def: 'true_pct' };
+    return { status: 'rec', reason: 'Oui / Non (' + fmt(p.trues / p.ne * 100, 0) + ' % de « Oui ») : part de « Oui » par territoire.', aggs: AGGS_BY_KIND.bool, def: 'true_pct' };
+  }
+  if (p.distinct <= 1) return { status: 'warn', reason: 'Valeur constante sur toute la table : aucune variation à cartographier.', aggs: AGGS_BY_KIND[p.kind], def: AGGS_BY_KIND[p.kind][0] };
+  if (p.kind === 'num') {
+    const def = MEAN_RX.test(k) ? 'mean' : 'sum';
+    if (YEAR_RX.test(k)) return { status: 'warn', reason: 'Année codée en nombre : une somme ou une moyenne n\'a pas de sens. Utilisez plutôt le filtre.', aggs: AGGS_BY_KIND.num, def: 'max' };
+    if (p.fill < 0.3) return { status: 'warn', reason: 'Peu renseignée (' + pc + ') : la carte serait peu représentative.', aggs: AGGS_BY_KIND.num, def };
+    if (p.distinct >= 3 && p.fill >= 0.6) return { status: 'rec', reason: 'Valeur numérique renseignée à ' + pc + ' : ' + (def === 'sum' ? 'somme' : 'moyenne') + ' par territoire.', aggs: AGGS_BY_KIND.num, def };
+    return { status: 'ok', reason: 'Numérique, ' + p.distinct + ' valeurs distinctes, renseignée à ' + pc + '.', aggs: AGGS_BY_KIND.num, def };
+  }
+  if (p.kind === 'cat' || p.kind === 'multi') {
+    const aggs = AGGS_BY_KIND[p.kind];
+    if (p.distinct > 30) return { status: 'warn', reason: 'Trop de modalités (' + p.distinct + ') pour une lecture cartographique.', aggs, def: aggs[0] };
+    if (p.fill < 0.3) return { status: 'warn', reason: 'Peu renseignée (' + pc + ').', aggs, def: aggs[0] };
+    if (p.distinct <= 12 && p.fill >= 0.5) return { status: 'rec', reason: p.distinct + ' modalités (' + p.mods.slice(0, 3).map(m => '« ' + m + ' »').join(', ') + (p.distinct > 3 ? '…' : '') + ') : part d\'une modalité par territoire.', aggs, def: aggs[0] };
+    return { status: 'ok', reason: p.distinct + ' modalités, renseignée à ' + pc + '.', aggs, def: aggs[0] };
+  }
+  return { status: 'no', reason: 'Type non pris en charge.', aggs: [] };
+}
+const STATUS_BADGE = {
+  rec:  '<span class="fr-badge fr-badge--sm fr-badge--success fr-badge--no-icon">Conseillé</span>',
+  ok:   '<span class="fr-badge fr-badge--sm fr-badge--info fr-badge--no-icon">Possible</span>',
+  warn: '<span class="fr-badge fr-badge--sm fr-badge--warning fr-badge--no-icon">Déconseillé</span>',
+  no:   '<span class="fr-badge fr-badge--sm fr-badge--no-icon">Non cartographiable</span>',
+  geo:  '<span class="fr-badge fr-badge--sm fr-badge--new fr-badge--no-icon">Localisation</span>',
+};
+
+/* =====================================================================
+ * Détection géographique (sur les valeurs)
+ * ===================================================================== */
+function validateRole(role, colId) {
+  const a = S.table.v[colId];
+  if (!a) return { ne: 0, ok: 0, rate: 0 };
+  const f = ROLE_NORM[role];
+  let ne = 0, ok = 0;
+  for (const x of a) {
+    if (x == null || x === '' || Array.isArray(x)) continue;
+    ne++;
+    if (f(x) != null) ok++;
+  }
+  return { ne, ok, rate: ne ? ok / ne : 0 };
+}
+const ROLE_MIN_RATE = 0.6;
+
+function detectGeo() {
+  const pre = S.prescan[S.table.tableId] || { roles: {} };
+  const cand = {};
+  const best = {};
+  for (const r in ROLES) {
+    cand[r] = (pre.roles[r] || []).map(col => Object.assign({ col }, validateRole(r, col)))
+      .sort((a, b) => b.rate - a.rate || b.ne - a.ne);
+    const b = cand[r].find(x => x.rate >= ROLE_MIN_RATE && x.ne > 0);
+    best[r] = b ? b.col : null;
+  }
+  // une même colonne ne joue qu'un rôle (priorité : INSEE > postal > département > nom)
+  const used = new Set();
+  for (const r of ['insee', 'postal', 'dept', 'lat', 'lon', 'name']) {
+    if (best[r] && used.has(best[r])) best[r] = null;
+    if (best[r]) used.add(best[r]);
+  }
+  return { cand, best };
+}
+
+function geoStatus() {
+  const g = T().geoMap || {};
+  const valid = {};
+  for (const r in ROLES) {
+    if (!g[r]) { valid[r] = null; continue; }
+    valid[r] = validateRole(r, g[r]);
+  }
+  const ok = r => valid[r] && valid[r].rate >= ROLE_MIN_RATE && valid[r].ne > 0;
+  const scales = {
+    commune: ok('insee') || ok('postal') || ok('name'),
+    epci: ok('insee') || ok('postal') || ok('name'),
+    dept: ok('dept') || ok('insee') || ok('postal') || ok('name'),
+    points: ok('lat') && ok('lon'),
+  };
+  const any = Object.values(scales).some(Boolean);
+  let reason = '';
+  if (!any) {
+    const tried = Object.keys(g).filter(r => g[r]).map(r => '« ' + g[r] + ' » (' + ROLES[r].label + ' : ' + Math.round((valid[r] ? valid[r].rate : 0) * 100) + ' % de valeurs reconnues)');
+    reason = tried.length
+      ? 'Les colonnes candidates ne contiennent pas de valeurs géographiques reconnues : ' + tried.join(', ') + '.'
+      : 'Aucune colonne ne contient de code INSEE, code postal, nom de commune, département ou coordonnées.';
+  }
+  return { valid, scales, any, reason };
+}
+
+/* =====================================================================
+ * Référentiels géographiques (geo.api.gouv.fr / Etalab)
+ * ===================================================================== */
+async function loadDeptContours() {
+  if (S.geom.dept) return S.geom.dept;
+  let lastErr;
+  for (const url of GEO_SRC.depts) {
+    try {
+      const fc = await fetchJSON(url);
+      fc.features.forEach(f => {
+        const p = f.properties || {};
+        const code = String(p.code || p.INSEE_DEP || p.code_insee || '').toUpperCase();
+        f.properties = { code, nom: p.nom || p.NOM || DEPT_BY_CODE[code] || code };
+      });
+      S.geom.dept = fc;
+      return fc;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error('Contours départementaux indisponibles');
+}
+
+async function loadCommuneIndex(depts) {
+  const todo = depts.filter(d => !S.geom.idx[d] && DEPT_BY_CODE[d]);
+  await Promise.all(todo.map(async d => {
+    const list = await fetchJSON(GEO_SRC.communesIndex(d));
+    S.geom.idx[d] = list;
+    for (const c of list) {
+      c.dep = c.codeDepartement || d;
+      S.geom.byCode.set(c.code, c);
+      (c.codesPostaux || []).forEach(p => { const a = S.geom.byPostal.get(p) || []; a.push(c); S.geom.byPostal.set(p, a); });
+      const nn = normName(c.nom);
+      const a = S.geom.byName.get(nn) || []; a.push(c); S.geom.byName.set(nn, a);
+    }
+  }));
+}
+
+async function loadCommuneContours(depts) {
+  const todo = depts.filter(d => !S.geom.contours[d] && DEPT_BY_CODE[d]);
+  await Promise.all(todo.map(async d => {
+    const fc = await fetchJSON(GEO_SRC.communesContours(d));
+    S.geom.contours[d] = fc.features || [];
+  }));
+}
+
+async function loadEpciNames() {
+  if (S.geom.epci) return;
+  try {
+    const list = await fetchJSON(GEO_SRC.epcis);
+    S.geom.epci = new Map(list.map(e => [e.code, e.nom]));
+  } catch (e) { S.geom.epci = new Map(); }
+}
+
+/* =====================================================================
+ * Localisation des enregistrements
+ * ===================================================================== */
+function perimeter() {
+  const t = T();
+  if (t.perimeter && t.perimeter.length) return t.perimeter.slice();
+  return (S.rec && S.rec.depsInData.length) ? S.rec.depsInData.slice() : DEFAULT_PERIMETER.slice();
+}
+
+async function locateRecords() {
+  const t = T(); const g = t.geoMap || {}; const v = S.table.v; const n = S.table.n;
+  const st = geoStatus();
+  const use = r => g[r] && st.valid[r] && st.valid[r].rate >= ROLE_MIN_RATE ? v[g[r]] : null;
+  const A = { insee: use('insee'), postal: use('postal'), dept: use('dept'), name: use('name'), lat: use('lat'), lon: use('lon') };
+  const scale = t.scale;
+
+  // 1) département de chaque enregistrement (sans référentiel)
+  const dep = new Array(n).fill(null);
+  const insee = new Array(n).fill(null);
+  const postal = new Array(n).fill(null);
+  const deps = new Set();
+  for (let i = 0; i < n; i++) {
+    if (A.insee) insee[i] = normInsee(A.insee[i]);
+    if (A.postal) postal[i] = normPostal(A.postal[i]);
+    let d = A.dept ? normDept(A.dept[i]) : null;
+    if (!d && insee[i]) d = deptOfInsee(insee[i]);
+    if (!d && postal[i]) d = deptOfPostal(postal[i]);
+    dep[i] = d; if (d) deps.add(d);
+  }
+  const depsInData = Array.from(deps).filter(d => DEPT_BY_CODE[d]).sort();
+  S.rec = { depsInData };
+  const per = perimeter();
+
+  // 2) référentiel communal si nécessaire
+  const needCommunes = scale === 'commune' || scale === 'epci' || (scale === 'dept' && A.name && !A.dept && !A.insee && !A.postal) || needsDenominators();
+  let idxDeps = [];
+  if (needCommunes) {
+    idxDeps = per.filter(d => DEPT_BY_CODE[d]);
+    await loadCommuneIndex(idxDeps);
+  }
+  const idxSet = new Set(idxDeps);
+
+  // 3) commune de chaque enregistrement
+  const key = new Array(n).fill(null);
+  const why = { vide: 0, inconnu: 0, ambigu: 0, hors: 0 };
+  const samples = [];
+  const perSet = new Set(per);
+  for (let i = 0; i < n; i++) {
+    let com = null, reason = null;
+    if (scale === 'points') {
+      const la = A.lat ? toLat(A.lat[i]) : null, lo = A.lon ? toLon(A.lon[i]) : null;
+      if (la != null && lo != null) key[i] = 'p' + i; else { why.vide++; reason = 'Coordonnées absentes'; }
+      if (reason && samples.length < 60) samples.push({ i, reason });
+      continue;
+    }
+    if (needCommunes) {
+      if (insee[i]) { com = S.geom.byCode.get(insee[i]) || null; if (!com && idxSet.has(deptOfInsee(insee[i]))) reason = 'Code INSEE inconnu (commune fusionnée ?)'; }
+      if (!com && postal[i]) {
+        let cs = S.geom.byPostal.get(postal[i]) || [];
+        if (cs.length > 1 && A.name) { const nn = normName(A.name[i]); const f = cs.filter(c => normName(c.nom) === nn); if (f.length) cs = f; }
+        if (cs.length === 1) com = cs[0];
+        else if (cs.length > 1) reason = reason || 'Code postal partagé par plusieurs communes';
+        else if (idxSet.has(deptOfPostal(postal[i]) || '')) reason = reason || 'Code postal inconnu';
+      }
+      if (!com && A.name && isPlaceName(A.name[i])) {
+        let cs = S.geom.byName.get(normName(A.name[i])) || [];
+        if (dep[i]) cs = cs.filter(c => c.dep === dep[i]);
+        else cs = cs.filter(c => perSet.has(c.dep));
+        if (cs.length === 1) com = cs[0];
+        else if (cs.length > 1) reason = reason || 'Nom de commune ambigu (homonymes)';
+        else reason = reason || 'Nom de commune introuvable';
+      }
+      if (com && !dep[i]) dep[i] = com.dep;
+    }
+    const d = dep[i] || (com && com.dep);
+    if (!d && !com) { why.vide++; if (samples.length < 60) samples.push({ i, reason: reason || 'Aucune information géographique' }); continue; }
+    if (d && !perSet.has(d)) { why.hors++; continue; }
+    if (scale === 'dept') { key[i] = d; continue; }
+    if (!com) { if (/ambigu|partagé/.test(reason || '')) why.ambigu++; else why.inconnu++; if (samples.length < 60) samples.push({ i, reason: reason || 'Commune non trouvée' }); continue; }
+    if (scale === 'commune') key[i] = com.code;
+    else if (scale === 'epci') { if (com.codeEpci) key[i] = com.codeEpci; else { why.inconnu++; if (samples.length < 60) samples.push({ i, reason: 'Commune sans EPCI' }); } }
+  }
+  Object.assign(S.rec, { key, dep, why, samples, per, A, located: key.filter(Boolean).length });
+}
+
+function needsDenominators() {
+  const t = T();
+  return t.indicators.some(i => i.per === 'pop1000' || i.per === 'km2') && t.scale !== 'points';
+}
+
+/* Liste des unités affichées (y compris celles sans enregistrement) */
+function displayUnits() {
+  const t = T(); const per = S.rec.per; const units = new Map();
+  if (t.scale === 'dept') {
+    per.forEach(d => units.set(d, { key: d, code: d, name: DEPT_BY_CODE[d] || d }));
+  } else if (t.scale === 'commune') {
+    per.forEach(d => (S.geom.idx[d] || []).forEach(c => units.set(c.code, { key: c.code, code: c.code, name: c.nom, com: c })));
+  } else if (t.scale === 'epci') {
+    per.forEach(d => (S.geom.idx[d] || []).forEach(c => {
+      if (!c.codeEpci) return;
+      const u = units.get(c.codeEpci) || { key: c.codeEpci, code: c.codeEpci, name: (S.geom.epci && S.geom.epci.get(c.codeEpci)) || ('EPCI ' + c.codeEpci), coms: [] };
+      u.coms.push(c); units.set(c.codeEpci, u);
+    }));
+  }
+  return units;
+}
+
+/* =====================================================================
+ * Agrégation
+ * ===================================================================== */
+function recordPassesFilter(i) {
+  const f = T().filter;
+  if (!f || !f.col || !f.values || !f.values.length) return true;
+  const x = S.table.v[f.col] ? S.table.v[f.col][i] : null;
+  if (Array.isArray(x)) return x.some(y => f.values.includes(String(y)));
+  const s = x == null || x === '' ? '(vide)' : typeof x === 'boolean' ? (x ? 'Oui' : 'Non') : String(x);
+  return f.values.includes(s);
+}
+
+function buildTerritories() {
+  const t = T();
+  S.terr = new Map();
+  const units = t.scale === 'points' ? new Map() : displayUnits();
+  units.forEach(u => S.terr.set(u.key, Object.assign({ recs: [] }, u)));
+  const nameCol = primaryLabelCol();
+  for (let i = 0; i < S.table.n; i++) {
+    const k = S.rec.key[i];
+    if (!k || !recordPassesFilter(i)) continue;
+    let tr = S.terr.get(k);
+    if (!tr) {
+      if (t.scale === 'points') {
+        const la = toLat(S.rec.A.lat[i]), lo = toLon(S.rec.A.lon[i]);
+        tr = { key: k, code: '#' + S.table.ids[i], name: nameCol ? String(S.table.v[nameCol][i] || ('Enregistrement ' + S.table.ids[i])) : 'Enregistrement ' + S.table.ids[i], latlng: [la, lo], recs: [] };
+      } else {
+        const com = S.geom.byCode.get(k);
+        tr = { key: k, code: k, name: t.scale === 'dept' ? (DEPT_BY_CODE[k] || k) : com ? com.nom : k, recs: [] };
+      }
+      S.terr.set(k, tr);
+    }
+    tr.recs.push(i);
+  }
+  // dénominateurs
+  S.terr.forEach(tr => {
+    let pop = null, surf = null;
+    const add = c => { if (c.population != null) pop = (pop || 0) + c.population; if (c.surface != null) surf = (surf || 0) + c.surface / 100; };
+    if (t.scale === 'commune') { const c = tr.com || S.geom.byCode.get(tr.key); if (c) add(c); }
+    else if (t.scale === 'epci' && tr.coms) tr.coms.forEach(add);
+    else if (t.scale === 'dept' && S.geom.idx[tr.key]) S.geom.idx[tr.key].forEach(add);
+    tr.pop = pop; tr.surf = surf;
+  });
+}
+
+function primaryLabelCol() {
+  const cols = S.table.cols;
+  const pref = cols.find(c => /raison_sociale|denomination|nom_?raison|(^|_)nom($|_)|libelle|titre|name/i.test(c.colId) && S.prof[c.colId] && S.prof[c.colId].kind === 'text');
+  if (pref) return pref.colId;
+  const t = cols.find(c => S.prof[c.colId] && (S.prof[c.colId].kind === 'text' || S.prof[c.colId].kind === 'cat') && !geoRoleOf(c.colId));
+  return t ? t.colId : null;
+}
+
+function cellNum(a, i) { const x = a[i]; return typeof x === 'boolean' ? null : toNum(x); }
+function aggregate(ind, idxs) {
+  if (ind.agg === 'count') return idxs.length;
+  const a = S.table.v[ind.col];
+  if (!a) return null;
+  const isEmpty = x => x == null || x === '' || (Array.isArray(x) && !x.length);
+  switch (ind.agg) {
+    case 'sum': { let s = 0, c = 0; for (const i of idxs) { const x = cellNum(a, i); if (x != null) { s += x; c++; } } return c ? s : null; }
+    case 'mean': { let s = 0, c = 0; for (const i of idxs) { const x = cellNum(a, i); if (x != null) { s += x; c++; } } return c ? s / c : null; }
+    case 'median': { const xs = idxs.map(i => cellNum(a, i)).filter(x => x != null).sort((p, q) => p - q); if (!xs.length) return null; const m = xs.length >> 1; return xs.length % 2 ? xs[m] : (xs[m - 1] + xs[m]) / 2; }
+    case 'min': { let r = null; for (const i of idxs) { const x = cellNum(a, i); if (x != null && (r == null || x < r)) r = x; } return r; }
+    case 'max': { let r = null; for (const i of idxs) { const x = cellNum(a, i); if (x != null && (r == null || x > r)) r = x; } return r; }
+    case 'filled': { let c = 0; for (const i of idxs) if (!isEmpty(a[i]) && a[i] !== false) c++; return c; }
+    case 'distinct': { const s = new Set(); for (const i of idxs) if (!isEmpty(a[i])) s.add(String(a[i])); return s.size; }
+    case 'true_count': { let c = 0; for (const i of idxs) if (a[i] === true) c++; return c; }
+    case 'true_pct': { if (!idxs.length) return null; let c = 0; for (const i of idxs) if (a[i] === true) c++; return c / idxs.length * 100; }
+    case 'eq_count': case 'eq_pct': {
+      let c = 0, ne = 0;
+      for (const i of idxs) { if (isEmpty(a[i])) continue; ne++; if (String(a[i]) === ind.mod) c++; }
+      return ind.agg === 'eq_count' ? c : (ne ? c / ne * 100 : null);
+    }
+    case 'contains_count': case 'contains_pct': {
+      let c = 0, ne = 0;
+      for (const i of idxs) { const x = a[i]; if (isEmpty(x)) continue; ne++; if ((Array.isArray(x) ? x.map(String) : [String(x)]).includes(ind.mod)) c++; }
+      return ind.agg === 'contains_count' ? c : (ne ? c / ne * 100 : null);
+    }
+  }
+  return null;
+}
+
+function computeIndicator(ind) {
+  const m = new Map();
+  const emptyMode = S.cfg.display.empty;
+  S.terr.forEach((tr, key) => {
+    let val;
+    if (tr.recs.length) val = aggregate(ind, tr.recs);
+    else val = (emptyMode === 'zero' && AGG[ind.agg] && AGG[ind.agg].additive) ? 0 : null;
+    if (val != null && ind.per === 'pop1000') val = tr.pop ? val / tr.pop * 1000 : null;
+    if (val != null && ind.per === 'km2') val = tr.surf ? val / tr.surf : null;
+    m.set(key, val);
+  });
+  if (ind.per === 'share') {
+    let tot = 0; m.forEach(v => { if (v != null) tot += v; });
+    m.forEach((v, k) => m.set(k, v == null || !tot ? null : v / tot * 100));
+  }
+  return m;
+}
+
+function indLabel(ind) {
+  if (ind.label) return ind.label;
+  if (ind.agg === 'count') return "Nombre d'enregistrements" + (ind.per !== 'none' ? ' (' + PER[ind.per].label.toLowerCase() + ')' : '');
+  const c = colMeta(ind.col); const cl = c ? c.label : ind.col;
+  let s;
+  switch (ind.agg) {
+    case 'sum': s = cl + ' (somme)'; break;
+    case 'mean': s = cl + ' (moyenne)'; break;
+    case 'median': s = cl + ' (médiane)'; break;
+    case 'min': s = cl + ' (minimum)'; break;
+    case 'max': s = cl + ' (maximum)'; break;
+    case 'filled': s = cl + ' renseigné'; break;
+    case 'distinct': s = cl + ' (valeurs distinctes)'; break;
+    case 'true_count': s = cl + ' = Oui (nombre)'; break;
+    case 'true_pct': s = cl + ' = Oui (part)'; break;
+    case 'eq_count': case 'contains_count': s = cl + ' = « ' + ind.mod + ' » (nombre)'; break;
+    case 'eq_pct': case 'contains_pct': s = cl + ' = « ' + ind.mod + ' » (part)'; break;
+    default: s = cl;
+  }
+  if (ind.per && ind.per !== 'none') s += ' — ' + PER[ind.per].label.toLowerCase();
+  return s;
+}
+function indUnit(ind) {
+  if (ind.per === 'share') return '%';
+  if (ind.per === 'pop1000') return '‰ hab.';
+  if (ind.per === 'km2') return '/km²';
+  return AGG[ind.agg] && AGG[ind.agg].pct ? '%' : '';
+}
+function aggDescription(ind) {
+  const a = AGG[ind.agg]; let s = a ? a.label : ind.agg;
+  if (a && a.mod) s += ' « ' + ind.mod + ' »';
+  if (ind.per && ind.per !== 'none') s += ' · ' + PER[ind.per].label.toLowerCase();
+  return s;
+}
+function colMeta(colId) { return S.table && S.table.cols.find(c => c.colId === colId); }
+
+/* =====================================================================
+ * Discrétisation
+ * ===================================================================== */
+function quantile(sorted, p) {
+  const pos = (sorted.length - 1) * p, lo = Math.floor(pos), hi = Math.ceil(pos);
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
+}
+function jenks(data, k) {
+  let d = data.slice().sort((a, b) => a - b);
+  if (d.length > 1500) { const step = (d.length - 1) / 1499; d = Array.from({ length: 1500 }, (_, i) => d[Math.round(i * step)]); }
+  const n = d.length;
+  const lower = Array.from({ length: n + 1 }, () => new Array(k + 1).fill(0));
+  const vari = Array.from({ length: n + 1 }, () => new Array(k + 1).fill(0));
+  for (let i = 1; i <= k; i++) { lower[1][i] = 1; for (let j = 2; j <= n; j++) vari[j][i] = Infinity; }
+  for (let l = 2; l <= n; l++) {
+    let s1 = 0, s2 = 0, w = 0, v = 0;
+    for (let m = 1; m <= l; m++) {
+      const i3 = l - m + 1, val = d[i3 - 1];
+      s2 += val * val; s1 += val; w++;
+      v = s2 - (s1 * s1) / w;
+      const i4 = i3 - 1;
+      if (i4 !== 0) for (let j = 2; j <= k; j++) if (vari[l][j] >= v + vari[i4][j - 1]) { lower[l][j] = i3; vari[l][j] = v + vari[i4][j - 1]; }
+    }
+    lower[l][1] = 1; vari[l][1] = v;
+  }
+  const b = new Array(k + 1); b[0] = d[0]; b[k] = d[n - 1];
+  let kk = n;
+  for (let j = k; j >= 2; j--) { const id = lower[kk][j] - 2; b[j - 1] = d[Math.max(0, id)]; kk = lower[kk][j] - 1; }
+  return b;
+}
+function niceStep(raw) {
+  if (!(raw > 0)) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p;
+}
+function cleanFloat(x) { return parseFloat(x.toPrecision(12)); }
+
+function rawBreaks(vals, c, note) {
+  const k = Math.max(2, Math.min(12, c.k | 0 || 5));
+  const min = vals[0], max = vals[vals.length - 1];
+  switch (c.method) {
+    case 'equal': return Array.from({ length: k + 1 }, (_, i) => min + (max - min) * i / k);
+    case 'nice': {
+      const step = niceStep((max - min) / k); const start = Math.floor(min / step) * step;
+      const b = [start]; while (b[b.length - 1] < max - 1e-12 && b.length < 40) b.push(cleanFloat(b[b.length - 1] + step));
+      return b;
+    }
+    case 'jenks': return jenks(vals, k);
+    case 'stddev': {
+      const mean = vals.reduce((s, x) => s + x, 0) / vals.length;
+      const sd = Math.sqrt(vals.reduce((s, x) => s + (x - mean) * (x - mean), 0) / vals.length);
+      if (!sd) return [min, max];
+      const inner = [];
+      for (let i = 1; i < k; i++) { const b = mean + (i - k / 2) * sd; if (b > min && b < max) inner.push(b); }
+      return [min].concat(inner, [max]);
+    }
+    case 'geometric': {
+      if (min <= 0) { note.push('Progression géométrique impossible avec des valeurs ≤ 0 : quantiles utilisés.'); break; }
+      const r = Math.pow(max / min, 1 / k);
+      return Array.from({ length: k + 1 }, (_, i) => min * Math.pow(r, i));
+    }
+  }
+  return Array.from({ length: k + 1 }, (_, i) => quantile(vals, i / k));
+}
+
+function roundBreaks(b, mode, keepLo, keepHi) {
+  if (mode === 'none' || b.length < 2) return b;
+  let step;
+  if (mode === 'auto') {
+    const r = (b[b.length - 1] - b[0]) || Math.abs(b[0]) || 1;
+    step = Math.pow(10, Math.floor(Math.log10(r)) - 1);
+  } else step = Math.pow(10, -parseInt(mode, 10));
+  const out = b.map((x, i) => cleanFloat(
+    i === 0 && !keepLo ? Math.floor(x / step) * step :
+    i === b.length - 1 && !keepHi ? Math.ceil(x / step) * step :
+    (i === 0 || i === b.length - 1) ? x : Math.round(x / step) * step));
+  return out;
+}
+function uniq(b) { const o = []; b.forEach(x => { if (!o.length || x > o[o.length - 1] + 1e-12) o.push(x); }); return o; }
+
+function classify(values, c) {
+  const res = { classes: [], assign: () => -1, notes: [], min: null, max: null, breaks: [] };
+  let vals = values.filter(isNum).sort((a, b) => a - b);
+  if (!vals.length) return res;
+  res.min = vals[0]; res.max = vals[vals.length - 1];
+  const classes = [];
+  let hasZero = false;
+  if (c.zero && vals.includes(0)) { hasZero = true; vals = vals.filter(x => x !== 0); classes.push({ zero: true, lo: 0, hi: 0, label: '0' }); }
+
+  const distinct = Array.from(new Set(vals));
+  if (vals.length) {
+    if (c.method === 'unique' || (c.method !== 'manual' && distinct.length <= Math.min(c.k, 12) && distinct.length <= 12)) {
+      if (c.method !== 'unique') res.notes.push('Peu de valeurs distinctes : une classe par valeur.');
+      if (distinct.length > 15) res.notes.push('Trop de valeurs distinctes pour « Valeurs uniques » : 15 premières.');
+      distinct.slice(0, 15).forEach(x => classes.push({ unique: true, lo: x, hi: x, label: fmt(x) }));
+      res.unique = true;
+    } else {
+      const lo = isNum(c.lo) ? c.lo : null, hi = isNum(c.hi) ? c.hi : null;
+      let b;
+      if (c.method === 'manual') {
+        b = uniq((c.manual || []).filter(isNum).slice().sort((x, y) => x - y));
+        if (b.length < 2) { res.notes.push('Saisissez au moins deux seuils manuels : quantiles utilisés en attendant.'); b = null; }
+      }
+      if (!b) {
+        const cv = vals.map(x => Math.min(hi != null ? hi : Infinity, Math.max(lo != null ? lo : -Infinity, x)));
+        b = rawBreaks(cv, c.method === 'manual' ? Object.assign({}, c, { method: 'quantile' }) : c, res.notes);
+        if (lo != null) b[0] = lo; if (hi != null) b[b.length - 1] = hi;
+        b = uniq(roundBreaks(b, c.round, lo != null, hi != null));
+      }
+      if (b.length < 2) b = [vals[0], vals[vals.length - 1]];
+      res.breaks = b;
+      const below = vals[0] < b[0], above = vals[vals.length - 1] > b[b.length - 1];
+      const dec = breakDecimals(b);
+      for (let i = 0; i < b.length - 1; i++) {
+        let label = fmt(b[i], dec) + ' – ' + fmt(b[i + 1], dec);
+        if (i === 0 && below) label = 'Moins de ' + fmt(b[1], dec);
+        if (i === b.length - 2 && above) label = '+ ' + fmt(b[i], dec);
+        if (i === 0 && below && i === b.length - 2 && above) label = 'Toutes valeurs';
+        classes.push({ lo: b[i], hi: b[i + 1], label });
+      }
+      if (b.length === 2 && b[0] === b[1]) classes[classes.length - 1].label = fmt(b[0], dec);
+    }
+  }
+  res.classes = classes;
+  const off = hasZero ? 1 : 0;
+  res.assign = v => {
+    if (!isNum(v)) return -1;
+    if (hasZero && v === 0) return 0;
+    if (res.unique) { const i = classes.findIndex(cl => cl.unique && cl.lo === v); return i; }
+    const n = classes.length - off;
+    for (let i = 0; i < n; i++) if (v <= classes[off + i].hi + 1e-12) return off + i;
+    return n ? classes.length - 1 : -1;
+  };
+  return res;
+}
+function breakDecimals(b) {
+  for (let d = 0; d <= 4; d++) {
+    const s = b.map(x => fmt(x, d));
+    if (new Set(s).size === s.length && b.every(x => Math.abs(parseFloat(x.toFixed(d)) - x) < 1e-9 || d === 4)) return d;
+  }
+  return 4;
+}
+
+function classColors(cls, c) {
+  const P = PALETTES[c.palette] || PALETTES['menthe-glycine'];
+  let cols = P.colors.slice();
+  if (c.reverse) cols.reverse();
+  const n = cls.classes.length;
+  const regular = cls.classes.filter(x => !x.zero);
+  let out;
+  if (P.group === 'div' && cls.min != null) {
+    let center = 0;
+    if (c.center === 'mean') center = S.valStats.mean;
+    else if (c.center === 'median') center = S.valStats.median;
+    else if (c.center === 'custom') center = isNum(c.centerValue) ? c.centerValue : 0;
+    const mid = Math.floor(cols.length / 2);
+    const lo = cls.min, hi = cls.max;
+    let sc;
+    if (center <= lo) sc = chroma.scale(cols.slice(mid)).mode('lab').domain([lo, hi]);
+    else if (center >= hi) sc = chroma.scale(cols.slice(0, mid + 1)).mode('lab').domain([lo, hi]);
+    else sc = chroma.scale(cols).mode('lab').domain([lo, center, hi]);
+    out = cls.classes.map(cl => cl.zero ? sc(0).hex() : sc(cl.unique ? cl.lo : (Math.max(lo, cl.lo) + Math.min(hi, cl.hi)) / 2).hex());
+  } else {
+    const k = regular.length;
+    const sc = chroma.scale(cols).mode('lab');
+    const seq = k <= 1 ? [sc(0.7).hex()] : sc.colors(k);
+    let j = 0;
+    out = cls.classes.map(cl => cl.zero ? '#EEEBE3' : seq[j++]);
+  }
+  cls.classes.forEach((cl, i) => { cl.color = out[i]; });
+  return out;
+}
+
+/* =====================================================================
+ * Carte
+ * ===================================================================== */
+function initMap() {
+  S.map = L.map('map', { zoomControl: false, preferCanvas: true, attributionControl: true, zoomSnap: 0.25 }).setView([48.2, -2.9], 8);
+  L.control.scale({ metric: true, imperial: false, position: 'bottomright' }).addTo(S.map);
+  setBasemap('gris');
+}
+function setBasemap(id) {
+  if (S.base) { S.map.removeLayer(S.base); S.base = null; }
+  const b = BASEMAPS[id] || BASEMAPS.gris;
+  if (b.url) { S.base = L.tileLayer(b.url, Object.assign({ crossOrigin: true }, b.opt)).addTo(S.map); S.base.bringToBack(); }
+}
+
+function activeInd() {
+  const t = T(); if (!t) return null;
+  return t.indicators.find(i => i.id === t.active) || t.indicators[0] || null;
+}
+
+function featureKeyOf(f) {
+  const scale = T().scale;
+  if (scale === 'epci') { const c = S.geom.byCode.get(f.properties.code); return c && c.codeEpci; }
+  return f.properties.code;
+}
+
+function displayFeatures() {
+  const t = T(); const per = S.rec.per;
+  if (t.scale === 'dept') return (S.geom.dept ? S.geom.dept.features : []).filter(f => per.includes(f.properties.code));
+  if (t.scale === 'commune' || t.scale === 'epci') { const out = []; per.forEach(d => (S.geom.contours[d] || []).forEach(f => out.push(f))); return out; }
+  return [];
+}
+
+function clearLayers() {
+  ['layer', 'circles', 'labels'].forEach(k => { if (S[k]) { S.map.removeLayer(S[k]); S[k] = null; } });
+  S.featLayers = new Map();
+}
+
+function drawGeometry() {
+  clearLayers();
+  const t = T();
+  if (t.scale === 'points') {
+    S.layer = L.featureGroup().addTo(S.map);
+    S.terr.forEach(tr => {
+      const m = L.circleMarker(tr.latlng, { radius: 6 });
+      m._vzKey = tr.key; bindFeature(m, tr.key); m.addTo(S.layer);
+      S.featLayers.set(tr.key, [m]);
+    });
+  } else {
+    S.layer = L.geoJSON(displayFeatures(), {
+      onEachFeature: (f, layer) => {
+        const key = featureKeyOf(f); if (!key) return;
+        layer._vzKey = key;
+        const a = S.featLayers.get(key) || []; a.push(layer); S.featLayers.set(key, a);
+        bindFeature(layer, key);
+      },
+    }).addTo(S.map);
+  }
+  // centroïdes
+  S.terr.forEach(tr => {
+    if (tr.latlng) return;
+    if (tr.com && tr.com.centre) { tr.latlng = [tr.com.centre.coordinates[1], tr.com.centre.coordinates[0]]; return; }
+    const ls = S.featLayers.get(tr.key);
+    if (ls && ls.length) {
+      let best = null, area = -1;
+      ls.forEach(l => { const b = l.getBounds(); const a = (b.getNorth() - b.getSouth()) * (b.getEast() - b.getWest()); if (a > area) { area = a; best = l; } });
+      tr.latlng = polyCentroid(best) || best.getBounds().getCenter();
+      if (tr.latlng.lat != null) tr.latlng = [tr.latlng.lat, tr.latlng.lng];
+    }
+  });
+}
+function polyCentroid(layer) {
+  try {
+    let rings = layer.getLatLngs();
+    while (Array.isArray(rings[0]) && Array.isArray(rings[0][0])) { // multipolygone : plus grand anneau
+      rings = rings.reduce((a, b) => (flatLen(b) > flatLen(a) ? b : a));
+    }
+    const ring = Array.isArray(rings[0]) ? rings[0] : rings;
+    let A = 0, x = 0, y = 0;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const f = ring[j].lng * ring[i].lat - ring[i].lng * ring[j].lat;
+      A += f; x += (ring[j].lng + ring[i].lng) * f; y += (ring[j].lat + ring[i].lat) * f;
+    }
+    if (!A) return null;
+    return [y / (3 * A), x / (3 * A)];
+  } catch (e) { return null; }
+}
+function flatLen(a) { return Array.isArray(a) ? a.reduce((s, x) => s + flatLen(x), 0) : 1; }
+
+function bindFeature(layer, key) {
+  layer.on('mouseover', () => hoverKey(key, true));
+  layer.on('mouseout', () => hoverKey(key, false));
+  layer.on('click', () => selectTerritory(key, false));
+  layer.bindTooltip(() => tooltipHtml(key), { sticky: true, direction: 'top', className: 'vz-tip', opacity: 0.97 });
+}
+function tooltipHtml(key) {
+  const tr = S.terr.get(key); const ind = activeInd();
+  if (!tr) return '';
+  const v = ind ? S.values[ind.id] && S.values[ind.id].get(key) : null;
+  const ci = S.cls ? S.cls.assign(v) : -1;
+  return '<div class="vz-tip"><strong>' + esc(tr.name) + '</strong> <span style="color:#666">' + esc(tr.code) + '</span><br>' +
+    (ind ? esc(indLabel(ind)) + ' : <span class="v">' + (v == null ? 'sans donnée' : fmt(v) + ' ' + esc(indUnit(ind))) + '</span>' : '') +
+    (ci >= 0 ? '<br><span style="color:#666">Classe : ' + esc(S.cls.classes[ci].label) + '</span>' : '') +
+    '<br><span style="color:#666">' + tr.recs.length + ' enregistrement' + (tr.recs.length > 1 ? 's' : '') + '</span></div>';
+}
+function hoverKey(key, on) {
+  (S.featLayers.get(key) || []).forEach(l => {
+    if (on) { l.setStyle({ weight: 2.5, color: '#161616' }); if (l.bringToFront && T().scale !== 'points') l.bringToFront(); }
+    else l.setStyle(styleFor(key));
+  });
+  if (!on && S.selected) (S.featLayers.get(S.selected) || []).forEach(l => { l.setStyle(styleFor(S.selected)); l.bringToFront && l.bringToFront(); });
+}
+
+function styleFor(key) {
+  const d = S.cfg.display; const t = T();
+  const ind = activeInd();
+  const v = ind && S.values[ind.id] ? S.values[ind.id].get(key) : null;
+  const ci = S.cls ? S.cls.assign(v) : -1;
+  const c = ind ? ind.classif : {};
+  const outRange = v != null && ((isNum(c.showMin) && v < c.showMin) || (isNum(c.showMax) && v > c.showMax));
+  const masked = ci >= 0 && (S.hidden.has(ci) || (S.focusClass != null && S.focusClass !== ci));
+  const sel = S.selected === key;
+  const thin = t.scale === 'commune' || t.scale === 'epci';
+  const circleMode = d.repr === 'cercles' && t.scale !== 'points';
+  let st;
+  if (t.scale === 'points') {
+    const col = ci >= 0 ? S.cls.classes[ci].color : '#929292';
+    st = { radius: 6, fillColor: col, color: sel ? '#000091' : '#fff', weight: sel ? 3 : 1, fillOpacity: (masked || outRange) ? 0.08 : d.opacity, opacity: (masked || outRange) ? 0.2 : 1 };
+    if (v == null && d.empty === 'hide') st.opacity = st.fillOpacity = 0;
+    return st;
+  }
+  if (circleMode) {
+    return { fillColor: '#F6F6F6', fillOpacity: v == null ? 0.25 : 0.45, color: sel ? '#000091' : '#B5B5B5', weight: sel ? 3 : (thin ? 0.4 : 1), opacity: 1 };
+  }
+  if (ci < 0) {
+    const hide = d.empty === 'hide';
+    st = { fillColor: '#E5E5E5', fillOpacity: hide ? 0 : 0.55 * d.opacity, color: d.borders ? '#FFFFFF' : '#E5E5E5', weight: thin ? 0.4 : 1, opacity: hide ? 0 : 1 };
+  } else {
+    const col = S.cls.classes[ci].color;
+    const faded = masked || outRange;
+    st = { fillColor: col, fillOpacity: faded ? 0.07 : d.opacity, color: d.borders ? '#FFFFFF' : col, weight: t.scale === 'epci' ? 0.25 : thin ? 0.5 : 1.2, opacity: faded ? 0.3 : 0.9 };
+  }
+  if (sel) { st.color = '#000091'; st.weight = 3; st.opacity = 1; }
+  return st;
+}
+
+function restyle() {
+  S.featLayers.forEach((ls, key) => ls.forEach(l => l.setStyle(styleFor(key))));
+  if (S.selected) (S.featLayers.get(S.selected) || []).forEach(l => l.bringToFront && l.bringToFront());
+  drawCircles(); drawLabels();
+}
+
+function drawCircles() {
+  if (S.circles) { S.map.removeLayer(S.circles); S.circles = null; }
+  const d = S.cfg.display; const t = T(); const ind = activeInd();
+  if (!ind || d.repr !== 'cercles' || t.scale === 'points') return;
+  const vals = S.values[ind.id];
+  let maxAbs = 0; vals.forEach(v => { if (isNum(v)) maxAbs = Math.max(maxAbs, Math.abs(v)); });
+  if (!maxAbs) return;
+  const items = [];
+  S.terr.forEach(tr => { const v = vals.get(tr.key); if (isNum(v) && v !== 0 && tr.latlng) items.push([tr, v]); });
+  items.sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+  S.circles = L.featureGroup().addTo(S.map);
+  const c = ind.classif;
+  items.forEach(([tr, v]) => {
+    const ci = S.cls.assign(v);
+    const masked = ci >= 0 && (S.hidden.has(ci) || (S.focusClass != null && S.focusClass !== ci));
+    const outRange = (isNum(c.showMin) && v < c.showMin) || (isNum(c.showMax) && v > c.showMax);
+    const r = Math.max(2, Math.sqrt(Math.abs(v) / maxAbs) * d.radius);
+    const m = L.circleMarker(tr.latlng, {
+      radius: r, fillColor: ci >= 0 ? S.cls.classes[ci].color : '#929292', fillOpacity: (masked || outRange) ? 0.06 : d.opacity,
+      color: S.selected === tr.key ? '#000091' : '#FFFFFF', weight: S.selected === tr.key ? 3 : 1, opacity: (masked || outRange) ? 0.2 : 1,
+      dashArray: v < 0 ? '3 2' : null,
+    });
+    bindFeature(m, tr.key);
+    m.addTo(S.circles);
+  });
+}
+
+function drawLabels() {
+  if (S.labels) { S.map.removeLayer(S.labels); S.labels = null; }
+  const mode = S.cfg.display.labels; const ind = activeInd();
+  if (mode === 'none' || !ind) return;
+  const vals = S.values[ind.id];
+  const items = [];
+  S.terr.forEach(tr => { const v = vals.get(tr.key); if (tr.latlng && (v != null || mode === 'name')) items.push([tr, v]); });
+  items.sort((a, b) => (Math.abs(b[1] || 0) - Math.abs(a[1] || 0)));
+  S.labels = L.layerGroup().addTo(S.map);
+  items.slice(0, 400).forEach(([tr, v]) => {
+    const txt = mode === 'value' ? fmt(v) : mode === 'name' ? tr.name : tr.name + ' · ' + fmt(v);
+    L.tooltip({ permanent: true, direction: 'center', className: 'vz-label', interactive: false }).setLatLng(tr.latlng).setContent(esc(txt)).addTo(S.labels);
+  });
+  if (items.length > 400) toast('Étiquettes limitées aux 400 territoires aux valeurs les plus fortes.');
+}
+
+function fitData() {
+  const b = L.latLngBounds([]);
+  S.featLayers.forEach((ls, key) => {
+    const tr = S.terr.get(key);
+    if (S.terr.size > 0 && tr && !tr.recs.length && T().scale !== 'dept') return;
+    ls.forEach(l => b.extend(l.getBounds ? l.getBounds() : l.getLatLng()));
+  });
+  if (!b.isValid()) S.featLayers.forEach(ls => ls.forEach(l => b.extend(l.getBounds ? l.getBounds() : l.getLatLng())));
+  if (b.isValid()) S.map.fitBounds(b, { padding: [24, 24], maxZoom: 12, paddingTopLeft: [$('#legend-card').hidden ? 24 : 310, 24] });
+}
+
+/* =====================================================================
+ * Pipeline
+ * ===================================================================== */
+let renderSeq = 0;
+async function rebuild(opts) {
+  opts = opts || {};
+  const seq = ++renderSeq;
+  const t = T();
+  if (!S.table || !t) return;
+  S.geo = geoStatus();
+  if (!S.geo.any) return showRefused();
+  try {
+    showLoading('Localisation des enregistrements…');
+    await locateRecords();
+    if (seq !== renderSeq) return;
+    const scale = t.scale;
+    if (scale === 'dept') { showLoading('Chargement des contours départementaux…'); await loadDeptContours(); }
+    if (scale === 'commune' || scale === 'epci') {
+      if (S.rec.per.length > MAX_DEPTS_NO_CONFIRM && !opts.confirmed) {
+        hideOverlay();
+        return showOverlay('<h2>Chargement important</h2><p>Les données couvrent <strong>' + S.rec.per.length + ' départements</strong>. Le chargement des contours communaux peut prendre du temps.</p>' +
+          '<ul class="fr-btns-group fr-btns-group--inline-sm"><li><button class="fr-btn fr-btn--sm" id="ov-go" type="button">Charger quand même</button></li><li><button class="fr-btn fr-btn--sm fr-btn--secondary" id="ov-dept" type="button">Passer à l\'échelle départementale</button></li></ul>',
+          () => { $('#ov-go').onclick = () => { hideOverlay(); rebuild({ confirmed: true }); }; $('#ov-dept').onclick = () => { hideOverlay(); t.scale = 'dept'; save(); renderGeoBox(); rebuild(); }; });
+      }
+      showLoading('Chargement des contours communaux (' + S.rec.per.join(', ') + ')…');
+      await loadCommuneIndex(S.rec.per);
+      await loadCommuneContours(S.rec.per);
+      if (scale === 'epci') await loadEpciNames();
+      if (seq !== renderSeq) return;
+      await locateRecords();
+    }
+    if (seq !== renderSeq) return;
+    if (!S.rec.located && S.table.n) {
+      S.geo.any = false;
+      S.geo.reason = 'aucun des ' + S.table.n + ' enregistrements n\'a pu être rattaché à un territoire (valeurs géographiques inconnues du référentiel ou hors périmètre).';
+      S.refused[S.table.tableId] = 'aucun enregistrement localisable';
+      save(); renderTables(); renderGeoBox(); renderIndicators(); renderStyleBox(); showRefused();
+      return;
+    }
+    buildTerritories();
+    drawGeometry();
+    hideOverlay();
+    if (S.selected && !S.terr.has(S.selected)) S.selected = null;
+    recompute();
+    if (!opts.keepView) fitData();
+    renderGeoBox();
+    renderSearchIndex();
+  } catch (e) {
+    console.error(e);
+    showOverlay('<h2>Impossible d\'afficher la carte</h2><div class="fr-alert fr-alert--error fr-alert--sm"><p>' + esc(e.message || e) + '</p></div>' +
+      '<p class="fr-mt-2w">Les référentiels géographiques proviennent de <span class="vz-mono">geo.api.gouv.fr</span> et <span class="vz-mono">etalab-datasets.geo.data.gouv.fr</span> : vérifiez que votre réseau y donne accès.</p>' +
+      '<button class="fr-btn fr-btn--sm fr-icon-refresh-line fr-btn--icon-left" id="ov-retry" type="button">Réessayer</button>',
+      () => { $('#ov-retry').onclick = () => { hideOverlay(); rebuild(); }; });
+  }
+}
+
+/* Recalcule valeurs + classes + styles (sans recharger la géométrie) */
+function recompute() {
+  const t = T();
+  S.values = {};
+  t.indicators.forEach(ind => { S.values[ind.id] = computeIndicator(ind); });
+  const ind = activeInd();
+  if (ind) {
+    const vals = [];
+    S.values[ind.id].forEach(v => { if (isNum(v)) vals.push(v); });
+    const sorted = vals.slice().sort((a, b) => a - b);
+    S.valStats = { n: vals.length, sum: vals.reduce((s, x) => s + x, 0), mean: vals.length ? vals.reduce((s, x) => s + x, 0) / vals.length : null, median: vals.length ? quantile(sorted, 0.5) : null, min: sorted[0], max: sorted[sorted.length - 1] };
+    S.cls = classify(vals, ind.classif);
+    classColors(S.cls, ind.classif);
+    S.cls.classes.forEach(cl => { cl.count = 0; });
+    let nodata = 0;
+    S.values[ind.id].forEach(v => { const ci = S.cls.assign(v); if (ci >= 0) S.cls.classes[ci].count++; else nodata++; });
+    S.cls.nodata = nodata;
+  } else { S.cls = null; S.valStats = null; }
+  S.hidden = new Set([...S.hidden].filter(i => S.cls && i < S.cls.classes.length));
+  restyle();
+  renderLegend();
+  renderDetail();
+  renderStatus();
+  renderStyleBox();
+}
+
+/* =====================================================================
+ * Rendu : légende
+ * ===================================================================== */
+function renderLegend() {
+  const card = $('#legend-card');
+  const t = T(); const ind = activeInd();
+  if (!t || !ind || !S.cls) { card.hidden = true; return; }
+  card.hidden = false;
+  $('#card-table').textContent = S.table.tableId;
+  $('#card-title').textContent = indLabel(ind);
+  $('#card-agg').textContent = aggDescription(ind);
+  $('#card-scale').textContent = SCALES[t.scale].label;
+  $('#card-scale').className = SCALES[t.scale].icon;
+  const unit = indUnit(ind);
+  const circle = S.cfg.display.repr === 'cercles' && t.scale !== 'points';
+  const items = S.cls.classes.map((cl, i) =>
+    '<li data-ci="' + i + '" class="' + (S.hidden.has(i) ? 'off' : '') + (S.focusClass === i ? ' focus' : '') + '" title="Cliquer pour masquer / afficher · double-clic pour isoler">' +
+    '<span class="sw' + (circle ? ' circle' : '') + '" style="background:' + cl.color + '"></span><span class="lab">' + esc(cl.label) + (unit ? ' ' + esc(unit) : '') + '</span><span class="cnt">' + cl.count + '</span></li>');
+  if (S.cls.nodata && S.cfg.display.empty !== 'hide') items.push('<li data-ci="-1" style="cursor:default"><span class="sw nodata"></span><span class="lab">Sans donnée</span><span class="cnt">' + S.cls.nodata + '</span></li>');
+  if (!S.cls.classes.length) items.push('<li style="cursor:default"><span class="lab vz-empty">Aucune valeur à représenter</span></li>');
+  $('#legend').innerHTML = items.join('');
+  const notes = (S.cls.notes || []).map(esc).join(' ');
+  const src = ind.source ? esc(ind.source) : 'Source : table Grist « ' + esc(S.table.tableId) + ' »';
+  $('#card-src').innerHTML = src + (notes ? '<br><em>' + notes + '</em>' : '');
+  $('#opacity').value = Math.round(S.cfg.display.opacity * 100);
+  $('#opacity-out').textContent = Math.round(S.cfg.display.opacity * 100) + ' %';
+  $('#card-analyses').innerHTML = t.indicators.map(i => '<option value="' + esc(i.id) + '"' + (i.id === ind.id ? ' selected' : '') + '>' + esc(indLabel(i)) + '</option>').join('');
+}
+
+/* =====================================================================
+ * Rendu : panneau de détail
+ * ===================================================================== */
+function destroyCharts() { S.charts.forEach(c => { try { c.destroy(); } catch (e) {} }); S.charts = []; }
+function rankOf(m, key) {
+  const v = m.get(key); if (!isNum(v)) return null;
+  let r = 1, n = 0; m.forEach(x => { if (isNum(x)) { n++; if (x > v) r++; } });
+  return { r, n };
+}
+function chartDefaults() {
+  if (!window.Chart) return;
+  Chart.defaults.font.family = 'Marianne, arial, sans-serif';
+  Chart.defaults.font.size = 11;
+  Chart.defaults.color = '#3A3A3A';
+}
+
+function renderDetail() {
+  destroyCharts();
+  const box = $('#detail');
+  const t = T(); const ind = activeInd();
+  if (!t || !ind || !S.cls) { box.innerHTML = '<p class="vz-empty">Sélectionnez une table et un indicateur pour afficher l\'analyse.</p>'; return; }
+  const unit = indUnit(ind);
+  const vals = S.values[ind.id];
+  const key = S.selected;
+  const tr = key ? S.terr.get(key) : null;
+
+  if (!tr) {
+    // ---- Vue d'ensemble ----
+    const withData = Array.from(vals.values()).filter(isNum).length;
+    const additive = AGG[ind.agg] && AGG[ind.agg].additive && (!ind.per || ind.per === 'none');
+    box.innerHTML =
+      '<div class="vz-d-head"><p class="vz-d-kicker">' + esc(indLabel(ind)) + '</p><h2 class="vz-d-title">Vue d\'ensemble</h2>' +
+      '<div class="vz-chips"><span class="vz-d-chip ' + SCALES[t.scale].icon + '">' + SCALES[t.scale].label + '</span><span class="vz-d-chip light fr-icon-table-line">' + esc(S.table.tableId) + '</span></div></div>' +
+      '<div class="vz-d-grid"><div class="vz-kpis">' +
+        kpi(fmt(S.rec.located, 0), '', 'enregistrements localisés', 'sur ' + fmt(S.table.n, 0) + ' (' + fmt(S.table.n ? S.rec.located / S.table.n * 100 : 0, 0) + ' %)') +
+        '<div class="vz-kpi-grid">' +
+          kpi(fmt(withData, 0), '', 'territoires renseignés', 'sur ' + fmt(S.terr.size, 0), true) +
+          kpi(additive ? fmt(S.valStats.sum) : fmt(S.valStats.mean), unit, additive ? 'total' : 'moyenne des territoires', '', true) +
+          kpi(fmt(S.valStats.min), unit, 'minimum', '', true) +
+          kpi(fmt(S.valStats.max), unit, 'maximum', '', true) +
+        '</div></div>' +
+        '<div class="vz-chart-box"><div class="vz-chart"><canvas id="ch1"></canvas></div><p class="vz-chart-cap">Répartition des territoires par classe<em>Nombre de territoires (' + esc(SCALES[t.scale].label.toLowerCase()) + ')</em></p></div>' +
+        '<div class="vz-chart-box"><div class="vz-chart"><canvas id="ch2"></canvas></div><p class="vz-chart-cap">Les 10 territoires aux valeurs les plus élevées<em>Cliquez sur une barre pour sélectionner le territoire</em></p></div>' +
+      '</div>';
+    chartDefaults();
+    if (!window.Chart) return;
+    S.charts.push(new Chart($('#ch1'), {
+      type: 'bar',
+      data: { labels: S.cls.classes.map(c => c.label), datasets: [{ data: S.cls.classes.map(c => c.count), backgroundColor: S.cls.classes.map(c => c.color), borderColor: '#fff', borderWidth: 1 }] },
+      options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { maxRotation: 45, autoSkip: false, font: { size: 10 } } }, y: { beginAtZero: true, ticks: { precision: 0 } } } },
+    }));
+    const top = Array.from(S.terr.values()).filter(x => isNum(vals.get(x.key))).sort((a, b) => vals.get(b.key) - vals.get(a.key)).slice(0, 10);
+    S.charts.push(new Chart($('#ch2'), {
+      type: 'bar',
+      data: { labels: top.map(x => x.name), datasets: [{ data: top.map(x => vals.get(x.key)), backgroundColor: top.map(x => { const ci = S.cls.assign(vals.get(x.key)); return ci >= 0 ? S.cls.classes[ci].color : '#929292'; }) }] },
+      options: { indexAxis: 'y', maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => fmt(c.raw) + ' ' + unit } } },
+        scales: { x: { ticks: { callback: v => fmt(v) } }, y: { grid: { display: false }, ticks: { font: { size: 10 } } } },
+        onClick: (e, els) => { if (els.length) selectTerritory(top[els[0].index].key, true); } },
+    }));
+    return;
+  }
+
+  // ---- Territoire sélectionné ----
+  const v = vals.get(key);
+  const rk = rankOf(vals, key);
+  const tiles = t.indicators.map(i => {
+    const m = S.values[i.id]; const x = m.get(key); const r = rankOf(m, key);
+    let mean = 0, n = 0; m.forEach(y => { if (isNum(y)) { mean += y; n++; } }); mean = n ? mean / n : null;
+    return { i, x, r, mean };
+  });
+  const main = tiles.find(x => x.i.id === ind.id);
+  const others = tiles.filter(x => x.i.id !== ind.id);
+  const catInd = t.indicators.find(i => AGG[i.agg] && AGG[i.agg].mod) || t.indicators.find(i => i.agg === 'true_pct' || i.agg === 'true_count');
+  const nameCol = primaryLabelCol();
+  const showCols = [nameCol].concat(Object.values(t.geoMap || {}).filter(Boolean), t.indicators.map(i => i.col).filter(Boolean)).filter((c, i, a) => c && a.indexOf(c) === i).slice(0, 8);
+  const recs = tr.recs.slice(0, 200);
+  const canCursor = S.gr && !S.demo && S.linkedTableId === S.table.tableId;
+
+  box.innerHTML =
+    '<div class="vz-d-head"><p class="vz-d-kicker">' + esc(indLabel(ind)) + '</p><h2 class="vz-d-title">' + esc(tr.name) + '</h2>' +
+    '<div class="vz-chips"><span class="vz-d-chip ' + SCALES[t.scale].icon + '">' + SCALES[t.scale].label + ' ' + esc(tr.code) + '</span>' +
+    (rk ? '<span class="vz-d-chip light fr-icon-list-ordered">Rang ' + rk.r + ' / ' + rk.n + '</span>' : '') +
+    '<button class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline fr-icon-close-line" id="d-close" type="button" title="Revenir à la vue d\'ensemble">Fermer</button></div></div>' +
+    '<div class="vz-d-grid"><div class="vz-kpis">' +
+      kpi(fmt(main.x), unit, indLabel(ind), main.mean != null ? 'moyenne des territoires : ' + fmt(main.mean) + ' ' + unit : '') +
+      '<div class="vz-kpi-grid">' +
+        kpi(fmt(tr.recs.length, 0), '', 'enregistrements', 'pour le territoire', true) +
+        others.slice(0, 5).map(o => kpi(fmt(o.x), indUnit(o.i), indLabel(o.i), o.r ? 'rang ' + o.r.r + ' / ' + o.r.n : '', true)).join('') +
+      '</div></div>' +
+      '<div class="vz-chart-box"><div class="vz-chart"><canvas id="ch1"></canvas></div><p class="vz-chart-cap">Positionnement du territoire<em>Comparaison avec l\'ensemble des territoires affichés</em></p></div>' +
+      '<div class="vz-chart-box">' + (catInd ? '<div class="vz-chart"><canvas id="ch2"></canvas></div><p class="vz-chart-cap">Répartition « ' + esc(colMeta(catInd.col) ? colMeta(catInd.col).label : catInd.col) + ' »<em>Pour le territoire sélectionné</em></p>'
+        : '<div class="vz-def"><h4 class="fr-icon-information-line">' + esc(indLabel(ind)) + '</h4><p>' + esc(aggDescription(ind)) + ' calculé(e) sur les enregistrements de la table « ' + esc(S.table.tableId) + ' » localisés dans le territoire' + (T().filter && T().filter.col ? ' (après filtre)' : '') + '.</p>' +
+          (S.cls && S.cls.classes[S.cls.assign(v)] ? '<h4 class="fr-icon-palette-line">Classe</h4><p>' + esc(S.cls.classes[S.cls.assign(v)].label) + ' ' + esc(unit) + ' — méthode : ' + esc(METHODS[ind.classif.method].label.toLowerCase()) + '.</p>' : '') +
+          (tr.pop ? '<h4 class="fr-icon-team-line">Population</h4><p>' + fmt(tr.pop, 0) + ' habitants' + (tr.surf ? ' · ' + fmt(tr.surf, 1) + ' km²' : '') + '</p>' : '') + '</div>') +
+      '</div>' +
+    '</div>' +
+    '<details class="vz-recs vz-details"' + (tr.recs.length <= 12 ? ' open' : '') + '><summary>Enregistrements du territoire (' + tr.recs.length + ')' + (tr.recs.length > 200 ? ' — 200 premiers' : '') + (canCursor ? ' · cliquez sur une ligne pour l\'ouvrir dans Grist' : '') + '</summary>' +
+      '<div class="vz-table-wrap"><table><thead><tr><th>id</th>' + showCols.map(c => '<th>' + esc(colMeta(c) ? colMeta(c).label : c) + '</th>').join('') + '</tr></thead><tbody>' +
+      recs.map(i => '<tr data-row="' + S.table.ids[i] + '"' + (canCursor ? ' class="clickable"' : '') + '><td>' + S.table.ids[i] + '</td>' + showCols.map(c => '<td title="' + esc(cellText(S.table.v[c][i])) + '">' + esc(cellText(S.table.v[c][i])) + '</td>').join('') + '</tr>').join('') +
+      '</tbody></table></div></details>';
+
+  $('#d-close').onclick = () => selectTerritory(null);
+  if (canCursor) $$('#detail tr.clickable').forEach(r => r.onclick = () => { try { S.gr.setCursorPos({ rowId: parseInt(r.dataset.row, 10) }); } catch (e) {} });
+
+  chartDefaults();
+  if (!window.Chart) return;
+  const st = S.valStats;
+  const ci = S.cls.assign(v);
+  S.charts.push(new Chart($('#ch1'), {
+    type: 'bar',
+    data: { labels: ['Ce territoire', 'Moyenne', 'Médiane', 'Minimum', 'Maximum'],
+      datasets: [{ data: [v, st.mean, st.median, st.min, st.max], backgroundColor: [ci >= 0 ? S.cls.classes[ci].color : '#929292', '#CACAFB', '#CACAFB', '#E5E5E5', '#E5E5E5'], borderColor: ['#000091', '#fff', '#fff', '#fff', '#fff'], borderWidth: [2, 0, 0, 0, 0] }] },
+    options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => fmt(c.raw) + ' ' + unit } } }, scales: { x: { grid: { display: false } }, y: { ticks: { callback: x => fmt(x) } } } },
+  }));
+  if (catInd) {
+    const a = S.table.v[catInd.col]; const cnt = new Map();
+    tr.recs.forEach(i => {
+      let x = a[i];
+      if (typeof x === 'boolean') x = x ? 'Oui' : 'Non';
+      (Array.isArray(x) ? x : [x]).forEach(y => { const k = y == null || y === '' ? '(vide)' : String(y); cnt.set(k, (cnt.get(k) || 0) + 1); });
+    });
+    const ent = Array.from(cnt.entries()).sort((p, q) => q[1] - p[1]);
+    const top = ent.slice(0, 7); if (ent.length > 7) top.push(['Autres', ent.slice(7).reduce((s, e) => s + e[1], 0)]);
+    const pal = ['#009081', '#000091', '#A558A0', '#E4794A', '#B7A73F', '#465F9D', '#CE614A', '#929292'];
+    S.charts.push(new Chart($('#ch2'), {
+      type: 'doughnut',
+      data: { labels: top.map(e => e[0]), datasets: [{ data: top.map(e => e[1]), backgroundColor: top.map((e, i) => e[0] === catInd.mod ? '#000091' : pal[(i + 1) % pal.length]), borderColor: '#fff', borderWidth: 2 }] },
+      options: { maintainAspectRatio: false, cutout: '55%', plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 10 } } } } },
+    }));
+  }
+}
+function kpi(val, unit, lbl, sub, mini) {
+  return '<div class="vz-kpi' + (mini ? ' mini' : '') + '"><div class="k-val">' + esc(val) + (unit ? '<small>' + esc(unit) + '</small>' : '') + '</div><div class="k-lbl">' + esc(lbl) + '</div>' + (sub ? '<div class="k-sub">' + esc(sub) + '</div>' : '') + '</div>';
+}
+function cellText(x) {
+  if (x == null) return '';
+  if (Array.isArray(x)) return x.join(', ');
+  if (typeof x === 'boolean') return x ? 'Oui' : 'Non';
+  if (typeof x === 'number') return fmt(x);
+  return String(x);
+}
+
+function selectTerritory(key, zoom) {
+  const prev = S.selected;
+  S.selected = key;
+  if (prev) (S.featLayers.get(prev) || []).forEach(l => l.setStyle(styleFor(prev)));
+  if (key) {
+    (S.featLayers.get(key) || []).forEach(l => { l.setStyle(styleFor(key)); l.bringToFront && l.bringToFront(); });
+    if (zoom) {
+      const b = L.latLngBounds([]);
+      (S.featLayers.get(key) || []).forEach(l => b.extend(l.getBounds ? l.getBounds() : l.getLatLng()));
+      const tr = S.terr.get(key);
+      if (b.isValid()) S.map.fitBounds(b, { maxZoom: T().scale === 'points' ? 14 : 11, padding: [40, 40] });
+      else if (tr && tr.latlng) S.map.setView(tr.latlng, 11);
+    }
+    $('#app').classList.remove('detail-closed');
+  }
+  if (S.cfg.display.repr === 'cercles') drawCircles();
+  renderDetail();
+  setTimeout(() => S.map.invalidateSize(), 50);
+}
+
+function renderStatus() {
+  const b = $('#status');
+  if (!S.rec || !S.table) { b.hidden = true; return; }
+  b.hidden = false;
+  const pc = S.table.n ? S.rec.located / S.table.n * 100 : 0;
+  $('#status-dot').className = 'dot' + (pc < 80 ? ' warn' : '');
+  const f = T().filter && T().filter.col && T().filter.values.length ? ' · filtre actif' : '';
+  $('#status-txt').textContent = fmt(S.rec.located, 0) + ' / ' + fmt(S.table.n, 0) + ' enregistrements localisés (' + fmt(pc, 0) + ' %)' + f;
+}
+
+/* =====================================================================
+ * Rendu : panneau latéral
+ * ===================================================================== */
+function renderTables() {
+  const ok = [], ko = [];
+  S.meta.tables.forEach(tb => {
+    const p = S.prescan[tb.tableId];
+    const geoErr = S.cfg.tableId !== tb.tableId && S.refused[tb.tableId];
+    const refused = p.status === 'refused' || geoErr;
+    const nCols = (S.meta.cols[tb.tableId] || []).length;
+    const html = '<button type="button" class="vz-tbl" data-table="' + esc(tb.tableId) + '"' + (refused ? ' disabled' : '') + (S.cfg.tableId === tb.tableId ? ' aria-current="true"' : '') + '>' +
+      '<span class="vz-tbl-ico ' + (refused ? 'fr-icon-close-circle-line' : 'fr-icon-map-pin-2-line') + '" aria-hidden="true"></span>' +
+      '<span class="vz-tbl-main"><span class="vz-tbl-name">' + esc(tb.tableId) + (tb.summary ? ' <span class="fr-badge fr-badge--sm fr-badge--no-icon">résumé</span>' : '') +
+      (tb.tableId === S.linkedTableId ? ' <span class="fr-badge fr-badge--sm fr-badge--info fr-badge--no-icon">liée au widget</span>' : '') + '</span>' +
+      '<span class="vz-tbl-meta">' + esc(refused ? ('Refusée — ' + (geoErr || p.reason)) : p.reason) + ' · ' + nCols + ' colonnes</span></span></button>';
+    (refused ? ko : ok).push(html);
+  });
+  $('#tables').innerHTML = ok.join('') || '<div class="fr-alert fr-alert--warning fr-alert--sm"><p>Aucune table de ce document ne contient d\'information géographique exploitable.</p></div>';
+  $('#tables-refused').innerHTML = ko.join('');
+  $('#tables-refused-sum').textContent = 'Tables refusées (' + ko.length + ') — sans intérêt géographique';
+  $('#tables-refused-box').hidden = !ko.length;
+  $$('#tables .vz-tbl').forEach(b => b.onclick = () => selectTable(b.dataset.table));
+}
+
+function renderGeoBox() {
+  const box = $('#geo-box');
+  const t = T();
+  if (!S.table || !t) { box.innerHTML = ''; return; }
+  const st = S.geo;
+  const opts = role => {
+    const cols = S.table.cols.filter(c => ROLE_TYPES[role].includes(c.base));
+    return '<option value="">— aucune —</option>' + cols.map(c => '<option value="' + esc(c.colId) + '"' + ((t.geoMap || {})[role] === c.colId ? ' selected' : '') + '>' + esc(c.label) + '</option>').join('');
+  };
+  const rows = Object.keys(ROLES).map(r => {
+    const vr = st.valid[r];
+    const rate = vr ? Math.round(vr.rate * 100) : null;
+    const cls = rate == null ? 'na' : rate >= ROLE_MIN_RATE * 100 ? 'ok' : 'ko';
+    return '<div class="vz-geo-role"><label class="vz-geo-lbl" for="role-' + r + '">' + ROLES[r].label + '</label><select class="fr-select" id="role-' + r + '" data-role="' + r + '">' + opts(r) + '</select>' +
+      '<span class="vz-rate ' + cls + '" title="Part des valeurs reconnues">' + (rate == null ? '—' : rate + ' %') + '</span></div>';
+  }).join('');
+
+  let html = '<hr class="vz-sep"><h2><span class="fr-icon-map-pin-2-line" aria-hidden="true"></span>Localisation</h2>';
+  if (!st.any) {
+    html += '<div class="fr-alert fr-alert--error fr-alert--sm vz-alert"><h3 class="fr-alert__title">Table refusée</h3><p>' + esc(st.reason) + '</p></div>';
+  }
+  html += '<p class="vz-hint">Colonnes détectées automatiquement (≥ ' + (ROLE_MIN_RATE * 100) + ' % de valeurs reconnues). Vous pouvez les corriger.</p>' + rows;
+
+  if (geoStatus().any) {
+    html += '<fieldset class="fr-segmented fr-segmented--sm fr-mt-2w"><legend class="fr-segmented__legend">Échelle d\'agrégation</legend><div class="fr-segmented__elements">' +
+      Object.keys(SCALES).map(s => '<div class="fr-segmented__element"><input value="' + s + '" type="radio" id="sc-' + s + '" name="scale"' + (t.scale === s ? ' checked' : '') + (st.scales[s] ? '' : ' disabled') + '><label class="fr-label" for="sc-' + s + '">' + (s === 'points' ? 'Points' : SCALES[s].label) + '</label></div>').join('') +
+      '</div></fieldset>';
+    const miss = Object.keys(SCALES).filter(s => !st.scales[s]);
+    if (miss.length) html += '<p class="vz-hint">' + miss.map(s => SCALES[s].label + ' : ' + (s === 'points' ? 'nécessite latitude et longitude' : 'nécessite un code INSEE, un code postal ou un nom de commune')).join(' · ') + '</p>';
+
+    if (t.scale !== 'points') {
+      const per = S.rec ? S.rec.per : perimeter();
+      const inData = S.rec ? S.rec.depsInData : [];
+      html += '<h2 class="fr-mt-2w"><span class="fr-icon-france-line" aria-hidden="true"></span>Périmètre (bornage territorial)</h2>' +
+        '<p class="vz-hint">Départements affichés. Les enregistrements situés hors périmètre sont exclus de la carte.' + (t.perimeter && t.perimeter.length ? '' : ' <strong>Par défaut : départements présents dans les données.</strong>') + '</p>' +
+        '<div class="vz-tags">' + per.map(d => '<button type="button" class="fr-tag fr-tag--sm fr-tag--dismiss" data-rmdep="' + d + '" aria-label="Retirer ' + esc(DEPT_BY_CODE[d] || d) + '">' + d + ' ' + esc(DEPT_BY_CODE[d] || '') + '</button>').join('') + '</div>' +
+        '<div class="vz-row"><select class="fr-select" id="add-dep"><option value="">Ajouter un département…</option>' + DEPTS.filter(([c]) => !per.includes(c)).map(([c, n]) => '<option value="' + c + '">' + c + ' – ' + esc(n) + (inData.includes(c) ? ' (dans les données)' : '') + '</option>').join('') + '</select></div>' +
+        '<ul class="fr-btns-group fr-btns-group--inline-sm fr-btns-group--sm fr-mt-1w">' +
+        '<li><button type="button" class="fr-btn fr-btn--sm fr-btn--tertiary" id="per-data">Départements des données</button></li>' +
+        '<li><button type="button" class="fr-btn fr-btn--sm fr-btn--tertiary" id="per-bzh">Bretagne</button></li></ul>';
+    }
+
+    // filtre
+    const f = t.filter || { col: null, values: [] };
+    const fcols = S.table.cols.filter(c => { const p = S.prof[c.colId]; return p && (p.kind === 'cat' || p.kind === 'bool' || p.kind === 'multi' || (p.distinct <= 40 && p.distinct > 1)); });
+    html += '<h2 class="fr-mt-2w"><span class="fr-icon-filter-line" aria-hidden="true"></span>Filtrer les enregistrements</h2>' +
+      '<div class="fr-select-group"><select class="fr-select" id="flt-col"><option value="">Aucun filtre</option>' + fcols.map(c => '<option value="' + esc(c.colId) + '"' + (f.col === c.colId ? ' selected' : '') + '>' + esc(c.label) + '</option>').join('') + '</select></div>';
+    if (f.col && S.prof[f.col]) {
+      const p = S.prof[f.col];
+      let mods = p.kind === 'bool' ? ['Oui', 'Non'] : p.mods.slice(0, 40);
+      if (p.ne < S.table.n && p.kind !== 'bool') mods = mods.concat(['(vide)']);
+      html += '<div class="vz-tags">' + mods.map(m => '<button type="button" class="fr-tag fr-tag--sm" aria-pressed="' + (f.values.includes(m) ? 'true' : 'false') + '" data-fval="' + esc(m) + '">' + esc(m) + '</button>').join('') + '</div>' +
+        '<p class="vz-hint">' + (f.values.length ? 'Seuls les enregistrements correspondant aux valeurs cochées sont cartographiés.' : 'Cochez une ou plusieurs valeurs.') + '</p>';
+    }
+
+    // diagnostic
+    if (S.rec) {
+      const w = S.rec.why;
+      const pc = S.table.n ? Math.round(S.rec.located / S.table.n * 100) : 0;
+      html += '<h2 class="fr-mt-2w"><span class="fr-icon-checkbox-circle-line" aria-hidden="true"></span>Qualité de la localisation</h2>' +
+        '<div class="fr-alert fr-alert--' + (pc >= 90 ? 'success' : pc >= 60 ? 'info' : 'warning') + ' fr-alert--sm vz-alert"><p><strong>' + fmt(S.rec.located, 0) + ' / ' + fmt(S.table.n, 0) + '</strong> enregistrements localisés (' + pc + ' %).' +
+        (w.vide ? '<br>' + w.vide + ' sans information géographique' : '') + (w.inconnu ? '<br>' + w.inconnu + ' non trouvés dans le référentiel' : '') +
+        (w.ambigu ? '<br>' + w.ambigu + ' ambigus (homonymes / code postal partagé)' : '') + (w.hors ? '<br>' + w.hors + ' hors périmètre' : '') + '</p></div>';
+      if (S.rec.samples.length) {
+        const lc = primaryLabelCol();
+        html += '<details class="vz-details"><summary>Exemples d\'enregistrements non localisés</summary><ul class="vz-hint">' +
+          S.rec.samples.slice(0, 25).map(s => '<li>#' + S.table.ids[s.i] + (lc ? ' ' + esc(cellText(S.table.v[lc][s.i])) : '') + ' — ' + esc(s.reason) +
+            Object.keys(ROLES).filter(r => t.geoMap && t.geoMap[r]).map(r => ' · ' + ROLES[r].label + ' : <span class="vz-mono">' + esc(cellText(S.table.v[t.geoMap[r]][s.i])) + '</span>').join('') + '</li>').join('') + '</ul></details>';
+      }
+    }
+  }
+  box.innerHTML = html;
+
+  $$('#geo-box select[data-role]').forEach(s => s.onchange = () => {
+    const g = Object.assign({}, t.geoMap || {}); g[s.dataset.role] = s.value || null;
+    t.geoMap = g; afterGeoChange();
+  });
+  $$('#geo-box input[name=scale]').forEach(i => i.onchange = () => { t.scale = i.value; S.selected = null; save(); rebuild(); });
+  $$('#geo-box [data-rmdep]').forEach(b => b.onclick = () => { const p = perimeter().filter(d => d !== b.dataset.rmdep); t.perimeter = p.length ? p : []; S.selected = null; save(); rebuild(); });
+  const ad = $('#add-dep'); if (ad) ad.onchange = () => { if (!ad.value) return; t.perimeter = perimeter().concat([ad.value]).sort(); save(); rebuild(); };
+  const pd = $('#per-data'); if (pd) pd.onclick = () => { t.perimeter = []; save(); rebuild(); };
+  const pb = $('#per-bzh'); if (pb) pb.onclick = () => { t.perimeter = DEFAULT_PERIMETER.slice(); save(); rebuild(); };
+  const fc = $('#flt-col'); if (fc) fc.onchange = () => { t.filter = { col: fc.value || null, values: [] }; save(); rebuildValuesOnly(); renderGeoBox(); };
+  $$('#geo-box [data-fval]').forEach(b => b.onclick = () => {
+    const vals = new Set(t.filter.values); const x = b.dataset.fval;
+    vals.has(x) ? vals.delete(x) : vals.add(x);
+    t.filter.values = Array.from(vals); save(); rebuildValuesOnly(); renderGeoBox();
+  });
+}
+function rebuildValuesOnly() {
+  if (!S.rec) return;
+  buildTerritories();
+  drawGeometry();
+  recompute();
+  renderSearchIndex();
+}
+
+function afterGeoChange() {
+  const t = T();
+  S.geo = geoStatus();
+  if (!S.geo.scales[t.scale]) t.scale = pickScale(S.geo.scales);
+  if (S.geo.any) delete S.refused[S.table.tableId]; else S.refused[S.table.tableId] = 'aucune valeur géographique reconnue';
+  save();
+  renderGeoBox(); renderIndicators();
+  if (S.geo.any) rebuild(); else showRefused();
+}
+function pickScale(sc) { return sc.commune ? 'commune' : sc.dept ? 'dept' : sc.points ? 'points' : sc.epci ? 'epci' : null; }
+
+/* ---------- Indicateurs ---------- */
+let indFilter = { q: '', mode: 'all' };
+function renderIndicators() {
+  const box = $('#ind-box');
+  const t = T();
+  if (!S.table || !t || !S.geo || !S.geo.any) { box.innerHTML = '<p class="vz-empty">Choisissez d\'abord une table géolocalisable.</p>'; return; }
+  const sel = new Map(t.indicators.map(i => [i.col || '__count', i]));
+  const items = [{ colId: '__count', label: "Nombre d'enregistrements", type: '—', rec: { status: 'rec', reason: 'Toujours disponible : nombre d\'enregistrements par territoire.', aggs: ['count'], def: 'count' } }]
+    .concat(S.table.cols.map(c => ({ colId: c.colId, label: c.label, type: TYPE_LABEL[c.base] || c.base, rec: recommend(c) })));
+  const counts = { rec: 0, ok: 0, warn: 0, no: 0, geo: 0 };
+  items.forEach(it => counts[it.rec.status]++);
+  const q = normKey(indFilter.q);
+  const order = { rec: 0, ok: 1, warn: 2, geo: 3, no: 4 };
+  const shown = items.filter(it => {
+    if (q && !normKey(it.label + ' ' + it.colId).includes(q)) return false;
+    if (indFilter.mode === 'rec' && it.rec.status !== 'rec') return false;
+    if (indFilter.mode === 'sel' && !sel.has(it.colId)) return false;
+    return true;
+  }).sort((a, b) => (sel.has(b.colId) - sel.has(a.colId)) || (order[a.rec.status] - order[b.rec.status]));
+
+  box.innerHTML =
+    '<h2>Indicateurs à cartographier <span class="fr-badge fr-badge--sm fr-badge--info fr-badge--no-icon">' + t.indicators.length + ' sélectionné' + (t.indicators.length > 1 ? 's' : '') + '</span></h2>' +
+    '<p class="vz-hint">Cochez les colonnes à analyser. Chaque indicateur est agrégé par territoire ; la carte affiche l\'indicateur actif (liste « Analyses » de la légende). ' +
+    '<strong>' + counts.rec + ' conseillé' + (counts.rec > 1 ? 's' : '') + '</strong>, ' + counts.ok + ' possible' + (counts.ok > 1 ? 's' : '') + ', ' + counts.warn + ' déconseillé' + (counts.warn > 1 ? 's' : '') + '.</p>' +
+    '<div class="vz-ind-tools"><input class="fr-input" type="search" id="ind-q" placeholder="Rechercher une colonne…" value="' + esc(indFilter.q) + '"></div>' +
+    '<div class="vz-chips">' + [['all', 'Toutes'], ['rec', 'Conseillées'], ['sel', 'Sélectionnées']].map(([m, l]) => '<button type="button" class="fr-tag fr-tag--sm" aria-pressed="' + (indFilter.mode === m) + '" data-imode="' + m + '">' + l + '</button>').join('') + '</div>' +
+    shown.map(it => indRow(it, sel.get(it.colId))).join('') +
+    (shown.length ? '' : '<p class="vz-empty">Aucune colonne ne correspond.</p>');
+
+  const q2 = $('#ind-q'); q2.oninput = debounce(() => { indFilter.q = q2.value; renderIndicators(); const e = $('#ind-q'); e.focus(); e.setSelectionRange(e.value.length, e.value.length); }, 250);
+  $$('#ind-box [data-imode]').forEach(b => b.onclick = () => { indFilter.mode = b.dataset.imode; renderIndicators(); });
+  $$('#ind-box input[data-icol]').forEach(cb => cb.onchange = () => toggleIndicator(cb.dataset.icol, cb.checked));
+  $$('#ind-box select[data-iopt]').forEach(s => s.onchange = () => {
+    const ind = t.indicators.find(i => (i.col || '__count') === s.dataset.icol); if (!ind) return;
+    ind[s.dataset.iopt] = s.value;
+    if (s.dataset.iopt === 'agg' && AGG[s.value].mod && !ind.mod) ind.mod = S.prof[ind.col].mods[0];
+    if (s.dataset.iopt === 'agg') { ind.label = ''; ind.classif = defaultClassif(ind); }
+    save(); recompute(); renderIndicators();
+    if ((s.dataset.iopt === 'per') && needsDenominators()) rebuild({ keepView: true });
+  });
+  $$('#ind-box [data-iactive]').forEach(b => b.onclick = () => { t.active = b.dataset.iactive; S.hidden.clear(); S.focusClass = null; save(); recompute(); renderIndicators(); });
+}
+function indRow(it, ind) {
+  const dis = it.rec.status === 'no' || it.rec.status === 'geo';
+  const id = 'ic-' + it.colId.replace(/[^A-Za-z0-9_]/g, '_');
+  let opts = '';
+  if (ind && !dis) {
+    const p = S.prof[it.colId];
+    const aggSel = '<select class="fr-select" data-iopt="agg" data-icol="' + esc(it.colId) + '" aria-label="Calcul">' + it.rec.aggs.map(a => '<option value="' + a + '"' + (ind.agg === a ? ' selected' : '') + '>' + AGG[a].label + '</option>').join('') + '</select>';
+    const modSel = AGG[ind.agg] && AGG[ind.agg].mod ? '<select class="fr-select" data-iopt="mod" data-icol="' + esc(it.colId) + '" aria-label="Modalité">' + p.mods.slice(0, 50).map(m => '<option value="' + esc(m) + '"' + (ind.mod === m ? ' selected' : '') + '>' + esc(m) + ' (' + (p.freq.get(m) || 0) + ')</option>').join('') + '</select>' : '';
+    const perSel = '<select class="fr-select' + (modSel ? ' full' : '') + '" data-iopt="per" data-icol="' + esc(it.colId) + '" aria-label="Rapporter à">' + Object.keys(PER).filter(k => k === 'none' || T().scale !== 'points').map(k => '<option value="' + k + '"' + ((ind.per || 'none') === k ? ' selected' : '') + '>' + PER[k].label + '</option>').join('') + '</select>';
+    const isActive = (activeInd() || {}).id === ind.id;
+    opts = '<div class="vz-ind-opts">' + (it.colId === '__count' ? '' : aggSel) + modSel + perSel +
+      '<button type="button" class="fr-btn fr-btn--sm ' + (isActive ? '' : 'fr-btn--secondary') + ' full fr-icon-road-map-line fr-btn--icon-left" data-iactive="' + esc(ind.id) + '"' + (isActive ? ' disabled' : '') + '>' + (isActive ? 'Indicateur affiché sur la carte' : 'Afficher sur la carte') + '</button></div>';
+    if (it.rec.status === 'warn') opts += '<div class="fr-alert fr-alert--warning fr-alert--sm vz-alert" style="margin-left:28px"><p>Indicateur déconseillé : ' + esc(it.rec.reason) + '</p></div>';
+  }
+  return '<div class="vz-ind' + (ind ? ' sel' : '') + (dis ? ' disabled' : '') + '"><div class="vz-ind-head"><div class="fr-checkbox-group fr-checkbox-group--sm">' +
+    '<input type="checkbox" id="' + id + '" data-icol="' + esc(it.colId) + '"' + (ind ? ' checked' : '') + (dis ? ' disabled' : '') + '>' +
+    '<label class="fr-label" for="' + id + '">' + esc(it.label) + '<span class="fr-hint-text">' + (it.colId === '__count' ? 'Comptage' : esc(it.colId) + ' · ' + esc(it.type)) + '</span></label></div>' +
+    STATUS_BADGE[it.rec.status] + '</div><p class="vz-reason">' + esc(it.rec.reason) + '</p>' + opts + '</div>';
+}
+function toggleIndicator(colId, on) {
+  const t = T();
+  if (on) {
+    let ind;
+    if (colId === '__count') ind = { id: '__count', col: null, agg: 'count', per: 'none' };
+    else {
+      const c = colMeta(colId); const r = recommend(c);
+      ind = { id: colId, col: colId, agg: r.def || r.aggs[0], per: 'none' };
+      if (AGG[ind.agg] && AGG[ind.agg].mod) {
+        const p = S.prof[colId];
+        ind.mod = p.mods.find(m => /^(oui|yes|vrai|true)$/i.test(m)) || p.mods[0];
+      }
+      if (r.status === 'warn') toast('Indicateur déconseillé ajouté : ' + r.reason, 5000);
+    }
+    ind.label = ''; ind.source = '';
+    ind.classif = defaultClassif(ind);
+    t.indicators.push(ind);
+    t.active = ind.id;
+  } else {
+    t.indicators = t.indicators.filter(i => (i.col || '__count') !== colId);
+    if (!t.indicators.find(i => i.id === t.active)) t.active = t.indicators.length ? t.indicators[0].id : null;
+  }
+  S.hidden.clear(); S.focusClass = null;
+  save(); recompute(); renderIndicators();
+}
+
+/* ---------- Représentation ---------- */
+function renderStyleBox() {
+  const box = $('#style-box');
+  const t = T(); const ind = activeInd(); const d = S.cfg.display;
+  if (!t || !ind || !S.cls) { box.innerHTML = '<p class="vz-empty">Choisissez d\'abord une table et au moins un indicateur.</p>'; return; }
+  if (box.contains(document.activeElement) && document.activeElement.matches('input[type=text], input[type=number], textarea')) return; // ne pas perdre la saisie en cours
+  const c = ind.classif;
+  const palBtn = k => { const P = PALETTES[k]; const cols = chroma.scale(P.colors).mode('lab').colors(6); return '<button type="button" class="vz-pal" data-pal="' + k + '" aria-pressed="' + (c.palette === k) + '"><span class="vz-pal-bar">' + cols.map(x => '<span style="background:' + x + '"></span>').join('') + '</span><span class="vz-pal-name">' + esc(P.name) + '</span></button>'; };
+  const grp = g => Object.keys(PALETTES).filter(k => PALETTES[k].group === g).map(palBtn).join('');
+  const numIn = (id, lbl, val, hint) => '<div class="fr-input-group"><label class="fr-label" for="' + id + '">' + lbl + (hint ? '<span class="fr-hint-text">' + hint + '</span>' : '') + '</label><input class="fr-input" type="number" step="any" id="' + id + '" value="' + (isNum(val) ? val : '') + '"></div>';
+  const manualAllowed = c.method === 'manual';
+  const divergent = (PALETTES[c.palette] || {}).group === 'div';
+  const st = S.valStats || {};
+
+  box.innerHTML =
+    '<div class="fr-select-group"><label class="fr-label" for="st-ind">Indicateur affiché</label><select class="fr-select" id="st-ind">' + t.indicators.map(i => '<option value="' + esc(i.id) + '"' + (i.id === ind.id ? ' selected' : '') + '>' + esc(indLabel(i)) + '</option>').join('') + '</select></div>' +
+    '<div class="vz-row"><div class="fr-input-group"><label class="fr-label" for="st-label">Titre personnalisé</label><input class="fr-input" type="text" id="st-label" value="' + esc(ind.label || '') + '" placeholder="' + esc(indLabel(Object.assign({}, ind, { label: '' }))) + '"></div></div>' +
+    '<div class="fr-input-group"><label class="fr-label" for="st-src">Source / commentaire<span class="fr-hint-text">Affiché sous la légende</span></label><input class="fr-input" type="text" id="st-src" value="' + esc(ind.source || '') + '" placeholder="Source : table Grist « ' + esc(S.table.tableId) + ' »"></div>' +
+
+    '<h2><span class="fr-icon-bar-chart-box-line" aria-hidden="true"></span>Discrétisation</h2>' +
+    '<p class="vz-hint">Distribution : ' + fmt(st.n, 0) + ' territoires renseignés · min ' + fmt(st.min) + ' · médiane ' + fmt(st.median) + ' · moyenne ' + fmt(st.mean) + ' · max ' + fmt(st.max) + '</p>' +
+    '<div class="fr-select-group"><label class="fr-label" for="st-method">Méthode</label><select class="fr-select" id="st-method">' + Object.keys(METHODS).map(m => '<option value="' + m + '"' + (c.method === m ? ' selected' : '') + '>' + METHODS[m].label + '</option>').join('') + '</select><p class="vz-hint">' + esc(METHODS[c.method].hint) + '</p></div>' +
+    (manualAllowed || c.method === 'unique' ? '' :
+      '<div class="vz-range-lbl"><label for="st-k">Nombre de classes</label><output>' + c.k + '</output></div><input class="vz-range" type="range" id="st-k" min="2" max="9" step="1" value="' + c.k + '">') +
+    (manualAllowed ? '<div class="fr-input-group fr-mt-1w"><label class="fr-label" for="st-manual">Seuils (bornes des classes)<span class="fr-hint-text">Valeurs séparées par « ; ». Ex. : 0 ; 1000 ; 2500 ; 5000 ; 10000</span></label><input class="fr-input" type="text" id="st-manual" value="' + esc((c.manual || []).map(x => String(x).replace('.', ',')).join(' ; ')) + '"></div>' : '') +
+    '<button type="button" class="fr-btn fr-btn--sm fr-btn--tertiary fr-icon-edit-line fr-btn--icon-left fr-mt-1w" id="st-tomanual">' + (manualAllowed ? 'Reprendre les seuils actuels' : 'Ajuster ces seuils à la main') + '</button>' +
+    '<div class="fr-select-group fr-mt-2w"><label class="fr-label" for="st-round">Arrondi des bornes</label><select class="fr-select" id="st-round">' +
+      [['auto', 'Automatique (2 chiffres significatifs)'], ['0', 'Unité'], ['1', '1 décimale'], ['2', '2 décimales'], ['-1', 'Dizaine'], ['-2', 'Centaine'], ['-3', 'Millier'], ['none', 'Aucun arrondi']].map(([k, l]) => '<option value="' + k + '"' + (String(c.round) === k ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></div>' +
+    '<p class="vz-hint"><strong>Écrêtage</strong> : les valeurs hors bornes sont rangées dans la première ou la dernière classe (« Moins de… », « + … »).</p>' +
+    '<div class="vz-row">' + numIn('st-lo', 'Borne basse', c.lo) + numIn('st-hi', 'Borne haute', c.hi) + '</div>' +
+    '<p class="vz-hint"><strong>Plage affichée</strong> : les territoires hors plage sont estompés sur la carte.</p>' +
+    '<div class="vz-row">' + numIn('st-smin', 'Afficher à partir de', c.showMin) + numIn('st-smax', 'Afficher jusqu\'à', c.showMax) + '</div>' +
+    '<div class="fr-toggle fr-toggle--label-left"><input type="checkbox" class="fr-toggle__input" id="st-zero"' + (c.zero ? ' checked' : '') + '><label class="fr-toggle__label" for="st-zero" data-fr-checked-label="Oui" data-fr-unchecked-label="Non">Classe dédiée aux valeurs nulles (0)</label></div>' +
+
+    '<h2 class="fr-mt-2w"><span class="fr-icon-palette-line" aria-hidden="true"></span>Couleurs</h2>' +
+    '<div class="vz-pal-group">Séquentielles (DSFR)</div><div class="vz-pals">' + grp('seq') + '</div>' +
+    '<div class="vz-pal-group">Multi-teintes</div><div class="vz-pals">' + grp('multi') + '</div>' +
+    '<div class="vz-pal-group">Divergentes (valeurs de part et d\'autre d\'un centre)</div><div class="vz-pals">' + grp('div') + '</div>' +
+    '<div class="fr-toggle fr-toggle--label-left fr-mt-1w"><input type="checkbox" class="fr-toggle__input" id="st-rev"' + (c.reverse ? ' checked' : '') + '><label class="fr-toggle__label" for="st-rev" data-fr-checked-label="Oui" data-fr-unchecked-label="Non">Inverser la palette</label></div>' +
+    (divergent ? '<div class="vz-row fr-mt-1w"><div class="fr-select-group"><label class="fr-label" for="st-center">Centre de la palette</label><select class="fr-select" id="st-center">' +
+      [['zero', 'Zéro'], ['mean', 'Moyenne (' + fmt(st.mean) + ')'], ['median', 'Médiane (' + fmt(st.median) + ')'], ['custom', 'Valeur personnalisée']].map(([k, l]) => '<option value="' + k + '"' + (c.center === k ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></div>' +
+      (c.center === 'custom' ? numIn('st-cval', 'Valeur', c.centerValue) : '') + '</div>' : '') +
+
+    '<hr class="vz-sep"><h2><span class="fr-icon-road-map-line" aria-hidden="true"></span>Affichage de la carte</h2>' +
+    (t.scale !== 'points' ? '<fieldset class="fr-segmented fr-segmented--sm"><legend class="fr-segmented__legend">Représentation</legend><div class="fr-segmented__elements">' +
+      [['aplat', 'Aplats de couleur'], ['cercles', 'Cercles proportionnels']].map(([k, l]) => '<div class="fr-segmented__element"><input value="' + k + '" type="radio" id="rp-' + k + '" name="repr"' + (d.repr === k ? ' checked' : '') + '><label class="fr-label" for="rp-' + k + '">' + l + '</label></div>').join('') + '</div></fieldset>' : '') +
+    (d.repr === 'cercles' && t.scale !== 'points' ? '<div class="vz-range-lbl fr-mt-1w"><label for="st-rad">Rayon maximal des cercles</label><output>' + d.radius + ' px</output></div><input class="vz-range" type="range" id="st-rad" min="8" max="60" step="2" value="' + d.radius + '">' : '') +
+    '<div class="fr-select-group fr-mt-2w"><label class="fr-label" for="st-empty">Territoires sans enregistrement</label><select class="fr-select" id="st-empty">' +
+      [['nodata', 'En gris (« sans donnée »)'], ['zero', 'Valeur 0 (comptages et sommes)'], ['hide', 'Masqués']].map(([k, l]) => '<option value="' + k + '"' + (d.empty === k ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></div>' +
+    '<div class="fr-select-group"><label class="fr-label" for="st-labels">Étiquettes</label><select class="fr-select" id="st-labels">' +
+      [['none', 'Aucune'], ['value', 'Valeur'], ['name', 'Nom du territoire'], ['both', 'Nom et valeur']].map(([k, l]) => '<option value="' + k + '"' + (d.labels === k ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></div>' +
+    '<div class="fr-toggle fr-toggle--label-left"><input type="checkbox" class="fr-toggle__input" id="st-borders"' + (d.borders ? ' checked' : '') + '><label class="fr-toggle__label" for="st-borders" data-fr-checked-label="Oui" data-fr-unchecked-label="Non">Contours blancs entre territoires</label></div>' +
+    '<div class="fr-select-group fr-mt-1w"><label class="fr-label" for="st-base">Fond de carte</label><select class="fr-select" id="st-base">' + Object.keys(BASEMAPS).map(k => '<option value="' + k + '"' + (d.basemap === k ? ' selected' : '') + '>' + BASEMAPS[k].label + '</option>').join('') + '</select></div>';
+
+  const c2 = () => { S.hidden.clear(); S.focusClass = null; save(); recompute(); };
+  const numVal = id => { const x = toNum($(id).value); return x == null ? null : x; };
+  $('#st-ind').onchange = e => { t.active = e.target.value; c2(); renderIndicators(); };
+  $('#st-label').onchange = e => { ind.label = e.target.value.trim(); c2(); renderIndicators(); };
+  $('#st-src').onchange = e => { ind.source = e.target.value.trim(); save(); renderLegend(); };
+  $('#st-method').onchange = e => { c.method = e.target.value; if (c.method === 'manual' && !(c.manual || []).length) c.manual = S.cls.breaks.slice(); c2(); };
+  const k = $('#st-k');
+  if (k) {
+    k.oninput = () => { k.previousElementSibling.querySelector('output').textContent = k.value; };
+    k.onchange = () => { c.k = parseInt(k.value, 10); c2(); };
+  }
+  const mi = $('#st-manual'); if (mi) mi.onchange = () => { c.manual = mi.value.split(/[;\n]+/).map(s => toNum(s.trim())).filter(isNum); mi.blur(); c2(); };
+  $('#st-tomanual').onclick = () => { c.manual = (S.cls.breaks && S.cls.breaks.length ? S.cls.breaks : [S.valStats.min, S.valStats.max]).slice(); c.method = 'manual'; c2(); };
+  $('#st-round').onchange = e => { c.round = e.target.value; c2(); };
+  [['#st-lo', 'lo'], ['#st-hi', 'hi'], ['#st-smin', 'showMin'], ['#st-smax', 'showMax'], ['#st-cval', 'centerValue']].forEach(([id, prop]) => { const el = $(id); if (el) el.onchange = () => { c[prop] = numVal(id); el.blur(); c2(); }; });
+  $('#st-zero').onchange = e => { c.zero = e.target.checked; c2(); };
+  $$('#style-box [data-pal]').forEach(b => b.onclick = () => { c.palette = b.dataset.pal; c2(); });
+  $('#st-rev').onchange = e => { c.reverse = e.target.checked; c2(); };
+  const ce = $('#st-center'); if (ce) ce.onchange = () => { c.center = ce.value; c2(); };
+  $$('#style-box input[name=repr]').forEach(r => r.onchange = () => { d.repr = r.value; save(); restyle(); renderLegend(); renderStyleBox(); });
+  const rad = $('#st-rad'); if (rad) { rad.oninput = () => { rad.previousElementSibling.querySelector('output').textContent = rad.value + ' px'; }; rad.onchange = () => { d.radius = parseInt(rad.value, 10); save(); drawCircles(); }; }
+  $('#st-empty').onchange = e => { d.empty = e.target.value; save(); recompute(); };
+  $('#st-labels').onchange = e => { d.labels = e.target.value; save(); drawLabels(); };
+  $('#st-borders').onchange = e => { d.borders = e.target.checked; save(); restyle(); };
+  $('#st-base').onchange = e => { d.basemap = e.target.value; setBasemap(d.basemap); save(); renderBasePop(); };
+}
+
+/* ---------- Recherche ---------- */
+let searchItems = [];
+function renderSearchIndex() {
+  searchItems = Array.from(S.terr.values()).map(tr => ({ key: tr.key, name: tr.name, code: tr.code, n: normName(tr.name + ' ' + tr.code), has: tr.recs.length }));
+  $('#search-box').hidden = !searchItems.length;
+}
+function runSearch() {
+  const q = normName($('#search').value);
+  const box = $('#sugg');
+  if (!q) { box.classList.remove('open'); return; }
+  const res = searchItems.filter(x => x.n.includes(q)).sort((a, b) => (b.n.startsWith(q) - a.n.startsWith(q)) || (b.has - a.has)).slice(0, 12);
+  box.innerHTML = res.map((x, i) => '<button type="button" data-k="' + esc(x.key) + '"' + (i === 0 ? ' class="active"' : '') + '><span>' + esc(x.name) + '</span><small>' + esc(x.code) + (x.has ? ' · ' + x.has + ' enr.' : '') + '</small></button>').join('') || '<button type="button" disabled><small>Aucun territoire trouvé</small></button>';
+  box.classList.add('open');
+  $$('#sugg [data-k]').forEach(b => b.onmousedown = e => { e.preventDefault(); pickSearch(b.dataset.k); });
+}
+function pickSearch(k) { $('#sugg').classList.remove('open'); $('#search').value = (S.terr.get(k) || {}).name || ''; selectTerritory(k, true); }
+
+/* ---------- Superpositions ---------- */
+function showOverlay(html, after) { $('#overlay-box').innerHTML = html; $('#overlay').classList.add('open'); if (after) after(); }
+function hideOverlay() { $('#overlay').classList.remove('open'); }
+function showLoading(msg) { showOverlay('<div class="vz-spin"></div><p>' + esc(msg) + '</p>'); }
+function showRefused() {
+  clearLayers(); $('#legend-card').hidden = true; $('#status').hidden = true; $('#search-box').hidden = true;
+  destroyCharts(); $('#detail').innerHTML = '';
+  showOverlay('<h2><span class="fr-icon-close-circle-line" aria-hidden="true"></span> Table refusée</h2>' +
+    '<div class="fr-alert fr-alert--error fr-alert--sm"><p>La table « ' + esc(S.table.tableId) + ' » ne présente pas d\'intérêt géographique : ' + esc(S.geo.reason) + '</p></div>' +
+    '<p class="fr-mt-2w">Pour être cartographiée, une table doit contenir au moins une des informations suivantes :</p>' +
+    '<ul><li>un <strong>code INSEE</strong> de commune (ex. 35238) ;</li><li>un <strong>code postal</strong> (ex. 35000) ;</li><li>un <strong>nom de commune</strong>, idéalement avec le département ;</li><li>un <strong>département</strong> (ex. 35, « 35 - Ille-et-Vilaine ») ;</li><li>une <strong>latitude</strong> et une <strong>longitude</strong>.</li></ul>' +
+    '<button class="fr-btn fr-btn--sm fr-btn--secondary" type="button" id="ov-choose">Choisir une autre table</button>',
+    () => { $('#ov-choose').onclick = () => { openSide('data'); }; });
+}
+function showChooser() {
+  clearLayers(); $('#legend-card').hidden = true; $('#status').hidden = true; $('#search-box').hidden = true; destroyCharts();
+  $('#detail').innerHTML = '<p class="vz-empty">Sélectionnez une table pour afficher l\'analyse.</p>';
+  const nOk = S.meta.tables.filter(tb => S.prescan[tb.tableId].status !== 'refused').length;
+  showOverlay('<h2>Quelle table souhaitez-vous cartographier ?</h2><p>' + nOk + ' table' + (nOk > 1 ? 's' : '') + ' sur ' + S.meta.tables.length + ' contiennent une information géographique exploitable. Choisissez-en une dans le panneau « Données ».</p>' +
+    '<button class="fr-btn fr-btn--sm fr-icon-arrow-left-line fr-btn--icon-left" type="button" id="ov-choose">Choisir une table</button>',
+    () => { $('#ov-choose').onclick = () => openSide('data'); });
+}
+
+/* =====================================================================
+ * Sélection d'une table
+ * ===================================================================== */
+async function selectTable(tableId) {
+  S.cfg.tableId = tableId;
+  S.selected = null; S.hidden.clear(); S.focusClass = null; S.rec = null;
+  $('#hdr-sub').textContent = 'Table : ' + tableId;
+  renderTables();
+  showLoading('Lecture de la table « ' + tableId + ' »…');
+  try { await loadTable(tableId); }
+  catch (e) { showOverlay('<h2>Lecture impossible</h2><div class="fr-alert fr-alert--error fr-alert--sm"><p>' + esc(e.message || e) + '</p></div>'); return; }
+  const t = T();
+  if (!t.geoMap) {
+    const det = detectGeo();
+    t.geoMap = det.best;
+  } else {
+    // colonnes supprimées entre-temps
+    Object.keys(t.geoMap).forEach(r => { if (t.geoMap[r] && !S.table.v[t.geoMap[r]]) t.geoMap[r] = null; });
+  }
+  t.indicators = (t.indicators || []).filter(i => !i.col || S.table.v[i.col]);
+  S.geo = geoStatus();
+  if (!S.geo.any) {
+    S.refused[tableId] = 'aucune valeur géographique reconnue';
+    save(); renderTables(); renderGeoBox(); renderIndicators(); renderStyleBox(); showRefused(); return;
+  }
+  delete S.refused[tableId];
+  if (!t.scale || !S.geo.scales[t.scale]) t.scale = pickScale(S.geo.scales);
+  if (!t.indicators.length) {
+    t.indicators.push({ id: '__count', col: null, agg: 'count', per: 'none', label: '', source: '', classif: null });
+    t.indicators[0].classif = defaultClassif(t.indicators[0]);
+    t.active = '__count';
+  }
+  t.indicators.forEach(i => { if (!i.classif) i.classif = defaultClassif(i); });
+  save();
+  renderTables(); renderGeoBox(); renderIndicators();
+  await rebuild();
+}
+
+/* =====================================================================
+ * Exports
+ * ===================================================================== */
+function exportCSV() {
+  const t = T(); if (!t || !S.terr.size) return toast('Rien à exporter.');
+  const inds = t.indicators;
+  const num = v => (isNum(v) ? String(Math.round(v * 1e6) / 1e6).replace('.', ',') : '');
+  const q = s => '"' + String(s == null ? '' : s).replace(/"/g, '""') + '"';
+  const ind = activeInd();
+  const rows = [['Code', 'Territoire', 'Échelle', 'Enregistrements'].concat(inds.map(i => indLabel(i) + (indUnit(i) ? ' (' + indUnit(i) + ')' : '')), ['Classe (' + indLabel(ind) + ')']).map(q).join(';')];
+  S.terr.forEach(tr => {
+    const ci = S.cls ? S.cls.assign(S.values[ind.id].get(tr.key)) : -1;
+    rows.push([q(tr.code), q(tr.name), q(SCALES[t.scale].label), tr.recs.length].concat(inds.map(i => num(S.values[i.id].get(tr.key))), [q(ci >= 0 ? S.cls.classes[ci].label : 'Sans donnée')]).join(';'));
+  });
+  download(fileBase() + '.csv', '﻿' + rows.join('\r\n'), 'text/csv;charset=utf-8');
+}
+function exportGeoJSON() {
+  const t = T(); if (!t || !S.featLayers.size) return toast('Rien à exporter.');
+  const feats = [];
+  S.featLayers.forEach((ls, key) => {
+    const tr = S.terr.get(key); if (!tr) return;
+    const props = { code: tr.code, nom: tr.name, echelle: SCALES[t.scale].label, enregistrements: tr.recs.length };
+    t.indicators.forEach(i => { props[indLabel(i)] = S.values[i.id].get(key); });
+    ls.forEach(l => { const g = l.toGeoJSON(); g.properties = props; feats.push(g); });
+  });
+  download(fileBase() + '.geojson', JSON.stringify({ type: 'FeatureCollection', features: feats }), 'application/geo+json');
+}
+async function exportPNG() {
+  if (!window.htmlToImage) return toast('Export image indisponible (bibliothèque non chargée).');
+  toast('Préparation de l\'image…');
+  try {
+    const url = await htmlToImage.toPng($('#map-wrap'), { pixelRatio: 2, cacheBust: false, filter: n => !(n.classList && (n.classList.contains('vz-noexport') || n.classList.contains('vz-overlay'))) });
+    const a = document.createElement('a'); a.href = url; a.download = fileBase() + '.png'; document.body.appendChild(a); a.click(); a.remove();
+  } catch (e) { console.error(e); toast('Export image impossible : le fond de carte n\'autorise peut-être pas la capture. Essayez « Aucun fond de carte ».', 6000); }
+}
+function fileBase() {
+  const ind = activeInd();
+  return ('carte_' + (S.table ? S.table.tableId : '') + '_' + (ind ? indLabel(ind) : '') + '_' + (T() ? T().scale : '')).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9_-]+/g, '_').slice(0, 120);
+}
+
+/* =====================================================================
+ * Persistance (options du widget Grist, ou navigateur en démo)
+ * ===================================================================== */
+let lastSaved = '';
+const save = debounce(() => {
+  const s = JSON.stringify(S.cfg);
+  if (s === lastSaved) return;
+  lastSaved = s;
+  if (S.gr && !S.demo) { try { Promise.resolve(S.gr.setOptions({ vizCfg: S.cfg })).catch(() => {}); } catch (e) {} }
+  else { try { localStorage.setItem('vz-cfg', s); } catch (e) {} }
+}, 700);
+
+/* =====================================================================
+ * Interface
+ * ===================================================================== */
+function openSide(tab) {
+  const app = $('#app');
+  app.classList.remove('side-closed', 'maximized');
+  $('#btn-side').setAttribute('aria-expanded', 'true');
+  if (tab) setTab(tab);
+  setTimeout(() => S.map.invalidateSize(), 220);
+}
+function setTab(tab) {
+  $$('.vz-tab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+  $$('.vz-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + tab));
+}
+function renderBasePop() {
+  $('#pop-base').innerHTML = Object.keys(BASEMAPS).map(k => '<button type="button" class="vz-menu" data-bm="' + k + '" aria-pressed="' + (S.cfg.display.basemap === k) + '">' + BASEMAPS[k].label + '</button>').join('');
+  $$('#pop-base [data-bm]').forEach(b => b.onclick = () => { S.cfg.display.basemap = b.dataset.bm; setBasemap(b.dataset.bm); save(); renderBasePop(); $('#pop-base').classList.remove('open'); });
+}
+
+function bindUI() {
+  $$('.vz-tab').forEach(b => b.onclick = () => setTab(b.dataset.tab));
+  $('#btn-side').onclick = () => {
+    const app = $('#app'); const closed = !app.classList.contains('side-closed');
+    app.classList.toggle('side-closed', closed); app.classList.remove('maximized');
+    $('#btn-side').setAttribute('aria-expanded', String(!closed));
+    setTimeout(() => S.map.invalidateSize(), 220);
+  };
+  $('#btn-refresh').onclick = () => refreshData();
+  $('#btn-export').onclick = e => { e.stopPropagation(); togglePop('#pop-export', '#btn-export'); };
+  $('#detail-toggle').onclick = () => { $('#app').classList.toggle('detail-closed'); $('#app').classList.remove('maximized'); setTimeout(() => S.map.invalidateSize(), 60); };
+  $('#z-in').onclick = () => S.map.zoomIn();
+  $('#z-out').onclick = () => S.map.zoomOut();
+  $('#z-home').onclick = () => fitData();
+  $('#c-png').onclick = () => exportPNG();
+  $('#c-max').onclick = () => { $('#app').classList.toggle('maximized'); setTimeout(() => S.map.invalidateSize(), 230); };
+  $('#c-base').onclick = e => { e.stopPropagation(); renderBasePop(); togglePop('#pop-base'); };
+  $('#pop-export').innerHTML =
+    '<button type="button" class="vz-menu" data-ex="png">Image de la carte (PNG)</button>' +
+    '<button type="button" class="vz-menu" data-ex="csv">Valeurs par territoire (CSV)</button>' +
+    '<button type="button" class="vz-menu" data-ex="geojson">Carte et valeurs (GeoJSON)</button>';
+  $$('#pop-export [data-ex]').forEach(b => b.onclick = () => { $('#pop-export').classList.remove('open'); ({ png: exportPNG, csv: exportCSV, geojson: exportGeoJSON })[b.dataset.ex](); });
+  document.addEventListener('click', e => { if (!e.target.closest('.vz-pop')) $$('.vz-pop').forEach(p => p.classList.remove('open')); });
+
+  $('#card-collapse').onclick = () => { $('#legend-card').classList.toggle('collapsed'); };
+  $('#opacity').oninput = e => { S.cfg.display.opacity = e.target.value / 100; $('#opacity-out').textContent = e.target.value + ' %'; restyle(); save(); };
+  $('#card-analyses').onchange = e => { T().active = e.target.value; S.hidden.clear(); S.focusClass = null; save(); recompute(); renderIndicators(); };
+  $('#legend').addEventListener('click', e => {
+    const li = e.target.closest('li[data-ci]'); if (!li) return; const ci = parseInt(li.dataset.ci, 10); if (ci < 0) return;
+    S.focusClass = null; S.hidden.has(ci) ? S.hidden.delete(ci) : S.hidden.add(ci); restyle(); renderLegend();
+  });
+  $('#legend').addEventListener('dblclick', e => {
+    const li = e.target.closest('li[data-ci]'); if (!li) return; const ci = parseInt(li.dataset.ci, 10); if (ci < 0) return;
+    S.hidden.clear(); S.focusClass = S.focusClass === ci ? null : ci; restyle(); renderLegend();
+  });
+  $('#status').onclick = () => { openSide('data'); setTimeout(() => { const el = $('#geo-box h2:last-of-type'); if (el) el.scrollIntoView({ behavior: 'smooth' }); }, 250); };
+
+  const si = $('#search');
+  si.oninput = runSearch;
+  si.onkeydown = e => {
+    const items = $$('#sugg [data-k]'); const i = items.findIndex(x => x.classList.contains('active'));
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (!items.length) return; items.forEach(x => x.classList.remove('active')); items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].classList.add('active'); }
+    else if (e.key === 'Enter') { const a = items[i >= 0 ? i : 0]; if (a) pickSearch(a.dataset.k); }
+    else if (e.key === 'Escape') $('#sugg').classList.remove('open');
+  };
+  si.onblur = () => setTimeout(() => $('#sugg').classList.remove('open'), 150);
+  window.addEventListener('resize', debounce(() => S.map.invalidateSize(), 150));
+}
+function togglePop(sel) { const p = $(sel); const was = p.classList.contains('open'); $$('.vz-pop').forEach(x => x.classList.remove('open')); if (!was) p.classList.add('open'); }
+
+async function refreshData(silent) {
+  S.refused = {};
+  if (!S.cfg.tableId) { try { await loadMeta(); renderTables(); } catch (e) {} return; }
+  if (!silent) showLoading('Actualisation des données…');
+  try {
+    await loadMeta(); renderTables();
+    await loadTable(S.cfg.tableId);
+    S.geo = geoStatus();
+    if (!S.geo.any) { showRefused(); return; }
+    renderIndicators();
+    await rebuild({ keepView: true });
+    if (!silent) toast('Données actualisées.');
+  } catch (e) { hideOverlay(); toast('Actualisation impossible : ' + (e.message || e), 6000); }
+}
+
+/* =====================================================================
+ * Démarrage
+ * ===================================================================== */
+async function boot() {
+  S.cfg = defaultCfg();
+  initMap();
+  bindUI();
+  let optionsResolve;
+  const optionsReady = new Promise(r => { optionsResolve = r; setTimeout(r, 1200); });
+  const inFrame = window.self !== window.top;
+
+  if (window.grist && typeof grist.ready === 'function' && inFrame) {
+    S.gr = grist;
+    grist.ready({ requiredAccess: 'full', allowSelectBy: false, onEditOptions: () => openSide('data') });
+    grist.onOptions(opts => {
+      if (opts && opts.vizCfg) {
+        const s = JSON.stringify(opts.vizCfg);
+        if (s !== lastSaved && !S.cfg.tableId) { S.cfg = Object.assign(defaultCfg(), opts.vizCfg); S.cfg.display = Object.assign(defaultCfg().display, opts.vizCfg.display || {}); lastSaved = s; }
+      }
+      optionsResolve();
+    });
+    const onRec = debounce(() => { if (S.table && S.linkedTableId && S.linkedTableId === S.cfg.tableId) refreshData(true); }, 1500);
+    let first = true;
+    grist.onRecords(() => { if (first) { first = false; return; } onRec(); });
+  } else {
+    S.demo = true;
+  }
+
+  showLoading('Lecture de la structure du document…');
+  if (S.demo) {
+    buildDemo();
+    try { const s = localStorage.getItem('vz-cfg'); if (s) { const c = JSON.parse(s); if (c && c.byTable) { S.cfg = Object.assign(defaultCfg(), c); lastSaved = s; } } } catch (e) {}
+  } else {
+    await optionsReady;
+    try { S.linkedTableId = await grist.getSelectedTableId(); } catch (e) { S.linkedTableId = null; }
+  }
+  try { await loadMeta(); }
+  catch (e) {
+    console.error(e);
+    showOverlay('<h2>Accès au document nécessaire</h2><div class="fr-alert fr-alert--warning fr-alert--sm"><p>Ce widget doit lire la structure et le contenu des tables du document.</p></div>' +
+      '<p class="fr-mt-2w">Dans le panneau de droite du widget (« Personnalisation du widget »), accordez le niveau d\'accès <strong>« Accès complet au document »</strong>, puis rechargez.</p>' +
+      '<p class="vz-hint">Détail : ' + esc(e.message || e) + '</p>');
+    return;
+  }
+  setBasemap(S.cfg.display.basemap);
+  renderTables();
+  if (S.demo) toast('Mode démonstration : ouvrez ce fichier comme widget personnalisé dans Grist pour utiliser vos données.', 6000);
+
+  let start = S.cfg.tableId;
+  if (start && !S.meta.cols[start]) start = null;
+  if (!start && S.linkedTableId && S.prescan[S.linkedTableId] && S.prescan[S.linkedTableId].status === 'probable') start = S.linkedTableId;
+  if (!start && S.demo) start = 'Exploitations_demo';
+  if (start) { await selectTable(start); if (!T().indicators.some(i => i.col)) setTab('ind'); }
+  else { showChooser(); openSide('data'); }
+}
+
+/* =====================================================================
+ * Démonstration (hors Grist)
+ * ===================================================================== */
+const DEMO = { tables: {} };
+function buildDemo() {
+  const communes = [
+    ['35238', 'Rennes', '35000'], ['35288', 'Saint-Malo', '35400'], ['35115', 'Fougères', '35300'], ['35360', 'Vitré', '35500'],
+    ['35236', 'Redon', '35600'], ['35047', 'Bruz', '35170'], ['35051', 'Cesson-Sévigné', '35510'], ['35093', 'Dinard', '35800'],
+    ['35281', 'Saint-Grégoire', '35760'], ['35024', 'Betton', '35830'], ['35055', 'Châteaugiron', '35410'], ['35066', 'Combourg', '35270'],
+    ['29019', 'Brest', '29200'], ['29232', 'Quimper', '29000'], ['29151', 'Morlaix', '29600'], ['29103', 'Landerneau', '29800'],
+    ['29039', 'Concarneau', '29900'], ['29058', 'Douarnenez', '29100'], ['29150', 'Montroulez', '29600'], ['29174', 'Plougastel-Daoulas', '29470'],
+    ['22278', 'Saint-Brieuc', '22000'], ['22113', 'Lannion', '22300'], ['22050', 'Dinan', '22100'], ['22093', 'Guingamp', '22200'],
+    ['22136', 'Loudéac', '22600'], ['22168', 'Paimpol', '22500'], ['22187', 'Plérin', '22190'],
+    ['56260', 'Vannes', '56000'], ['56121', 'Lorient', '56100'], ['56178', 'Pontivy', '56300'], ['56007', 'Auray', '56400'],
+    ['56162', 'Ploërmel', '56800'], ['56083', 'Hennebont', '56700'], ['56098', 'Lanester', '56600'],
+  ];
+  const prods = ['élevage ruminants (bovins, ovins, caprins)', 'maraichage (hors abri)', 'légumes de plein champ (hors abri)', 'autres productions végétales, grandes cultures', 'élevage (autres)'];
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const n = 420;
+  const d = { id: [], siret: [], raison_sociale: [], code_insee_ville: [], code_postal: [], ville: [], dep2: [], Aide_demandee: [], SAUtot: [], Eligible: [], GAEC: [], Productions: [], Enveloppe: [] };
+  for (let i = 0; i < n; i++) {
+    const w = Math.floor(Math.pow(rnd(), 1.6) * communes.length);
+    const c = communes[w];
+    d.id.push(i + 1); d.siret.push(String(30000000000000 + Math.floor(rnd() * 9e12)));
+    d.raison_sociale.push((rnd() < 0.3 ? 'GAEC ' : 'EARL ') + ['DU CHENE', 'DES PRES', 'DE LA LANDE', 'DU MOULIN', 'DES GENETS', 'DU BOCAGE'][Math.floor(rnd() * 6)] + ' ' + (i + 1));
+    d.code_insee_ville.push(rnd() < 0.03 ? '' : c[0]); d.code_postal.push(c[2]); d.ville.push(c[1].toUpperCase()); d.dep2.push(c[0].slice(0, 2));
+    d.Aide_demandee.push(Math.round(1500 + rnd() * 8500)); d.SAUtot.push(Math.round((5 + rnd() * 140) * 10) / 10);
+    d.Eligible.push(rnd() < 0.72 ? 'Oui' : rnd() < 0.6 ? 'Non' : ''); d.GAEC.push(rnd() < 0.3);
+    d.Productions.push(prods[Math.floor(rnd() * prods.length)]); d.Enveloppe.push(Math.ceil(rnd() * 3));
+  }
+  DEMO.tables.Exploitations_demo = d;
+  DEMO.tables.Enveloppes_demo = { id: [1, 2, 3], libelle: ['Maraîchage', 'Ruminants', 'Autres'] };
+  DEMO.tables.Notes_internes = { id: [1, 2], Titre: ['Réunion', 'Relance'], Contenu: ['…', '…'] };
+  const T1 = ['Exploitations_demo', 'Enveloppes_demo', 'Notes_internes'];
+  DEMO.tables._grist_Tables = { id: [1, 2, 3], tableId: T1, summarySourceTable: [0, 0, 0] };
+  const cols = [
+    [1, 'siret', 'Text'], [1, 'raison_sociale', 'Text'], [1, 'code_insee_ville', 'Text'], [1, 'code_postal', 'Text'], [1, 'ville', 'Text'],
+    [1, 'dep2', 'Any'], [1, 'Aide_demandee', 'Numeric'], [1, 'SAUtot', 'Numeric'], [1, 'Eligible', 'Choice'], [1, 'GAEC', 'Bool'],
+    [1, 'Productions', 'Choice'], [1, 'Enveloppe', 'Ref:Enveloppes_demo'],
+    [2, 'libelle', 'Text'], [3, 'Titre', 'Text'], [3, 'Contenu', 'Text'],
+  ];
+  DEMO.tables._grist_Tables_column = {
+    id: cols.map((_, i) => i + 1), parentId: cols.map(c => c[0]), colId: cols.map(c => c[1]), label: cols.map(c => c[1]),
+    type: cols.map(c => c[2]), parentPos: cols.map((_, i) => i), visibleCol: cols.map(c => (c[1] === 'Enveloppe' ? 13 : 0)), isFormula: cols.map(() => false),
+  };
+}
+
+boot();
+</script>
+</body>
+</html>
