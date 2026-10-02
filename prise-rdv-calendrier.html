@@ -152,7 +152,7 @@
   .btn-ghost{ background:transparent; color:var(--ink-soft); margin-top:6px; }
   .btn-ghost:hover{ color:var(--ink); }
 
-  .msg{ margin-top:12px; padding:10px 12px; border-radius:8px; font-size:13px; display:none; }
+  .msg{ margin-bottom:12px; padding:10px 12px; border-radius:8px; font-size:13px; display:none; }
   .msg.show{ display:block; }
   .msg.ok{ background:var(--success-soft); color:var(--success); }
   .msg.err{ background:var(--accent-soft); color:var(--accent); }
@@ -200,9 +200,9 @@
     <p class="hint">Cliquez sur une date du calendrier : elle remplit le prochain choix libre. Recliquez pour la retirer.</p>
     <ol class="choices" id="choices"></ol>
 
+    <div class="msg" id="msg" role="status"></div>
     <button class="btn" id="submit" type="button" disabled>Enregistrer ma demande</button>
     <button class="btn btn-ghost" id="reset" type="button">Tout effacer</button>
-    <div class="msg" id="msg" role="status"></div>
   </section>
 </main>
 
@@ -237,6 +237,8 @@
     viewYear: today.getFullYear(),
     viewMonth: today.getMonth(),
     choices: [null, null, null, null],   // clés 'YYYY-MM-DD'
+    tableId: null,                       // id réel de la table dans Grist
+    cols: null,                          // { nom, prenom, choix: [..] } : colIds réels
     colTypes: {},                        // colId -> type Grist
     load: {},                            // 'YYYY-MM-DD' -> nb de demandes existantes
     total: 0,
@@ -464,7 +466,7 @@
 
   $('submit').addEventListener('click', function () {
     if ($('submit').disabled) return;
-    var cols = CONFIG.columns;
+    var cols = state.cols;
     var fields = {};
     fields[cols.nom] = $('nom').value.trim();
     fields[cols.prenom] = $('prenom').value.trim();
@@ -474,7 +476,7 @@
 
     state.saving = true;
     updateSubmit();
-    grist.docApi.applyUserActions([['AddRecord', CONFIG.table, null, fields]])
+    grist.docApi.applyUserActions([['AddRecord', state.tableId, null, fields]])
       .then(function () {
         showMsg('ok', 'Demande enregistrée pour ' + fields[cols.prenom] + ' ' + fields[cols.nom] + '. Merci !');
         resetForm();
@@ -493,35 +495,71 @@
   // ============================================================
   // Grist
   // ============================================================
-  // Récupère le type des colonnes de la table cible (Date ou Texte)
+  // Normalise un nom : minuscules, sans accents ni ponctuation ("Prénom" -> "prenom", "Choix N°1" -> "choixn1")
+  function norm(x) {
+    return String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  // Trouve la table et ses colonnes sans tenir compte de la casse, des accents ou de la ponctuation
   function loadSchema() {
     return Promise.all([
       grist.docApi.fetchTable('_grist_Tables'),
       grist.docApi.fetchTable('_grist_Tables_column')
     ]).then(function (res) {
       var tables = res[0], cols = res[1];
-      var tIdx = tables.tableId.indexOf(CONFIG.table);
-      if (tIdx === -1) throw new Error('La table « ' + CONFIG.table + ' » est introuvable dans ce document.');
+      var tIdx = -1;
+      for (var t = 0; t < tables.id.length; t++) {
+        if (norm(tables.tableId[t]) === norm(CONFIG.table)) { tIdx = t; break; }
+      }
+      if (tIdx === -1) {
+        var names = tables.tableId.filter(function (n) { return n.indexOf('_grist') !== 0 && n.indexOf('GristHidden') !== 0; });
+        throw new Error('Table « ' + CONFIG.table + ' » introuvable. Tables du document : ' + names.join(', '));
+      }
+      state.tableId = tables.tableId[tIdx];
       var tableRef = tables.id[tIdx];
-      var types = {};
+
+      var list = [];
       for (var i = 0; i < cols.id.length; i++) {
-        if (cols.parentId[i] === tableRef) types[cols.colId[i]] = cols.type[i];
+        if (cols.parentId[i] !== tableRef || cols.colId[i] === 'manualSort' || cols.colId[i].indexOf('gristHelper_') === 0) continue;
+        list.push({ colId: cols.colId[i], label: cols.label ? cols.label[i] : '', type: cols.type[i] });
+        state.colTypes[cols.colId[i]] = cols.type[i];
       }
-      var wanted = [CONFIG.columns.nom, CONFIG.columns.prenom].concat(CONFIG.columns.choix);
-      var missing = wanted.filter(function (c) { return !(c in types); });
+      function find(wanted, test) {
+        var w = norm(wanted), hit = null;
+        list.forEach(function (c) {
+          if (hit) return;
+          if (norm(c.colId) === w || norm(c.label) === w || (test && (test(norm(c.colId)) || test(norm(c.label))))) hit = c.colId;
+        });
+        return hit;
+      }
+      var resolved = {
+        nom: find(CONFIG.columns.nom),
+        prenom: find(CONFIG.columns.prenom),
+        choix: CONFIG.columns.choix.map(function (wanted, i) {
+          // accepte Choix_1, Choix1, Choix N°1, Choix_N_1, Choix n° 1…
+          var re = new RegExp('^choix(n|no)?' + (i + 1) + '$');
+          return find(wanted, function (n) { return re.test(n); });
+        })
+      };
+      var missing = [];
+      if (!resolved.nom) missing.push(CONFIG.columns.nom);
+      if (!resolved.prenom) missing.push(CONFIG.columns.prenom);
+      resolved.choix.forEach(function (c, i) { if (!c) missing.push(CONFIG.columns.choix[i]); });
       if (missing.length) {
-        throw new Error('Colonnes manquantes dans « ' + CONFIG.table + ' » : ' + missing.join(', '));
+        throw new Error('Colonnes manquantes dans « ' + state.tableId + ' » : ' + missing.join(', ') +
+          '. Colonnes trouvées : ' + list.map(function (c) { return c.colId; }).join(', '));
       }
-      state.colTypes = types;
+      state.cols = resolved;
     });
   }
 
   // Compte les demandes déjà enregistrées par date (tous choix confondus)
   function loadExisting() {
-    return grist.docApi.fetchTable(CONFIG.table).then(function (data) {
+    return grist.docApi.fetchTable(state.tableId).then(function (data) {
       var load = {};
       var n = (data.id || []).length;
-      CONFIG.columns.choix.forEach(function (colId) {
+      state.cols.choix.forEach(function (colId) {
         var vals = data[colId] || [];
         vals.forEach(function (v) {
           var k = fromGristValue(v);
@@ -547,7 +585,7 @@
       console.error(err);
       $('count').textContent = 'erreur';
       var text = err && err.message ? err.message : String(err);
-      if (/access/i.test(text)) text = 'Le widget doit avoir l\'accès complet au document (panneau Créateur → Accès : « Accès complet »).';
+      if (/access|permission|granted|denied/i.test(text)) text = 'Le widget doit avoir l\'accès complet au document (panneau Créateur → Accès : « Accès complet »).';
       showMsg('err', text);
     });
 
