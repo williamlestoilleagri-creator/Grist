@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prise de rendez-vous</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --bg: #F5F4F0;
+    --surface: #FFFFFF;
+    --ink: #1B1B1E;
+    --ink-soft: #65656B;
+    --ink-faint: #9A9A9F;
+    --border: #E2E0D8;
+    --primary: #000091;
+    --primary-soft: #E5E5FB;
+    --accent: #C9184A;
+    --accent-soft: #FBE3EA;
+    --success: #18753C;
+    --success-soft: #E2F3E8;
+    --warning: #B34000;
+    --warning-soft: #FBE9DD;
+    --radius-card: 10px;
+    --shadow: 0 1px 2px rgba(20,20,30,.06), 0 8px 24px -16px rgba(20,20,30,.25);
+    --font-display: 'Spectral', Georgia, serif;
+    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  }
+
+  *{ box-sizing: border-box; }
+  [hidden]{ display:none !important; }
+  html,body{ min-height:100%; }
+  body{
+    margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-body);
+    font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased;
+  }
+  button, input{ font-family:inherit; font-size:inherit; color:inherit; }
+  ::selection{ background:var(--primary-soft); }
+
+  /* ---------- header ---------- */
+  .app-header{
+    display:flex; align-items:baseline; justify-content:space-between; gap:12px;
+    padding:14px 18px; background:var(--primary); color:#fff;
+  }
+  .app-header h1{
+    font-family:var(--font-display); font-weight:600; font-size:18px; margin:0;
+    letter-spacing:.2px;
+  }
+  .app-header .sub{ font-size:11.5px; opacity:.78; margin-top:2px; }
+
+  /* ---------- layout ---------- */
+  .app-body{
+    display:grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr);
+    gap:16px; padding:16px; max-width:1100px; margin:0 auto;
+  }
+  @media (max-width: 760px){
+    .app-body{ grid-template-columns: 1fr; padding:12px; }
+  }
+  .card{
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius-card); box-shadow:var(--shadow); padding:16px;
+  }
+  .card h2{
+    font-family:var(--font-display); font-weight:600; font-size:16px; margin:0 0 12px;
+  }
+
+  /* ---------- calendar ---------- */
+  .cal-nav{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .cal-nav .month{
+    font-family:var(--font-display); font-weight:600; font-size:17px; text-transform:capitalize;
+  }
+  .icon-btn{
+    border:1px solid var(--border); background:var(--surface); border-radius:8px;
+    width:34px; height:34px; cursor:pointer; font-size:16px; line-height:1;
+  }
+  .icon-btn:hover{ background:var(--primary-soft); border-color:var(--primary); }
+
+  .cal-grid{ display:grid; grid-template-columns:repeat(7, 1fr); gap:4px; }
+  .cal-dow{
+    text-align:center; font-size:11px; font-weight:600; text-transform:uppercase;
+    color:var(--ink-faint); letter-spacing:.5px; padding:4px 0;
+  }
+  .day{
+    position:relative; aspect-ratio:1 / 1; min-height:38px;
+    border:1px solid var(--border); border-radius:8px; background:var(--surface);
+    cursor:pointer; font-weight:500; display:flex; align-items:center; justify-content:center;
+    transition:background .12s, border-color .12s;
+  }
+  .day:hover:not(:disabled){ background:var(--primary-soft); border-color:var(--primary); }
+  .day.empty{ visibility:hidden; }
+  .day:disabled{ color:var(--ink-faint); background:#FAFAF8; cursor:not-allowed; border-style:dashed; }
+  .day.today{ box-shadow:inset 0 0 0 2px var(--ink-faint); }
+  .day.selected{ background:var(--primary); border-color:var(--primary); color:#fff; }
+  .day .rank{
+    position:absolute; top:3px; left:5px; font-family:var(--font-mono); font-size:10px; font-weight:600;
+  }
+
+  .legend{ display:flex; flex-wrap:wrap; gap:12px; margin-top:12px; font-size:12px; color:var(--ink-soft); }
+  .legend span{ display:inline-flex; align-items:center; gap:6px; }
+  .legend i{ display:inline-block; width:12px; height:12px; border-radius:3px; border:1px solid var(--border); }
+
+  /* ---------- form ---------- */
+  .field{ display:flex; flex-direction:column; gap:4px; margin-bottom:12px; }
+  .field label{ font-size:12px; font-weight:600; color:var(--ink-soft); }
+  .field input{
+    border:1px solid var(--border); border-radius:8px; padding:9px 11px; background:#fff; width:100%;
+  }
+  .field input:focus{ outline:none; border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-soft); }
+
+  .choices{ list-style:none; margin:0 0 14px; padding:0; display:flex; flex-direction:column; gap:6px; }
+  .choice{
+    display:flex; align-items:center; gap:10px; padding:8px 10px;
+    border:1px solid var(--border); border-radius:8px; min-height:42px;
+  }
+  .choice .num{
+    font-family:var(--font-mono); font-size:12px; font-weight:600; flex:0 0 auto;
+    width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    background:var(--primary-soft); color:var(--primary);
+  }
+  .choice .val{ flex:1 1 auto; text-transform:capitalize; }
+  .choice.empty .val{ color:var(--ink-faint); text-transform:none; font-style:italic; }
+  .choice.next{ border-color:var(--primary); border-style:dashed; }
+  .choice .actions{ display:flex; gap:2px; }
+  .mini-btn{
+    border:none; background:transparent; cursor:pointer; color:var(--ink-soft);
+    width:24px; height:24px; border-radius:6px; font-size:13px;
+  }
+  .mini-btn:hover:not(:disabled){ background:var(--bg); color:var(--ink); }
+  .mini-btn:disabled{ opacity:.3; cursor:default; }
+
+  .btn{
+    width:100%; border:none; border-radius:8px; padding:11px 14px; font-weight:600; cursor:pointer;
+    background:var(--primary); color:#fff;
+  }
+  .btn:disabled{ opacity:.45; cursor:not-allowed; }
+  .btn-ghost{ background:transparent; color:var(--ink-soft); margin-top:6px; }
+  .btn-ghost:hover{ color:var(--ink); }
+
+  .msg{ margin-bottom:12px; padding:10px 12px; border-radius:8px; font-size:13px; display:none; }
+  .msg.show{ display:block; }
+  .msg.ok{ background:var(--success-soft); color:var(--success); }
+  .msg.err{ background:var(--accent-soft); color:var(--accent); }
+  .msg.warn{ background:var(--warning-soft); color:var(--warning); }
+  .done{ text-align:center; padding:40px 20px; max-width:600px; width:calc(100% - 32px); margin:24px auto; }
+  .done h2{ font-size:22px; margin-bottom:8px; }
+  .done p{ color:var(--ink-soft); margin:0 0 20px; }
+  .done .btn{ width:auto; padding:11px 22px; }
+  .hint{ font-size:12px; color:var(--ink-soft); margin:0 0 12px; }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div>
+    <h1>Prise de rendez-vous</h1>
+    <div class="sub">Choisissez jusqu'à 4 dates, par ordre de préférence</div>
+  </div>
+</header>
+
+<main class="app-body" id="app">
+  <section class="card" aria-label="Calendrier">
+    <div class="cal-nav">
+      <button class="icon-btn" id="prev" type="button" aria-label="Mois précédent">‹</button>
+      <div class="month" id="month-label"></div>
+      <button class="icon-btn" id="next" type="button" aria-label="Mois suivant">›</button>
+    </div>
+    <div class="cal-grid" id="cal-grid"></div>
+    <div class="legend">
+      <span><i style="background:var(--primary);border-color:var(--primary)"></i>Votre choix</span>
+      <span><i style="background:#FAFAF8;border-style:dashed"></i>Indisponible</span>
+    </div>
+  </section>
+
+  <section class="card" aria-label="Formulaire">
+    <h2>Vos informations</h2>
+    <div class="field">
+      <label for="nom">Nom</label>
+      <input id="nom" type="text" autocomplete="family-name" required>
+    </div>
+    <div class="field">
+      <label for="prenom">Prénom</label>
+      <input id="prenom" type="text" autocomplete="given-name" required>
+    </div>
+
+    <h2>Vos choix de dates</h2>
+    <p class="hint">Cliquez sur une date du calendrier : elle remplit le prochain choix libre. Recliquez pour la retirer.</p>
+    <ol class="choices" id="choices"></ol>
+
+    <div class="msg" id="msg" role="status"></div>
+    <button class="btn" id="submit" type="button" disabled>Enregistrer ma demande</button>
+    <button class="btn btn-ghost" id="reset" type="button">Tout effacer</button>
+  </section>
+</main>
+
+<section class="card done" id="done" hidden>
+  <h2>Merci, votre demande est enregistrée</h2>
+  <p id="done-text"></p>
+  <button class="btn" id="again" type="button">Faire une autre demande</button>
+</section>
+
+<script>
+(function () {
+  'use strict';
+
+  // ============================================================
+  // Configuration
+  // ============================================================
+  var CONFIG = {
+    // Lien du formulaire Grist publié sur la table prise_RDV (bouton « Publier » du formulaire).
+    // Peut aussi être passé dans l'adresse de cette page : ...html?form=<lien encodé>
+    formUrl: 'COLLER_ICI_LE_LIEN_DU_FORMULAIRE_GRIST',
+    table: 'prise_RDV',
+    columns: {
+      nom: 'Nom',
+      prenom: 'Prenom',
+      choix: ['Choix_1', 'Choix_2', 'Choix_3', 'Choix_4']
+    },
+    maxChoices: 4,
+    disablePast: true,          // empêche de choisir une date passée
+    disabledWeekdays: [0, 6]    // 0 = dimanche, 6 = samedi ; [] pour tout autoriser
+  };
+
+  var MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet',
+                'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  var DOW = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'];
+
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  var state = {
+    viewYear: today.getFullYear(),
+    viewMonth: today.getMonth(),
+    choices: [null, null, null, null],   // clés 'YYYY-MM-DD'
+    tableId: null,                       // id réel de la table dans Grist
+    cols: null,                          // { nom, prenom, choix: [..] } : colIds réels
+    api: null,                           // { base, shareKey, vsId }
+    ready: false,
+    saving: false
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ============================================================
+  // Dates
+  // ============================================================
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function keyOf(y, m, d) { return y + '-' + pad(m + 1) + '-' + pad(d); }
+  function parseKey(k) {
+    var p = k.split('-');
+    return { y: +p[0], m: +p[1] - 1, d: +p[2] };
+  }
+  function labelOf(k) {
+    var p = parseKey(k);
+    return new Date(p.y, p.m, p.d).toLocaleDateString('fr-FR', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+    });
+  }
+  function isDisabled(y, m, d) {
+    var dt = new Date(y, m, d);
+    if (CONFIG.disablePast && dt < today) return true;
+    if (CONFIG.disabledWeekdays.indexOf(dt.getDay()) !== -1) return true;
+    return false;
+  }
+
+  // ============================================================
+  // Rendu
+  // ============================================================
+  function renderCalendar() {
+    var y = state.viewYear, m = state.viewMonth;
+    $('month-label').textContent = MONTHS[m] + ' ' + y;
+
+    var grid = $('cal-grid');
+    grid.innerHTML = '';
+    DOW.forEach(function (d) {
+      var el = document.createElement('div');
+      el.className = 'cal-dow';
+      el.textContent = d;
+      grid.appendChild(el);
+    });
+
+    var first = new Date(y, m, 1).getDay();      // 0 = dimanche
+    var offset = (first + 6) % 7;                // semaine commençant le lundi
+    var nDays = new Date(y, m + 1, 0).getDate();
+
+    for (var i = 0; i < offset; i++) {
+      var e = document.createElement('div');
+      e.className = 'day empty';
+      grid.appendChild(e);
+    }
+
+    for (var d = 1; d <= nDays; d++) {
+      var k = keyOf(y, m, d);
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'day';
+      btn.textContent = d;
+      btn.dataset.key = k;
+
+      var rank = state.choices.indexOf(k);
+      if (rank !== -1) {
+        btn.classList.add('selected');
+        var r = document.createElement('span');
+        r.className = 'rank';
+        r.textContent = '#' + (rank + 1);
+        btn.appendChild(r);
+      }
+      if (y === today.getFullYear() && m === today.getMonth() && d === today.getDate()) {
+        btn.classList.add('today');
+      }
+      btn.disabled = isDisabled(y, m, d);
+      btn.setAttribute('aria-label', labelOf(k) + (rank !== -1 ? ', choix n°' + (rank + 1) : ''));
+      grid.appendChild(btn);
+    }
+
+    var prevDisabled = CONFIG.disablePast &&
+      (y < today.getFullYear() || (y === today.getFullYear() && m <= today.getMonth()));
+    $('prev').disabled = prevDisabled;
+  }
+
+  function renderChoices() {
+    var ol = $('choices');
+    ol.innerHTML = '';
+    var nextFree = state.choices.indexOf(null);
+    state.choices.forEach(function (k, i) {
+      var li = document.createElement('li');
+      li.className = 'choice' + (k ? '' : ' empty') + (i === nextFree ? ' next' : '');
+      li.innerHTML =
+        '<span class="num">' + (i + 1) + '</span>' +
+        '<span class="val"></span>' +
+        '<span class="actions">' +
+          '<button class="mini-btn" data-act="up" title="Monter" type="button">↑</button>' +
+          '<button class="mini-btn" data-act="down" title="Descendre" type="button">↓</button>' +
+          '<button class="mini-btn" data-act="del" title="Retirer" type="button">✕</button>' +
+        '</span>';
+      li.querySelector('.val').textContent = k ? labelOf(k) : (i === 0 ? 'Choix n°1 (obligatoire)' : 'Choix n°' + (i + 1) + ' (facultatif)');
+      li.querySelector('[data-act="up"]').disabled = !k || i === 0;
+      li.querySelector('[data-act="down"]').disabled = !k || i === CONFIG.maxChoices - 1 || !state.choices[i + 1];
+      li.querySelector('[data-act="del"]').disabled = !k;
+      li.dataset.index = i;
+      ol.appendChild(li);
+    });
+    updateSubmit();
+  }
+
+  function render() {
+    renderCalendar();
+    renderChoices();
+  }
+
+  function updateSubmit() {
+    var ok = state.ready && !state.saving &&
+      $('nom').value.trim() !== '' && $('prenom').value.trim() !== '' && !!state.choices[0];
+    $('submit').disabled = !ok;
+  }
+
+  function showMsg(kind, text) {
+    var el = $('msg');
+    el.className = 'msg show ' + kind;
+    el.textContent = text;
+  }
+  function hideMsg() { $('msg').className = 'msg'; }
+
+  // ============================================================
+  // Interactions
+  // ============================================================
+  // Retire les trous : les choix restent contigus (1, 2, 3…)
+  function compact() {
+    var filled = state.choices.filter(Boolean);
+    while (filled.length < CONFIG.maxChoices) filled.push(null);
+    state.choices = filled;
+  }
+
+  $('cal-grid').addEventListener('click', function (ev) {
+    var btn = ev.target.closest('.day');
+    if (!btn || btn.disabled || !btn.dataset.key) return;
+    var k = btn.dataset.key;
+    var idx = state.choices.indexOf(k);
+    hideMsg();
+    if (idx !== -1) {
+      state.choices[idx] = null;
+      compact();
+    } else {
+      var free = state.choices.indexOf(null);
+      if (free === -1) {
+        showMsg('warn', 'Vous avez déjà ' + CONFIG.maxChoices + ' choix. Retirez-en un pour en sélectionner un autre.');
+        return;
+      }
+      state.choices[free] = k;
+    }
+    render();
+  });
+
+  $('choices').addEventListener('click', function (ev) {
+    var b = ev.target.closest('.mini-btn');
+    if (!b || b.disabled) return;
+    var i = +b.closest('.choice').dataset.index;
+    var c = state.choices;
+    if (b.dataset.act === 'del') { c[i] = null; compact(); }
+    else if (b.dataset.act === 'up') { var t = c[i - 1]; c[i - 1] = c[i]; c[i] = t; }
+    else if (b.dataset.act === 'down') { var u = c[i + 1]; c[i + 1] = c[i]; c[i] = u; }
+    render();
+  });
+
+  $('prev').addEventListener('click', function () {
+    state.viewMonth--;
+    if (state.viewMonth < 0) { state.viewMonth = 11; state.viewYear--; }
+    renderCalendar();
+  });
+  $('next').addEventListener('click', function () {
+    state.viewMonth++;
+    if (state.viewMonth > 11) { state.viewMonth = 0; state.viewYear++; }
+    renderCalendar();
+  });
+
+  $('nom').addEventListener('input', updateSubmit);
+  $('prenom').addEventListener('input', updateSubmit);
+
+  function resetForm() {
+    $('nom').value = '';
+    $('prenom').value = '';
+    state.choices = [null, null, null, null];
+    render();
+  }
+  $('reset').addEventListener('click', function () { hideMsg(); resetForm(); });
+
+  $('submit').addEventListener('click', function () {
+    if ($('submit').disabled) return;
+    var cols = state.cols;
+    var fields = {};
+    fields[cols.nom] = $('nom').value.trim();
+    fields[cols.prenom] = $('prenom').value.trim();
+    cols.choix.forEach(function (colId, i) {
+      fields[colId] = state.choices[i] || null;   // 'YYYY-MM-DD', converti par Grist
+    });
+
+    state.saving = true;
+    updateSubmit();
+    postRecord(fields)
+      .then(function () {
+        var recap = state.choices.filter(Boolean).map(function (k, i) { return (i + 1) + '. ' + labelOf(k); });
+        $('done-text').textContent = fields[cols.prenom] + ' ' + fields[cols.nom] + ' — ' + recap.join(' · ');
+        $('app').hidden = true;
+        $('done').hidden = false;
+        hideMsg();
+        resetForm();
+      })
+      .catch(function (err) {
+        console.error(err);
+        showMsg('err', "Échec de l'enregistrement : " + (err && err.message ? err.message : err));
+      })
+      .then(function () {
+        state.saving = false;
+        updateSubmit();
+      });
+  });
+
+  // ============================================================
+  // Grist (formulaire publié : aucun compte nécessaire)
+  // ============================================================
+  $('again').addEventListener('click', function () {
+    $('done').hidden = true;
+    $('app').hidden = false;
+  });
+
+  // Normalise un nom : minuscules, sans accents ni ponctuation ("Prénom" -> "prenom", "Choix N°1" -> "choixn1")
+  function norm(x) {
+    return String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  // "https://docs.getgrist.com/forms/<shareKey>/<vsId>" -> { base, shareKey, vsId }
+  function parseFormUrl(u) {
+    var m = String(u || '').trim().match(/^(https?:\/\/.+?)\/forms\/([^\/?#]+)\/(\d+)/);
+    if (!m) return null;
+    return { base: m[1], shareKey: m[2], vsId: m[3] };
+  }
+
+  function request(path, opts) {
+    var url = state.api.base + '/api/s/' + state.api.shareKey + path;
+    return fetch(url, opts).then(function (resp) {
+      return resp.json().catch(function () { return {}; }).then(function (body) {
+        if (!resp.ok) throw new Error(body.error || ('Erreur ' + resp.status));
+        return body;
+      });
+    });
+  }
+
+  // Lit la description du formulaire : table cible et colonnes présentes
+  function loadForm() {
+    return request('/forms/' + state.api.vsId, { method: 'GET' }).then(function (form) {
+      state.tableId = form.formTableId;
+      var list = Object.keys(form.formFieldsById || {}).map(function (id) { return form.formFieldsById[id]; });
+      function find(wanted, test) {
+        var w = norm(wanted), hit = null;
+        list.forEach(function (c) {
+          if (hit) return;
+          if (norm(c.colId) === w || norm(c.question) === w || (test && (test(norm(c.colId)) || test(norm(c.question))))) hit = c.colId;
+        });
+        return hit;
+      }
+      var resolved = {
+        nom: find(CONFIG.columns.nom),
+        prenom: find(CONFIG.columns.prenom),
+        choix: CONFIG.columns.choix.map(function (wanted, i) {
+          var re = new RegExp('^choix(n|no)?' + (i + 1) + '$');
+          return find(wanted, function (n) { return re.test(n); });
+        })
+      };
+      var missing = [];
+      if (!resolved.nom) missing.push(CONFIG.columns.nom);
+      if (!resolved.prenom) missing.push(CONFIG.columns.prenom);
+      resolved.choix.forEach(function (c, i) { if (!c) missing.push(CONFIG.columns.choix[i]); });
+      if (missing.length) {
+        throw new Error('Le formulaire Grist doit contenir ces champs : ' + missing.join(', ') +
+          '. Champs trouvés : ' + list.map(function (c) { return c.colId; }).join(', '));
+      }
+      state.cols = resolved;
+    });
+  }
+
+  function postRecord(fields) {
+    return request('/tables/' + encodeURIComponent(state.tableId) + '/records', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ records: [{ fields: fields }] })
+    });
+  }
+
+  var fromQuery = new URLSearchParams(location.search).get('form');
+  state.api = parseFormUrl(fromQuery || CONFIG.formUrl);
+  if (!state.api) {
+    showMsg('err', 'Formulaire non configuré : renseignez le lien du formulaire Grist publié (CONFIG.formUrl).');
+  } else {
+    loadForm()
+      .then(function () {
+        state.ready = true;
+        updateSubmit();
+      })
+      .catch(function (err) {
+        console.error(err);
+        var text = err && err.message ? err.message : String(err);
+        if (/not found|introuvable/i.test(text)) text = 'Formulaire introuvable : vérifiez qu\'il est bien publié dans Grist.';
+        else if (/failed to fetch|networkerror/i.test(text)) text = 'Impossible de joindre Grist. Vérifiez votre connexion.';
+        showMsg('err', text);
+      });
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
