@@ -1,241 +1,193 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" data-fr-scheme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Prise de rendez-vous</title>
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<!-- Système de Design de l'État (DSFR) : composants + police Marianne + icônes -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.15.3/dist/dsfr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.15.3/dist/utility/icons/icons.min.css">
 
 <style>
-  :root{
-    --bg: #F5F4F0;
-    --surface: #FFFFFF;
-    --ink: #1B1B1E;
-    --ink-soft: #65656B;
-    --ink-faint: #9A9A9F;
-    --border: #E2E0D8;
-    --primary: #000091;
-    --primary-soft: #E5E5FB;
-    --accent: #C9184A;
-    --accent-soft: #FBE3EA;
-    --success: #18753C;
-    --success-soft: #E2F3E8;
-    --warning: #B34000;
-    --warning-soft: #FBE9DD;
-    --radius-card: 10px;
-    --shadow: 0 1px 2px rgba(20,20,30,.06), 0 8px 24px -16px rgba(20,20,30,.25);
-    --font-display: 'Spectral', Georgia, serif;
-    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
-  }
-
-  *{ box-sizing: border-box; }
   [hidden]{ display:none !important; }
-  html,body{ min-height:100%; }
-  body{
-    margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-body);
-    font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased;
-  }
-  button, input{ font-family:inherit; font-size:inherit; color:inherit; }
-  ::selection{ background:var(--primary-soft); }
-
-  /* ---------- header ---------- */
-  .app-header{
-    display:flex; align-items:baseline; justify-content:space-between; gap:12px;
-    padding:14px 18px; background:var(--primary); color:#fff;
-  }
-  .app-header h1{
-    font-family:var(--font-display); font-weight:600; font-size:18px; margin:0;
-    letter-spacing:.2px;
-  }
-  .app-header .sub{ font-size:11.5px; opacity:.78; margin-top:2px; }
+  body{ background:var(--background-alt-grey); }
 
   /* ---------- layout ---------- */
   .app-body{
     display:grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr);
-    gap:16px; padding:16px; max-width:1100px; margin:0 auto;
+    gap:1.5rem; align-items:start;
   }
-  @media (max-width: 760px){
-    .app-body{ grid-template-columns: 1fr; padding:12px; }
+  @media (max-width: 47.99em){
+    .app-body{ grid-template-columns: 1fr; gap:1rem; }
   }
-  .card{
-    background:var(--surface); border:1px solid var(--border);
-    border-radius:var(--radius-card); box-shadow:var(--shadow); padding:16px;
+  .panel{
+    background:var(--background-default-grey); border:1px solid var(--border-default-grey);
+    padding:1.5rem;
   }
-  .card h2{
-    font-family:var(--font-display); font-weight:600; font-size:16px; margin:0 0 12px;
-  }
+  @media (max-width: 47.99em){ .panel{ padding:1rem; } }
+  .panel-narrow{ max-width:48rem; margin:0 auto; }
 
-  /* ---------- calendar ---------- */
-  .cal-nav{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
-  .cal-nav .month{
-    font-family:var(--font-display); font-weight:600; font-size:17px; text-transform:capitalize;
-  }
-  .icon-btn{
-    border:1px solid var(--border); background:var(--surface); border-radius:8px;
-    width:34px; height:34px; cursor:pointer; font-size:16px; line-height:1;
-  }
-  .icon-btn:hover{ background:var(--primary-soft); border-color:var(--primary); }
+  /* ---------- calendrier ---------- */
+  .cal-nav{ display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; }
+  .cal-nav .month{ margin:0; text-transform:capitalize; }
 
-  .cal-grid{ display:grid; grid-template-columns:repeat(7, 1fr); gap:4px; }
+  .cal-grid{ display:grid; grid-template-columns:repeat(7, 1fr); gap:.25rem; }
   .cal-dow{
-    text-align:center; font-size:11px; font-weight:600; text-transform:uppercase;
-    color:var(--ink-faint); letter-spacing:.5px; padding:4px 0;
+    text-align:center; font-size:.75rem; font-weight:700; text-transform:uppercase;
+    color:var(--text-mention-grey); padding:.25rem 0;
   }
   .day{
-    position:relative; aspect-ratio:1 / 1; min-height:38px;
-    border:1px solid var(--border); border-radius:8px; background:var(--surface);
-    cursor:pointer; font-weight:500; display:flex; align-items:center; justify-content:center;
-    transition:background .12s, border-color .12s;
+    position:relative; aspect-ratio:1 / 1; min-height:2.5rem; padding:0;
+    border:1px solid var(--border-default-grey); background:var(--background-default-grey);
+    color:var(--text-title-grey); font-weight:500; font-size:1rem;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
   }
-  .day:hover:not(:disabled){ background:var(--primary-soft); border-color:var(--primary); }
+  .day:hover:not(:disabled){ background:var(--background-action-low-blue-france); border-color:var(--border-action-high-blue-france); }
   .day.empty{ visibility:hidden; }
-  .day:disabled{ color:var(--ink-faint); background:#FAFAF8; cursor:not-allowed; border-style:dashed; }
-  .day.today{ box-shadow:inset 0 0 0 2px var(--ink-faint); }
-  .day.selected{ background:var(--primary); border-color:var(--primary); color:#fff; }
-  .day .rank{
-    position:absolute; top:3px; left:5px; font-family:var(--font-mono); font-size:10px; font-weight:600;
+  .day:disabled{
+    background:var(--background-disabled-grey); color:var(--text-disabled-grey);
+    border-color:var(--border-disabled-grey); cursor:not-allowed;
   }
-
-  .legend{ display:flex; flex-wrap:wrap; gap:12px; margin-top:12px; font-size:12px; color:var(--ink-soft); }
-  .legend span{ display:inline-flex; align-items:center; gap:6px; }
-  .legend i{ display:inline-block; width:12px; height:12px; border-radius:3px; border:1px solid var(--border); }
-
-  /* ---------- form ---------- */
-  .field{ display:flex; flex-direction:column; gap:4px; margin-bottom:12px; }
-  .field label{ font-size:12px; font-weight:600; color:var(--ink-soft); }
-  .field input{
-    border:1px solid var(--border); border-radius:8px; padding:9px 11px; background:#fff; width:100%;
+  .day.today{ box-shadow:inset 0 -3px 0 var(--border-plain-blue-france); }
+  .day.selected, .day.selected:hover:not(:disabled){
+    background:var(--background-action-high-blue-france); border-color:var(--background-action-high-blue-france);
+    color:var(--text-inverted-blue-france);
   }
-  .field input:focus{ outline:none; border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-soft); }
+  .day .rank{ position:absolute; top:2px; left:4px; font-size:.7rem; font-weight:700; }
 
-  .choices{ list-style:none; margin:0 0 14px; padding:0; display:flex; flex-direction:column; gap:6px; }
+  .legend{ display:flex; flex-wrap:wrap; gap:1rem; margin-top:1rem; font-size:.875rem; color:var(--text-mention-grey); }
+  .legend span{ display:inline-flex; align-items:center; gap:.5rem; }
+  .legend i{ display:inline-block; width:.875rem; height:.875rem; border:1px solid var(--border-default-grey); }
+
+  /* ---------- choix ---------- */
+  .choices{ list-style:none; margin:0 0 1.5rem; padding:0; display:flex; flex-direction:column; gap:.5rem; }
+  .choices li{ padding:0; }
   .choice{
-    display:flex; align-items:center; gap:10px; padding:8px 10px;
-    border:1px solid var(--border); border-radius:8px; min-height:42px;
+    display:flex; align-items:center; gap:.75rem; padding:.375rem .5rem .375rem .75rem;
+    border:1px solid var(--border-default-grey); min-height:3rem; background:var(--background-default-grey);
   }
   .choice .num{
-    font-family:var(--font-mono); font-size:12px; font-weight:600; flex:0 0 auto;
-    width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-    background:var(--primary-soft); color:var(--primary);
+    flex:0 0 auto; width:1.75rem; height:1.75rem; display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:.875rem;
+    background:var(--background-action-low-blue-france); color:var(--text-action-high-blue-france);
   }
   .choice .val{ flex:1 1 auto; text-transform:capitalize; }
-  .choice.empty .val{ color:var(--ink-faint); text-transform:none; font-style:italic; }
-  .choice.next{ border-color:var(--primary); border-style:dashed; }
-  .choice .actions{ display:flex; gap:2px; }
-  .mini-btn{
-    border:none; background:transparent; cursor:pointer; color:var(--ink-soft);
-    width:24px; height:24px; border-radius:6px; font-size:13px;
-  }
-  .mini-btn:hover:not(:disabled){ background:var(--bg); color:var(--ink); }
-  .mini-btn:disabled{ opacity:.3; cursor:default; }
+  .choice.empty .val{ color:var(--text-mention-grey); text-transform:none; font-style:italic; }
+  .choice.next{ border-color:var(--border-action-high-blue-france); border-style:dashed; }
+  .choice .actions{ display:flex; }
+  .choice .mini-btn:disabled{ opacity:.35; }
 
-  .btn{
-    width:100%; border:none; border-radius:8px; padding:11px 14px; font-weight:600; cursor:pointer;
-    background:var(--primary); color:#fff;
-  }
-  .btn:disabled{ opacity:.45; cursor:not-allowed; }
-  .btn-ghost{ background:transparent; color:var(--ink-soft); margin-top:6px; }
-  .btn-ghost:hover{ color:var(--ink); }
-
-  .msg{ margin-bottom:12px; padding:10px 12px; border-radius:8px; font-size:13px; display:none; }
-  .msg.show{ display:block; }
-  .msg.ok{ background:var(--success-soft); color:var(--success); }
-  .msg.err{ background:var(--accent-soft); color:var(--accent); }
-  .msg.warn{ background:var(--warning-soft); color:var(--warning); }
-  .setup{ max-width:720px; width:calc(100% - 32px); margin:24px auto; }
-  .setup p{ color:var(--ink-soft); margin:0 0 12px; }
-  .setup ol{ margin:0 0 14px; padding-left:20px; color:var(--ink-soft); }
-  .setup .row{ display:flex; gap:8px; flex-wrap:wrap; }
-  .setup .row input{ flex:1 1 260px; border:1px solid var(--border); border-radius:8px; padding:9px 11px; min-width:0; }
-  .setup .row .btn{ width:auto; }
+  /* ---------- panneau lien ---------- */
+  .row{ display:flex; gap:.5rem; flex-wrap:wrap; align-items:flex-end; }
+  .row .fr-input-group{ flex:1 1 16rem; margin:0; }
   .share-link{
-    font-family:var(--font-mono); font-size:12px; word-break:break-all; background:var(--bg);
-    border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin:12px 0;
+    font-family:ui-monospace, Menlo, monospace; font-size:.8rem; word-break:break-all;
+    background:var(--background-alt-grey); border:1px solid var(--border-default-grey);
+    padding:.75rem 1rem; margin:.5rem 0 1rem;
   }
-  .done{ text-align:center; padding:40px 20px; max-width:600px; width:calc(100% - 32px); margin:24px auto; }
-  .done h2{ font-size:22px; margin-bottom:8px; }
-  .done p{ color:var(--ink-soft); margin:0 0 20px; }
-  .done .btn{ width:auto; padding:11px 22px; }
-  .hint{ font-size:12px; color:var(--ink-soft); margin:0 0 12px; }
+  .done{ text-align:center; max-width:40rem; margin:0 auto; }
 </style>
 </head>
 <body>
 
-<header class="app-header">
-  <div>
-    <h1>Prise de rendez-vous</h1>
-    <div class="sub">Choisissez jusqu'à 4 dates, par ordre de préférence</div>
+<header role="banner" class="fr-header">
+  <div class="fr-header__body">
+    <div class="fr-container">
+      <div class="fr-header__body-row">
+        <div class="fr-header__brand fr-enlarge-link">
+          <div class="fr-header__brand-top">
+            <div class="fr-header__logo">
+              <p class="fr-logo">République<br>Française</p>
+            </div>
+          </div>
+          <div class="fr-header__service">
+            <p class="fr-header__service-title">Prise de rendez-vous</p>
+            <p class="fr-header__service-tagline">Choisissez jusqu'à 4 dates, par ordre de préférence</p>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </header>
 
-<section class="card setup" id="setup" hidden>
-  <h2 id="setup-title">Configurer le formulaire public</h2>
-  <div class="msg" id="auto-msg" role="status"></div>
+<div class="fr-container fr-my-4w fr-my-md-6w">
+
+<section class="panel panel-narrow" id="setup" hidden>
+  <h1 class="fr-h4" id="setup-title">Configurer le formulaire public</h1>
+  <div id="auto-msg" role="status" hidden></div>
   <ol id="setup-steps">
-    <li>Dans Grist, créez une page <b>Formulaire</b> sur la table PRISE_RDV avec les champs Nom, Prénom, Choix 1 à 4.</li>
-    <li>Cliquez sur <b>« Publier »</b>.</li>
+    <li>Dans Grist, créez une page <strong>Formulaire</strong> sur la table PRISE_RDV avec les champs Nom, Prénom, Choix 1 à 4.</li>
+    <li>Cliquez sur <strong>« Publier »</strong>.</li>
     <li>Revenez sur ce widget : le lien à envoyer apparaît ici automatiquement.</li>
   </ol>
-  <p id="manual-hint">Ou collez le lien du formulaire Grist publié :</p>
-  <div class="row" id="manual-row">
-    <input id="setup-url" type="url" placeholder="https://docs.getgrist.com/forms/XXXXXXXX/12">
-    <button class="btn" id="setup-go" type="button">Générer le lien</button>
-  </div>
-  <div class="msg" id="setup-msg" role="status" style="margin-top:12px"></div>
-  <div id="setup-result" hidden>
-    <p>Lien à envoyer aux personnes (elles n'ont pas besoin de compte Grist) :</p>
-    <div class="share-link" id="share-link"></div>
-    <div class="row">
-      <button class="btn" id="copy" type="button">Copier le lien</button>
-      <a class="btn btn-ghost" id="open" target="_blank" rel="noopener" style="width:auto;text-align:center;text-decoration:none;margin:0">Ouvrir</a>
+  <div class="row fr-mb-2w" id="manual-row">
+    <div class="fr-input-group">
+      <label class="fr-label" for="setup-url" id="manual-hint">Ou collez le lien du formulaire Grist publié
+        <span class="fr-hint-text">Exemple : https://docs.getgrist.com/forms/XXXXXXXX/12</span>
+      </label>
+      <input class="fr-input" id="setup-url" type="url">
     </div>
+    <button class="fr-btn" id="setup-go" type="button">Générer le lien</button>
+  </div>
+  <div id="setup-msg" role="status" hidden></div>
+  <div id="setup-result" class="fr-mt-2w" hidden>
+    <p class="fr-mb-0">Lien à envoyer aux personnes (elles n'ont pas besoin de compte Grist) :</p>
+    <div class="share-link" id="share-link"></div>
+    <ul class="fr-btns-group fr-btns-group--inline-sm fr-btns-group--icon-left">
+      <li><button class="fr-btn fr-icon-clipboard-line" id="copy" type="button">Copier le lien</button></li>
+      <li><a class="fr-btn fr-btn--secondary" id="open" target="_blank" rel="noopener">Ouvrir</a></li>
+    </ul>
   </div>
 </section>
 
-<main class="app-body" id="app">
-  <section class="card" aria-label="Calendrier">
+<main class="app-body" id="app" role="main">
+  <section class="panel" aria-label="Calendrier">
     <div class="cal-nav">
-      <button class="icon-btn" id="prev" type="button" aria-label="Mois précédent">‹</button>
-      <div class="month" id="month-label"></div>
-      <button class="icon-btn" id="next" type="button" aria-label="Mois suivant">›</button>
+      <button class="fr-btn fr-btn--tertiary fr-btn--sm fr-icon-arrow-left-s-line" id="prev" type="button" title="Mois précédent">Mois précédent</button>
+      <h2 class="fr-h5 month" id="month-label"></h2>
+      <button class="fr-btn fr-btn--tertiary fr-btn--sm fr-icon-arrow-right-s-line" id="next" type="button" title="Mois suivant">Mois suivant</button>
     </div>
     <div class="cal-grid" id="cal-grid"></div>
     <div class="legend">
-      <span><i style="background:var(--primary);border-color:var(--primary)"></i>Votre choix</span>
-      <span><i style="background:#FAFAF8;border-style:dashed"></i>Indisponible</span>
+      <span><i style="background:var(--background-action-high-blue-france);border-color:var(--background-action-high-blue-france)"></i>Votre choix</span>
+      <span><i style="background:var(--background-disabled-grey)"></i>Indisponible</span>
     </div>
   </section>
 
-  <section class="card" aria-label="Formulaire">
-    <h2>Vos informations</h2>
-    <div class="field">
-      <label for="nom">Nom</label>
-      <input id="nom" type="text" autocomplete="family-name" required>
+  <section class="panel" aria-label="Formulaire">
+    <h2 class="fr-h5">Vos informations</h2>
+    <div class="fr-input-group">
+      <label class="fr-label" for="nom">Nom</label>
+      <input class="fr-input" id="nom" type="text" autocomplete="family-name" required>
     </div>
-    <div class="field">
-      <label for="prenom">Prénom</label>
-      <input id="prenom" type="text" autocomplete="given-name" required>
+    <div class="fr-input-group">
+      <label class="fr-label" for="prenom">Prénom</label>
+      <input class="fr-input" id="prenom" type="text" autocomplete="given-name" required>
     </div>
 
-    <h2>Vos choix de dates</h2>
-    <p class="hint">Cliquez sur une date du calendrier : elle remplit le prochain choix libre. Recliquez pour la retirer.</p>
+    <h2 class="fr-h5 fr-mt-4w">Vos choix de dates</h2>
+    <p class="fr-text--sm fr-hint-text">Cliquez sur une date du calendrier : elle remplit le prochain choix libre. Recliquez pour la retirer.</p>
     <ol class="choices" id="choices"></ol>
 
-    <div class="msg" id="msg" role="status"></div>
-    <button class="btn" id="submit" type="button" disabled>Enregistrer ma demande</button>
-    <button class="btn btn-ghost" id="reset" type="button">Tout effacer</button>
+    <div id="msg" role="status" hidden></div>
+    <ul class="fr-btns-group">
+      <li><button class="fr-btn" id="submit" type="button" disabled>Enregistrer ma demande</button></li>
+      <li><button class="fr-btn fr-btn--secondary" id="reset" type="button">Tout effacer</button></li>
+    </ul>
   </section>
 </main>
 
-<section class="card done" id="done" hidden>
-  <h2>Merci, votre demande est enregistrée</h2>
+<section class="panel done" id="done" hidden>
+  <span class="fr-icon-success-line fr-icon--lg" aria-hidden="true" style="color:var(--text-default-success)"></span>
+  <h1 class="fr-h3 fr-mt-2w">Merci, votre demande est enregistrée</h1>
   <p id="done-text"></p>
-  <button class="btn" id="again" type="button">Faire une autre demande</button>
+  <ul class="fr-btns-group fr-btns-group--center fr-btns-group--inline-sm">
+    <li><button class="fr-btn fr-btn--secondary" id="again" type="button">Faire une autre demande</button></li>
+  </ul>
 </section>
+
+</div>
 
 <script>
 (function () {
@@ -367,9 +319,9 @@
         '<span class="num">' + (i + 1) + '</span>' +
         '<span class="val"></span>' +
         '<span class="actions">' +
-          '<button class="mini-btn" data-act="up" title="Monter" type="button">↑</button>' +
-          '<button class="mini-btn" data-act="down" title="Descendre" type="button">↓</button>' +
-          '<button class="mini-btn" data-act="del" title="Retirer" type="button">✕</button>' +
+          '<button class="mini-btn fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-icon-arrow-up-line" data-act="up" title="Monter" type="button">Monter</button>' +
+          '<button class="mini-btn fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-icon-arrow-down-line" data-act="down" title="Descendre" type="button">Descendre</button>' +
+          '<button class="mini-btn fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-icon-close-line" data-act="del" title="Retirer" type="button">Retirer</button>' +
         '</span>';
       li.querySelector('.val').textContent = k ? labelOf(k) : (i === 0 ? 'Choix n°1 (obligatoire)' : 'Choix n°' + (i + 1) + ' (facultatif)');
       li.querySelector('[data-act="up"]').disabled = !k || i === 0;
@@ -392,12 +344,19 @@
     $('submit').disabled = !ok;
   }
 
-  function showMsg(kind, text) {
-    var el = $('msg');
-    el.className = 'msg show ' + kind;
-    el.textContent = text;
+  // Alerte DSFR (kind : ok | err | warn)
+  function alertBox(el, kind, text, isHtml) {
+    var type = { ok: 'success', err: 'error', warn: 'warning' }[kind] || 'info';
+    el.className = 'fr-alert fr-alert--sm fr-mb-3w fr-alert--' + type;
+    var pEl = document.createElement('p');
+    if (isHtml) pEl.innerHTML = text; else pEl.textContent = text;
+    el.innerHTML = '';
+    el.appendChild(pEl);
+    el.hidden = false;
   }
-  function hideMsg() { $('msg').className = 'msg'; }
+
+  function showMsg(kind, text) { alertBox($('msg'), kind, text); }
+  function hideMsg() { $('msg').hidden = true; }
 
   // ============================================================
   // Interactions
@@ -565,11 +524,7 @@
     });
   }
 
-  function setupMsg(kind, text) {
-    var el = $('setup-msg');
-    el.className = 'msg show ' + kind;
-    el.textContent = text;
-  }
+  function setupMsg(kind, text) { alertBox($('setup-msg'), kind, text); }
 
   function showLink(formUrl) {
     var link = location.origin + location.pathname + '?form=' + encodeURIComponent(formUrl);
@@ -619,11 +574,7 @@
     });
   }
 
-  function autoMsg(kind, html) {
-    var el = $('auto-msg');
-    el.className = 'msg show ' + kind;
-    el.innerHTML = html;
-  }
+  function autoMsg(kind, html) { alertBox($('auto-msg'), kind, html, true); }
 
   function safeJson(x) { try { return JSON.parse(x || '{}') || {}; } catch (e) { return {}; } }
 
