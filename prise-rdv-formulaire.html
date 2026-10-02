@@ -173,19 +173,21 @@
 </header>
 
 <section class="card setup" id="setup" hidden>
-  <h2>Configurer le formulaire public</h2>
-  <ol>
+  <h2 id="setup-title">Configurer le formulaire public</h2>
+  <div class="msg" id="auto-msg" role="status"></div>
+  <ol id="setup-steps">
     <li>Dans Grist, créez une page <b>Formulaire</b> sur la table PRISE_RDV avec les champs Nom, Prénom, Choix 1 à 4.</li>
-    <li>Cliquez sur <b>« Publier »</b> puis copiez le lien du formulaire.</li>
-    <li>Collez-le ci-dessous : la page génère le lien à envoyer aux personnes.</li>
+    <li>Cliquez sur <b>« Publier »</b>.</li>
+    <li>Revenez sur ce widget : le lien à envoyer apparaît ici automatiquement.</li>
   </ol>
-  <div class="row">
+  <p id="manual-hint">Ou collez le lien du formulaire Grist publié :</p>
+  <div class="row" id="manual-row">
     <input id="setup-url" type="url" placeholder="https://docs.getgrist.com/forms/XXXXXXXX/12">
     <button class="btn" id="setup-go" type="button">Générer le lien</button>
   </div>
   <div class="msg" id="setup-msg" role="status" style="margin-top:12px"></div>
   <div id="setup-result" hidden>
-    <p>Lien à envoyer (la page est déjà reliée à votre formulaire) :</p>
+    <p>Lien à envoyer aux personnes (elles n'ont pas besoin de compte Grist) :</p>
     <div class="share-link" id="share-link"></div>
     <div class="row">
       <button class="btn" id="copy" type="button">Copier le lien</button>
@@ -245,7 +247,7 @@
   var CONFIG = {
     // Lien du formulaire Grist publié sur la table prise_RDV (bouton « Publier » du formulaire).
     // Peut aussi être passé dans l'adresse de cette page : ...html?form=<lien encodé>
-    formUrl: 'https://grist.dataregion.fr/o/docs/forms/1gxjjFowEESTzJtpTvosPE/5',
+    formUrl: '',
     table: 'prise_RDV',
     columns: {
       nom: 'Nom',
@@ -563,15 +565,25 @@
     });
   }
 
-  var fromQuery = new URLSearchParams(location.search).get('form');
-  state.api = parseFormUrl(fromQuery || CONFIG.formUrl);
   function setupMsg(kind, text) {
     var el = $('setup-msg');
     el.className = 'msg show ' + kind;
     el.textContent = text;
   }
 
-  // Écran de configuration : affiché tant qu'aucun lien de formulaire n'est fourni
+  function showLink(formUrl) {
+    var link = location.origin + location.pathname + '?form=' + encodeURIComponent(formUrl);
+    $('share-link').textContent = link;
+    $('open').href = link;
+    $('copy').textContent = 'Copier le lien';
+    $('setup-result').hidden = false;
+    if (!/^https?:$/.test(location.protocol)) {
+      setupMsg('warn', 'Attention : cette page est ouverte depuis votre ordinateur, ' +
+        'le lien ne fonctionnera pour les autres qu\'une fois la page mise en ligne.');
+    }
+  }
+
+  // Panneau « lien à envoyer » : affiché dans Grist (widget) ou quand aucun formulaire n'est fourni
   function showSetup() {
     $('app').hidden = true;
     $('setup').hidden = false;
@@ -586,16 +598,8 @@
       state.api = api;
       setupMsg('warn', 'Vérification du formulaire…');
       loadForm().then(function () {
-        var link = location.origin + location.pathname + '?form=' + encodeURIComponent(raw);
-        if (!/^https?:$/.test(location.protocol)) {
-          setupMsg('warn', 'Formulaire valide. Attention : cette page est ouverte depuis votre ordinateur, ' +
-            'le lien ne fonctionnera pour les autres qu\'une fois la page mise en ligne.');
-        } else {
-          setupMsg('ok', 'Formulaire valide (table ' + state.tableId + ').');
-        }
-        $('share-link').textContent = link;
-        $('open').href = link;
-        $('setup-result').hidden = false;
+        setupMsg('ok', 'Formulaire valide (table ' + state.tableId + ').');
+        showLink(raw);
       }).catch(function (err) {
         var text = err && err.message ? err.message : String(err);
         if (/not found/i.test(text)) text = 'Formulaire introuvable : vérifiez qu\'il est bien publié dans Grist.';
@@ -615,9 +619,87 @@
     });
   }
 
-  if (!state.api) {
+  function autoMsg(kind, html) {
+    var el = $('auto-msg');
+    el.className = 'msg show ' + kind;
+    el.innerHTML = html;
+  }
+
+  function safeJson(x) { try { return JSON.parse(x || '{}') || {}; } catch (e) { return {}; } }
+
+  // Dans Grist : retrouve le formulaire publié sur la table cible et construit son lien public
+  function findPublishedForm() {
+    var api = grist.docApi;
+    return Promise.all([
+      api.fetchTable('_grist_Tables'),
+      api.fetchTable('_grist_Views_section'),
+      api.fetchTable('_grist_Pages'),
+      api.fetchTable('_grist_Shares'),
+      api.getAccessToken({ readOnly: true })
+    ]).then(function (r) {
+      var tables = r[0], sections = r[1], pages = r[2], shares = r[3], token = r[4];
+      // ".../o/docs/api/docs/<docId>" -> ".../o/docs"
+      var home = String(token.baseUrl).replace(/\/api\/docs\/.*$/, '');
+      var tableRefs = {};
+      tables.id.forEach(function (id, i) { tableRefs[id] = tables.tableId[i]; });
+      var found = [];
+      sections.id.forEach(function (secId, i) {
+        if (sections.parentKey[i] !== 'form') return;
+        var tableId = tableRefs[sections.tableRef[i]];
+        if (norm(tableId) !== norm(CONFIG.table)) return;
+        var pIdx = pages.viewRef.indexOf(sections.parentId[i]);
+        var shareRef = pIdx === -1 ? 0 : pages.shareRef[pIdx];
+        var sIdx = shares.id.indexOf(shareRef);
+        var published = sIdx !== -1 && safeJson(shares.options[sIdx]).publish &&
+          safeJson(sections.shareOptions[i]).publish;
+        found.push({
+          title: sections.title[i] || tableId,
+          published: !!published,
+          url: published ? home + '/forms/' + shares.linkId[sIdx] + '/' + secId : null
+        });
+      });
+      return found;
+    });
+  }
+
+  function initInGrist() {
+    $('setup-title').textContent = 'Lien du formulaire à envoyer';
     showSetup();
-  } else {
+    grist.ready({ requiredAccess: 'full' });
+    findPublishedForm().then(function (forms) {
+      var pub = forms.filter(function (f) { return f.published; });
+      if (pub.length) {
+        $('setup-steps').hidden = true;
+        $('manual-hint').hidden = true;
+        $('manual-row').hidden = true;
+        autoMsg('ok', 'Formulaire publié trouvé sur la table ' + CONFIG.table + '.');
+        state.api = parseFormUrl(pub[0].url);
+        showLink(pub[0].url);
+        // vérifie que le formulaire contient bien les champs attendus
+        loadForm().catch(function (err) { setupMsg('err', err && err.message ? err.message : String(err)); });
+      } else if (forms.length) {
+        autoMsg('warn', 'Un formulaire existe sur ' + CONFIG.table + ' mais il n\'est pas publié : ouvrez-le et cliquez sur « Publier », puis rechargez ce widget.');
+      } else {
+        autoMsg('warn', 'Aucun formulaire trouvé sur la table ' + CONFIG.table + '. Suivez les étapes ci-dessous puis rechargez ce widget.');
+      }
+    }).catch(function (err) {
+      console.error(err);
+      var text = err && err.message ? err.message : String(err);
+      if (/access|permission|granted|denied/i.test(text)) {
+        autoMsg('err', 'Donnez au widget l\'<b>accès complet</b> (panneau de droite → Accès) pour détecter le lien automatiquement.');
+      } else {
+        autoMsg('err', 'Détection automatique impossible : ' + text.replace(/</g, '&lt;'));
+      }
+    });
+  }
+
+  function initPublic() {
+    var fromQuery = new URLSearchParams(location.search).get('form');
+    state.api = parseFormUrl(fromQuery || CONFIG.formUrl);
+    if (!state.api) {
+      showSetup();
+      return;
+    }
     loadForm()
       .then(function () {
         state.ready = true;
@@ -630,6 +712,18 @@
         else if (/failed to fetch|networkerror/i.test(text)) text = 'Impossible de joindre Grist. Vérifiez votre connexion.';
         showMsg('err', text);
       });
+  }
+
+  // Ouverte dans un widget Grist (iframe) : panneau de lien. Sinon : formulaire public.
+  var inIframe = window.parent !== window;
+  if (inIframe && !new URLSearchParams(location.search).get('form')) {
+    var sc = document.createElement('script');
+    sc.src = 'https://docs.getgrist.com/grist-plugin-api.js';
+    sc.onload = initInGrist;
+    sc.onerror = initPublic;
+    document.head.appendChild(sc);
+  } else {
+    initPublic();
   }
 
   render();
