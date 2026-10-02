@@ -597,13 +597,14 @@
       sections.id.forEach(function (secId, i) {
         if (sections.parentKey[i] !== 'form') return;
         var tableId = tableRefs[sections.tableRef[i]];
-        if (norm(tableId) !== norm(CONFIG.table)) return;
         var pIdx = pages.viewRef.indexOf(sections.parentId[i]);
         var shareRef = pIdx === -1 ? 0 : pages.shareRef[pIdx];
         var sIdx = shares.id.indexOf(shareRef);
         var published = sIdx !== -1 && safeJson(shares.options[sIdx]).publish &&
           safeJson(sections.shareOptions[i]).publish;
         found.push({
+          tableId: tableId,
+          onTarget: norm(tableId) === norm(CONFIG.table),
           title: sections.title[i] || tableId,
           published: !!published,
           url: published ? home + '/forms/' + shares.linkId[sIdx] + '/' + secId : null
@@ -618,20 +619,22 @@
     showSetup();
     grist.ready({ requiredAccess: 'full' });
     findPublishedForm().then(function (forms) {
-      var pub = forms.filter(function (f) { return f.published; });
+      // priorité aux formulaires de la table cible, sinon n'importe quel formulaire publié
+      var pub = forms.filter(function (f) { return f.published && f.onTarget; });
+      if (!pub.length) pub = forms.filter(function (f) { return f.published; });
       if (pub.length) {
         $('setup-steps').hidden = true;
         $('manual-hint').hidden = true;
         $('manual-row').hidden = true;
-        autoMsg('ok', 'Formulaire publié trouvé sur la table ' + CONFIG.table + '.');
+        autoMsg('ok', 'Formulaire publié trouvé sur la table ' + pub[0].tableId.replace(/</g, '&lt;') + '.');
         state.api = parseFormUrl(pub[0].url);
         showLink(pub[0].url);
         // vérifie que le formulaire contient bien les champs attendus
         loadForm().catch(function (err) { setupMsg('err', err && err.message ? err.message : String(err)); });
       } else if (forms.length) {
-        autoMsg('warn', 'Un formulaire existe sur ' + CONFIG.table + ' mais il n\'est pas publié : ouvrez-le et cliquez sur « Publier », puis rechargez ce widget.');
+        autoMsg('warn', 'Un formulaire existe (table ' + forms[0].tableId.replace(/</g, '&lt;') + ') mais il n\'est pas publié : ouvrez-le et cliquez sur « Publier », puis rechargez ce widget.');
       } else {
-        autoMsg('warn', 'Aucun formulaire trouvé sur la table ' + CONFIG.table + '. Suivez les étapes ci-dessous puis rechargez ce widget.');
+        autoMsg('warn', 'Aucun formulaire trouvé dans ce document. Suivez les étapes ci-dessous puis rechargez ce widget.');
       }
     }).catch(function (err) {
       console.error(err);
