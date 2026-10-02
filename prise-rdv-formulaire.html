@@ -146,6 +146,16 @@
   .msg.ok{ background:var(--success-soft); color:var(--success); }
   .msg.err{ background:var(--accent-soft); color:var(--accent); }
   .msg.warn{ background:var(--warning-soft); color:var(--warning); }
+  .setup{ max-width:720px; width:calc(100% - 32px); margin:24px auto; }
+  .setup p{ color:var(--ink-soft); margin:0 0 12px; }
+  .setup ol{ margin:0 0 14px; padding-left:20px; color:var(--ink-soft); }
+  .setup .row{ display:flex; gap:8px; flex-wrap:wrap; }
+  .setup .row input{ flex:1 1 260px; border:1px solid var(--border); border-radius:8px; padding:9px 11px; min-width:0; }
+  .setup .row .btn{ width:auto; }
+  .share-link{
+    font-family:var(--font-mono); font-size:12px; word-break:break-all; background:var(--bg);
+    border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin:12px 0;
+  }
   .done{ text-align:center; padding:40px 20px; max-width:600px; width:calc(100% - 32px); margin:24px auto; }
   .done h2{ font-size:22px; margin-bottom:8px; }
   .done p{ color:var(--ink-soft); margin:0 0 20px; }
@@ -161,6 +171,28 @@
     <div class="sub">Choisissez jusqu'à 4 dates, par ordre de préférence</div>
   </div>
 </header>
+
+<section class="card setup" id="setup" hidden>
+  <h2>Configurer le formulaire public</h2>
+  <ol>
+    <li>Dans Grist, créez une page <b>Formulaire</b> sur la table PRISE_RDV avec les champs Nom, Prénom, Choix 1 à 4.</li>
+    <li>Cliquez sur <b>« Publier »</b> puis copiez le lien du formulaire.</li>
+    <li>Collez-le ci-dessous : la page génère le lien à envoyer aux personnes.</li>
+  </ol>
+  <div class="row">
+    <input id="setup-url" type="url" placeholder="https://docs.getgrist.com/forms/XXXXXXXX/12">
+    <button class="btn" id="setup-go" type="button">Générer le lien</button>
+  </div>
+  <div class="msg" id="setup-msg" role="status" style="margin-top:12px"></div>
+  <div id="setup-result" hidden>
+    <p>Lien à envoyer (la page est déjà reliée à votre formulaire) :</p>
+    <div class="share-link" id="share-link"></div>
+    <div class="row">
+      <button class="btn" id="copy" type="button">Copier le lien</button>
+      <a class="btn btn-ghost" id="open" target="_blank" rel="noopener" style="width:auto;text-align:center;text-decoration:none;margin:0">Ouvrir</a>
+    </div>
+  </div>
+</section>
 
 <main class="app-body" id="app">
   <section class="card" aria-label="Calendrier">
@@ -533,8 +565,58 @@
 
   var fromQuery = new URLSearchParams(location.search).get('form');
   state.api = parseFormUrl(fromQuery || CONFIG.formUrl);
+  function setupMsg(kind, text) {
+    var el = $('setup-msg');
+    el.className = 'msg show ' + kind;
+    el.textContent = text;
+  }
+
+  // Écran de configuration : affiché tant qu'aucun lien de formulaire n'est fourni
+  function showSetup() {
+    $('app').hidden = true;
+    $('setup').hidden = false;
+    $('setup-go').addEventListener('click', function () {
+      var raw = $('setup-url').value.trim();
+      var api = parseFormUrl(raw);
+      $('setup-result').hidden = true;
+      if (!api) {
+        setupMsg('err', 'Lien non reconnu. Il doit ressembler à https://docs.getgrist.com/forms/XXXXXXXX/12');
+        return;
+      }
+      state.api = api;
+      setupMsg('warn', 'Vérification du formulaire…');
+      loadForm().then(function () {
+        var link = location.origin + location.pathname + '?form=' + encodeURIComponent(raw);
+        if (!/^https?:$/.test(location.protocol)) {
+          setupMsg('warn', 'Formulaire valide. Attention : cette page est ouverte depuis votre ordinateur, ' +
+            'le lien ne fonctionnera pour les autres qu\'une fois la page mise en ligne.');
+        } else {
+          setupMsg('ok', 'Formulaire valide (table ' + state.tableId + ').');
+        }
+        $('share-link').textContent = link;
+        $('open').href = link;
+        $('setup-result').hidden = false;
+      }).catch(function (err) {
+        var text = err && err.message ? err.message : String(err);
+        if (/not found/i.test(text)) text = 'Formulaire introuvable : vérifiez qu\'il est bien publié dans Grist.';
+        setupMsg('err', text);
+      });
+    });
+    $('copy').addEventListener('click', function () {
+      var link = $('share-link').textContent;
+      (navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject())
+        .then(function () { $('copy').textContent = 'Copié ✓'; })
+        .catch(function () {
+          var r = document.createRange();
+          r.selectNodeContents($('share-link'));
+          var sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+          $('copy').textContent = 'Faites Ctrl+C';
+        });
+    });
+  }
+
   if (!state.api) {
-    showMsg('err', 'Formulaire non configuré : renseignez le lien du formulaire Grist publié (CONFIG.formUrl).');
+    showSetup();
   } else {
     loadForm()
       .then(function () {
