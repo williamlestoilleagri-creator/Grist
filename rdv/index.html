@@ -198,8 +198,10 @@
   // ============================================================
   var CONFIG = {
     // Lien du formulaire Grist publié sur la table prise_RDV (bouton « Publier » du formulaire).
-    // Peut aussi être passé dans l'adresse de cette page : ...html?form=<lien encodé>
-    formUrl: '',
+    // Formulaire par défaut : le lien à envoyer est alors simplement l'adresse de cette page.
+    formUrl: 'https://grist.dataregion.fr/o/docs/forms/1gxjjFowEESTzJtpTvosPE/5',
+    // Serveur Grist par défaut : un autre formulaire de ce serveur donne un lien court (.../#<clé>-<n°>)
+    gristHome: 'https://grist.dataregion.fr/o/docs',
     table: 'prise_RDV',
     columns: {
       nom: 'Nom',
@@ -526,8 +528,17 @@
 
   function setupMsg(kind, text) { alertBox($('setup-msg'), kind, text); }
 
+  // Lien le plus court possible vers cette page pour un formulaire donné
+  function shareLinkFor(formUrl) {
+    var page = location.origin + location.pathname;
+    var api = parseFormUrl(formUrl), def = parseFormUrl(CONFIG.formUrl);
+    if (def && api.base === def.base && api.shareKey === def.shareKey && api.vsId === def.vsId) return page;
+    if (api.base === CONFIG.gristHome) return page + '#' + api.shareKey + '-' + api.vsId;
+    return page + '?form=' + encodeURIComponent(formUrl);
+  }
+
   function showLink(formUrl) {
-    var link = location.origin + location.pathname + '?form=' + encodeURIComponent(formUrl);
+    var link = shareLinkFor(formUrl);
     $('share-link').textContent = link;
     $('open').href = link;
     $('copy').textContent = 'Copier le lien';
@@ -649,7 +660,10 @@
 
   function initPublic() {
     var fromQuery = new URLSearchParams(location.search).get('form');
-    state.api = parseFormUrl(fromQuery || CONFIG.formUrl);
+    var fromHash = location.hash.match(/^#(.+)-(\d+)$/);
+    var formUrl = fromQuery ||
+      (fromHash ? CONFIG.gristHome + '/forms/' + fromHash[1] + '/' + fromHash[2] : CONFIG.formUrl);
+    state.api = parseFormUrl(formUrl);
     if (!state.api) {
       showSetup();
       return;
