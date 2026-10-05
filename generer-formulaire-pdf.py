@@ -16,7 +16,8 @@ from reportlab.lib.colors import HexColor, white
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from pypdf import PdfReader, PdfWriter
-from pypdf.generic import DictionaryObject, NameObject, TextStringObject, BooleanObject
+from pypdf.generic import (ArrayObject, BooleanObject, DictionaryObject, NameObject,
+                           NumberObject, TextStringObject)
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else "formulaire-rdv.pdf"
 
@@ -39,6 +40,8 @@ ROWS_P2 = 28
 TOTAL = 2 * ROWS_P1 + 2 * ROWS_P2
 
 date_fields = []
+columns = []            # premier numéro de créneau de chaque colonne
+label_fields_align = {} # champs libellés à aligner (2 = droite)
 
 
 def header(c, title, subtitle):
@@ -87,44 +90,34 @@ def text_field(c, name, label, x, y, w, tooltip):
     )
 
 
-def calendar_icon(c, x, y):
-    c.setStrokeColor(PRIMARY)
-    c.setFillColor(white)
-    c.setLineWidth(0.9)
-    c.roundRect(x, y, 11, 10, 1.5, stroke=1, fill=1)
-    c.setFillColor(PRIMARY)
-    c.rect(x, y + 7, 11, 3, stroke=0, fill=1)
-    c.setLineWidth(1.2)
-    c.line(x + 3, y + 9, x + 3, y + 12)
-    c.line(x + 8, y + 9, x + 8, y + 12)
-    for i in range(3):
-        for j in range(2):
-            c.rect(x + 2 + i * 2.8, y + 1.8 + j * 2.6, 1.4, 1.4, stroke=0, fill=1)
+
+def label_field(c, name, value, x, y, w, h, size, color, align=0):
+    """Texte sous forme de champ en lecture seule, pour pouvoir le masquer/afficher en JavaScript."""
+    c.acroForm.textfield(
+        name=name, value=value, x=x, y=y, width=w, height=h,
+        borderWidth=0, borderColor=white, fillColor=white, textColor=color,
+        fontName="Helvetica-Bold", fontSize=size, fieldFlags="readOnly",
+    )
+    if align:
+        label_fields_align[name] = align
 
 
 def slot_column(c, x, y_top, first, rows):
     col_w = (W - 2 * M - 20) / 2
-    c.setFillColor(INK_SOFT)
-    c.setFont("Helvetica-Bold", 7.5)
-    c.drawString(x + 24, y_top + 4, "DATE  (cliquez sur le champ)")
-    c.drawString(x + 24 + 128, y_top + 4, "HEURE")
+    columns.append(first)
+    label_field(c, f"entete_d_{first:02d}", "DATE  (cliquez pour le calendrier)", x + 24, y_top - 1, 150, 12, 7.5, INK_SOFT)
+    label_field(c, f"entete_h_{first:02d}", "HEURE", x + 152, y_top - 1, 60, 12, 7.5, INK_SOFT)
     row_h = 25
     for r in range(rows):
         i = first + r
         y = y_top - 22 - r * row_h
-        if r % 2 == 0:
-            c.setFillColor(HexColor("#FAFAF7"))
-            c.rect(x, y - 3, col_w, row_h - 1, stroke=0, fill=1)
-        c.setFillColor(PRIMARY)
-        c.setFont("Helvetica-Bold", 8)
-        c.drawRightString(x + 17, y + 6, f"{i:02d}")
-        calendar_icon(c, x + 24, y + 4)
+        label_field(c, f"num_{i:02d}", f"{i:02d}", x, y, 30, 19, 9, PRIMARY, align=2)
         dname = f"date_{i:02d}"
         c.acroForm.textfield(
             name=dname, tooltip=f"Créneau {i} - date (jj/mm/aaaa)",
-            x=x + 40, y=y, width=104, height=19,
+            x=x + 34, y=y, width=110, height=19,
             borderColor=BORDER, fillColor=white, textColor=INK, borderWidth=1,
-            fontName="Helvetica", fontSize=10, forceBorder=True, maxlen=10,
+            fontName="Helvetica", fontSize=10, maxlen=10,
         )
         date_fields.append(dname)
         c.acroForm.choice(
@@ -132,7 +125,7 @@ def slot_column(c, x, y_top, first, rows):
             value=" ", options=[" "] + HOURS, fieldFlags="combo edit",
             x=x + 152, y=y, width=col_w - 158, height=19,
             borderColor=BORDER, fillColor=white, textColor=INK, borderWidth=1,
-            fontName="Helvetica", fontSize=10, forceBorder=True,
+            fontName="Helvetica", fontSize=10,
         )
 
 
@@ -179,8 +172,8 @@ def build_base():
     c.setFont("Helvetica-Bold", 8.5)
     c.drawString(M + 10, by + 10, "Astuce :")
     c.setFont("Helvetica", 8.5)
-    c.drawString(M + 50, by + 10, f"{TOTAL} créneaux disponibles sur 2 pages. Besoin de plus ? "
-                                  "Remplissez un second exemplaire du formulaire.")
+    c.drawString(M + 50, by + 10, "Une nouvelle ligne apparaît dès que vous remplissez la précédente "
+                                  f"(jusqu'à {TOTAL} créneaux).")
 
     y_top = by - 22
     slot_column(c, M, y_top, 1, ROWS_P1)
@@ -201,6 +194,8 @@ def build_base():
     slot_column(c, M, y_top, start, ROWS_P2)
     slot_column(c, M + col_w + 20, y_top, start + ROWS_P2, ROWS_P2)
     footer(c, 2, 2)
+    # champ technique invisible : son calcul relance l'affichage des lignes à chaque saisie
+    c.acroForm.textfield(name="_maj", x=0, y=0, width=1, height=1, borderWidth=0, fieldFlags="readOnly")
     c.showPage()
     c.save()
     return buf.getvalue()
@@ -213,21 +208,67 @@ def js(code):
     })
 
 
-def add_date_behaviour(pdf_bytes):
-    """Ajoute le format date Acrobat (=> sélecteur de calendrier) sur les champs date_XX."""
+DOC_JS = """
+var RDV_TOTAL = %(total)d;
+var RDV_COLONNES = %(cols)s;
+function rdvPad(i) { return (i < 10 ? "0" : "") + i; }
+function rdvVoir(doc, nom, visible) {
+  var f = doc.getField(nom);
+  if (f) f.display = visible ? display.visible : display.hidden;
+}
+function rdvLignes(doc) {
+  var dernier = 0, i;
+  for (i = 1; i <= RDV_TOTAL; i++) {
+    var d = doc.getField("date_" + rdvPad(i)), h = doc.getField("heure_" + rdvPad(i));
+    var vd = d ? String(d.valueAsString).replace(/\\s/g, "") : "";
+    var vh = h ? String(h.valueAsString).replace(/\\s/g, "") : "";
+    if (vd !== "" || vh !== "") dernier = i;
+  }
+  for (i = 1; i <= RDV_TOTAL; i++) {
+    var v = i <= dernier + 1;
+    rdvVoir(doc, "num_" + rdvPad(i), v);
+    rdvVoir(doc, "date_" + rdvPad(i), v);
+    rdvVoir(doc, "heure_" + rdvPad(i), v);
+  }
+  for (i = 0; i < RDV_COLONNES.length; i++) {
+    var c = RDV_COLONNES[i], vc = c <= dernier + 1;
+    rdvVoir(doc, "entete_d_" + rdvPad(c), vc);
+    rdvVoir(doc, "entete_h_" + rdvPad(c), vc);
+  }
+}
+rdvLignes(this);
+"""
+
+
+def add_behaviour(pdf_bytes):
+    """Format date Acrobat (=> calendrier) + affichage progressif des lignes."""
     reader = PdfReader(io.BytesIO(pdf_bytes))
     writer = PdfWriter()
     writer.append(reader)
     wanted = set(date_fields)
+    calc_ref = None
     for page in writer.pages:
         for annot in page.get("/Annots", []) or []:
             a = annot.get_object()
-            if a.get("/T") in wanted:
+            name = a.get("/T")
+            if name in wanted:
                 a[NameObject("/AA")] = DictionaryObject({
                     NameObject("/F"): js('AFDate_FormatEx("dd/mm/yyyy");'),
                     NameObject("/K"): js('AFDate_KeystrokeEx("dd/mm/yyyy");'),
                 })
-    writer._root_object["/AcroForm"][NameObject("/NeedAppearances")] = BooleanObject(True)
+            elif name in label_fields_align:
+                a[NameObject("/Q")] = NumberObject(label_fields_align[name])
+            elif name == "_maj":
+                a[NameObject("/F")] = NumberObject(2)  # annotation masquée
+                a[NameObject("/AA")] = DictionaryObject({NameObject("/C"): js("rdvLignes(this);")})
+                calc_ref = annot
+    acro = writer._root_object["/AcroForm"]
+    acro[NameObject("/NeedAppearances")] = BooleanObject(True)
+    if calc_ref is not None:
+        acro[NameObject("/CO")] = ArrayObject([calc_ref])
+    # script document : s'exécute à l'ouverture et masque les lignes vides
+    # (les lecteurs sans JavaScript affichent simplement toutes les lignes)
+    writer.add_js(DOC_JS % {"total": TOTAL, "cols": "[" + ",".join(str(c) for c in columns) + "]"})
     writer.add_metadata({"/Title": "Demande de rendez-vous"})
     out = io.BytesIO()
     writer.write(out)
@@ -235,7 +276,7 @@ def add_date_behaviour(pdf_bytes):
 
 
 if __name__ == "__main__":
-    data = add_date_behaviour(build_base())
+    data = add_behaviour(build_base())
     with open(OUT, "wb") as f:
         f.write(data)
     print(f"{OUT} : {TOTAL} créneaux, {len(data) // 1024} Ko")
