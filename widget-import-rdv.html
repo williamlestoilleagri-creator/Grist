@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
 <style>
   :root{
@@ -95,6 +96,7 @@
   .files .org{ color:var(--ink-soft); font-size:12.5px; }
   .files .fn{ font-family:var(--font-mono); font-size:11px; color:var(--ink-faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .files .msg{ font-size:12px; color:var(--accent); }
+  .files .warn{ font-size:11.5px; color:var(--warning); }
   .files .slots{ display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
   .files .slots span{ font-family:var(--font-mono); font-size:11px; background:var(--primary-soft); color:var(--primary); padding:1px 6px; border-radius:5px; }
   .files .slots span.dup{ background:var(--warning-soft); color:var(--warning); text-decoration:line-through; }
@@ -116,7 +118,7 @@
   <header class="app-header">
     <div>
       <h1>Import des demandes de rendez-vous</h1>
-      <div class="sub">Déposez les fichiers .json générés par le formulaire</div>
+      <div class="sub">Déposez les formulaires PDF remplis</div>
     </div>
     <div class="status" id="status">connexion…</div>
   </header>
@@ -128,9 +130,9 @@
 
     <label class="drop" id="drop">
       <div class="ico">📥</div>
-      <div class="t">Glissez vos fichiers ici</div>
+      <div class="t">Glissez les PDF remplis ici</div>
       <div class="s">un seul ou des centaines à la fois — ou cliquez pour parcourir</div>
-      <input type="file" id="file-input" accept=".json,application/json" multiple>
+      <input type="file" id="file-input" accept=".pdf,application/pdf" multiple>
     </label>
 
     <div class="toolbar">
@@ -187,18 +189,20 @@
   }
 
   // ---------- Format "04/01/2027 : 13h00" ----------
-  function formatSlot(c) {
-    if (!c) return null;
-    var date = norm(c.date), heure = norm(c.heure);
-    var m = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (m) date = m[3] + '/' + m[2] + '/' + m[1];
-    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(date)) {
-      // repli : le libellé déjà formaté par le formulaire
-      return /^\d{2}\/\d{2}\/\d{4} : \d{1,2}h\d{2}$/.test(norm(c.libelle)) ? norm(c.libelle) : null;
+  function normDate(v) {
+    v = norm(v);
+    var m = v.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2}|\d{4})$/);
+    if (m) {
+      var y = m[3].length === 2 ? '20' + m[3] : m[3];
+      return pad(+m[1]) + '/' + pad(+m[2]) + '/' + y;
     }
-    var hm = heure.match(/^(\d{1,2})[:hH](\d{2})/);
-    if (!hm) return null;
-    return date + ' : ' + pad(+hm[1]) + 'h' + hm[2];
+    m = v.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? m[3] + '/' + m[2] + '/' + m[1] : null;
+  }
+  function normHeure(v) {
+    var m = norm(v).match(/^(\d{1,2})\s*(?:[:hH.]\s*(\d{2})?)?$/);
+    if (!m || +m[1] > 23) return null;
+    return pad(+m[1]) + 'h' + (m[2] || '00');
   }
   function sortKey(lbl) { // "dd/mm/yyyy : HHhMM" -> "yyyymmddHHMM"
     return lbl.slice(6, 10) + lbl.slice(3, 5) + lbl.slice(0, 2) + lbl.slice(13, 15) + lbl.slice(16, 18);
@@ -208,63 +212,88 @@
     return [nom, prenom, structure, date].map(function (s) { return norm(s).toLowerCase(); }).join('\u0001');
   }
 
-  // ---------- Lecture des fichiers ----------
-  function parseDemande(obj) {
-    if (!obj || typeof obj !== 'object') throw new Error('contenu inattendu');
-    var nom = norm(obj.nom), prenom = norm(obj.prenom), structure = norm(obj.structure);
-    if (!nom && !prenom) throw new Error('nom / prénom manquants');
-    if (!Array.isArray(obj.creneaux) || !obj.creneaux.length) throw new Error('aucun créneau');
-    var seen = {}, slots = [];
-    obj.creneaux.forEach(function (c) {
-      var s = formatSlot(c);
-      if (s && !seen[s]) { seen[s] = 1; slots.push(s); }
-    });
-    if (!slots.length) throw new Error('créneaux illisibles');
-    slots.sort(function (a, b) { return sortKey(a) < sortKey(b) ? -1 : 1; });
-    return { id: norm(obj.id), nom: nom, prenom: prenom, structure: structure, slots: slots };
+  // ---------- Lecture des PDF remplis ----------
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   }
 
-  function readFile(file) {
-    return new Promise(function (resolve) {
-      var r = new FileReader();
-      r.onload = function () {
-        var out = [];
-        try {
-          var data = JSON.parse(String(r.result).replace(/^﻿/, ''));
-          (Array.isArray(data) ? data : [data]).forEach(function (d, i) {
-            try {
-              out.push(Object.assign({ file: file.name + (Array.isArray(data) ? ' #' + (i + 1) : '') }, parseDemande(d)));
-            } catch (e) {
-              out.push({ file: file.name, error: e.message });
-            }
-          });
-        } catch (e) {
-          out.push({ file: file.name, error: 'fichier JSON invalide' });
-        }
-        resolve(out);
-      };
-      r.onerror = function () { resolve([{ file: file.name, error: 'lecture impossible' }]); };
-      r.readAsText(file, 'utf-8');
-    });
+  async function pdfFields(file) {
+    var buf = await file.arrayBuffer();
+    var doc = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+    try {
+      var objs = (await doc.getFieldObjects()) || {};
+      var vals = {};
+      Object.keys(objs).forEach(function (name) {
+        var v = (objs[name] || []).map(function (o) { return o.value; })
+          .filter(function (x) { return x != null && norm(x) !== '' && x !== 'Off'; })[0];
+        vals[name] = norm(Array.isArray(v) ? v[0] : v);
+      });
+      return vals;
+    } finally {
+      doc.destroy();
+    }
+  }
+
+  async function readFile(file) {
+    var f;
+    try { f = await pdfFields(file); }
+    catch (e) { console.error(e); return { file: file.name, error: 'PDF illisible' }; }
+
+    if (!('nom' in f) && !('date_01' in f)) return { file: file.name, error: 'ce PDF n\'est pas le formulaire de rendez-vous' };
+    var nom = f.nom || '', prenom = f.prenom || '', structure = f.structure || '';
+    if (!nom && !prenom) return { file: file.name, error: 'nom et prénom non renseignés' };
+
+    var seen = {}, slots = [], warnings = [];
+    for (var i = 1; ('date_' + pad(i)) in f; i++) {
+      var rawD = f['date_' + pad(i)], rawH = f['heure_' + pad(i)];
+      if (!rawD && !rawH) continue;
+      var d = normDate(rawD), h = normHeure(rawH);
+      if (!d) { warnings.push('créneau ' + i + ' : date ' + (rawD ? '« ' + rawD + ' » illisible' : 'manquante')); continue; }
+      if (!h) { warnings.push('créneau ' + i + ' : heure ' + (rawH ? '« ' + rawH + ' » illisible' : 'manquante')); continue; }
+      var s = d + ' : ' + h;
+      if (!seen[s]) { seen[s] = 1; slots.push(s); }
+    }
+    if (!slots.length) return { file: file.name, error: 'aucun créneau complet (date + heure)' + (warnings.length ? ' — ' + warnings.join(' ; ') : '') };
+    slots.sort(function (a, b) { return sortKey(a) < sortKey(b) ? -1 : 1; });
+    return { file: file.name, nom: nom, prenom: prenom, structure: structure, slots: slots, warnings: warnings };
+  }
+
+  // lecture par petits lots pour ne pas saturer le navigateur avec 100+ PDF
+  async function readAll(files, onProgress) {
+    var out = new Array(files.length), next = 0, done = 0;
+    async function worker() {
+      while (next < files.length) {
+        var i = next++;
+        out[i] = await readFile(files[i]);
+        onProgress(++done, files.length);
+      }
+    }
+    var runners = [];
+    for (var k = 0; k < Math.min(4, files.length); k++) runners.push(worker());
+    await Promise.all(runners);
+    return out;
   }
 
   function addFiles(fileList) {
-    var files = Array.prototype.filter.call(fileList, function (f) { return /\.json$/i.test(f.name) || f.type === 'application/json'; });
+    var files = Array.prototype.filter.call(fileList, function (f) { return /\.pdf$/i.test(f.name) || f.type === 'application/pdf'; });
     var ignored = fileList.length - files.length;
-    if (!files.length) { toast('Aucun fichier .json détecté.'); return; }
-    Promise.all(files.map(readFile)).then(function (results) {
+    if (!files.length) { toast('Aucun fichier PDF détecté.'); return; }
+    if (!window.pdfjsLib) { toast('Lecteur PDF non chargé (connexion internet ?)'); return; }
+    var dropT = document.querySelector('#drop .t'), dropLabel = dropT.textContent;
+    readAll(files, function (n, total) { dropT.textContent = 'Lecture… ' + n + ' / ' + total; }).then(function (items) {
+      dropT.textContent = dropLabel;
       var added = 0, already = 0;
-      results.forEach(function (list) {
-        list.forEach(function (it) {
-          // même demande déposée deux fois dans la file d'attente
-          if (it.id && state.items.some(function (x) { return x.id === it.id && !x.error; })) { already++; return; }
-          state.items.push(it); added++;
-        });
+      items.forEach(function (it) {
+        // même fichier déposé deux fois dans la file d'attente
+        if (!it.error && state.items.some(function (x) {
+          return !x.error && keyOf(x.nom, x.prenom, x.structure, x.slots.join('|')) === keyOf(it.nom, it.prenom, it.structure, it.slots.join('|'));
+        })) { already++; return; }
+        state.items.push(it); added++;
       });
       render();
-      var msg = added + ' demande' + (added > 1 ? 's' : '') + ' ajoutée' + (added > 1 ? 's' : '');
+      var msg = added + ' formulaire' + (added > 1 ? 's' : '') + ' ajouté' + (added > 1 ? 's' : '');
       if (already) msg += ' · ' + already + ' déjà dans la liste';
-      if (ignored) msg += ' · ' + ignored + ' fichier(s) non .json ignoré(s)';
+      if (ignored) msg += ' · ' + ignored + ' fichier(s) non PDF ignoré(s)';
       toast(msg);
     });
   }
@@ -309,7 +338,7 @@
     var sum = $('summary'); sum.innerHTML = '';
     var done = state.items.filter(function (i) { return i.done; }).length;
     if (state.items.length) {
-      sum.appendChild(el('span', 'pill', state.items.length + ' demande(s)'));
+      sum.appendChild(el('span', 'pill', state.items.length + ' formulaire(s)'));
       if (p.stats.ok) sum.appendChild(el('span', 'pill ok', p.stats.rows + ' ligne(s) à créer'));
       if (p.stats.dup) sum.appendChild(el('span', 'pill warn', p.stats.dup + ' déjà dans Grist'));
       if (p.stats.err) sum.appendChild(el('span', 'pill err', p.stats.err + ' en erreur'));
@@ -344,6 +373,7 @@
           slots.appendChild(sp);
         });
         main.appendChild(slots);
+        (it.warnings || []).forEach(function (w) { main.appendChild(el('div', 'warn', '⚠ ' + w + ' (ignoré)')); });
         main.appendChild(el('div', 'fn', it.file));
       }
       li.appendChild(main);
