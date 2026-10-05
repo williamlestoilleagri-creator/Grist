@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Import demandes RDV</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+
+<style>
+  :root{
+    --bg: #F5F4F0;
+    --surface: #FFFFFF;
+    --ink: #1B1B1E;
+    --ink-soft: #65656B;
+    --ink-faint: #9A9A9F;
+    --border: #E2E0D8;
+    --primary: #000091;
+    --primary-soft: #E5E5FB;
+    --accent: #C9184A;
+    --accent-soft: #FBE3EA;
+    --success: #18753C;
+    --success-soft: #E2F3E8;
+    --warning: #B34000;
+    --warning-soft: #FBE9DD;
+    --radius-card: 10px;
+    --font-display: 'Spectral', Georgia, serif;
+    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-body);
+    font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased;
+  }
+  button, input{ font-family:inherit; font-size:inherit; color:inherit; }
+
+  .app{ display:flex; flex-direction:column; min-height:100vh; }
+  .app-header{
+    display:flex; align-items:baseline; justify-content:space-between; gap:12px;
+    padding:14px 18px; background:var(--primary); color:#fff;
+  }
+  .app-header h1{ font-family:var(--font-display); font-weight:600; font-size:18px; margin:0; }
+  .app-header .sub{ font-size:11.5px; opacity:.78; margin-top:2px; }
+  .app-header .status{ font-family:var(--font-mono); font-size:11.5px; opacity:.85; white-space:nowrap; }
+
+  main{ padding:16px; display:flex; flex-direction:column; gap:14px; flex:1; }
+
+  .drop{
+    border:2px dashed var(--border); border-radius:14px; background:var(--surface);
+    padding:28px 16px; text-align:center; cursor:pointer; transition:all .15s; position:relative;
+  }
+  .drop:hover, .drop.over{ border-color:var(--primary); background:var(--primary-soft); }
+  .drop.over{ transform:scale(1.01); }
+  .drop .ico{ font-size:34px; line-height:1; }
+  .drop .t{ font-family:var(--font-display); font-size:18px; font-weight:600; margin:8px 0 2px; }
+  .drop .s{ color:var(--ink-soft); font-size:12.5px; }
+  .drop input{ display:none; }
+
+  .toolbar{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .seg{ display:inline-flex; border:1px solid var(--border); border-radius:9px; overflow:hidden; background:var(--surface); }
+  .seg button{ border:none; background:none; padding:7px 12px; cursor:pointer; font-size:12.5px; font-weight:600; color:var(--ink-soft); }
+  .seg button.on{ background:var(--primary); color:#fff; }
+  .toolbar .lbl{ font-size:12px; color:var(--ink-soft); }
+  .spacer{ flex:1; }
+
+  .btn{
+    border:none; border-radius:9px; padding:9px 16px; font-weight:600; cursor:pointer;
+    background:var(--primary); color:#fff;
+  }
+  .btn:disabled{ opacity:.4; cursor:not-allowed; }
+  .btn.ghost{ background:transparent; color:var(--ink-soft); border:1px solid var(--border); }
+
+  .summary{ display:flex; gap:8px; flex-wrap:wrap; }
+  .pill{ font-size:12px; font-weight:600; padding:4px 10px; border-radius:999px; background:var(--surface); border:1px solid var(--border); }
+  .pill.ok{ background:var(--success-soft); color:var(--success); border-color:transparent; }
+  .pill.warn{ background:var(--warning-soft); color:var(--warning); border-color:transparent; }
+  .pill.err{ background:var(--accent-soft); color:var(--accent); border-color:transparent; }
+
+  .card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-card); overflow:hidden; }
+  .files{ list-style:none; margin:0; padding:0; max-height:46vh; overflow:auto; }
+  .files li{ display:flex; gap:10px; padding:9px 12px; border-bottom:1px solid var(--border); align-items:flex-start; }
+  .files li:last-child{ border-bottom:none; }
+  .files .st{ width:22px; height:22px; border-radius:50%; flex:0 0 22px; display:grid; place-items:center; font-size:12px; font-weight:700; }
+  .files .st.ok{ background:var(--success-soft); color:var(--success); }
+  .files .st.dup{ background:var(--warning-soft); color:var(--warning); }
+  .files .st.err{ background:var(--accent-soft); color:var(--accent); }
+  .files .st.done{ background:var(--success); color:#fff; }
+  .files .main{ flex:1; min-width:0; }
+  .files .who{ font-weight:600; }
+  .files .org{ color:var(--ink-soft); font-size:12.5px; }
+  .files .fn{ font-family:var(--font-mono); font-size:11px; color:var(--ink-faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .files .msg{ font-size:12px; color:var(--accent); }
+  .files .slots{ display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
+  .files .slots span{ font-family:var(--font-mono); font-size:11px; background:var(--primary-soft); color:var(--primary); padding:1px 6px; border-radius:5px; }
+  .files .slots span.dup{ background:var(--warning-soft); color:var(--warning); text-decoration:line-through; }
+  .files .rm{ border:none; background:none; cursor:pointer; color:var(--ink-faint); border-radius:6px; width:24px; height:24px; }
+  .files .rm:hover{ background:var(--accent-soft); color:var(--accent); }
+
+  .empty{ padding:22px; text-align:center; color:var(--ink-faint); font-size:13px; }
+  .toast{
+    position:fixed; left:50%; bottom:18px; transform:translateX(-50%) translateY(80px);
+    background:var(--ink); color:var(--bg); padding:10px 16px; border-radius:10px; font-size:13px;
+    transition:transform .25s; z-index:10; max-width:90vw;
+  }
+  .toast.show{ transform:translateX(-50%) translateY(0); }
+  .mapping-warn{ background:var(--warning-soft); color:var(--warning); padding:10px 12px; border-radius:9px; font-size:12.5px; display:none; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="app-header">
+    <div>
+      <h1>Import des demandes de rendez-vous</h1>
+      <div class="sub">Déposez les fichiers .json générés par le formulaire</div>
+    </div>
+    <div class="status" id="status">connexion…</div>
+  </header>
+
+  <main>
+    <div class="mapping-warn" id="mapping-warn" style="display:block">
+      Associez les colonnes du widget (Nom, Prénom, Structure, Date de prise de rendez-vous) dans le panneau de droite de Grist (« Créateur de widget »).
+    </div>
+
+    <label class="drop" id="drop">
+      <div class="ico">📥</div>
+      <div class="t">Glissez vos fichiers ici</div>
+      <div class="s">un seul ou des centaines à la fois — ou cliquez pour parcourir</div>
+      <input type="file" id="file-input" accept=".json,application/json" multiple>
+    </label>
+
+    <div class="toolbar">
+      <span class="lbl">Écriture :</span>
+      <div class="seg" id="mode">
+        <button type="button" data-mode="row">1 ligne Grist par créneau</button>
+        <button type="button" data-mode="cell">1 ligne par personne</button>
+      </div>
+      <span class="spacer"></span>
+      <button type="button" class="btn ghost" id="clear">Vider</button>
+      <button type="button" class="btn" id="import" disabled>Importer dans Grist</button>
+    </div>
+
+    <div class="summary" id="summary"></div>
+
+    <div class="card">
+      <ul class="files" id="files"></ul>
+    </div>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  var COLS = {
+    nom: 'Nom',
+    prenom: 'Prenom',
+    structure: 'Structure',
+    date: 'Date_RDV'
+  };
+  var CHUNK = 400;
+
+  var state = {
+    colMap: null,
+    existing: new Set(),   // clés déjà présentes dans la table
+    items: [],             // un item par fichier
+    mode: 'row'
+  };
+
+  function $(id) { return document.getElementById(id); }
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function norm(s) { return String(s == null ? '' : s).trim(); }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function toast(msg) {
+    var t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toast._t); toast._t = setTimeout(function () { t.classList.remove('show'); }, 3200);
+  }
+
+  // ---------- Format "04/01/2027 : 13h00" ----------
+  function formatSlot(c) {
+    if (!c) return null;
+    var date = norm(c.date), heure = norm(c.heure);
+    var m = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) date = m[3] + '/' + m[2] + '/' + m[1];
+    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(date)) {
+      // repli : le libellé déjà formaté par le formulaire
+      return /^\d{2}\/\d{2}\/\d{4} : \d{1,2}h\d{2}$/.test(norm(c.libelle)) ? norm(c.libelle) : null;
+    }
+    var hm = heure.match(/^(\d{1,2})[:hH](\d{2})/);
+    if (!hm) return null;
+    return date + ' : ' + pad(+hm[1]) + 'h' + hm[2];
+  }
+  function sortKey(lbl) { // "dd/mm/yyyy : HHhMM" -> "yyyymmddHHMM"
+    return lbl.slice(6, 10) + lbl.slice(3, 5) + lbl.slice(0, 2) + lbl.slice(13, 15) + lbl.slice(16, 18);
+  }
+
+  function keyOf(nom, prenom, structure, date) {
+    return [nom, prenom, structure, date].map(function (s) { return norm(s).toLowerCase(); }).join('\u0001');
+  }
+
+  // ---------- Lecture des fichiers ----------
+  function parseDemande(obj) {
+    if (!obj || typeof obj !== 'object') throw new Error('contenu inattendu');
+    var nom = norm(obj.nom), prenom = norm(obj.prenom), structure = norm(obj.structure);
+    if (!nom && !prenom) throw new Error('nom / prénom manquants');
+    if (!Array.isArray(obj.creneaux) || !obj.creneaux.length) throw new Error('aucun créneau');
+    var seen = {}, slots = [];
+    obj.creneaux.forEach(function (c) {
+      var s = formatSlot(c);
+      if (s && !seen[s]) { seen[s] = 1; slots.push(s); }
+    });
+    if (!slots.length) throw new Error('créneaux illisibles');
+    slots.sort(function (a, b) { return sortKey(a) < sortKey(b) ? -1 : 1; });
+    return { id: norm(obj.id), nom: nom, prenom: prenom, structure: structure, slots: slots };
+  }
+
+  function readFile(file) {
+    return new Promise(function (resolve) {
+      var r = new FileReader();
+      r.onload = function () {
+        var out = [];
+        try {
+          var data = JSON.parse(String(r.result).replace(/^﻿/, ''));
+          (Array.isArray(data) ? data : [data]).forEach(function (d, i) {
+            try {
+              out.push(Object.assign({ file: file.name + (Array.isArray(data) ? ' #' + (i + 1) : '') }, parseDemande(d)));
+            } catch (e) {
+              out.push({ file: file.name, error: e.message });
+            }
+          });
+        } catch (e) {
+          out.push({ file: file.name, error: 'fichier JSON invalide' });
+        }
+        resolve(out);
+      };
+      r.onerror = function () { resolve([{ file: file.name, error: 'lecture impossible' }]); };
+      r.readAsText(file, 'utf-8');
+    });
+  }
+
+  function addFiles(fileList) {
+    var files = Array.prototype.filter.call(fileList, function (f) { return /\.json$/i.test(f.name) || f.type === 'application/json'; });
+    var ignored = fileList.length - files.length;
+    if (!files.length) { toast('Aucun fichier .json détecté.'); return; }
+    Promise.all(files.map(readFile)).then(function (results) {
+      var added = 0, already = 0;
+      results.forEach(function (list) {
+        list.forEach(function (it) {
+          // même demande déposée deux fois dans la file d'attente
+          if (it.id && state.items.some(function (x) { return x.id === it.id && !x.error; })) { already++; return; }
+          state.items.push(it); added++;
+        });
+      });
+      render();
+      var msg = added + ' demande' + (added > 1 ? 's' : '') + ' ajoutée' + (added > 1 ? 's' : '');
+      if (already) msg += ' · ' + already + ' déjà dans la liste';
+      if (ignored) msg += ' · ' + ignored + ' fichier(s) non .json ignoré(s)';
+      toast(msg);
+    });
+  }
+
+  // ---------- Construction des lignes à écrire ----------
+  function plan() {
+    var rows = [], seenBatch = new Set(), stats = { ok: 0, dup: 0, err: 0, rows: 0 };
+    state.items.forEach(function (it) {
+      it.dupSlots = {};
+      it.allDup = false;
+      if (it.error) { stats.err++; return; }
+      if (it.done) return;
+      if (state.mode === 'row') {
+        var fresh = 0;
+        it.slots.forEach(function (s) {
+          var k = keyOf(it.nom, it.prenom, it.structure, s);
+          if (state.existing.has(k) || seenBatch.has(k)) { it.dupSlots[s] = 1; return; }
+          seenBatch.add(k); fresh++;
+          rows.push({ item: it, nom: it.nom, prenom: it.prenom, structure: it.structure, date: s });
+        });
+        it.allDup = fresh === 0;
+      } else {
+        var txt = it.slots.join('\n');
+        var k2 = keyOf(it.nom, it.prenom, it.structure, txt);
+        if (state.existing.has(k2) || seenBatch.has(k2)) { it.allDup = true; }
+        else {
+          seenBatch.add(k2);
+          rows.push({ item: it, nom: it.nom, prenom: it.prenom, structure: it.structure, date: txt });
+        }
+      }
+      if (it.allDup) stats.dup++; else stats.ok++;
+    });
+    stats.rows = rows.length;
+    return { rows: rows, stats: stats };
+  }
+
+  // ---------- Rendu ----------
+  function render() {
+    document.querySelectorAll('#mode button').forEach(function (b) { b.classList.toggle('on', b.dataset.mode === state.mode); });
+
+    var p = plan();
+    var sum = $('summary'); sum.innerHTML = '';
+    var done = state.items.filter(function (i) { return i.done; }).length;
+    if (state.items.length) {
+      sum.appendChild(el('span', 'pill', state.items.length + ' demande(s)'));
+      if (p.stats.ok) sum.appendChild(el('span', 'pill ok', p.stats.rows + ' ligne(s) à créer'));
+      if (p.stats.dup) sum.appendChild(el('span', 'pill warn', p.stats.dup + ' déjà dans Grist'));
+      if (p.stats.err) sum.appendChild(el('span', 'pill err', p.stats.err + ' en erreur'));
+      if (done) sum.appendChild(el('span', 'pill ok', done + ' importée(s)'));
+    }
+    $('import').disabled = !p.rows.length || !state.colMap;
+    $('import').textContent = p.rows.length ? 'Importer ' + p.rows.length + ' ligne' + (p.rows.length > 1 ? 's' : '') : 'Importer dans Grist';
+
+    var ul = $('files'); ul.innerHTML = '';
+    if (!state.items.length) { ul.appendChild(el('li', 'empty', 'Aucun fichier déposé pour le moment.')); return; }
+
+    state.items.forEach(function (it, idx) {
+      var li = el('li');
+      var st;
+      if (it.error) st = el('div', 'st err', '!');
+      else if (it.done) st = el('div', 'st done', '✓');
+      else if (it.allDup) st = el('div', 'st dup', '=');
+      else st = el('div', 'st ok', '✓');
+      li.appendChild(st);
+
+      var main = el('div', 'main');
+      if (it.error) {
+        main.appendChild(el('div', 'fn', it.file));
+        main.appendChild(el('div', 'msg', it.error));
+      } else {
+        main.appendChild(el('div', 'who', (it.prenom + ' ' + it.nom).trim()));
+        main.appendChild(el('div', 'org', it.structure || '—'));
+        var slots = el('div', 'slots');
+        it.slots.forEach(function (s) {
+          var sp = el('span', it.dupSlots[s] || (it.allDup && !it.done) ? 'dup' : '', s);
+          if (it.dupSlots[s] || it.allDup) sp.title = 'Déjà présent dans la table';
+          slots.appendChild(sp);
+        });
+        main.appendChild(slots);
+        main.appendChild(el('div', 'fn', it.file));
+      }
+      li.appendChild(main);
+
+      var rm = el('button', 'rm', '✕'); rm.type = 'button'; rm.title = 'Retirer de la liste';
+      rm.addEventListener('click', function () { state.items.splice(idx, 1); render(); });
+      li.appendChild(rm);
+      ul.appendChild(li);
+    });
+  }
+
+  // ---------- Import ----------
+  async function doImport() {
+    var p = plan();
+    if (!p.rows.length || !state.colMap) return;
+    var btn = $('import'); btn.disabled = true;
+    try {
+      for (var i = 0; i < p.rows.length; i += CHUNK) {
+        btn.textContent = 'Import… ' + Math.min(i + CHUNK, p.rows.length) + '/' + p.rows.length;
+        var chunk = p.rows.slice(i, i + CHUNK).map(function (r) {
+          var f = {};
+          f[state.colMap.Nom] = r.nom;
+          f[state.colMap.Prenom] = r.prenom;
+          f[state.colMap.Structure] = r.structure;
+          f[state.colMap.Date_RDV] = r.date;
+          return { fields: f };
+        });
+        await grist.selectedTable.create(chunk);
+      }
+      p.rows.forEach(function (r) {
+        r.item.done = true;
+        state.existing.add(keyOf(r.nom, r.prenom, r.structure, r.date));
+      });
+      toast(p.rows.length + ' ligne(s) ajoutée(s) dans Grist ✔');
+    } catch (e) {
+      console.error(e);
+      toast('Erreur pendant l\'import : ' + (e && e.message ? e.message : e));
+    }
+    render();
+  }
+
+  // ---------- Événements UI ----------
+  var drop = $('drop');
+  ['dragenter', 'dragover'].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('over'); });
+  });
+  ['dragleave', 'drop'].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('over'); });
+  });
+  drop.addEventListener('drop', function (e) { if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files); });
+  // empêche le navigateur d'ouvrir un fichier lâché à côté de la zone
+  window.addEventListener('dragover', function (e) { e.preventDefault(); });
+  window.addEventListener('drop', function (e) { e.preventDefault(); });
+
+  $('file-input').addEventListener('change', function (e) { addFiles(e.target.files); e.target.value = ''; });
+  $('import').addEventListener('click', doImport);
+  $('clear').addEventListener('click', function () { state.items = []; render(); });
+  $('mode').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    state.mode = b.dataset.mode;
+    grist.setOption('mode', state.mode).catch(function () {});
+    render();
+  });
+
+  // ---------- Grist ----------
+  grist.ready({
+    requiredAccess: 'full',
+    columns: [
+      { name: COLS.nom, title: 'Nom', type: 'Text' },
+      { name: COLS.prenom, title: 'Prénom', type: 'Text' },
+      { name: COLS.structure, title: 'Structure', type: 'Text' },
+      { name: COLS.date, title: 'Date de prise de rendez-vous', type: 'Text' }
+    ]
+  });
+
+  grist.onOptions(function (opts) {
+    if (opts && (opts.mode === 'row' || opts.mode === 'cell')) { state.mode = opts.mode; render(); }
+  });
+
+  grist.onRecords(function (records, mappings) {
+    var ok = mappings && mappings.Nom && mappings.Prenom && mappings.Structure && mappings.Date_RDV;
+    state.colMap = ok ? mappings : null;
+    $('mapping-warn').style.display = ok ? 'none' : 'block';
+    $('status').textContent = ok ? records.length + ' ligne(s) dans la table' : 'colonnes à associer';
+    state.existing = new Set();
+    if (ok) {
+      var mapped = grist.mapColumnNames(records, mappings) || [];
+      mapped.forEach(function (r) {
+        state.existing.add(keyOf(r.Nom, r.Prenom, r.Structure, r.Date_RDV));
+      });
+    }
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
