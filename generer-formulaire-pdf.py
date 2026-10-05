@@ -1,19 +1,28 @@
 #!/usr/bin/env python3
-"""Génère formulaire-rdv.pdf : formulaire PDF remplissable de demande de rendez-vous.
+"""Génère formulaire-rdv.pdf : formulaire PDF remplissable de demande de rendez-vous,
+mis en forme selon le Système de Design de l'État (DSFR) : police Marianne, couleurs,
+champs de saisie, indicateur d'étapes et mise en exergue.
 
 Champs créés (lus par widget-import-rdv.html) :
   nom, prenom, structure
-  date_01 … date_NN   (format jj/mm/aaaa, calendrier dans Acrobat / Firefox)
+  date_01 … date_NN   (format jj/mm/aaaa, calendrier dans Acrobat)
   heure_01 … heure_NN (liste modifiable : 07h00 … 20h00)
 
+Les lignes de créneaux apparaissent une à une (JavaScript Acrobat / Firefox) ;
+les lecteurs sans JavaScript affichent toutes les lignes.
+
 Dépendances : pip install reportlab pypdf
+Polices     : fonts/Marianne-*.ttf (issues du paquet @gouvfr/dsfr)
 Usage       : python3 generer-formulaire-pdf.py [sortie.pdf]
 """
 import io
+import os
 import sys
 
 from reportlab.lib.colors import HexColor, white
 from reportlab.lib.pagesizes import A4
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 from pypdf import PdfReader, PdfWriter
 from pypdf.generic import (ArrayObject, BooleanObject, DictionaryObject, NameObject,
@@ -21,183 +30,263 @@ from pypdf.generic import (ArrayObject, BooleanObject, DictionaryObject, NameObj
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else "formulaire-rdv.pdf"
 
-PRIMARY = HexColor("#000091")
-PRIMARY_SOFT = HexColor("#E5E5FB")
-ACCENT = HexColor("#C9184A")
-INK = HexColor("#1B1B1E")
-INK_SOFT = HexColor("#65656B")
-BORDER = HexColor("#C9C7BE")
-FIELD_BG = HexColor("#F5F4F0")
+# ------------------------------------------------------------------
+# Personnalisation
+# ------------------------------------------------------------------
+TITRE = "Demande de rendez-vous"
+# Bloc-marque de l'État : réservé aux services de l'État. Laisser vide sinon.
+# Exemple : ["Ministère", "de l'Agriculture", "et de la Souveraineté", "alimentaire"]
+BLOC_MARQUE = []
+# Nom du service affiché dans l'en-tête (facultatif)
+SERVICE = ""
+
+# ------------------------------------------------------------------
+# Jetons DSFR
+# ------------------------------------------------------------------
+BLUE_FRANCE = HexColor("#000091")        # --blue-france-sun-113-625
+BLUE_ECUME = HexColor("#6A6AF4")         # --border-default-blue-france (callout)
+GREY_50 = HexColor("#161616")            # --text-title-grey
+GREY_200 = HexColor("#3A3A3A")           # --border-plain-grey (soulignement des champs)
+GREY_425 = HexColor("#666666")           # --text-mention-grey
+GREY_900 = HexColor("#DDDDDD")           # --border-default-grey
+GREY_950 = HexColor("#EEEEEE")           # --background-contrast-grey (fond des champs)
+
+FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
+for style in ("Regular", "Medium", "Bold", "Light"):
+    pdfmetrics.registerFont(TTFont(f"Marianne-{style}", os.path.join(FONT_DIR, f"Marianne-{style}.ttf")))
+F_REG, F_MED, F_BOLD = "Marianne-Regular", "Marianne-Medium", "Marianne-Bold"
+# Les champs de formulaire PDF ne peuvent utiliser que les polices standard :
+# Helvetica (équivalent d'Arial, police de repli officielle du DSFR).
+F_FIELD, F_FIELD_BOLD = "Helvetica", "Helvetica-Bold"
 
 W, H = A4
-M = 36  # marge
+M = 40           # marge
+GAP = 24         # espace entre colonnes de créneaux
+ROW_H = 26
+FIELD_H = 20
 
 HOURS = [f"{h:02d}h{m:02d}" for h in range(7, 21) for m in (0, 30) if not (h == 20 and m == 30)]
 
-# créneaux par page : (lignes par colonne)
-ROWS_P1 = 19
-ROWS_P2 = 28
-TOTAL = 2 * ROWS_P1 + 2 * ROWS_P2
-
 date_fields = []
-columns = []            # premier numéro de créneau de chaque colonne
-label_fields_align = {} # champs libellés à aligner (2 = droite)
+columns = []             # premier numéro de créneau de chaque colonne
+label_fields_align = {}  # champs libellés à aligner (2 = droite)
 
 
-def header(c, title, subtitle):
-    c.setFillColor(PRIMARY)
-    c.rect(0, H - 92, W, 92, stroke=0, fill=1)
-    c.setFillColor(ACCENT)
-    c.rect(0, H - 96, W, 4, stroke=0, fill=1)
-    c.setFillColor(white)
-    c.setFont("Helvetica-Bold", 9)
-    c.drawString(M, H - 30, "PRISE DE RENDEZ-VOUS")
-    c.setFont("Times-Bold", 26)
-    c.drawString(M, H - 58, title)
-    c.setFont("Helvetica", 9.5)
-    c.drawString(M, H - 76, subtitle)
-    # cercles décoratifs
-    c.setStrokeColor(HexColor("#2B2BB0"))
-    c.setLineWidth(14)
-    c.circle(W - 40, H - 20, 46, stroke=1, fill=0)
-    c.setLineWidth(6)
-    c.circle(W - 110, H - 80, 18, stroke=1, fill=0)
+# ------------------------------------------------------------------
+# Composants
+# ------------------------------------------------------------------
+def header(c, compact=False):
+    """En-tête façon fr-header : fond blanc, filet et ombre portée."""
+    top = H - 28
+    x = M
+    base = top - 52
+    if BLOC_MARQUE and not compact:
+        c.setFillColor(GREY_50)
+        c.setFont(F_BOLD, 10.5)
+        c.drawString(x, top - 4, "RÉPUBLIQUE")
+        c.drawString(x, top - 16, "FRANÇAISE")
+        c.setFont("Helvetica-Oblique", 6.5)
+        for k, word in enumerate(("Liberté", "Égalité", "Fraternité")):
+            c.drawString(x, top - 27 - 8 * k, word)
+        c.setFont(F_BOLD, 8)
+        yy = top - 56
+        for line in BLOC_MARQUE:
+            c.drawString(x, yy, line.upper())
+            yy -= 9.5
+        x += 150
+        c.setStrokeColor(GREY_900)
+        c.setLineWidth(0.6)
+        c.line(x - 18, top + 2, x - 18, yy + 6)
+        base = min(base, yy - 4)
+
+    if compact:
+        c.setFillColor(GREY_50)
+        c.setFont(F_BOLD, 14)
+        c.drawString(M, top - 12, TITRE)
+        c.setFillColor(GREY_425)
+        c.setFont(F_REG, 9)
+        c.drawRightString(W - M, top - 12, "Suite des créneaux")
+        base = top - 30
+    else:
+        c.setFillColor(GREY_50)
+        c.setFont(F_BOLD, 22)
+        c.drawString(x, top - 20, TITRE)
+        c.setFillColor(GREY_425)
+        c.setFont(F_REG, 10)
+        c.drawString(x, top - 36, SERVICE or "Formulaire de prise de rendez-vous")
+
+    # filet bas d'en-tête + ombre légère (comme le fr-header)
+    for i, col in enumerate(("#DDDDDD", "#EBEBEB", "#F4F4F4")):
+        c.setStrokeColor(HexColor(col))
+        c.setLineWidth(1)
+        c.line(0, base - i, W, base - i)
+    return base
 
 
-def section(c, y, num, label, hint=None):
-    c.setFillColor(PRIMARY)
-    c.roundRect(M, y - 3, 22, 15, 3, stroke=0, fill=1)
-    c.setFillColor(white)
-    c.setFont("Helvetica-Bold", 8.5)
-    c.drawCentredString(M + 11, y + 1, num)
-    c.setFillColor(INK)
-    c.setFont("Times-Bold", 15)
-    c.drawString(M + 30, y, label)
-    if hint:
-        c.setFillColor(INK_SOFT)
-        c.setFont("Helvetica", 8.5)
-        c.drawString(M + 30, y - 14, hint)
+def callout(c, y, title, text_lines):
+    """Mise en exergue fr-callout : fond gris contrasté, barre bleue à gauche."""
+    h = 30 + 13 * len(text_lines)
+    c.setFillColor(GREY_950)
+    c.rect(M, y - h, W - 2 * M, h, stroke=0, fill=1)
+    c.setFillColor(BLUE_ECUME)
+    c.rect(M, y - h, 4, h, stroke=0, fill=1)
+    c.setFillColor(GREY_50)
+    c.setFont(F_BOLD, 11)
+    c.drawString(M + 18, y - 19, title)
+    c.setFont(F_REG, 9)
+    yy = y - 34
+    for line in text_lines:
+        c.drawString(M + 18, yy, line)
+        yy -= 13
+    return y - h
 
 
-def text_field(c, name, label, x, y, w, tooltip):
-    c.setFillColor(INK_SOFT)
-    c.setFont("Helvetica-Bold", 8)
-    c.drawString(x, y + 26, label.upper())
-    c.acroForm.textfield(
-        name=name, tooltip=tooltip, x=x, y=y, width=w, height=22,
-        borderColor=BORDER, fillColor=FIELD_BG, textColor=INK, borderWidth=1,
-        fontName="Helvetica", fontSize=11, forceBorder=True,
+def stepper(c, y, step, total, title, next_title=None):
+    """Indicateur d'étapes fr-stepper."""
+    c.setFillColor(GREY_425)
+    c.setFont(F_REG, 9)
+    c.drawString(M, y, f"Étape {step} sur {total}")
+    c.setFillColor(GREY_50)
+    c.setFont(F_BOLD, 15)
+    c.drawString(M, y - 19, title)
+    bar_y = y - 32
+    seg = (W - 2 * M - 6 * (total - 1)) / total
+    for i in range(total):
+        c.setFillColor(BLUE_FRANCE if i < step else GREY_950)
+        c.rect(M + i * (seg + 6), bar_y, seg, 6, stroke=0, fill=1)
+    if next_title:
+        c.setFillColor(GREY_425)
+        c.setFont(F_BOLD, 8)
+        c.drawString(M, bar_y - 13, "Étape suivante :")
+        c.setFont(F_REG, 8)
+        c.drawString(M + pdfmetrics.stringWidth("Étape suivante : ", F_BOLD, 8), bar_y - 13, next_title)
+        return bar_y - 13
+    return bar_y
+
+
+def dsfr_field_kwargs(size=10.5):
+    """Champ fr-input : fond gris, soulignement gris foncé de 2 pt."""
+    return dict(
+        fillColor=GREY_950, borderColor=GREY_200, borderWidth=2, borderStyle="underlined",
+        textColor=GREY_50, fontName=F_FIELD, fontSize=size,
     )
 
 
+def input_group(c, name, label, hint, x, y, w):
+    c.setFillColor(GREY_50)
+    c.setFont(F_REG, 10)
+    c.drawString(x, y + FIELD_H + 20, label)
+    c.setFillColor(GREY_425)
+    c.setFont(F_REG, 7.5)
+    c.drawString(x, y + FIELD_H + 8, hint)
+    c.acroForm.textfield(name=name, tooltip=label, x=x, y=y, width=w, height=FIELD_H + 2,
+                         **dsfr_field_kwargs(11))
 
-def label_field(c, name, value, x, y, w, h, size, color, align=0):
-    """Texte sous forme de champ en lecture seule, pour pouvoir le masquer/afficher en JavaScript."""
+
+def label_field(c, name, value, x, y, w, h, size, color, bold=False, align=0):
+    """Texte sous forme de champ en lecture seule, pour pouvoir le masquer / l'afficher."""
     c.acroForm.textfield(
         name=name, value=value, x=x, y=y, width=w, height=h,
         borderWidth=0, borderColor=white, fillColor=white, textColor=color,
-        fontName="Helvetica-Bold", fontSize=size, fieldFlags="readOnly",
+        fontName=F_FIELD_BOLD if bold else F_FIELD, fontSize=size, fieldFlags="readOnly",
     )
     if align:
         label_fields_align[name] = align
 
 
 def slot_column(c, x, y_top, first, rows):
-    col_w = (W - 2 * M - 20) / 2
+    col_w = (W - 2 * M - GAP) / 2
+    date_x, date_w = x + 30, 112
+    hour_x = date_x + date_w + 10
+    hour_w = col_w - (hour_x - x)
     columns.append(first)
-    label_field(c, f"entete_d_{first:02d}", "DATE  (cliquez pour le calendrier)", x + 24, y_top - 1, 150, 12, 7.5, INK_SOFT)
-    label_field(c, f"entete_h_{first:02d}", "HEURE", x + 152, y_top - 1, 60, 12, 7.5, INK_SOFT)
-    row_h = 25
+    label_field(c, f"entete_d_{first:02d}", "Date (jj/mm/aaaa)", date_x - 2, y_top - 2, date_w + 4, 12, 8, GREY_425)
+    label_field(c, f"entete_h_{first:02d}", "Heure", hour_x - 2, y_top - 2, hour_w, 12, 8, GREY_425)
     for r in range(rows):
         i = first + r
-        y = y_top - 22 - r * row_h
-        label_field(c, f"num_{i:02d}", f"{i:02d}", x, y, 30, 19, 9, PRIMARY, align=2)
+        y = y_top - 24 - r * ROW_H
+        label_field(c, f"num_{i:02d}", f"{i:02d}", x, y + 1, 26, FIELD_H - 2, 9, BLUE_FRANCE, bold=True, align=2)
         dname = f"date_{i:02d}"
         c.acroForm.textfield(
             name=dname, tooltip=f"Créneau {i} - date (jj/mm/aaaa)",
-            x=x + 34, y=y, width=110, height=19,
-            borderColor=BORDER, fillColor=white, textColor=INK, borderWidth=1,
-            fontName="Helvetica", fontSize=10, maxlen=10,
+            x=date_x, y=y, width=date_w, height=FIELD_H, maxlen=10, **dsfr_field_kwargs(),
         )
         date_fields.append(dname)
         c.acroForm.choice(
             name=f"heure_{i:02d}", tooltip=f"Créneau {i} - heure",
             value=" ", options=[" "] + HOURS, fieldFlags="combo edit",
-            x=x + 152, y=y, width=col_w - 158, height=19,
-            borderColor=BORDER, fillColor=white, textColor=INK, borderWidth=1,
-            fontName="Helvetica", fontSize=10,
+            x=hour_x, y=y, width=hour_w, height=FIELD_H, **dsfr_field_kwargs(),
         )
 
 
+def rows_fitting(y_top, y_min):
+    return int((y_top - 24 - y_min) // ROW_H) + 1
+
+
 def footer(c, page, pages):
-    c.setStrokeColor(BORDER)
-    c.setLineWidth(0.6)
-    c.line(M, 44, W - M, 44)
-    c.setFillColor(INK_SOFT)
-    c.setFont("Helvetica", 7.5)
-    c.drawString(M, 32, "Enregistrez ce PDF une fois rempli, puis renvoyez-le tel quel par mail. "
-                        "Il sera importé automatiquement dans Grist.")
-    c.drawRightString(W - M, 32, f"{page} / {pages}")
+    c.setStrokeColor(BLUE_FRANCE)
+    c.setLineWidth(2)
+    c.line(M, 52, W - M, 52)
+    c.setFillColor(GREY_425)
+    c.setFont(F_REG, 7.5)
+    c.drawString(M, 38, "Enregistrez ce PDF une fois rempli, puis renvoyez-le tel quel par courriel.")
+    c.drawString(M, 28, "Vos réponses seront importées automatiquement.")
+    c.setFont(F_MED, 7.5)
+    c.drawRightString(W - M, 38, f"Page {page} sur {pages}")
+
+
+# ------------------------------------------------------------------
+# Document
+# ------------------------------------------------------------------
+TOTAL = 0
 
 
 def build_base():
+    global TOTAL
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
-    c.setTitle("Demande de rendez-vous")
+    c.setTitle(TITRE)
     c.setSubject("Formulaire de prise de rendez-vous")
-    col_w = (W - 2 * M - 20) / 2
+    col_w = (W - 2 * M - GAP) / 2
+    y_min = 72
 
     # ---------------- Page 1 ----------------
-    header(c, "Demande de rendez-vous",
-           "Remplissez vos coordonnées puis indiquez autant de créneaux que vous le souhaitez.")
+    y = header(c) - 22
+    y = callout(c, y, "Comment remplir ce formulaire ?", [
+        "1. Indiquez vos coordonnées.",
+        "2. Cliquez sur une date pour ouvrir le calendrier, puis choisissez l'heure dans la liste (ou tapez-la, ex. 13h15).",
+        "     Une nouvelle ligne apparaît dès que vous remplissez la précédente.",
+        "3. Enregistrez le PDF et renvoyez-le par courriel.",
+    ]) - 26
 
-    y = H - 132
-    section(c, y, "01", "Vous")
-    y -= 52
-    fw = (W - 2 * M - 24) / 3
-    text_field(c, "nom", "Nom", M, y, fw, "Nom")
-    text_field(c, "prenom", "Prénom", M + fw + 12, y, fw, "Prénom")
-    text_field(c, "structure", "Structure", M + 2 * (fw + 12), y, fw, "Structure")
+    y = stepper(c, y, 1, 2, "Vos coordonnées", "Vos disponibilités") - 22
+    fw = (W - 2 * M - 2 * 16) / 3
+    fy = y - FIELD_H - 26
+    input_group(c, "nom", "Nom", "Votre nom de famille", M, fy, fw)
+    input_group(c, "prenom", "Prénom", "Votre prénom", M + fw + 16, fy, fw)
+    input_group(c, "structure", "Structure", "Organisme, entreprise, association…", M + 2 * (fw + 16), fy, fw)
 
-    y -= 46
-    section(c, y, "02", "Vos disponibilités",
-            "Cliquez sur une date pour ouvrir le calendrier, puis choisissez l'heure dans la liste "
-            "(ou tapez-la, ex. 13h15).")
+    y = fy - 30
+    y = stepper(c, y, 2, 2, "Vos disponibilités") - 22
 
-    # encadré conseil
-    by = y - 50
-    c.setFillColor(PRIMARY_SOFT)
-    c.roundRect(M, by, W - 2 * M, 26, 6, stroke=0, fill=1)
-    c.setFillColor(PRIMARY)
-    c.setFont("Helvetica-Bold", 8.5)
-    c.drawString(M + 10, by + 10, "Astuce :")
-    c.setFont("Helvetica", 8.5)
-    c.drawString(M + 50, by + 10, "Une nouvelle ligne apparaît dès que vous remplissez la précédente "
-                                  f"(jusqu'à {TOTAL} créneaux).")
-
-    y_top = by - 22
-    slot_column(c, M, y_top, 1, ROWS_P1)
-    slot_column(c, M + col_w + 20, y_top, 1 + ROWS_P1, ROWS_P1)
+    rows1 = rows_fitting(y, y_min)
+    slot_column(c, M, y, 1, rows1)
+    slot_column(c, M + col_w + GAP, y, 1 + rows1, rows1)
     footer(c, 1, 2)
     c.showPage()
 
     # ---------------- Page 2 ----------------
-    c.setFillColor(PRIMARY)
-    c.rect(0, H - 50, W, 50, stroke=0, fill=1)
-    c.setFillColor(ACCENT)
-    c.rect(0, H - 53, W, 3, stroke=0, fill=1)
-    c.setFillColor(white)
-    c.setFont("Times-Bold", 17)
-    c.drawString(M, H - 32, "Créneaux supplémentaires")
-    y_top = H - 84
-    start = 2 * ROWS_P1 + 1
-    slot_column(c, M, y_top, start, ROWS_P2)
-    slot_column(c, M + col_w + 20, y_top, start + ROWS_P2, ROWS_P2)
+    y = header(c, compact=True) - 30
+    rows2 = rows_fitting(y, y_min)
+    start = 2 * rows1 + 1
+    slot_column(c, M, y, start, rows2)
+    slot_column(c, M + col_w + GAP, y, start + rows2, rows2)
     footer(c, 2, 2)
     # champ technique invisible : son calcul relance l'affichage des lignes à chaque saisie
     c.acroForm.textfield(name="_maj", x=0, y=0, width=1, height=1, borderWidth=0, fieldFlags="readOnly")
     c.showPage()
     c.save()
+    TOTAL = 2 * rows1 + 2 * rows2
     return buf.getvalue()
 
 
@@ -269,7 +358,7 @@ def add_behaviour(pdf_bytes):
     # script document : s'exécute à l'ouverture et masque les lignes vides
     # (les lecteurs sans JavaScript affichent simplement toutes les lignes)
     writer.add_js(DOC_JS % {"total": TOTAL, "cols": "[" + ",".join(str(c) for c in columns) + "]"})
-    writer.add_metadata({"/Title": "Demande de rendez-vous"})
+    writer.add_metadata({"/Title": TITRE})
     out = io.BytesIO()
     writer.write(out)
     return out.getvalue()
