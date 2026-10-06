@@ -1,0 +1,2141 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Carte multicouches</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.2/proj4.js"></script>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+
+<style>
+  :root{
+    --bg:#F5F4F0; --surface:#FFFFFF; --ink:#1B1B1E; --ink-soft:#5F5F66; --ink-faint:#9A9A9F;
+    --border:#E2E0D8; --primary:#000091; --primary-soft:#E5E5FB; --accent:#C9184A; --accent-soft:#FBE3EA;
+    --success:#18753C; --success-soft:#E2F3E8; --warning:#B34000; --warning-soft:#FBE9DD;
+    --radius:9px; --shadow:0 1px 2px rgba(20,20,30,.06), 0 10px 28px -16px rgba(20,20,30,.35);
+    --font-body:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    --font-mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:var(--font-body); font-size:13px; line-height:1.45; -webkit-font-smoothing:antialiased; }
+  button,input,select{ font-family:inherit; font-size:inherit; color:inherit; }
+
+  .app{ display:flex; flex-direction:column; height:100vh; min-height:420px; }
+
+  /* ---------- barre du haut ---------- */
+  .topbar{ display:flex; align-items:center; gap:10px; padding:8px 12px; background:var(--primary); color:#fff; flex:0 0 auto; }
+  .brand{ display:flex; flex-direction:column; min-width:0; }
+  .brand h1{ font-size:14px; font-weight:700; margin:0; white-space:nowrap; }
+  .brand .sub{ font-size:11px; opacity:.8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:280px; }
+  .place-search{ position:relative; flex:1 1 auto; max-width:420px; margin-left:auto; }
+  .place-search input{ width:100%; border:none; border-radius:7px; padding:7px 10px; background:rgba(255,255,255,.14); color:#fff; outline:none; }
+  .place-search input::placeholder{ color:rgba(255,255,255,.7); }
+  .place-search input:focus{ background:#fff; color:var(--ink); }
+  .top-btn{ border:1px solid rgba(255,255,255,.35); background:transparent; color:#fff; border-radius:7px; padding:6px 10px; cursor:pointer; white-space:nowrap; font-weight:600; }
+  .top-btn:hover{ background:rgba(255,255,255,.12); }
+  .top-btn.on{ background:#fff; color:var(--primary); border-color:#fff; }
+
+  .suggestions{ position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:2000; background:#fff; color:var(--ink); border:1px solid var(--border); border-radius:8px; box-shadow:var(--shadow); max-height:260px; overflow-y:auto; display:none; }
+  .suggestions.open{ display:block; }
+  .suggestion{ padding:7px 10px; cursor:pointer; border-bottom:1px solid #F0EFE9; }
+  .suggestion:last-child{ border-bottom:none; }
+  .suggestion:hover,.suggestion.active{ background:var(--primary-soft); }
+  .suggestion .meta{ font-size:11px; color:var(--ink-soft); }
+
+  /* ---------- corps ---------- */
+  .body{ display:flex; flex:1 1 auto; min-height:0; position:relative; }
+  .map-wrap{ flex:1 1 auto; position:relative; min-width:0; background:#dfe6e2; }
+  #map{ position:absolute; inset:0; }
+
+  .side{ background:var(--surface); display:flex; flex-direction:column; min-height:0; }
+  #list-panel{ width:290px; flex:0 0 290px; border-right:1px solid var(--border); }
+  #config-panel{ width:380px; flex:0 0 380px; border-left:1px solid var(--border); }
+  .side.hidden{ display:none; }
+  @media (max-width: 900px){
+    #list-panel,#config-panel{ position:absolute; top:0; bottom:0; z-index:1500; box-shadow:var(--shadow); }
+    #list-panel{ left:0; width:min(290px,85vw); }
+    #config-panel{ right:0; width:min(380px,100vw); }
+  }
+
+  /* ---------- liste ---------- */
+  .list-head{ padding:10px 12px; border-bottom:1px solid var(--border); display:flex; flex-direction:column; gap:6px; }
+  .list-head input{ width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:7px; background:#FCFCFB; outline:none; }
+  .list-head input:focus{ border-color:var(--primary); background:#fff; }
+  .list-meta{ font-size:11px; color:var(--ink-faint); display:flex; justify-content:space-between; }
+  .list{ overflow-y:auto; flex:1 1 auto; }
+  .item{ display:flex; gap:9px; padding:8px 12px; border-bottom:1px solid #F0EFE9; cursor:pointer; align-items:flex-start; }
+  .item:hover{ background:#FAFAF7; }
+  .item.selected{ background:var(--primary-soft); }
+  .item .dot{ width:10px; height:10px; border-radius:50%; margin-top:4px; flex:0 0 auto; border:1px solid rgba(0,0,0,.15); }
+  .item .dot.none{ background:transparent; border:1.5px dashed var(--ink-faint); }
+  .item .t{ font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .item .s{ font-size:11.5px; color:var(--ink-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .item .txt{ min-width:0; flex:1; }
+
+  /* ---------- panneau de configuration ---------- */
+  .tabs{ display:flex; border-bottom:1px solid var(--border); flex:0 0 auto; }
+  .tab{ flex:1; border:none; background:none; padding:10px 4px 9px; cursor:pointer; font-weight:600; font-size:12px; color:var(--ink-soft); border-bottom:2px solid transparent; }
+  .tab:hover{ color:var(--ink); }
+  .tab.active{ color:var(--primary); border-bottom-color:var(--primary); }
+  .tab .ico{ display:block; font-size:16px; line-height:1.1; margin-bottom:2px; }
+  .tab-body{ overflow-y:auto; flex:1 1 auto; padding:12px 14px 20px; }
+  .panel-foot{ border-top:1px solid var(--border); padding:8px 14px; font-size:11px; color:var(--ink-faint); display:flex; justify-content:space-between; gap:8px; align-items:center; }
+
+  .sec{ margin:0 0 16px; }
+  .sec h3{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-faint); margin:0 0 8px; }
+  .row{ display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .row > label{ flex:0 0 120px; font-size:12px; color:var(--ink-soft); }
+  .row > .ctl{ flex:1; min-width:0; display:flex; gap:6px; align-items:center; }
+  .ctl select,.ctl input[type=text],.ctl input[type=number],.ctl input[type=url],.ctl input[type=search]{ width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:6px; background:#FCFCFB; outline:none; min-width:0; }
+  .ctl select:focus,.ctl input:focus{ border-color:var(--primary); background:#fff; }
+  .ctl input[type=color]{ width:36px; height:28px; padding:0 2px; border:1px solid var(--border); border-radius:6px; background:#fff; flex:0 0 auto; cursor:pointer; }
+  .ctl input[type=range]{ flex:1; }
+  .ctl .val{ font-family:var(--font-mono); font-size:11px; color:var(--ink-soft); min-width:34px; text-align:right; }
+  .chk{ display:flex; gap:8px; align-items:flex-start; margin-bottom:7px; cursor:pointer; font-size:12.5px; }
+  .chk input{ margin-top:2px; }
+  .chk small{ display:block; color:var(--ink-faint); font-size:11px; }
+  .help{ font-size:11.5px; color:var(--ink-soft); background:#F8F7F3; border-radius:7px; padding:8px 10px; margin:0 0 10px; }
+  .help code{ font-family:var(--font-mono); font-size:11px; }
+
+  .modes{ display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:12px; }
+  .mode{ border:1px solid var(--border); border-radius:8px; padding:7px 9px; cursor:pointer; background:#fff; text-align:left; }
+  .mode:hover{ border-color:var(--primary); }
+  .mode.active{ border-color:var(--primary); background:var(--primary-soft); box-shadow:inset 0 0 0 1px var(--primary); }
+  .mode b{ display:block; font-size:12px; }
+  .mode span{ font-size:10.5px; color:var(--ink-soft); }
+
+  .btn{ border:1px solid var(--border); background:#fff; border-radius:7px; padding:6px 10px; cursor:pointer; font-weight:600; font-size:12px; white-space:nowrap; }
+  .btn:hover{ border-color:var(--primary); color:var(--primary); }
+  .btn.primary{ background:var(--primary); color:#fff; border-color:var(--primary); }
+  .btn.primary:hover{ filter:brightness(1.15); color:#fff; }
+  .btn:disabled{ opacity:.5; cursor:default; }
+  .btn.sm{ padding:3px 7px; font-size:11px; }
+  .btn.icon{ padding:3px 6px; }
+
+  .fields-list{ border:1px solid var(--border); border-radius:8px; overflow:hidden; margin-bottom:8px; }
+  .field-item{ display:flex; align-items:center; gap:6px; padding:5px 8px; border-bottom:1px solid #F0EFE9; background:#fff; }
+  .field-item:last-child{ border-bottom:none; }
+  .field-item .name{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .field-item .type{ font-family:var(--font-mono); font-size:10px; color:var(--ink-faint); }
+  .empty-note{ padding:10px; color:var(--ink-faint); font-size:12px; text-align:center; }
+
+  .diag{ border-radius:8px; padding:9px 10px; font-size:12px; margin-bottom:12px; }
+  .diag.ok{ background:var(--success-soft); color:var(--success); }
+  .diag.warn{ background:var(--warning-soft); color:var(--warning); }
+  .diag.info{ background:var(--primary-soft); color:var(--primary); }
+  .diag ul{ margin:6px 0 0; padding-left:16px; }
+  .diag li{ font-size:11.5px; }
+
+  .cat-colors{ max-height:200px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; padding:4px 8px; }
+  .cat-row{ display:flex; align-items:center; gap:8px; padding:3px 0; font-size:12px; }
+  .cat-row input[type=color]{ width:26px; height:22px; border:1px solid var(--border); border-radius:5px; padding:0 1px; cursor:pointer; }
+  .cat-row span{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  .chips{ display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px; }
+  .chip{ display:inline-flex; align-items:center; gap:5px; background:var(--primary-soft); color:var(--primary); border-radius:999px; padding:3px 4px 3px 9px; font-size:11.5px; font-weight:600; }
+  .chip button{ border:none; background:rgba(0,0,145,.12); color:var(--primary); border-radius:50%; width:17px; height:17px; line-height:15px; padding:0; cursor:pointer; }
+
+  .layer-group h4{ font-size:12px; margin:12px 0 6px; color:var(--ink); }
+  .layer{ display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px dashed #EEECE5; }
+  .layer:last-child{ border-bottom:none; }
+  .layer .ln{ flex:1; min-width:0; }
+  .layer .ln b{ font-weight:500; font-size:12.5px; display:block; }
+  .layer .ln small{ color:var(--ink-faint); font-size:10.5px; }
+  .layer input[type=range]{ width:70px; }
+
+  .src-badge{ display:inline-block; font-size:9.5px; font-weight:700; letter-spacing:.04em; padding:1px 5px; border-radius:4px; background:#EEE; color:#555; margin-left:4px; vertical-align:1px; }
+
+  /* ---------- éléments sur la carte ---------- */
+  .legend{ background:rgba(255,255,255,.96); border-radius:8px; box-shadow:var(--shadow); padding:8px 10px; max-width:230px; max-height:45vh; overflow-y:auto; font-size:11.5px; }
+  .legend .lt{ font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft); margin-bottom:5px; }
+  .legend .li{ display:flex; align-items:center; gap:7px; padding:1px 0; }
+  .legend .sw{ width:11px; height:11px; border-radius:50%; flex:0 0 auto; border:1px solid rgba(0,0,0,.15); }
+  .legend .sw.sq{ border-radius:3px; }
+  .legend .grad{ height:10px; border-radius:4px; margin:3px 0; }
+  .legend .gl{ display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:10px; color:var(--ink-soft); }
+  .legend + .legend{ margin-top:6px; }
+
+  .progress{ position:absolute; left:50%; bottom:22px; transform:translateX(-50%); z-index:900; background:rgba(27,27,30,.86); color:#fff; border-radius:999px; padding:6px 14px; font-size:12px; display:none; white-space:nowrap; }
+  .progress.show{ display:block; }
+
+  .leaflet-popup-content{ margin:12px 14px; min-width:220px; max-width:320px; font-family:var(--font-body); font-size:12.5px; }
+  .pp-title{ font-weight:700; font-size:14px; margin-bottom:1px; }
+  .pp-sub{ color:var(--ink-soft); margin-bottom:6px; }
+  .pp-table{ border-collapse:collapse; width:100%; margin:4px 0 2px; }
+  .pp-table td{ padding:2px 0; vertical-align:top; border-bottom:1px solid #F2F1EC; }
+  .pp-table td:first-child{ color:var(--ink-faint); padding-right:8px; white-space:nowrap; font-size:11.5px; }
+  .pp-enrich{ margin-top:8px; border-top:1px solid var(--border); padding-top:6px; }
+  .pp-enrich .er{ display:flex; gap:6px; padding:2px 0; font-size:12px; }
+  .pp-enrich .er .k{ color:var(--ink-faint); flex:0 0 72px; font-size:11.5px; }
+  .pp-enrich .loading{ color:var(--ink-faint); font-style:italic; }
+  .pp-links{ margin-top:7px; display:flex; flex-wrap:wrap; gap:4px; }
+  .pp-links a{ font-size:11px; text-decoration:none; color:var(--primary); background:var(--primary-soft); border-radius:5px; padding:2px 6px; }
+  .pp-coords{ font-family:var(--font-mono); font-size:10.5px; color:var(--ink-faint); margin-top:5px; }
+
+  .map-label{ background:rgba(255,255,255,.92); border:none; box-shadow:0 1px 2px rgba(0,0,0,.25); font-size:11px; font-weight:600; padding:1px 5px; border-radius:4px; }
+  .map-label::before{ display:none; }
+  .commune-label{ background:transparent; border:none; box-shadow:none; font-weight:700; font-size:11px; text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff; }
+  .commune-label::before{ display:none; }
+  .pin-icon{ background:none; border:none; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <h1>Carte multicouches</h1>
+      <div class="sub" id="status">Connexion à Grist…</div>
+    </div>
+    <div class="place-search">
+      <input type="search" id="place-input" placeholder="Aller à : adresse, commune, lieu…" autocomplete="off">
+      <div class="suggestions" id="place-suggestions"></div>
+    </div>
+    <button class="top-btn" id="btn-list" title="Afficher la liste des éléments">☰ Liste</button>
+    <button class="top-btn" id="btn-config" title="Paramètres de la carte">⚙ Paramètres</button>
+  </header>
+
+  <div class="body">
+    <aside class="side hidden" id="list-panel">
+      <div class="list-head">
+        <input type="search" id="list-search" placeholder="Filtrer les éléments…">
+        <div class="list-meta"><span id="list-count">0 élément</span><a href="#" id="fit-all">Tout afficher</a></div>
+      </div>
+      <div class="list" id="list"></div>
+    </aside>
+
+    <main class="map-wrap">
+      <div id="map"></div>
+      <div class="progress" id="progress"></div>
+    </main>
+
+    <aside class="side hidden" id="config-panel">
+      <nav class="tabs" id="tabs">
+        <button class="tab active" data-tab="geo"><span class="ico">📍</span>Géographie</button>
+        <button class="tab" data-tab="data"><span class="ico">📋</span>Données</button>
+        <button class="tab" data-tab="style"><span class="ico">🎨</span>Style</button>
+        <button class="tab" data-tab="layers"><span class="ico">🗺️</span>Couches</button>
+      </nav>
+      <div class="tab-body" id="tab-body"></div>
+      <div class="panel-foot">
+        <span id="save-state">Réglages enregistrés avec la vue</span>
+        <button class="btn sm" id="btn-reset" title="Revenir aux réglages détectés automatiquement">Réinitialiser</button>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // =====================================================================
+  // Sources publiques
+  // =====================================================================
+  var API = {
+    geocode: 'https://data.geopf.fr/geocodage/search',
+    completion: 'https://data.geopf.fr/geocodage/completion/',
+    geoApi: 'https://geo.api.gouv.fr',
+    cadastre: 'https://apicarto.ign.fr/api/cadastre/parcelle',
+    alti: 'https://data.geopf.fr/altimetrie/1.0/calcul/alti/rest/elevation.json',
+    meteo: 'https://api.open-meteo.com/v1/forecast',
+    entreprises: 'https://recherche-entreprises.api.gouv.fr/search',
+    georisques: 'https://georisques.gouv.fr/api/v1/gaspar/risques',
+    rainviewer: 'https://api.rainviewer.com/public/weather-maps.json',
+    departements: 'https://cdn.jsdelivr.net/gh/gregoiredavid/france-geojson@master/departements-version-simplifiee.geojson',
+    regions: 'https://cdn.jsdelivr.net/gh/gregoiredavid/france-geojson@master/regions-version-simplifiee.geojson'
+  };
+
+  function ignWmts(layer, format, style) {
+    return 'https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=' + layer +
+      '&STYLE=' + encodeURIComponent(style || 'normal') + '&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=' +
+      encodeURIComponent(format || 'image/png');
+  }
+  var IGN_ATTR = '&copy; <a href="https://www.ign.fr" target="_blank">IGN</a> – Géoplateforme';
+  var OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>';
+
+  var BASEMAPS = {
+    planign:  { name: 'Plan IGN', url: ignWmts('GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2'), opts: { maxZoom: 19, maxNativeZoom: 19, attribution: IGN_ATTR } },
+    ortho:    { name: 'Photographies aériennes IGN', url: ignWmts('ORTHOIMAGERY.ORTHOPHOTOS', 'image/jpeg'), opts: { maxZoom: 20, maxNativeZoom: 19, attribution: IGN_ATTR } },
+    osm:      { name: 'OpenStreetMap', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', opts: { maxZoom: 19, attribution: OSM_ATTR } },
+    positron: { name: 'Clair (Carto)', url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', opts: { maxZoom: 20, subdomains: 'abcd', attribution: OSM_ATTR + ' &copy; CARTO' } },
+    dark:     { name: 'Sombre (Carto)', url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', opts: { maxZoom: 20, subdomains: 'abcd', attribution: OSM_ATTR + ' &copy; CARTO' } },
+    topo:     { name: 'Topographique (OpenTopoMap)', url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', opts: { maxZoom: 17, attribution: OSM_ATTR + ' &copy; OpenTopoMap' } },
+    esri:     { name: 'Satellite (Esri)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', opts: { maxZoom: 19, attribution: '&copy; Esri' } },
+    none:     { name: 'Aucun fond', url: null }
+  };
+
+  // Catalogue de couches publiques superposables
+  var OVERLAYS = [
+    { group: 'Cadastre & limites', items: [
+      { id: 'cadastre', name: 'Parcelles cadastrales', src: 'IGN', type: 'xyz', url: ignWmts('CADASTRALPARCELS.PARCELLAIRE_EXPRESS', 'image/png', 'PCI vecteur'), opts: { maxZoom: 20, maxNativeZoom: 19, attribution: IGN_ATTR }, note: 'Visible à partir du zoom 13' },
+      { id: 'limites', name: 'Limites administratives', src: 'IGN', type: 'xyz', url: ignWmts('LIMITES_ADMINISTRATIVES_EXPRESS.LATEST'), opts: { maxZoom: 19, attribution: IGN_ATTR } },
+      { id: 'departements', name: 'Contours des départements', src: 'IGN/Etalab', type: 'geojson', url: API.departements, style: { color: '#000091', weight: 1.5, fill: false } },
+      { id: 'regions', name: 'Contours des régions', src: 'IGN/Etalab', type: 'geojson', url: API.regions, style: { color: '#C9184A', weight: 2, fill: false } }
+    ]},
+    { group: 'Agriculture & environnement', items: [
+      { id: 'rpg', name: 'Parcelles agricoles (RPG)', src: 'IGN/ASP', type: 'xyz', url: ignWmts('LANDUSE.AGRICULTURE.LATEST'), opts: { maxZoom: 19, attribution: IGN_ATTR + ' / ASP' }, note: 'Registre parcellaire graphique' },
+      { id: 'znieff1', name: 'ZNIEFF type 1', src: 'INPN', type: 'xyz', url: ignWmts('PROTECTEDAREAS.ZNIEFF1'), opts: { maxZoom: 19, attribution: IGN_ATTR + ' / MNHN' } },
+      { id: 'n2000sic', name: 'Natura 2000 – Habitats', src: 'INPN', type: 'xyz', url: ignWmts('PROTECTEDAREAS.SIC'), opts: { maxZoom: 19, attribution: IGN_ATTR + ' / MNHN' } },
+      { id: 'n2000zps', name: 'Natura 2000 – Oiseaux', src: 'INPN', type: 'xyz', url: ignWmts('PROTECTEDAREAS.ZPS'), opts: { maxZoom: 19, attribution: IGN_ATTR + ' / MNHN' } },
+      { id: 'pnr', name: 'Parcs naturels régionaux', src: 'INPN', type: 'xyz', url: ignWmts('PROTECTEDAREAS.PNR'), opts: { maxZoom: 19, attribution: IGN_ATTR + ' / MNHN' } }
+    ]},
+    { group: 'Relief, eau & réseaux', items: [
+      { id: 'courbes', name: 'Courbes de niveau', src: 'IGN', type: 'xyz', url: ignWmts('ELEVATION.CONTOUR.LINE'), opts: { maxZoom: 19, attribution: IGN_ATTR } },
+      { id: 'hydro', name: 'Hydrographie', src: 'IGN', type: 'xyz', url: ignWmts('HYDROGRAPHY.HYDROGRAPHY'), opts: { maxZoom: 19, attribution: IGN_ATTR } },
+      { id: 'routes', name: 'Routes', src: 'IGN', type: 'xyz', url: ignWmts('TRANSPORTNETWORKS.ROADS'), opts: { maxZoom: 19, attribution: IGN_ATTR } },
+      { id: 'batiments', name: 'Bâtiments', src: 'IGN', type: 'xyz', url: ignWmts('BUILDINGS.BUILDINGS'), opts: { maxZoom: 20, maxNativeZoom: 19, attribution: IGN_ATTR } }
+    ]},
+    { group: 'Géologie & risques', items: [
+      { id: 'geol', name: 'Carte géologique 1/50 000', src: 'BRGM', type: 'wms', url: 'https://geoservices.brgm.fr/geologie', layers: 'SCAN_H_GEOL50', opts: { attribution: '&copy; BRGM' } },
+      { id: 'argiles', name: 'Retrait-gonflement des argiles', src: 'Géorisques', type: 'wms', url: 'https://mapsref.brgm.fr/wxs/georisques/risques', layers: 'ALEA_SYNTHESE_01_01FXX', opts: { attribution: '&copy; BRGM / Géorisques' } },
+      { id: 'cavites', name: 'Cavités souterraines', src: 'Géorisques', type: 'wms', url: 'https://mapsref.brgm.fr/wxs/georisques/risques', layers: 'CAVITE_LOCALISEE', opts: { attribution: '&copy; BRGM / Géorisques' } },
+      { id: 'mvt', name: 'Mouvements de terrain', src: 'Géorisques', type: 'wms', url: 'https://mapsref.brgm.fr/wxs/georisques/risques', layers: 'MVT_LOCALISE', opts: { attribution: '&copy; BRGM / Géorisques' } }
+    ]},
+    { group: 'Météo', items: [
+      { id: 'radar', name: 'Radar de précipitations (temps réel)', src: 'RainViewer', type: 'rainviewer', note: 'Dernière image radar, actualisée toutes les 10 min' }
+    ]}
+  ];
+  var OVERLAY_BY_ID = {};
+  OVERLAYS.forEach(function (g) { g.items.forEach(function (it) { OVERLAY_BY_ID[it.id] = it; }); });
+
+  // =====================================================================
+  // Projections
+  // =====================================================================
+  if (window.proj4) {
+    proj4.defs('EPSG:2154', '+proj=lcc +lat_0=46.5 +lon_0=3 +lat_1=49 +lat_2=44 +x_0=700000 +y_0=6600000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs');
+    proj4.defs('EPSG:27572', '+proj=lcc +lat_1=46.8 +lat_0=46.8 +lon_0=0 +k_0=0.99987742 +x_0=600000 +y_0=2200000 +a=6378249.2 +b=6356515 +towgs84=-168,-60,320,0,0,0,0 +pm=paris +units=m +no_defs');
+  }
+  var CRS_LIST = [
+    ['auto', 'Détection automatique'],
+    ['EPSG:4326', 'WGS 84 (degrés décimaux, GPS)'],
+    ['EPSG:2154', 'Lambert 93 (mètres)'],
+    ['EPSG:27572', 'Lambert II étendu (mètres)'],
+    ['EPSG:3857', 'Web Mercator (mètres)']
+  ];
+  // Convertit [x (lon/est), y (lat/nord)] vers [lon, lat] WGS84
+  function toWgs([x, y], crs) {
+    if (!isFinite(x) || !isFinite(y)) return null;
+    var c = crs;
+    if (c === 'auto') {
+      if (Math.abs(x) <= 180 && Math.abs(y) <= 90) c = 'EPSG:4326';
+      else if (x > 0 && x < 1300000 && y > 6000000 && y < 7200000) c = 'EPSG:2154';
+      else if (x > 0 && x < 1300000 && y > 1600000 && y < 2800000) c = 'EPSG:27572';
+      else c = 'EPSG:3857';
+    }
+    if (c === 'EPSG:4326') return [x, y];
+    if (!window.proj4) return null;
+    try { var r = proj4(c, 'EPSG:4326', [x, y]); return isFinite(r[0]) && isFinite(r[1]) ? r : null; } catch (e) { return null; }
+  }
+
+  // =====================================================================
+  // Modes de géolocalisation
+  // =====================================================================
+  var GEO_MODES = [
+    { id: 'latlon',   name: 'Latitude / Longitude', desc: '2 colonnes (GPS, Lambert…)' },
+    { id: 'combined', name: 'Coordonnées combinées', desc: '"48.85, 2.35" dans 1 colonne' },
+    { id: 'address',  name: 'Adresse postale', desc: 'Géocodage BAN / IGN' },
+    { id: 'geometry', name: 'Géométrie GeoJSON / WKT', desc: 'Points, lignes, polygones' },
+    { id: 'commune',  name: 'Code commune INSEE', desc: 'Contour ou centre de commune' },
+    { id: 'postal',   name: 'Code postal', desc: 'Centre des communes' },
+    { id: 'departement', name: 'Département', desc: 'Code (01…976) → contour' },
+    { id: 'region',   name: 'Région', desc: 'Code INSEE → contour' },
+    { id: 'siret',    name: 'SIRET / SIREN', desc: 'Siège de l\'entreprise (Sirene)' },
+    { id: 'parcelle', name: 'Parcelle cadastrale', desc: 'Identifiant 14 caractères' }
+  ];
+
+  // =====================================================================
+  // Palettes
+  // =====================================================================
+  var CAT_PALETTE = ['#000091', '#C9184A', '#18753C', '#B34000', '#6E445A', '#007C7C', '#716043', '#3D5A80', '#E4794A', '#5770BE', '#9A6324', '#A558A0', '#2B5797', '#68A532', '#CE614A'];
+  var SEQ_PALETTES = {
+    viridis: ['#440154', '#3b528b', '#21918c', '#5ec962', '#fde725'],
+    bleus:   ['#deebf7', '#9ecae1', '#4292c6', '#2171b5', '#08306b'],
+    verts:   ['#e5f5e0', '#a1d99b', '#41ab5d', '#238b45', '#00441b'],
+    rouges:  ['#fee5d9', '#fcae91', '#fb6a4a', '#de2d26', '#a50f15'],
+    chaleur: ['#ffffb2', '#fecc5c', '#fd8d3c', '#f03b20', '#bd0026'],
+    divergent: ['#2166ac', '#67a9cf', '#f7f7f7', '#ef8a62', '#b2182b']
+  };
+
+  // =====================================================================
+  // Configuration
+  // =====================================================================
+  function defaultCfg() {
+    return {
+      geo: { mode: 'latlon', lat: '', lon: '', crs: 'auto', combined: '', combinedOrder: 'latlon', address: [], geometry: '',
+             commune: '', communeShape: 'contour', postal: '', departement: '', region: '', siret: '', parcelle: '',
+             fallbackAddress: '', writeLat: '', writeLon: '' },
+      data: { title: '', subtitle: '', fields: [], label: '', link: '', hideEmpty: true, selectByBounds: false },
+      style: { basemap: 'planign', marker: 'circle', size: 7, sizeBy: '', sizeMax: 22, color: '#000091', colorBy: '',
+               palette: 'viridis', classes: 'continu', catColors: {}, opacity: 0.9, stroke: '#ffffff',
+               cluster: false, heatmap: false, heatRadius: 25, labels: false,
+               zoneFill: '#000091', zoneOpacity: 0.25, zoneStroke: '#000091', zoneWeight: 1.5,
+               communeContour: 'none', communeList: [], communeColor: '#C9184A', communeWeight: 2, communeFill: 0.05,
+               communeDash: false, communeNames: true, legend: true, fit: true },
+      layers: { active: [], opacity: {}, custom: [] },
+      enrich: { commune: true, altitude: true, meteo: true, parcelle: true, risques: false, inspector: true }
+    };
+  }
+
+  function deepMerge(base, over) {
+    if (!over || typeof over !== 'object') return base;
+    Object.keys(base).forEach(function (k) {
+      if (!(k in over)) return;
+      if (base[k] && typeof base[k] === 'object' && !Array.isArray(base[k]) && over[k] && typeof over[k] === 'object' && !Array.isArray(over[k])) {
+        base[k] = deepMerge(base[k], over[k]);
+      } else {
+        base[k] = over[k];
+      }
+    });
+    return base;
+  }
+
+  var LS_KEY = 'grist-carte-multicouches:cfg';
+  var state = {
+    cfg: defaultCfg(),
+    cfgLoaded: false,       // une config a-t-elle été lue depuis Grist ?
+    cfgString: '',
+    records: [],
+    columns: [],            // [{id, label, type}]
+    colMeta: null,          // métadonnées issues de Grist (ou null)
+    tableId: null,
+    selectedId: null,
+    geoms: {},              // rowId -> {kind:'point'|'shape', latlng, geojson, extra}
+    failures: [],           // [{id, value, reason}]
+    pending: 0,
+    resolveGen: 0,
+    listFilter: '',
+    activeTab: 'geo',
+    canWrite: true
+  };
+
+  function getPath(obj, path) { return path.split('.').reduce(function (o, k) { return o == null ? undefined : o[k]; }, obj); }
+  function setPath(obj, path, val) {
+    var parts = path.split('.'); var last = parts.pop();
+    var o = parts.reduce(function (o, k) { return o[k]; }, obj);
+    o[last] = val;
+  }
+
+  var saveTimer = null;
+  function saveCfg() {
+    clearTimeout(saveTimer);
+    setSaveState('Enregistrement…');
+    saveTimer = setTimeout(function () {
+      var s = JSON.stringify(state.cfg);
+      state.cfgString = s;
+      try { localStorage.setItem(LS_KEY + ':' + (state.tableId || ''), s); } catch (e) { /* stockage indisponible */ }
+      Promise.resolve()
+        .then(function () { return grist.setOptions({ cfg: s }); })
+        .then(function () { setSaveState('Réglages enregistrés avec la vue'); })
+        .catch(function () { setSaveState('Réglages gardés dans ce navigateur (pas de droit d\'écriture sur la vue)'); });
+    }, 400);
+  }
+  function setSaveState(t) { document.getElementById('save-state').textContent = t; }
+
+  // =====================================================================
+  // Utilitaires
+  // =====================================================================
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function norm(s) { return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+  function isBlank(v) { return v == null || v === '' || (Array.isArray(v) && v.length <= 1 && v[0] === 'L'); }
+  function fmtNum(n, d) { return Number(n).toLocaleString('fr-FR', { maximumFractionDigits: d == null ? 2 : d }); }
+
+  function displayValue(v) {
+    if (v == null) return '';
+    if (v instanceof Date) return v.toLocaleDateString('fr-FR');
+    if (Array.isArray(v)) {
+      if (v[0] === 'L') return v.slice(1).map(displayValue).join(', ');
+      if (v[0] === 'E') return '⚠ erreur';
+      if (v[0] === 'R') return '#' + v[2];
+      return v.map(displayValue).join(', ');
+    }
+    if (typeof v === 'number') return fmtNum(v, 6);
+    if (typeof v === 'boolean') return v ? 'Oui' : 'Non';
+    if (typeof v === 'object') return JSON.stringify(v);
+    return String(v);
+  }
+  function valueHtml(v) {
+    var s = displayValue(v);
+    if (/^https?:\/\/\S+$/i.test(s)) return '<a href="' + esc(s) + '" target="_blank" rel="noopener">' + esc(s.replace(/^https?:\/\//, '').slice(0, 40)) + '</a>';
+    if (/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(s)) return '<a href="mailto:' + esc(s) + '">' + esc(s) + '</a>';
+    return esc(s).replace(/\n/g, '<br>');
+  }
+
+  function toNumber(v) {
+    if (typeof v === 'number') return isFinite(v) ? v : null;
+    if (typeof v !== 'string') return null;
+    var s = v.trim().replace(/\s/g, '');
+    if (!s) return null;
+    if (/^-?\d+,\d+$/.test(s)) s = s.replace(',', '.');
+    var n = Number(s);
+    return isFinite(n) ? n : null;
+  }
+
+  // Accepte : 48.85 / "48,85" / "48°51'24\"N" / "2°21'03\"E" / "N 48°51.4'"
+  function parseCoord(v) {
+    var n = toNumber(v);
+    if (n != null) return n;
+    if (typeof v !== 'string') return null;
+    var s = v.trim().replace(/,/g, '.');
+    var m = s.match(/^([NSEWO])?\s*(-?\d+(?:\.\d+)?)\s*[°º]\s*(?:(\d+(?:\.\d+)?)\s*['′’]\s*)?(?:(\d+(?:\.\d+)?)\s*(?:["″”]|''))?\s*([NSEWO])?$/i);
+    if (!m) return null;
+    var deg = Math.abs(parseFloat(m[2])) + (m[3] ? parseFloat(m[3]) / 60 : 0) + (m[4] ? parseFloat(m[4]) / 3600 : 0);
+    var hemi = (m[1] || m[5] || '').toUpperCase();
+    if (parseFloat(m[2]) < 0 || hemi === 'S' || hemi === 'W' || hemi === 'O') deg = -deg;
+    return deg;
+  }
+
+  // "48.85, 2.35" / "48,85;2,35" / "48.85 2.35" / "POINT(2.35 48.85)"
+  function parseCombined(v, order) {
+    if (v == null) return null;
+    if (Array.isArray(v) && v[0] === 'L') v = v.slice(1).join(',');
+    var s = String(v).trim();
+    if (!s) return null;
+    if (/^(SRID=\d+;)?\s*POINT/i.test(s)) {
+      var g = parseWKT(s);
+      return g ? [g.coordinates[0], g.coordinates[1]] : null;  // WKT = lon lat
+    }
+    if (s[0] === '[' || s[0] === '{') {
+      try {
+        var j = JSON.parse(s);
+        if (Array.isArray(j) && j.length >= 2) s = j[0] + ';' + j[1];
+        else if (j && j.type === 'Point') return [j.coordinates[0], j.coordinates[1]];
+        else if (j && j.lat != null) return [Number(j.lon != null ? j.lon : j.lng), Number(j.lat)];
+      } catch (e) { /* pas du JSON */ }
+    }
+    var parts;
+    if (s.indexOf(';') >= 0) parts = s.split(';');
+    else if (/^\s*-?\d+,\d+\s*,\s*-?\d+,\d+\s*$/.test(s)) { var p = s.split(','); parts = [p[0] + '.' + p[1], p[2] + '.' + p[3]]; }
+    else if (s.indexOf(',') >= 0) parts = s.split(',');
+    else parts = s.split(/\s+/);
+    if (parts.length !== 2) return null;
+    var a = parseCoord(parts[0]), b = parseCoord(parts[1]);
+    if (a == null || b == null) return null;
+    return order === 'lonlat' ? [a, b] : [b, a]; // renvoie [x, y]
+  }
+
+  // Mini parseur WKT → géométrie GeoJSON
+  function parseWKT(str) {
+    var m = String(str).trim().match(/^(?:SRID=\d+;)?\s*(MULTIPOLYGON|POLYGON|MULTILINESTRING|LINESTRING|MULTIPOINT|POINT)\s*(?:ZM|Z|M)?\s*(\(.*\))\s*$/i);
+    if (!m) return null;
+    var type = m[1].toUpperCase();
+    var num = '(-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?)';
+    var json = m[2]
+      .replace(new RegExp(num + '\\s+' + num + '(?:\\s+-?\\d+(?:\\.\\d+)?(?:[eE][-+]?\\d+)?)*', 'g'), '[$1,$2]')
+      .replace(/\(/g, '[').replace(/\)/g, ']');
+    var arr;
+    try { arr = JSON.parse(json); } catch (e) { return null; }
+    var map = { POINT: 'Point', LINESTRING: 'LineString', POLYGON: 'Polygon', MULTIPOINT: 'MultiPoint', MULTILINESTRING: 'MultiLineString', MULTIPOLYGON: 'MultiPolygon' };
+    var coords = arr;
+    if (type === 'POINT') coords = arr[0];
+    if (type === 'MULTIPOINT') coords = arr.map(function (p) { return Array.isArray(p[0]) ? p[0] : p; });
+    return { type: map[type], coordinates: coords };
+  }
+
+  function parseGeometry(v) {
+    if (v == null || v === '') return null;
+    if (typeof v === 'object' && !Array.isArray(v)) return normalizeGeo(v);
+    var s = String(v).trim();
+    if (!s) return null;
+    if (s[0] === '{') {
+      try { return normalizeGeo(JSON.parse(s)); } catch (e) { return null; }
+    }
+    return parseWKT(s);
+  }
+  function normalizeGeo(j) {
+    if (!j || !j.type) return null;
+    if (j.type === 'Feature') return j.geometry || null;
+    if (j.type === 'FeatureCollection') {
+      var geoms = (j.features || []).map(function (f) { return f.geometry; }).filter(Boolean);
+      return geoms.length === 1 ? geoms[0] : { type: 'GeometryCollection', geometries: geoms };
+    }
+    return j;
+  }
+  function reprojectGeo(g, crs) {
+    if (!g || crs === 'EPSG:4326') return g;
+    var sample = firstCoord(g);
+    if (!sample) return g;
+    if (crs === 'auto' && Math.abs(sample[0]) <= 180 && Math.abs(sample[1]) <= 90) return g;
+    function walk(c) {
+      if (typeof c[0] === 'number') return toWgs([c[0], c[1]], crs) || c;
+      return c.map(walk);
+    }
+    if (g.type === 'GeometryCollection') return { type: g.type, geometries: g.geometries.map(function (x) { return reprojectGeo(x, crs); }) };
+    return { type: g.type, coordinates: walk(g.coordinates) };
+  }
+  function firstCoord(g) {
+    if (!g) return null;
+    if (g.type === 'GeometryCollection') return firstCoord(g.geometries[0]);
+    var c = g.coordinates;
+    while (Array.isArray(c) && Array.isArray(c[0])) c = c[0];
+    return Array.isArray(c) && typeof c[0] === 'number' ? c : null;
+  }
+
+  // ---- réseau : fetch avec délai maximum ----
+  function fetchJson(url, timeoutMs) {
+    var ctrl = window.AbortController ? new AbortController() : null;
+    var t = ctrl ? setTimeout(function () { ctrl.abort(); }, timeoutMs || 12000) : null;
+    return fetch(url, ctrl ? { signal: ctrl.signal } : undefined).then(function (r) {
+      if (t) clearTimeout(t);
+      if (!r.ok) { var err = new Error('HTTP ' + r.status); err.status = r.status; throw err; }
+      return r.json();
+    }, function (e) { if (t) clearTimeout(t); throw e; });
+  }
+
+  // ---- cache : mémoire + localStorage (best-effort) ----
+  var memCache = Object.create(null);
+  var CACHE_PREFIX = 'gcm:';
+  function cacheGet(ns, key, persist) {
+    var k = ns + ':' + key;
+    if (k in memCache) return memCache[k];
+    if (persist) {
+      try { var raw = localStorage.getItem(CACHE_PREFIX + k); if (raw) { memCache[k] = JSON.parse(raw); return memCache[k]; } } catch (e) { /* ignore */ }
+    }
+    return undefined;
+  }
+  function cacheSet(ns, key, val, persist) {
+    var k = ns + ':' + key;
+    memCache[k] = val;
+    if (persist) { try { localStorage.setItem(CACHE_PREFIX + k, JSON.stringify(val)); } catch (e) { /* quota : ignore */ } }
+  }
+
+  // Exécute fn sur chaque élément avec une concurrence limitée et un délai entre appels
+  async function runQueue(items, fn, concurrency, delayMs, isStale) {
+    var i = 0;
+    async function worker() {
+      while (i < items.length) {
+        if (isStale && isStale()) return;
+        var idx = i++;
+        try { await fn(items[idx]); } catch (e) { /* chaque appel gère ses erreurs */ }
+        if (delayMs) await new Promise(function (r) { setTimeout(r, delayMs); });
+      }
+    }
+    var ws = [];
+    for (var k = 0; k < Math.min(concurrency, items.length); k++) ws.push(worker());
+    await Promise.all(ws);
+  }
+
+  // =====================================================================
+  // Résolveurs (sources publiques) – chaque résultat est mis en cache
+  // =====================================================================
+  var NOTFOUND = { nf: true };
+
+  async function geocodeAddress(q) {
+    var key = norm(q).replace(/\s+/g, ' ').trim();
+    var c = cacheGet('addr', key, true); if (c !== undefined) return c;
+    var data = await fetchJson(API.geocode + '?q=' + encodeURIComponent(q) + '&index=address&limit=1');
+    var f = data && data.features && data.features[0];
+    var res = f ? { lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1], label: f.properties.label, score: f.properties.score, citycode: f.properties.citycode } : NOTFOUND;
+    cacheSet('addr', key, res, true);
+    return res;
+  }
+
+  async function communeByCode(code, shape) {
+    code = String(code).trim().toUpperCase();
+    if (/^\d{4}$/.test(code)) code = '0' + code;
+    var ck = code + ':' + shape;
+    var c = cacheGet('com', ck, shape === 'centre'); if (c !== undefined) return c;
+    var res;
+    try {
+      var data = await fetchJson(API.geoApi + '/communes/' + encodeURIComponent(code) + '?format=geojson&geometry=' + shape + '&fields=nom,code,codesPostaux,population,codeDepartement');
+      res = data && data.geometry ? { geometry: data.geometry, props: data.properties || {} } : NOTFOUND;
+    } catch (e) {
+      if (e.status !== 404) throw e;
+      res = NOTFOUND;
+    }
+    cacheSet('com', ck, res, shape === 'centre');
+    return res;
+  }
+
+  async function communesByPostal(cp) {
+    cp = String(cp).trim();
+    if (/^\d{4}$/.test(cp)) cp = '0' + cp;
+    var c = cacheGet('cp', cp, true); if (c !== undefined) return c;
+    var data = await fetchJson(API.geoApi + '/communes?codePostal=' + encodeURIComponent(cp) + '&format=geojson&geometry=centre&fields=nom,code,population');
+    var feats = (data && data.features) || [];
+    var res = feats.length ? { lon: feats[0].geometry.coordinates[0], lat: feats[0].geometry.coordinates[1], label: feats.map(function (f) { return f.properties.nom; }).join(', ') } : NOTFOUND;
+    cacheSet('cp', cp, res, true);
+    return res;
+  }
+
+  async function communeAtPoint(lat, lon, withContour) {
+    var key = lat.toFixed(4) + ',' + lon.toFixed(4) + (withContour ? ':c' : '');
+    var c = cacheGet('comAt', key, !withContour); if (c !== undefined) return c;
+    var url = API.geoApi + '/communes?lat=' + lat + '&lon=' + lon + '&fields=nom,code,codesPostaux,population,codeDepartement' +
+      (withContour ? '&format=geojson&geometry=contour' : '');
+    var data = await fetchJson(url);
+    var res;
+    if (withContour) {
+      var f = data && data.features && data.features[0];
+      res = f ? { props: f.properties, geometry: f.geometry } : NOTFOUND;
+    } else {
+      res = data && data[0] ? data[0] : NOTFOUND;
+    }
+    cacheSet('comAt', key, res, !withContour);
+    return res;
+  }
+
+  var adminGeojson = {};
+  function loadAdmin(kind) {
+    if (!adminGeojson[kind]) {
+      adminGeojson[kind] = fetchJson(kind === 'region' ? API.regions : API.departements, 30000).then(function (fc) {
+        var byCode = {};
+        (fc.features || []).forEach(function (f) { byCode[String(f.properties.code).toUpperCase()] = f; byCode[norm(f.properties.nom)] = f; });
+        return byCode;
+      }).catch(function (e) { adminGeojson[kind] = null; throw e; });
+    }
+    return adminGeojson[kind];
+  }
+
+  async function siretLookup(v) {
+    var q = String(v).replace(/\s/g, '');
+    if (!/^\d{9}(\d{5})?$/.test(q)) return NOTFOUND;
+    var c = cacheGet('siret', q, true); if (c !== undefined) return c;
+    var data;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try { data = await fetchJson(API.entreprises + '?q=' + q + '&page=1&per_page=1'); break; }
+      catch (e) { if (e.status === 429) { await new Promise(function (r) { setTimeout(r, 1200 * (attempt + 1)); }); continue; } throw e; }
+    }
+    var r = data && data.results && data.results[0];
+    var etab = r && r.siege;
+    if (r && q.length === 14 && r.matching_etablissements) {
+      var m = r.matching_etablissements.filter(function (e) { return e.siret === q; })[0];
+      if (m) etab = m;
+    }
+    var res = etab && etab.latitude ? {
+      lat: Number(etab.latitude), lon: Number(etab.longitude),
+      nom: r.nom_complet, naf: r.activite_principale, etat: r.etat_administratif, adresse: etab.adresse,
+      effectif: r.tranche_effectif_salarie
+    } : NOTFOUND;
+    cacheSet('siret', q, res, true);
+    return res;
+  }
+
+  async function parcelleLookup(v) {
+    var id = String(v).replace(/\s/g, '').toUpperCase();
+    // IDU : INSEE(5) + préfixe(3) + section(2) + numéro(4)
+    var m = id.match(/^(\d[\dAB]\d{3})(\d{3})([0-9A-Z]{1,2})(\d{1,4})$/);
+    if (!m) return NOTFOUND;
+    var c = cacheGet('parc', id, false); if (c !== undefined) return c;
+    var section = m[3].length === 1 ? '0' + m[3] : m[3];
+    var url = API.cadastre + '?code_insee=' + m[1] + '&section=' + section + '&numero=' + m[4].padStart(4, '0') +
+      (m[2] !== '000' ? '&com_abs=' + m[2] : '');
+    var data = await fetchJson(url, 15000);
+    var f = data && data.features && data.features[0];
+    var res = f ? { geometry: f.geometry, props: f.properties } : NOTFOUND;
+    cacheSet('parc', id, res, false);
+    return res;
+  }
+
+  // =====================================================================
+  // Colonnes Grist
+  // =====================================================================
+  async function loadColumnMeta() {
+    try {
+      var tableId = await grist.selectedTable.getTableId();
+      if (!tableId) return;
+      state.tableId = tableId;
+      var tables = await grist.docApi.fetchTable('_grist_Tables');
+      var idx = tables.tableId.indexOf(tableId);
+      if (idx < 0) return;
+      var tRef = tables.id[idx];
+      var cols = await grist.docApi.fetchTable('_grist_Tables_column');
+      var out = [];
+      for (var i = 0; i < cols.id.length; i++) {
+        if (cols.parentId[i] !== tRef) continue;
+        var cid = cols.colId[i];
+        if (cid === 'manualSort' || cid.indexOf('gristHelper_') === 0) continue;
+        out.push({ id: cid, label: cols.label[i] || cid, type: cols.type[i], pos: cols.parentPos[i] });
+      }
+      out.sort(function (a, b) { return a.pos - b.pos; });
+      state.colMeta = out;
+    } catch (e) {
+      state.colMeta = null;   // accès limité : on déduira les colonnes des enregistrements
+    }
+  }
+
+  function computeColumns() {
+    if (state.colMeta && state.colMeta.length) { state.columns = state.colMeta; return; }
+    var seen = {}; var out = [];
+    state.records.slice(0, 50).forEach(function (r) {
+      Object.keys(r).forEach(function (k) {
+        if (k === 'id' || k === 'manualSort' || k.indexOf('gristHelper_') === 0 || seen[k]) return;
+        seen[k] = 1; out.push({ id: k, label: k, type: '' });
+      });
+    });
+    state.columns = out;
+  }
+  function colLabel(id) {
+    var c = state.columns.filter(function (c) { return c.id === id; })[0];
+    return c ? c.label : id;
+  }
+  function colExists(id) { return !!id && state.columns.some(function (c) { return c.id === id; }); }
+
+  // Devine des colonnes à partir de leurs noms (premier chargement uniquement)
+  function autoDetect() {
+    var cfg = defaultCfg();
+    var cols = state.columns;
+    function find(re) { var c = cols.filter(function (c) { return re.test(norm(c.id)) || re.test(norm(c.label)); })[0]; return c ? c.id : ''; }
+    var lat = find(/^(lat|latitude|y|coord_?y|y_?wgs84|lat_?wgs84)$/) || find(/lat/);
+    var lon = find(/^(lon|lng|long|longitude|x|coord_?x|x_?wgs84|lon_?wgs84)$/) || find(/(^|_)lon|lng|longitude/);
+    var geom = find(/^(geom|geometry|geometrie|geojson|wkt|geo_shape|contour)$/);
+    var coords = find(/^(coord|coords|coordonnees|geo_point|geopoint|geo_point_2d|position|gps)$/);
+    var adr = find(/adresse|address|^rue$|voie/);
+    var cp = find(/^(cp|code_?postal|postal_?code|zip)$/);
+    var ville = find(/^(ville|commune|city|localite|nom_?commune)$/);
+    var insee = find(/insee|code_?commune|codgeo|com_?code|^code_?com$/);
+    var siret = find(/^(siret|siren)$/) || find(/siret|siren/);
+    var parcelle = find(/parcelle|idu|ref_?cadastr/);
+    var dep = find(/^(dep|departement|code_?dep|code_?departement)$/);
+    if (lat && lon) { cfg.geo.mode = 'latlon'; cfg.geo.lat = lat; cfg.geo.lon = lon; }
+    else if (geom) { cfg.geo.mode = 'geometry'; cfg.geo.geometry = geom; }
+    else if (coords) { cfg.geo.mode = 'combined'; cfg.geo.combined = coords; }
+    else if (adr) { cfg.geo.mode = 'address'; cfg.geo.address = [adr, cp, ville].filter(Boolean); }
+    else if (siret) { cfg.geo.mode = 'siret'; cfg.geo.siret = siret; }
+    else if (parcelle) { cfg.geo.mode = 'parcelle'; cfg.geo.parcelle = parcelle; }
+    else if (insee) { cfg.geo.mode = 'commune'; cfg.geo.commune = insee; }
+    else if (cp) { cfg.geo.mode = 'postal'; cfg.geo.postal = cp; }
+    else if (dep) { cfg.geo.mode = 'departement'; cfg.geo.departement = dep; }
+    if (adr && cfg.geo.mode !== 'address') cfg.geo.fallbackAddress = adr;
+    cfg.geo.lat = cfg.geo.lat || lat; cfg.geo.lon = cfg.geo.lon || lon;
+
+    var geoCols = [cfg.geo.lat, cfg.geo.lon, geom, coords].filter(Boolean);
+    var title = find(/^(nom|name|raison_?sociale|denomination|libelle|titre|title|intitule|enseigne)$/) ||
+                find(/nom|name|raison|denomination|libelle|titre/);
+    var subtitle = find(/^(type|categorie|category|statut|activite|famille|nature)$/);
+    cfg.data.title = title || (cols[0] ? cols[0].id : '');
+    cfg.data.subtitle = subtitle && subtitle !== cfg.data.title ? subtitle : '';
+    cfg.data.fields = cols.map(function (c) { return c.id; })
+      .filter(function (id) { return id !== cfg.data.title && id !== cfg.data.subtitle && geoCols.indexOf(id) < 0; })
+      .slice(0, 6);
+    if (subtitle) cfg.style.colorBy = subtitle;
+    return cfg;
+  }
+
+  // =====================================================================
+  // Résolution des géométries
+  // =====================================================================
+  function addressString(r) {
+    return (state.cfg.geo.address || []).map(function (c) { return displayValue(r[c]); }).filter(Boolean).join(' ').trim();
+  }
+
+  function syncGeometry(r) {
+    var g = state.cfg.geo;
+    var pt;
+    if (g.mode === 'latlon' && colExists(g.lat) && colExists(g.lon)) {
+      var la = parseCoord(r[g.lat]), lo = parseCoord(r[g.lon]);
+      if (la != null && lo != null && !(la === 0 && lo === 0)) {
+        pt = toWgs([lo, la], g.crs);
+        if (pt && Math.abs(pt[1]) <= 90 && Math.abs(pt[0]) <= 180) return { kind: 'point', latlng: [pt[1], pt[0]] };
+      }
+      return null;
+    }
+    if (g.mode === 'combined' && colExists(g.combined)) {
+      var xy = parseCombined(r[g.combined], g.combinedOrder);
+      if (xy) { pt = toWgs(xy, g.crs); if (pt && Math.abs(pt[1]) <= 90) return { kind: 'point', latlng: [pt[1], pt[0]] }; }
+      return null;
+    }
+    if (g.mode === 'geometry' && colExists(g.geometry)) {
+      var geo = reprojectGeo(parseGeometry(r[g.geometry]), g.crs);
+      if (!geo) return null;
+      if (geo.type === 'Point') return { kind: 'point', latlng: [geo.coordinates[1], geo.coordinates[0]] };
+      return { kind: 'shape', geojson: geo };
+    }
+    return undefined; // nécessite un appel réseau
+  }
+
+  // Renvoie {key, fn} pour les modes asynchrones, ou null si la valeur est vide
+  function asyncLookup(r) {
+    var g = state.cfg.geo;
+    var v;
+    switch (g.mode) {
+      case 'address':
+        v = addressString(r); if (!v || v.length < 3) return null;
+        return { raw: v, fn: function () { return geocodeAddress(v).then(pointFrom); } };
+      case 'commune':
+        if (!colExists(g.commune) || isBlank(r[g.commune])) return null;
+        v = displayValue(r[g.commune]).replace(/\s/g, '');
+        return { raw: v, fn: function () { return communeByCode(v, g.communeShape).then(function (res) {
+          if (res === NOTFOUND) return NOTFOUND;
+          if (res.geometry.type === 'Point') return { kind: 'point', latlng: [res.geometry.coordinates[1], res.geometry.coordinates[0]], extra: { commune: res.props } };
+          return { kind: 'shape', geojson: res.geometry, extra: { commune: res.props } };
+        }); } };
+      case 'postal':
+        if (!colExists(g.postal) || isBlank(r[g.postal])) return null;
+        v = displayValue(r[g.postal]).replace(/\s/g, '');
+        return { raw: v, fn: function () { return communesByPostal(v).then(pointFrom); } };
+      case 'departement':
+      case 'region':
+        var col = g.mode === 'region' ? g.region : g.departement;
+        if (!colExists(col) || isBlank(r[col])) return null;
+        v = displayValue(r[col]).trim();
+        return { raw: v, fn: function () { return loadAdmin(g.mode).then(function (byCode) {
+          var key = /^\d[\dAB]?$/i.test(v) && v.length === 1 ? '0' + v : v.toUpperCase();
+          var f = byCode[key] || byCode[norm(v)];
+          return f ? { kind: 'shape', geojson: f.geometry, extra: { admin: f.properties } } : NOTFOUND;
+        }); } };
+      case 'siret':
+        if (!colExists(g.siret) || isBlank(r[g.siret])) return null;
+        v = displayValue(r[g.siret]);
+        return { raw: v, fn: function () { return siretLookup(v).then(function (res) {
+          if (res === NOTFOUND) return NOTFOUND;
+          return { kind: 'point', latlng: [res.lat, res.lon], extra: { entreprise: res } };
+        }); } };
+      case 'parcelle':
+        if (!colExists(g.parcelle) || isBlank(r[g.parcelle])) return null;
+        v = displayValue(r[g.parcelle]);
+        return { raw: v, fn: function () { return parcelleLookup(v).then(function (res) {
+          if (res === NOTFOUND) return NOTFOUND;
+          return { kind: 'shape', geojson: res.geometry, extra: { parcelle: res.props } };
+        }); } };
+    }
+    return null;
+  }
+  function pointFrom(res) {
+    if (!res || res === NOTFOUND) return NOTFOUND;
+    return { kind: 'point', latlng: [res.lat, res.lon], extra: { geocoded: res } };
+  }
+
+  // Si les coordonnées manquent, on peut géocoder une adresse de secours
+  function fallbackLookup(r) {
+    var col = state.cfg.geo.fallbackAddress;
+    if (!colExists(col) || ['latlon', 'combined', 'geometry', 'siret'].indexOf(state.cfg.geo.mode) < 0) return null;
+    var v = displayValue(r[col]).trim();
+    if (v.length < 3) return null;
+    return { raw: v, fn: function () { return geocodeAddress(v).then(pointFrom); } };
+  }
+
+  var LIMITS = { address: [4, 30], commune: [4, 30], postal: [4, 30], departement: [1, 0], region: [1, 0], siret: [2, 160], parcelle: [3, 60], fallback: [4, 30] };
+
+  async function resolveAll() {
+    var gen = ++state.resolveGen;
+    var isStale = function () { return gen !== state.resolveGen; };
+    state.geoms = {};
+    state.failures = [];
+    var jobs = [];
+    state.records.forEach(function (r) {
+      var res = syncGeometry(r);
+      if (res) { state.geoms[r.id] = res; return; }
+      var job = res === undefined ? asyncLookup(r) : null;
+      var kind = state.cfg.geo.mode;
+      if (!job) { job = fallbackLookup(r); kind = 'fallback'; }
+      if (job) { job.id = r.id; job.kind = kind; jobs.push(job); }
+      else if (res === null || res === undefined) state.failures.push({ id: r.id, reason: 'valeur vide ou illisible' });
+    });
+    state.pending = jobs.length;
+    renderAll();
+    if (!jobs.length) { setProgress(''); refreshGeoTabDiag(); return; }
+
+    var done = 0;
+    var mode = jobs[0].kind;
+    var lim = LIMITS[mode] || [4, 30];
+    var redrawTimer = null;
+    function scheduleRedraw() {
+      if (redrawTimer) return;
+      redrawTimer = setTimeout(function () { redrawTimer = null; if (!isStale()) renderAll(true); }, 600);
+    }
+    setProgress('Localisation : 0 / ' + jobs.length);
+    await runQueue(jobs, async function (job) {
+      try {
+        var out = await job.fn();
+        if (isStale()) return;
+        if (out && out !== NOTFOUND) state.geoms[job.id] = out;
+        else state.failures.push({ id: job.id, value: job.raw, reason: 'introuvable' });
+      } catch (e) {
+        if (!isStale()) state.failures.push({ id: job.id, value: job.raw, reason: 'service indisponible (' + (e.message || 'réseau') + ')' });
+      }
+      done++;
+      if (!isStale()) { setProgress('Localisation : ' + done + ' / ' + jobs.length); scheduleRedraw(); }
+    }, lim[0], lim[1], isStale);
+    if (isStale()) return;
+    clearTimeout(redrawTimer);
+    state.pending = 0;
+    setProgress('');
+    renderAll(true);
+    refreshGeoTabDiag();
+  }
+
+  var progressEl = document.getElementById('progress');
+  function setProgress(t) { progressEl.textContent = t; progressEl.classList.toggle('show', !!t); }
+
+  // =====================================================================
+  // Carte
+  // =====================================================================
+  var map = L.map('map', { zoomControl: true, preferCanvas: false }).setView([46.6, 2.4], 6);
+  L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
+  var baseLayer = null;
+  var overlayLayers = {};          // id -> layer
+  var dataLayer = L.featureGroup().addTo(map);
+  var zonesLayer = L.featureGroup().addTo(map);
+  var communeLayer = L.featureGroup().addTo(map);
+  var heatLayer = null;
+  var clusterLayer = null;
+  var layerByRow = {};             // rowId -> layer
+  var inspectorPopup = L.popup({ maxWidth: 340 });
+  var didFitOnce = false;
+
+  map.createPane('zones'); map.getPane('zones').style.zIndex = 410;
+  map.createPane('communes'); map.getPane('communes').style.zIndex = 405;
+  map.getPane('communes').style.pointerEvents = 'none';
+
+  function applyBasemap() {
+    if (baseLayer) { map.removeLayer(baseLayer); baseLayer = null; }
+    var b = BASEMAPS[state.cfg.style.basemap] || BASEMAPS.planign;
+    if (b.url) { baseLayer = L.tileLayer(b.url, b.opts).addTo(map); baseLayer.bringToBack(); }
+  }
+
+  var rainviewerFrame = null;
+  async function makeOverlay(def) {
+    var op = state.cfg.layers.opacity[def.id];
+    var opacity = op == null ? (def.type === 'geojson' ? 1 : 0.75) : op;
+    if (def.type === 'xyz') return L.tileLayer(def.url, Object.assign({ opacity: opacity, zIndex: 5 }, def.opts || {}));
+    if (def.type === 'wms') return L.tileLayer.wms(def.url, Object.assign({ layers: def.layers, format: 'image/png', transparent: true, version: '1.3.0', opacity: opacity, zIndex: 5 }, def.opts || {}));
+    if (def.type === 'geojson') {
+      var data = await fetchJson(def.url, 30000);
+      return L.geoJSON(data, {
+        style: function () { return Object.assign({ weight: 1.5, color: '#3D5A80', fillOpacity: 0.15 }, def.style || {}, { opacity: opacity }); },
+        pointToLayer: function (f, ll) { return L.circleMarker(ll, { radius: 5, color: '#fff', weight: 1, fillColor: (def.style && def.style.color) || '#3D5A80', fillOpacity: opacity }); },
+        onEachFeature: function (f, l) {
+          var p = f.properties || {};
+          var name = p.nom || p.name || p.libelle || p.NOM || p.code;
+          if (name) l.bindTooltip(esc(name), { sticky: true });
+        }
+      });
+    }
+    if (def.type === 'rainviewer') {
+      if (!rainviewerFrame) {
+        var rv = await fetchJson(API.rainviewer);
+        var past = rv.radar && rv.radar.past;
+        if (!past || !past.length) throw new Error('pas de données radar');
+        rainviewerFrame = { url: rv.host + past[past.length - 1].path + '/256/{z}/{x}/{y}/2/1_1.png', time: past[past.length - 1].time };
+        setTimeout(function () { rainviewerFrame = null; }, 10 * 60 * 1000);
+      }
+      return L.tileLayer(rainviewerFrame.url, { opacity: opacity, zIndex: 6, maxNativeZoom: 7, maxZoom: 20,
+        attribution: 'Radar &copy; <a href="https://www.rainviewer.com" target="_blank">RainViewer</a> – ' + new Date(rainviewerFrame.time * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) });
+    }
+    return null;
+  }
+
+  function allOverlayDefs() {
+    var defs = {};
+    Object.keys(OVERLAY_BY_ID).forEach(function (k) { defs[k] = OVERLAY_BY_ID[k]; });
+    (state.cfg.layers.custom || []).forEach(function (c) { defs[c.id] = c; });
+    return defs;
+  }
+
+  var overlayErrors = {};
+  async function applyOverlays() {
+    var defs = allOverlayDefs();
+    var want = (state.cfg.layers.active || []).filter(function (id) { return defs[id]; });
+    Object.keys(overlayLayers).forEach(function (id) {
+      if (want.indexOf(id) < 0) { map.removeLayer(overlayLayers[id]); delete overlayLayers[id]; }
+    });
+    for (var i = 0; i < want.length; i++) {
+      var id = want[i];
+      if (overlayLayers[id]) continue;
+      try {
+        var lyr = await makeOverlay(defs[id]);
+        if (lyr && (state.cfg.layers.active || []).indexOf(id) >= 0 && !overlayLayers[id]) {
+          overlayLayers[id] = lyr.addTo(map);
+          delete overlayErrors[id];
+          if (lyr.bringToBack && defs[id].type === 'geojson') lyr.bringToBack();
+        }
+      } catch (e) {
+        overlayErrors[id] = e.message || 'erreur';
+        if (state.activeTab === 'layers') renderTab();
+      }
+    }
+  }
+  function setOverlayOpacity(id, val) {
+    var l = overlayLayers[id];
+    if (!l) return;
+    if (l.setOpacity) l.setOpacity(val);
+    else if (l.setStyle) l.setStyle({ opacity: val });
+  }
+
+  // ---- couleurs & tailles ----
+  function hexToRgb(h) { var n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+  function rgbToHex(c) { return '#' + c.map(function (x) { return Math.round(x).toString(16).padStart(2, '0'); }).join(''); }
+  function interpolate(stops, t) {
+    t = Math.max(0, Math.min(1, t));
+    var pos = t * (stops.length - 1), i = Math.min(Math.floor(pos), stops.length - 2), f = pos - i;
+    var a = hexToRgb(stops[i]), b = hexToRgb(stops[i + 1]);
+    return rgbToHex([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f]);
+  }
+
+  function categoryKey(v) { var s = displayValue(v).trim(); return s || '(vide)'; }
+
+  function buildColorScale() {
+    var st = state.cfg.style;
+    var col = st.colorBy;
+    if (!colExists(col)) return { fn: function () { return st.color; }, legend: null };
+    var vals = state.records.map(function (r) { return r[col]; });
+    var nums = vals.map(toNumber).filter(function (n) { return n != null; });
+    var nonEmpty = vals.filter(function (v) { return !isBlank(v); }).length;
+    var meta = state.columns.filter(function (c) { return c.id === col; })[0];
+    var isNumeric = meta && meta.type ? /^(Numeric|Int)$/.test(meta.type) : (nonEmpty > 0 && nums.length === nonEmpty);
+    if (isNumeric && nums.length) {
+      var stops = SEQ_PALETTES[st.palette] || SEQ_PALETTES.viridis;
+      var min = Math.min.apply(null, nums), max = Math.max.apply(null, nums);
+      var breaks = null;
+      if (st.classes !== 'continu') {
+        var n = 5, sorted = nums.slice().sort(function (a, b) { return a - b; });
+        breaks = [];
+        for (var k = 1; k < n; k++) {
+          breaks.push(st.classes === 'quantiles' ? sorted[Math.floor(k * sorted.length / n)] : min + (max - min) * k / n);
+        }
+      }
+      var fn = function (r) {
+        var x = toNumber(r[col]);
+        if (x == null) return '#B8B8BD';
+        if (breaks) {
+          var cls = 0; while (cls < breaks.length && x >= breaks[cls]) cls++;
+          return interpolate(stops, cls / breaks.length);
+        }
+        return interpolate(stops, max === min ? 0.5 : (x - min) / (max - min));
+      };
+      var legend = breaks
+        ? { title: colLabel(col), items: [min].concat(breaks).map(function (b, i, arr) {
+            var hi = i < arr.length - 1 ? arr[i + 1] : max;
+            return { color: interpolate(stops, i / breaks.length), label: fmtNum(b) + ' – ' + fmtNum(hi) };
+          }) }
+        : { title: colLabel(col), gradient: stops, min: min, max: max };
+      return { fn: fn, legend: legend, numeric: true };
+    }
+    // catégoriel
+    var counts = {};
+    vals.forEach(function (v) {
+      if (Array.isArray(v) && v[0] === 'L') { if (v.length > 1) v = v[1]; else v = ''; }
+      var k = categoryKey(v); counts[k] = (counts[k] || 0) + 1;
+    });
+    var cats = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; });
+    var colors = {};
+    cats.forEach(function (c, i) { colors[c] = st.catColors[c] || (c === '(vide)' ? '#B8B8BD' : CAT_PALETTE[i % CAT_PALETTE.length]); });
+    return {
+      fn: function (r) { var v = r[col]; if (Array.isArray(v) && v[0] === 'L') v = v.length > 1 ? v[1] : ''; return colors[categoryKey(v)]; },
+      legend: { title: colLabel(col), items: cats.slice(0, 30).map(function (c) { return { color: colors[c], label: c + ' (' + counts[c] + ')' }; }), more: Math.max(0, cats.length - 30) },
+      categories: cats, colors: colors
+    };
+  }
+
+  function buildSizeScale() {
+    var st = state.cfg.style;
+    if (!colExists(st.sizeBy)) return { fn: function () { return st.size; } };
+    var nums = state.records.map(function (r) { return toNumber(r[st.sizeBy]); }).filter(function (n) { return n != null; });
+    if (!nums.length) return { fn: function () { return st.size; } };
+    var min = Math.min.apply(null, nums), max = Math.max.apply(null, nums);
+    return {
+      fn: function (r) {
+        var x = toNumber(r[st.sizeBy]);
+        if (x == null) return st.size * 0.6;
+        var t = max === min ? 0.5 : Math.sqrt((x - min) / (max - min));
+        return st.size + t * Math.max(0, st.sizeMax - st.size);
+      },
+      min: min, max: max
+    };
+  }
+
+  function pinIcon(color, size, selected) {
+    var h = Math.round(size * 3.4 * (selected ? 1.25 : 1)), w = Math.round(h * 0.72);
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 24 34">' +
+      '<path d="M12 .8C5.8.8.8 5.8.8 11.9c0 8.4 11.2 21.3 11.2 21.3S23.2 20.3 23.2 11.9C23.2 5.8 18.2.8 12 .8z" fill="' + color + '" stroke="' + (selected ? '#1B1B1E' : state.cfg.style.stroke) + '" stroke-width="' + (selected ? 2.2 : 1.5) + '"/>' +
+      '<circle cx="12" cy="12" r="4.4" fill="#fff"/></svg>';
+    return L.divIcon({ className: 'pin-icon', html: svg, iconSize: [w, h], iconAnchor: [w / 2, h], popupAnchor: [0, -h + 4], tooltipAnchor: [w / 2, -h / 2] });
+  }
+  function squareIcon(color, size, selected) {
+    var s = Math.round(size * 2 * (selected ? 1.3 : 1));
+    var html = '<div style="width:' + s + 'px;height:' + s + 'px;background:' + color + ';opacity:' + state.cfg.style.opacity +
+      ';border:' + (selected ? '2.5px solid #1B1B1E' : '1.5px solid ' + state.cfg.style.stroke) + ';border-radius:3px;box-sizing:border-box"></div>';
+    return L.divIcon({ className: 'pin-icon', html: html, iconSize: [s, s], iconAnchor: [s / 2, s / 2] });
+  }
+
+  var lastColorScale = null, lastSizeScale = null;
+
+  function renderAll(keepView) {
+    renderMapData(keepView);
+    renderList();
+    renderLegend();
+    updateStatus();
+    if (!state.pending) renderCommuneContours();
+    if (state.activeTab === 'style') refreshCatColors();
+  }
+
+  function renderMapData(keepView) {
+    var st = state.cfg.style, d = state.cfg.data;
+    dataLayer.clearLayers(); zonesLayer.clearLayers();
+    if (clusterLayer) { map.removeLayer(clusterLayer); clusterLayer = null; }
+    if (heatLayer) { map.removeLayer(heatLayer); heatLayer = null; }
+    layerByRow = {};
+
+    var colorScale = lastColorScale = buildColorScale();
+    var sizeScale = lastSizeScale = buildSizeScale();
+    var pointTarget = dataLayer;
+    if (st.cluster && L.markerClusterGroup) {
+      clusterLayer = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 50, spiderfyOnMaxZoom: true });
+      clusterLayer.addTo(map);
+      pointTarget = clusterLayer;
+    }
+    var heatPts = [];
+
+    state.records.forEach(function (r) {
+      var g = state.geoms[r.id];
+      if (!g) return;
+      var color = colorScale.fn(r);
+      var sel = r.id === state.selectedId;
+      var layer;
+      if (g.kind === 'point') {
+        var size = sizeScale.fn(r);
+        if (st.heatmap) {
+          var w = colExists(st.sizeBy) && sizeScale.max ? Math.max(0.1, (toNumber(r[st.sizeBy]) || 0) / sizeScale.max) : 1;
+          heatPts.push([g.latlng[0], g.latlng[1], w]);
+          if (!sel) return;   // en mode chaleur, seul le point sélectionné reste visible
+        }
+        if (st.marker === 'pin') layer = L.marker(g.latlng, { icon: pinIcon(color, Math.max(6, size), sel), riseOnHover: true, zIndexOffset: sel ? 1000 : 0 });
+        else if (st.marker === 'square') layer = L.marker(g.latlng, { icon: squareIcon(color, size, sel), zIndexOffset: sel ? 1000 : 0 });
+        else layer = L.circleMarker(g.latlng, {
+          radius: sel ? size + 3 : size, fillColor: color, fillOpacity: st.opacity,
+          color: sel ? '#1B1B1E' : st.stroke, weight: sel ? 3 : 1.5, opacity: 1, bubblingMouseEvents: false
+        });
+        layer._info = { kind: 'point', color: color, size: size };
+        (st.heatmap ? dataLayer : pointTarget).addLayer(layer);
+      } else {
+        layer = L.geoJSON({ type: 'Feature', geometry: g.geojson, properties: {} }, {
+          pane: 'zones', bubblingMouseEvents: false,
+          style: zoneStyle(color, sel),
+          pointToLayer: function (f, ll) { return L.circleMarker(ll, { radius: st.size, fillColor: color, fillOpacity: st.opacity, color: st.stroke, weight: 1.5, pane: 'zones', bubblingMouseEvents: false }); }
+        });
+        layer._info = { kind: 'shape', color: color };
+        zonesLayer.addLayer(layer);
+      }
+      layer._rowId = r.id;
+      layerByRow[r.id] = layer;
+      var titleTxt = colExists(d.title) ? displayValue(r[d.title]) : '';
+      if (st.labels && colExists(d.label || d.title)) {
+        var lbl = displayValue(r[d.label || d.title]);
+        if (lbl) layer.bindTooltip(esc(lbl), { permanent: true, direction: g.kind === 'point' ? 'right' : 'center', className: 'map-label', offset: g.kind === 'point' ? [8, 0] : [0, 0] });
+      } else if (titleTxt) {
+        layer.bindTooltip(esc(titleTxt), { sticky: g.kind !== 'point', direction: 'top', offset: [0, -4] });
+      }
+      layer.bindPopup(function () { return popupHtml(r, layerCenter(layer)); }, { maxWidth: 340, autoPanPadding: [30, 30] });
+      layer.on('popupopen', function (e) { fillEnrichment(e.popup, r, layerCenter(layer)); });
+      layer.on('click', function () { selectRow(r.id, false); });
+    });
+
+    if (st.heatmap && heatPts.length && L.heatLayer) {
+      heatLayer = L.heatLayer(heatPts, { radius: st.heatRadius, blur: Math.round(st.heatRadius * 0.75), maxZoom: 13, minOpacity: 0.3 }).addTo(map);
+    }
+
+    if (st.fit && (!keepView || !didFitOnce)) fitToData();
+  }
+
+  function zoneStyle(color, sel) {
+    var st = state.cfg.style, useColor = colExists(st.colorBy);
+    return {
+      color: sel ? '#1B1B1E' : (useColor ? color : st.zoneStroke), weight: sel ? st.zoneWeight + 2 : st.zoneWeight,
+      fillColor: useColor ? color : st.zoneFill, fillOpacity: sel ? Math.min(1, st.zoneOpacity + 0.2) : st.zoneOpacity, opacity: 0.95
+    };
+  }
+
+  // Met à jour l'apparence d'un seul élément (sélectionné ou non) sans tout redessiner
+  function restyleOne(id) {
+    var l = layerByRow[id];
+    if (!l || !l._info) return;
+    var sel = id === state.selectedId, info = l._info, st = state.cfg.style;
+    if (info.kind === 'shape') { l.setStyle(zoneStyle(info.color, sel)); if (sel) l.bringToFront(); return; }
+    if (st.marker === 'pin') { l.setIcon(pinIcon(info.color, Math.max(6, info.size), sel)); l.setZIndexOffset(sel ? 1000 : 0); }
+    else if (st.marker === 'square') { l.setIcon(squareIcon(info.color, info.size, sel)); l.setZIndexOffset(sel ? 1000 : 0); }
+    else { l.setRadius(sel ? info.size + 3 : info.size); l.setStyle({ color: sel ? '#1B1B1E' : st.stroke, weight: sel ? 3 : 1.5 }); if (sel && l.bringToFront) l.bringToFront(); }
+  }
+
+  function layerCenter(layer) {
+    if (layer.getLatLng) return layer.getLatLng();
+    try { return layer.getBounds().getCenter(); } catch (e) { return map.getCenter(); }
+  }
+
+  function dataBounds() {
+    var b = L.latLngBounds([]);
+    Object.keys(state.geoms).forEach(function (id) {
+      var g = state.geoms[id];
+      if (g.kind === 'point') b.extend(g.latlng);
+      else { var l = layerByRow[id]; if (l && l.getBounds) { var lb = l.getBounds(); if (lb.isValid()) b.extend(lb); } }
+    });
+    return b;
+  }
+  function fitToData() {
+    var b = dataBounds();
+    if (b.isValid()) { map.fitBounds(b, { padding: [30, 30], maxZoom: 15 }); didFitOnce = true; }
+  }
+
+  // ---- contours de communes ----
+  var communeGen = 0;
+  async function renderCommuneContours() {
+    var gen = ++communeGen;
+    communeLayer.clearLayers();
+    var st = state.cfg.style;
+    if (st.communeContour === 'none') return;
+    var shapes = [];   // [{geometry, props}]
+    try {
+      if (st.communeContour === 'points') {
+        var pts = Object.keys(state.geoms).map(function (id) { return state.geoms[id]; })
+          .filter(function (g) { return g.kind === 'point'; }).map(function (g) { return g.latlng; });
+        if (pts.length > 1500) pts = pts.slice(0, 1500);
+        var seen = {};
+        await runQueue(pts, async function (ll) {
+          if (shapes.some(function (s) { return inPolygon(ll[1], ll[0], s.geometry); })) return;
+          var c = await communeAtPoint(ll[0], ll[1], true);
+          if (gen !== communeGen) return;
+          if (c !== NOTFOUND && !seen[c.props.code]) { seen[c.props.code] = 1; shapes.push(c); drawCommune(c); }
+        }, 4, 20, function () { return gen !== communeGen; });
+      } else if (st.communeContour === 'list') {
+        for (var i = 0; i < (st.communeList || []).length; i++) {
+          var item = st.communeList[i];
+          var res;
+          if (item.type === 'departement') {
+            var byCode = await loadAdmin('departement');
+            var f = byCode[item.code.toUpperCase()];
+            res = f ? { geometry: f.geometry, props: { nom: f.properties.nom, code: f.properties.code } } : NOTFOUND;
+          } else {
+            res = await communeByCode(item.code, 'contour');
+          }
+          if (gen !== communeGen) return;
+          if (res !== NOTFOUND) drawCommune(res);
+        }
+      }
+    } catch (e) { /* service indisponible : on n'affiche simplement pas les contours */ }
+  }
+  function inRing(x, y, ring) {
+    var ins = false;
+    for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      var xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+      if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) ins = !ins;
+    }
+    return ins;
+  }
+  function inPolygon(x, y, g) {
+    var polys = !g ? [] : g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
+    return polys.some(function (rings) { return inRing(x, y, rings[0]) && !rings.slice(1).some(function (h) { return inRing(x, y, h); }); });
+  }
+  function drawCommune(c) {
+    var st = state.cfg.style;
+    var l = L.geoJSON({ type: 'Feature', geometry: c.geometry, properties: c.props }, {
+      pane: 'communes', interactive: false,
+      style: { color: st.communeColor, weight: st.communeWeight, dashArray: st.communeDash ? '6 5' : null, fillColor: st.communeColor, fillOpacity: st.communeFill, opacity: 0.95 }
+    });
+    if (st.communeNames && c.props && c.props.nom) {
+      try { L.tooltip({ permanent: true, direction: 'center', className: 'commune-label', interactive: false }).setLatLng(l.getBounds().getCenter()).setContent(esc(c.props.nom)).addTo(communeLayer); } catch (e) { /* ignore */ }
+    }
+    communeLayer.addLayer(l);
+  }
+
+  // ---- légende ----
+  var LegendCtl = L.Control.extend({
+    options: { position: 'bottomright' },
+    onAdd: function () {
+      var div = L.DomUtil.create('div', '');
+      div.id = 'legend-wrap';
+      L.DomEvent.disableClickPropagation(div); L.DomEvent.disableScrollPropagation(div);
+      return div;
+    }
+  });
+  map.addControl(new LegendCtl());
+  function renderLegend() {
+    var el = document.getElementById('legend-wrap');
+    if (!el) return;
+    var st = state.cfg.style, parts = [];
+    if (!st.legend) { el.innerHTML = ''; return; }
+    var cs = lastColorScale;
+    if (cs && cs.legend) {
+      var lg = cs.legend, h = '<div class="legend"><div class="lt">' + esc(lg.title) + '</div>';
+      if (lg.gradient) {
+        h += '<div class="grad" style="background:linear-gradient(90deg,' + lg.gradient.join(',') + ')"></div><div class="gl"><span>' + fmtNum(lg.min) + '</span><span>' + fmtNum(lg.max) + '</span></div>';
+      } else {
+        lg.items.forEach(function (it) { h += '<div class="li"><span class="sw' + (st.marker === 'square' ? ' sq' : '') + '" style="background:' + it.color + '"></span>' + esc(it.label) + '</div>'; });
+        if (lg.more) h += '<div class="li" style="color:var(--ink-faint)">+ ' + lg.more + ' autres valeurs</div>';
+      }
+      parts.push(h + '</div>');
+    }
+    var ss = lastSizeScale;
+    if (ss && ss.max != null && colExists(st.sizeBy)) {
+      parts.push('<div class="legend"><div class="lt">Taille : ' + esc(colLabel(st.sizeBy)) + '</div><div class="gl"><span>' + fmtNum(ss.min) + '</span><span>' + fmtNum(ss.max) + '</span></div></div>');
+    }
+    var active = (state.cfg.layers.active || []).map(function (id) { return allOverlayDefs()[id]; }).filter(Boolean);
+    if (active.length) {
+      parts.push('<div class="legend"><div class="lt">Couches</div>' + active.map(function (d) { return '<div class="li">▪ ' + esc(d.name) + '</div>'; }).join('') + '</div>');
+    }
+    el.innerHTML = parts.join('');
+  }
+
+  // =====================================================================
+  // Popups & enrichissement
+  // =====================================================================
+  function popupHtml(r, ll) {
+    var d = state.cfg.data;
+    var h = '';
+    if (colExists(d.title)) h += '<div class="pp-title">' + valueHtml(r[d.title]) + '</div>';
+    if (colExists(d.subtitle) && !isBlank(r[d.subtitle])) h += '<div class="pp-sub">' + valueHtml(r[d.subtitle]) + '</div>';
+    var rows = (d.fields || []).filter(colExists).filter(function (c) { return !(d.hideEmpty && isBlank(r[c])); });
+    if (rows.length) {
+      h += '<table class="pp-table">' + rows.map(function (c) {
+        return '<tr><td>' + esc(colLabel(c)) + '</td><td>' + valueHtml(r[c]) + '</td></tr>';
+      }).join('') + '</table>';
+    }
+    if (colExists(d.link) && !isBlank(r[d.link])) {
+      var url = displayValue(r[d.link]);
+      if (/^https?:\/\//i.test(url)) h += '<div class="pp-links"><a href="' + esc(url) + '" target="_blank" rel="noopener">🔗 Ouvrir le lien</a></div>';
+    }
+    var g = state.geoms[r.id] || {};
+    var ex = g.extra || {};
+    var known = [];
+    if (ex.entreprise) known.push(['Entreprise', esc(ex.entreprise.nom) + (ex.entreprise.naf ? ' · NAF ' + esc(ex.entreprise.naf) : '') + (ex.entreprise.etat === 'C' ? ' · <b style="color:var(--accent)">cessée</b>' : '')]);
+    if (ex.entreprise && ex.entreprise.adresse) known.push(['Adresse', esc(ex.entreprise.adresse)]);
+    if (ex.geocoded && ex.geocoded.label) known.push(['Géocodé', esc(ex.geocoded.label) + (ex.geocoded.score ? ' <span style="color:var(--ink-faint)">(' + Math.round(ex.geocoded.score * 100) + ' %)</span>' : '')]);
+    if (ex.parcelle) known.push(['Parcelle', esc(ex.parcelle.idu || '') + (ex.parcelle.contenance ? ' · ' + fmtNum(ex.parcelle.contenance, 0) + ' m²' : '')]);
+    if (ex.commune) known.push(['Commune', esc(ex.commune.nom) + ' (' + esc(ex.commune.code) + ')' + (ex.commune.population ? ' · ' + fmtNum(ex.commune.population, 0) + ' hab.' : '')]);
+    if (ex.admin) known.push(['Zone', esc(ex.admin.nom) + ' (' + esc(ex.admin.code) + ')']);
+    return h + enrichmentShell(ll, known);
+  }
+
+  function enrichmentShell(ll, known) {
+    var e = state.cfg.enrich;
+    var h = '<div class="pp-enrich">';
+    (known || []).forEach(function (k) { h += '<div class="er"><span class="k">' + k[0] + '</span><span>' + k[1] + '</span></div>'; });
+    [['commune', 'Commune'], ['altitude', 'Altitude'], ['meteo', 'Météo'], ['parcelle', 'Cadastre'], ['risques', 'Risques']].forEach(function (k) {
+      if (e[k[0]]) h += '<div class="er" data-enrich="' + k[0] + '"><span class="k">' + k[1] + '</span><span class="loading">chargement…</span></div>';
+    });
+    var lat = ll.lat.toFixed(6), lon = ll.lng.toFixed(6);
+    h += '</div><div class="pp-links">' +
+      '<a target="_blank" rel="noopener" href="https://www.geoportail.gouv.fr/carte?c=' + lon + ',' + lat + '&z=17&l0=ORTHOIMAGERY.ORTHOPHOTOS::GEOPORTAIL:OGC:WMTS(1)&l1=CADASTRALPARCELS.PARCELLAIRE_EXPRESS::GEOPORTAIL:OGC:WMTS(1)&permalink=yes">Géoportail</a>' +
+      '<a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=' + lat + ',' + lon + '">Google Maps</a>' +
+      '<a target="_blank" rel="noopener" href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=' + lat + ',' + lon + '">Street View</a>' +
+      '<a target="_blank" rel="noopener" href="https://www.openstreetmap.org/?mlat=' + lat + '&mlon=' + lon + '#map=17/' + lat + '/' + lon + '">OSM</a>' +
+      '<a target="_blank" rel="noopener" href="https://www.georisques.gouv.fr/mes-risques/connaitre-les-risques-pres-de-chez-moi">Géorisques</a>' +
+      '</div><div class="pp-coords">' + lat + ', ' + lon + '</div>';
+    return h;
+  }
+
+  var WMO = {
+    0: '☀️ Ciel clair', 1: '🌤️ Peu nuageux', 2: '⛅ Partiellement nuageux', 3: '☁️ Couvert', 45: '🌫️ Brouillard', 48: '🌫️ Brouillard givrant',
+    51: '🌦️ Bruine légère', 53: '🌦️ Bruine', 55: '🌧️ Bruine forte', 56: '🌧️ Bruine verglaçante', 57: '🌧️ Bruine verglaçante',
+    61: '🌧️ Pluie faible', 63: '🌧️ Pluie', 65: '🌧️ Forte pluie', 66: '🌧️ Pluie verglaçante', 67: '🌧️ Pluie verglaçante',
+    71: '🌨️ Neige faible', 73: '🌨️ Neige', 75: '❄️ Forte neige', 77: '🌨️ Grains de neige', 80: '🌦️ Averses', 81: '🌧️ Averses', 82: '⛈️ Fortes averses',
+    85: '🌨️ Averses de neige', 86: '🌨️ Fortes averses de neige', 95: '⛈️ Orage', 96: '⛈️ Orage avec grêle', 99: '⛈️ Orage violent'
+  };
+
+  var ENRICHERS = {
+    commune: async function (ll) {
+      var c = await communeAtPoint(ll.lat, ll.lng, false);
+      if (c === NOTFOUND) return 'hors commune française';
+      return esc(c.nom) + ' (' + esc(c.code) + ')' + (c.codesPostaux && c.codesPostaux[0] ? ' · ' + esc(c.codesPostaux[0]) : '') + (c.population ? ' · ' + fmtNum(c.population, 0) + ' hab.' : '');
+    },
+    altitude: async function (ll) {
+      var data = await fetchJson(API.alti + '?lon=' + ll.lng + '&lat=' + ll.lat + '&resource=ign_rge_alti_wld&zonly=true');
+      var z = data && data.elevations && data.elevations[0];
+      if (z && typeof z === 'object') z = z.z;
+      return z == null || z < -1000 ? 'inconnue' : fmtNum(z, 1) + ' m';
+    },
+    meteo: async function (ll) {
+      var data = await fetchJson(API.meteo + '?latitude=' + ll.lat.toFixed(4) + '&longitude=' + ll.lng.toFixed(4) +
+        '&current=temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&forecast_days=1&timezone=auto');
+      var c = data.current || {}, dly = data.daily || {};
+      var s = (WMO[c.weather_code] || '') + ' · <b>' + fmtNum(c.temperature_2m, 1) + ' °C</b>';
+      s += '<br><span style="color:var(--ink-soft);font-size:11.5px">vent ' + fmtNum(c.wind_speed_10m, 0) + ' km/h · humidité ' + fmtNum(c.relative_humidity_2m, 0) + ' %';
+      if (dly.temperature_2m_min) s += ' · auj. ' + fmtNum(dly.temperature_2m_min[0], 0) + '/' + fmtNum(dly.temperature_2m_max[0], 0) + ' °C, ' + fmtNum(dly.precipitation_sum[0], 1) + ' mm';
+      return s + '</span>';
+    },
+    parcelle: async function (ll) {
+      var geom = encodeURIComponent(JSON.stringify({ type: 'Point', coordinates: [ll.lng, ll.lat] }));
+      var data = await fetchJson(API.cadastre + '?geom=' + geom, 15000);
+      var f = data && data.features && data.features[0];
+      if (!f) return 'aucune parcelle';
+      var p = f.properties;
+      return esc(p.idu) + ' · section ' + esc(p.section) + ' n°' + esc(String(p.numero).replace(/^0+/, '')) + (p.contenance ? ' · ' + fmtNum(p.contenance, 0) + ' m²' : '');
+    },
+    risques: async function (ll) {
+      var data = await fetchJson(API.georisques + '?latlon=' + ll.lng + ',' + ll.lat);
+      var d = data && data.data && data.data[0];
+      var list = d && d.risques_detail ? d.risques_detail.map(function (x) { return x.libelle_risque_long; }) : [];
+      if (!list.length) return 'aucun risque recensé (commune)';
+      return '<span style="font-size:11.5px">' + list.slice(0, 8).map(esc).join(' · ') + (list.length > 8 ? ' …' : '') + '</span>';
+    }
+  };
+
+  function relayout(popup) {
+    if (popup._updateLayout && popup.isOpen()) { popup._updateLayout(); popup._updatePosition(); }
+  }
+  function fillEnrichment(popup, r, ll) {
+    var el = popup.getElement && popup.getElement();
+    if (!el) return;
+    Object.keys(ENRICHERS).forEach(function (k) {
+      var slot = el.querySelector('[data-enrich="' + k + '"] span:last-child');
+      if (!slot) return;
+      // pas de popup.update() : il régénérerait le contenu et effacerait les résultats déjà affichés
+      ENRICHERS[k](ll).then(function (html) { slot.className = ''; slot.innerHTML = html; relayout(popup); })
+        .catch(function () { slot.className = 'loading'; slot.textContent = 'service indisponible'; });
+    });
+  }
+
+  // Inspecteur : clic sur un endroit vide de la carte
+  map.on('click', function (e) {
+    if (!state.cfg.enrich.inspector) return;
+    inspectorPopup.setLatLng(e.latlng).setContent('<div class="pp-title">📍 Ce lieu</div>' + enrichmentShell(e.latlng, [])).openOn(map);
+    fillEnrichment(inspectorPopup, null, e.latlng);
+  });
+
+  // =====================================================================
+  // Sélection & liste
+  // =====================================================================
+  function selectRow(id, pan) {
+    var prev = state.selectedId;
+    state.selectedId = id;
+    if (prev !== id) {
+      try { grist.setCursorPos({ rowId: id }); } catch (e) { /* ignore */ }
+    }
+    restyleSelection(prev, id);
+    highlightListItem();
+    if (pan) focusRow(id, true);
+  }
+  function restyleSelection(prev, id) {
+    if (prev === id) return;
+    // en mode carte de chaleur, seul le point sélectionné est dessiné : il faut tout refaire
+    if (state.cfg.style.heatmap) { renderMapData(true); return; }
+    restyleOne(prev); restyleOne(id);
+  }
+  function focusRow(id, openPopup) {
+    var l = layerByRow[id];
+    if (!l) return;
+    if (l.getLatLng) {
+      if (clusterLayer && clusterLayer.hasLayer(l)) clusterLayer.zoomToShowLayer(l, function () { if (openPopup) l.openPopup(); });
+      else { map.setView(l.getLatLng(), Math.max(map.getZoom(), 14)); if (openPopup) l.openPopup(); }
+    } else if (l.getBounds) {
+      map.fitBounds(l.getBounds(), { padding: [40, 40], maxZoom: 17 });
+      if (openPopup) l.openPopup();
+    }
+  }
+
+  var listEl = document.getElementById('list');
+  function renderList() {
+    var d = state.cfg.data;
+    var f = norm(state.listFilter);
+    var rows = state.records.filter(function (r) {
+      if (!f) return true;
+      return [d.title, d.subtitle].concat(d.fields || []).filter(colExists).some(function (c) { return norm(displayValue(r[c])).indexOf(f) >= 0; });
+    });
+    var located = Object.keys(state.geoms).length;
+    document.getElementById('list-count').textContent = rows.length + ' élément' + (rows.length > 1 ? 's' : '') + ' · ' + located + ' localisé' + (located > 1 ? 's' : '');
+    var cs = lastColorScale;
+    listEl.innerHTML = rows.slice(0, 1000).map(function (r) {
+      var g = state.geoms[r.id];
+      var t = colExists(d.title) ? displayValue(r[d.title]) : 'Ligne ' + r.id;
+      var s = colExists(d.subtitle) ? displayValue(r[d.subtitle]) : '';
+      var dot = g ? '<span class="dot" style="background:' + (cs ? cs.fn(r) : state.cfg.style.color) + '"></span>' : '<span class="dot none" title="Non localisé"></span>';
+      return '<div class="item' + (r.id === state.selectedId ? ' selected' : '') + '" data-id="' + r.id + '">' + dot +
+        '<div class="txt"><div class="t">' + esc(t || '—') + '</div>' + (s ? '<div class="s">' + esc(s) + '</div>' : '') + '</div></div>';
+    }).join('') + (rows.length > 1000 ? '<div class="empty-note">… ' + (rows.length - 1000) + ' éléments de plus (affinez le filtre)</div>' : '') +
+      (!rows.length ? '<div class="empty-note">Aucun élément</div>' : '');
+  }
+  function highlightListItem() {
+    Array.prototype.forEach.call(listEl.querySelectorAll('.item'), function (el) {
+      var on = Number(el.dataset.id) === state.selectedId;
+      el.classList.toggle('selected', on);
+      if (on) el.scrollIntoView({ block: 'nearest' });
+    });
+  }
+  listEl.addEventListener('click', function (e) {
+    var it = e.target.closest('.item'); if (!it) return;
+    selectRow(Number(it.dataset.id), true);
+  });
+  document.getElementById('list-search').addEventListener('input', function (e) { state.listFilter = e.target.value; renderList(); });
+  document.getElementById('fit-all').addEventListener('click', function (e) { e.preventDefault(); fitToData(); });
+
+  function updateStatus() {
+    var n = state.records.length, located = Object.keys(state.geoms).length;
+    var mode = GEO_MODES.filter(function (m) { return m.id === state.cfg.geo.mode; })[0];
+    document.getElementById('status').textContent = n
+      ? located + ' / ' + n + ' localisés · ' + (mode ? mode.name : '') + (state.pending ? ' · en cours…' : '')
+      : 'Aucune donnée dans la table';
+  }
+
+  // Sélection liée : les autres widgets ne montrent que ce qui est visible sur la carte
+  function pushVisibleSelection() {
+    if (!state.cfg.data.selectByBounds) return;
+    var b = map.getBounds();
+    var ids = Object.keys(layerByRow).map(Number).filter(function (id) {
+      var l = layerByRow[id];
+      try { return l.getLatLng ? b.contains(l.getLatLng()) : b.intersects(l.getBounds()); } catch (e) { return false; }
+    });
+    try { grist.setSelectedRows(ids); } catch (e) { /* API non disponible */ }
+  }
+  var boundsTimer = null;
+  map.on('moveend', function () { clearTimeout(boundsTimer); boundsTimer = setTimeout(pushVisibleSelection, 250); });
+
+  // =====================================================================
+  // Recherche de lieu (barre du haut)
+  // =====================================================================
+  (function placeSearch() {
+    var input = document.getElementById('place-input'), box = document.getElementById('place-suggestions');
+    var timer = null, results = [], marker = null;
+    input.addEventListener('input', function () {
+      clearTimeout(timer);
+      var q = input.value.trim();
+      if (q.length < 3) { box.classList.remove('open'); return; }
+      timer = setTimeout(async function () {
+        try {
+          var data = await fetchJson(API.completion + '?text=' + encodeURIComponent(q) + '&type=StreetAddress,PositionOfInterest&maximumResponses=8');
+          results = (data && data.results) || [];
+          box.innerHTML = results.map(function (r, i) {
+            return '<div class="suggestion" data-i="' + i + '">' + esc(r.fulltext) + '<div class="meta">' + esc(r.kind || (r.poiType || []).join(', ') || r.zipcode || '') + '</div></div>';
+          }).join('') || '<div class="suggestion"><span class="meta">Aucun résultat</span></div>';
+          box.classList.add('open');
+        } catch (e) { box.classList.remove('open'); }
+      }, 250);
+    });
+    box.addEventListener('mousedown', function (e) {
+      var s = e.target.closest('.suggestion'); if (!s || s.dataset.i == null) return;
+      var r = results[Number(s.dataset.i)];
+      box.classList.remove('open');
+      input.value = r.fulltext;
+      var ll = [r.y, r.x];
+      map.setView(ll, r.kind === 'commune' || /commune/i.test(r.poiType || '') ? 13 : 17);
+      if (marker) map.removeLayer(marker);
+      marker = L.circleMarker(ll, { radius: 7, color: '#1B1B1E', weight: 2, fillColor: '#FFD43B', fillOpacity: 1 }).addTo(map)
+        .bindPopup('<div class="pp-title">' + esc(r.fulltext) + '</div>' + enrichmentShell(L.latLng(ll), []));
+      marker.on('popupopen', function (ev) { fillEnrichment(ev.popup, null, L.latLng(ll)); });
+      marker.openPopup();
+    });
+    input.addEventListener('blur', function () { setTimeout(function () { box.classList.remove('open'); }, 150); });
+  })();
+
+  // =====================================================================
+  // Panneau de configuration
+  // =====================================================================
+  var tabBody = document.getElementById('tab-body');
+
+  function colOptions(selected, emptyLabel) {
+    var h = '<option value="">' + esc(emptyLabel || '— aucune —') + '</option>';
+    state.columns.forEach(function (c) {
+      h += '<option value="' + esc(c.id) + '"' + (c.id === selected ? ' selected' : '') + '>' + esc(c.label) + (c.type ? ' · ' + esc(c.type.replace(/:.*/, '')) : '') + '</option>';
+    });
+    if (selected && !colExists(selected)) h += '<option value="' + esc(selected) + '" selected>⚠ ' + esc(selected) + ' (introuvable)</option>';
+    return h;
+  }
+  function selRow(label, path, emptyLabel, help) {
+    return '<div class="row"><label>' + label + '</label><div class="ctl"><select data-bind="' + path + '">' + colOptions(getPath(state.cfg, path), emptyLabel) + '</select></div></div>' +
+      (help ? '<div class="help" style="margin-top:-4px">' + help + '</div>' : '');
+  }
+  function enumRow(label, path, opts) {
+    var v = getPath(state.cfg, path);
+    return '<div class="row"><label>' + label + '</label><div class="ctl"><select data-bind="' + path + '">' +
+      opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (o[0] === v ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select></div></div>';
+  }
+  function colorRow(label, path) {
+    return '<div class="row"><label>' + label + '</label><div class="ctl"><input type="color" data-bind="' + path + '" value="' + esc(getPath(state.cfg, path)) + '"></div></div>';
+  }
+  function rangeRow(label, path, min, max, step, unit) {
+    var v = getPath(state.cfg, path);
+    return '<div class="row"><label>' + label + '</label><div class="ctl"><input type="range" data-num data-bind="' + path + '" min="' + min + '" max="' + max + '" step="' + step + '" value="' + v + '"><span class="val">' + v + (unit || '') + '</span></div></div>';
+  }
+  function checkRow(label, path, sub) {
+    return '<label class="chk"><input type="checkbox" data-bind="' + path + '"' + (getPath(state.cfg, path) ? ' checked' : '') + '><span>' + label + (sub ? '<small>' + sub + '</small>' : '') + '</span></label>';
+  }
+
+  var TABS = {
+    geo: function () {
+      var g = state.cfg.geo;
+      var h = '<div class="sec"><h3>Comment localiser chaque ligne ?</h3><div class="modes">' +
+        GEO_MODES.map(function (m) { return '<button class="mode' + (m.id === g.mode ? ' active' : '') + '" data-mode="' + m.id + '"><b>' + m.name + '</b><span>' + m.desc + '</span></button>'; }).join('') +
+        '</div></div><div class="sec"><h3>Colonnes</h3>';
+      var crsRow = enumRow('Système', 'geo.crs', CRS_LIST);
+      switch (g.mode) {
+        case 'latlon':
+          h += selRow('Latitude (Y)', 'geo.lat') + selRow('Longitude (X)', 'geo.lon') + crsRow +
+            '<div class="help">Formats acceptés : <code>48.8566</code>, <code>48,8566</code>, <code>48°51\'24"N</code>. En Lambert 93, choisissez X = longitude et Y = latitude.</div>';
+          break;
+        case 'combined':
+          h += selRow('Coordonnées', 'geo.combined') + enumRow('Ordre', 'geo.combinedOrder', [['latlon', 'latitude, longitude'], ['lonlat', 'longitude, latitude']]) + crsRow +
+            '<div class="help">Exemples : <code>48.85, 2.35</code> · <code>48,85;2,35</code> · <code>POINT(2.35 48.85)</code> · <code>[48.85, 2.35]</code></div>';
+          break;
+        case 'address':
+          h += '<div class="help">Les colonnes cochées sont concaténées dans l\'ordre (ex. adresse + code postal + ville), puis géocodées par la <b>Base Adresse Nationale</b> (Géoplateforme IGN). Les résultats sont mis en cache.</div>' + fieldPicker('geo.address');
+          break;
+        case 'geometry':
+          h += selRow('Géométrie', 'geo.geometry') + crsRow + '<div class="help">GeoJSON (<code>{"type":"Polygon",…}</code>, Feature, FeatureCollection) ou WKT (<code>POLYGON((…))</code>, <code>MULTIPOLYGON</code>, <code>LINESTRING</code>…).</div>';
+          break;
+        case 'commune':
+          h += selRow('Code INSEE', 'geo.commune') + enumRow('Représenter par', 'geo.communeShape', [['contour', 'le contour de la commune'], ['centre', 'le centre de la commune'], ['mairie', 'la mairie']]) +
+            '<div class="help">Source : <b>API Découpage administratif</b> (geo.api.gouv.fr). Code INSEE sur 5 caractères, ex. <code>75056</code>, <code>2A004</code>.</div>';
+          break;
+        case 'postal':
+          h += selRow('Code postal', 'geo.postal') + '<div class="help">Source : geo.api.gouv.fr. Un code postal partagé par plusieurs communes est placé sur la première.</div>';
+          break;
+        case 'departement':
+          h += selRow('Département', 'geo.departement') + '<div class="help">Code (<code>01</code>, <code>2A</code>, <code>974</code>) ou nom. Contours IGN Admin Express simplifiés.</div>';
+          break;
+        case 'region':
+          h += selRow('Région', 'geo.region') + '<div class="help">Code INSEE (<code>11</code>, <code>84</code>…) ou nom de la région.</div>';
+          break;
+        case 'siret':
+          h += selRow('SIRET / SIREN', 'geo.siret') + '<div class="help">Source : <b>API Recherche d\'entreprises</b> (Sirene, INSEE). Un SIRET place l\'établissement, un SIREN le siège. Limite de 7 requêtes/s : les grandes tables sont traitées progressivement.</div>';
+          break;
+        case 'parcelle':
+          h += selRow('Identifiant', 'geo.parcelle') + '<div class="help">Identifiant unique (IDU) sur 14 caractères : INSEE + préfixe + section + numéro, ex. <code>75056000AB0012</code>. Source : <b>API Carto cadastre</b> (IGN).</div>';
+          break;
+      }
+      h += '</div>';
+      if (['latlon', 'combined', 'geometry', 'siret'].indexOf(g.mode) >= 0) {
+        h += '<div class="sec"><h3>Secours</h3>' + selRow('Adresse de secours', 'geo.fallbackAddress', '— aucune —', 'Si la ligne n\'a pas de coordonnées, on géocode cette adresse.') + '</div>';
+      }
+      if (['address', 'siret', 'postal'].indexOf(g.mode) >= 0 || (g.fallbackAddress && g.mode !== 'address')) {
+        h += '<div class="sec"><h3>Enregistrer les coordonnées trouvées</h3>' +
+          selRow('→ Latitude', 'geo.writeLat', '— ne pas écrire —') + selRow('→ Longitude', 'geo.writeLon', '— ne pas écrire —') +
+          '<div class="row"><label></label><div class="ctl"><button class="btn primary" id="btn-writeback">Écrire dans la table</button></div></div>' +
+          '<div class="help">Évite de refaire le géocodage et permet d\'utiliser les coordonnées ailleurs dans Grist. Seules les cellules vides sont remplies.</div></div>';
+      }
+      h += '<div id="geo-diag"></div>';
+      return h;
+    },
+
+    data: function () {
+      var h = '<div class="sec"><h3>En-tête des fiches</h3>' +
+        selRow('Titre', 'data.title', '— aucun —') + selRow('Sous-titre', 'data.subtitle', '— aucun —') +
+        selRow('Lien (URL)', 'data.link', '— aucun —') + '</div>';
+      h += '<div class="sec"><h3>Champs affichés dans la fiche</h3>' + fieldPicker('data.fields') + checkRow('Masquer les champs vides', 'data.hideEmpty') + '</div>';
+      h += '<div class="sec"><h3>Étiquettes sur la carte</h3>' + selRow('Texte', 'data.label', '— même que le titre —') +
+        '<div class="help">Activez « Afficher les étiquettes » dans l\'onglet Style.</div></div>';
+      h += '<div class="sec"><h3>Informations publiques ajoutées aux fiches</h3>' +
+        checkRow('Commune, code postal, population', 'enrich.commune', 'geo.api.gouv.fr') +
+        checkRow('Altitude', 'enrich.altitude', 'IGN RGE ALTI®') +
+        checkRow('Météo actuelle et du jour', 'enrich.meteo', 'Open-Meteo (modèles Météo-France inclus)') +
+        checkRow('Parcelle cadastrale', 'enrich.parcelle', 'API Carto IGN – cadastre') +
+        checkRow('Risques naturels et technologiques', 'enrich.risques', 'Géorisques (GASPAR)') +
+        checkRow('Inspecteur : cliquer n\'importe où sur la carte', 'enrich.inspector', 'Affiche ces informations pour le lieu cliqué') + '</div>';
+      h += '<div class="sec"><h3>Liaison avec Grist</h3>' +
+        checkRow('Filtrer les widgets liés sur la zone visible', 'data.selectByBounds', 'Dans Grist, liez un tableau à ce widget (« Sélectionner par ») : il ne montrera que les lignes visibles sur la carte.') +
+        '<div class="row"><label>Export</label><div class="ctl"><button class="btn" id="btn-export">⬇ Télécharger en GeoJSON</button></div></div></div>';
+      return h;
+    },
+
+    style: function () {
+      var st = state.cfg.style;
+      var h = '<div class="sec"><h3>Fond de carte</h3>' + enumRow('Fond', 'style.basemap', Object.keys(BASEMAPS).map(function (k) { return [k, BASEMAPS[k].name]; })) + '</div>';
+      h += '<div class="sec"><h3>Points</h3>' +
+        enumRow('Forme', 'style.marker', [['circle', '● Cercle'], ['pin', '📍 Épingle'], ['square', '■ Carré']]) +
+        rangeRow('Taille', 'style.size', 3, 20, 1, ' px') + rangeRow('Opacité', 'style.opacity', 0.1, 1, 0.05) +
+        colorRow('Bordure', 'style.stroke') +
+        checkRow('Regrouper les points proches (clusters)', 'style.cluster') +
+        checkRow('Carte de chaleur', 'style.heatmap', 'Intensité pondérée par la colonne de taille si elle est définie') +
+        (st.heatmap ? rangeRow('Rayon chaleur', 'style.heatRadius', 8, 60, 1, ' px') : '') +
+        checkRow('Afficher les étiquettes', 'style.labels') + '</div>';
+      h += '<div class="sec"><h3>Couleur</h3>' + selRow('Colorer selon', 'style.colorBy', '— couleur unique —');
+      if (!colExists(st.colorBy)) h += colorRow('Couleur', 'style.color');
+      else h += '<div id="color-detail"></div>';
+      h += '</div>';
+      h += '<div class="sec"><h3>Taille proportionnelle</h3>' + selRow('Taille selon', 'style.sizeBy', '— taille fixe —') +
+        (colExists(st.sizeBy) ? rangeRow('Taille max', 'style.sizeMax', 8, 50, 1, ' px') : '') + '</div>';
+      h += '<div class="sec"><h3>Zones (polygones)</h3>' + colorRow('Remplissage', 'style.zoneFill') + rangeRow('Opacité', 'style.zoneOpacity', 0, 1, 0.05) +
+        colorRow('Contour', 'style.zoneStroke') + rangeRow('Épaisseur', 'style.zoneWeight', 0, 6, 0.5, ' px') +
+        '<div class="help">Si « Colorer selon » est défini, il s\'applique aussi aux zones (carte choroplèthe).</div></div>';
+      h += '<div class="sec"><h3>Contour des communes</h3>' +
+        enumRow('Afficher', 'style.communeContour', [['none', 'Aucun'], ['points', 'Communes contenant les points'], ['list', 'Communes / départements choisis']]);
+      if (st.communeContour === 'list') {
+        h += '<div class="chips">' + (st.communeList || []).map(function (c, i) {
+          return '<span class="chip">' + esc(c.nom) + ' <small>' + esc(c.code) + '</small><button data-rm-commune="' + i + '" title="Retirer">×</button></span>';
+        }).join('') + '</div>' +
+          '<div class="row" style="position:relative"><label>Ajouter</label><div class="ctl" style="position:relative"><input type="search" id="commune-search" placeholder="Nom de commune ou département…" autocomplete="off"><div class="suggestions" id="commune-sugg"></div></div></div>';
+      }
+      if (st.communeContour !== 'none') {
+        h += colorRow('Couleur', 'style.communeColor') + rangeRow('Épaisseur', 'style.communeWeight', 0.5, 6, 0.5, ' px') +
+          rangeRow('Remplissage', 'style.communeFill', 0, 0.6, 0.05) + checkRow('Trait pointillé', 'style.communeDash') + checkRow('Afficher le nom', 'style.communeNames');
+      }
+      h += '</div><div class="sec"><h3>Affichage</h3>' + checkRow('Afficher la légende', 'style.legend') +
+        checkRow('Recadrer automatiquement sur les données', 'style.fit') + '</div>';
+      return h;
+    },
+
+    layers: function () {
+      var active = state.cfg.layers.active || [];
+      var h = '<div class="help">Couches publiques superposées à vos données. Cochez pour afficher, réglez l\'opacité avec le curseur.</div>';
+      function layerRow(def, removable) {
+        var on = active.indexOf(def.id) >= 0;
+        var op = state.cfg.layers.opacity[def.id]; if (op == null) op = def.type === 'geojson' ? 1 : 0.75;
+        return '<div class="layer"><input type="checkbox" data-layer="' + esc(def.id) + '"' + (on ? ' checked' : '') + '>' +
+          '<div class="ln"><b>' + esc(def.name) + (def.src ? '<span class="src-badge">' + esc(def.src) + '</span>' : '') + '</b>' +
+          (overlayErrors[def.id] ? '<small style="color:var(--accent)">⚠ indisponible : ' + esc(overlayErrors[def.id]) + '</small>' : (def.note ? '<small>' + esc(def.note) + '</small>' : '')) + '</div>' +
+          '<input type="range" min="0.1" max="1" step="0.05" value="' + op + '" data-layer-op="' + esc(def.id) + '" title="Opacité">' +
+          (removable ? '<button class="btn icon sm" data-rm-layer="' + esc(def.id) + '" title="Supprimer">✕</button>' : '') + '</div>';
+      }
+      OVERLAYS.forEach(function (g) {
+        h += '<div class="layer-group"><h4>' + esc(g.group) + '</h4>' + g.items.map(function (d) { return layerRow(d, false); }).join('') + '</div>';
+      });
+      var custom = state.cfg.layers.custom || [];
+      h += '<div class="layer-group"><h4>Mes couches</h4>' + (custom.length ? custom.map(function (d) { return layerRow(d, true); }).join('') : '<div class="empty-note">Ajoutez n\'importe quel flux public (WMS, tuiles XYZ, GeoJSON) : data.gouv.fr, Géoportail, BRGM, INPN, SANDRE, Cerema…</div>') + '</div>';
+      h += '<div class="sec" style="margin-top:12px"><h3>Ajouter une couche</h3>' +
+        '<div class="row"><label>Nom</label><div class="ctl"><input type="text" id="cl-name" placeholder="ex. Zones inondables"></div></div>' +
+        '<div class="row"><label>Type</label><div class="ctl"><select id="cl-type"><option value="wms">WMS</option><option value="xyz">Tuiles XYZ / WMTS (URL avec {z}/{x}/{y})</option><option value="geojson">GeoJSON (URL)</option></select></div></div>' +
+        '<div class="row"><label>URL</label><div class="ctl"><input type="url" id="cl-url" placeholder="https://…"></div></div>' +
+        '<div class="row"><label>Couche(s) WMS</label><div class="ctl"><input type="text" id="cl-layers" placeholder="nom_de_couche (pour WMS)"></div></div>' +
+        '<div class="row"><label></label><div class="ctl"><button class="btn primary" id="cl-add">Ajouter</button></div></div>' +
+        '<div class="help">Exemple IGN WMS : URL <code>https://data.geopf.fr/wms-r/wms</code>, couche <code>OCSGE.COUVERTURE</code>. Le catalogue complet est sur <a href="https://cartes.gouv.fr" target="_blank">cartes.gouv.fr</a> et <a href="https://geoservices.ign.fr" target="_blank">geoservices.ign.fr</a>.</div></div>';
+      return h;
+    }
+  };
+
+  // Liste ordonnée de colonnes (champs de la fiche, colonnes d'adresse)
+  function fieldPicker(path) {
+    var list = getPath(state.cfg, path) || [];
+    var h = '<div class="fields-list">' + (list.length ? list.map(function (c, i) {
+      var meta = state.columns.filter(function (x) { return x.id === c; })[0];
+      return '<div class="field-item"><span class="name">' + (meta ? esc(meta.label) : '⚠ ' + esc(c)) + '</span>' +
+        (meta && meta.type ? '<span class="type">' + esc(meta.type.replace(/:.*/, '')) + '</span>' : '') +
+        '<button class="btn icon sm" data-fp="' + path + '" data-act="up" data-i="' + i + '"' + (i === 0 ? ' disabled' : '') + '>↑</button>' +
+        '<button class="btn icon sm" data-fp="' + path + '" data-act="down" data-i="' + i + '"' + (i === list.length - 1 ? ' disabled' : '') + '>↓</button>' +
+        '<button class="btn icon sm" data-fp="' + path + '" data-act="rm" data-i="' + i + '">✕</button></div>';
+    }).join('') : '<div class="empty-note">Aucune colonne choisie</div>') + '</div>';
+    var avail = state.columns.filter(function (c) { return list.indexOf(c.id) < 0; });
+    h += '<div class="row"><div class="ctl"><select data-fp-add="' + path + '"><option value="">+ Ajouter une colonne…</option>' +
+      avail.map(function (c) { return '<option value="' + esc(c.id) + '">' + esc(c.label) + '</option>'; }).join('') + '</select>' +
+      '<button class="btn sm" data-fp="' + path + '" data-act="all">Toutes</button></div></div>';
+    return h;
+  }
+
+  function renderTab() {
+    var scroll = tabBody.scrollTop;
+    tabBody.innerHTML = state.columns.length || state.activeTab === 'layers'
+      ? TABS[state.activeTab]()
+      : '<div class="help">La table liée est vide ou le widget n\'a pas encore accès aux données. Donnez l\'accès « complet » au widget, puis ajoutez des lignes.</div>' + (state.activeTab === 'style' ? TABS.style() : '');
+    tabBody.scrollTop = scroll;
+    if (state.activeTab === 'geo') refreshGeoTabDiag();
+    if (state.activeTab === 'style') { refreshCatColors(); bindCommuneSearch(); }
+  }
+
+  function refreshGeoTabDiag() {
+    var el = document.getElementById('geo-diag');
+    if (!el) return;
+    var n = state.records.length, ok = Object.keys(state.geoms).length;
+    var cls = state.pending ? 'info' : (ok === n ? 'ok' : (ok ? 'warn' : 'warn'));
+    var h = '<div class="diag ' + cls + '"><b>' + ok + ' / ' + n + '</b> lignes localisées' + (state.pending ? ' — recherche en cours…' : '');
+    var fails = state.failures.slice(0, 8);
+    if (fails.length && !state.pending) {
+      var t = state.cfg.data.title;
+      h += '<ul>' + fails.map(function (f) {
+        var r = state.records.filter(function (x) { return x.id === f.id; })[0];
+        var name = r && colExists(t) ? displayValue(r[t]) : 'Ligne ' + f.id;
+        return '<li>' + esc(name || 'Ligne ' + f.id) + (f.value ? ' — <code>' + esc(String(f.value).slice(0, 50)) + '</code>' : '') + ' : ' + esc(f.reason) + '</li>';
+      }).join('') + (state.failures.length > 8 ? '<li>… et ' + (state.failures.length - 8) + ' autres</li>' : '') + '</ul>';
+    }
+    el.innerHTML = h + '</div>';
+  }
+
+  function refreshCatColors() {
+    var el = document.getElementById('color-detail');
+    if (!el) return;
+    var cs = lastColorScale || buildColorScale();
+    var h = '';
+    if (cs.numeric) {
+      h += enumRow('Palette', 'style.palette', Object.keys(SEQ_PALETTES).map(function (k) { return [k, k.charAt(0).toUpperCase() + k.slice(1)]; })) +
+        '<div class="row"><label></label><div class="ctl"><div class="grad" style="flex:1;height:10px;border-radius:4px;background:linear-gradient(90deg,' + (SEQ_PALETTES[state.cfg.style.palette] || SEQ_PALETTES.viridis).join(',') + ')"></div></div></div>' +
+        enumRow('Classes', 'style.classes', [['continu', 'Dégradé continu'], ['quantiles', '5 classes (quantiles)'], ['egal', '5 classes (intervalles égaux)']]);
+    } else if (cs.categories) {
+      h += '<div class="cat-colors">' + cs.categories.slice(0, 60).map(function (c) {
+        return '<div class="cat-row"><input type="color" data-cat="' + esc(c) + '" value="' + cs.colors[c] + '"><span>' + esc(c) + '</span></div>';
+      }).join('') + '</div><div class="row" style="margin-top:6px"><div class="ctl"><button class="btn sm" id="btn-reset-cat">Couleurs par défaut</button></div></div>';
+    }
+    el.innerHTML = h;
+  }
+
+  function bindCommuneSearch() {
+    var input = document.getElementById('commune-search');
+    if (!input) return;
+    var box = document.getElementById('commune-sugg'), timer = null, results = [];
+    input.addEventListener('input', function () {
+      clearTimeout(timer);
+      var q = input.value.trim();
+      if (q.length < 2) { box.classList.remove('open'); return; }
+      timer = setTimeout(async function () {
+        try {
+          var isCode = /^\d[\dAB]\d{3}$/i.test(q);
+          var coms = await fetchJson(API.geoApi + '/communes?' + (isCode ? 'code=' : 'nom=') + encodeURIComponent(q) + '&fields=nom,code,codeDepartement&boost=population&limit=6');
+          var deps = await fetchJson(API.geoApi + '/departements?' + (/^\d[\dAB]?\d?$/i.test(q) ? 'code=' : 'nom=') + encodeURIComponent(q) + '&limit=3').catch(function () { return []; });
+          results = deps.map(function (d) { return { type: 'departement', code: d.code, nom: d.nom, meta: 'Département' }; })
+            .concat(coms.map(function (c) { return { type: 'commune', code: c.code, nom: c.nom, meta: 'Commune · ' + c.code + ' · dép. ' + c.codeDepartement }; }));
+          box.innerHTML = results.map(function (r, i) { return '<div class="suggestion" data-i="' + i + '">' + esc(r.nom) + '<div class="meta">' + esc(r.meta) + '</div></div>'; }).join('') ||
+            '<div class="suggestion"><span class="meta">Aucun résultat</span></div>';
+          box.classList.add('open');
+        } catch (e) { box.classList.remove('open'); }
+      }, 250);
+    });
+    box.addEventListener('mousedown', function (e) {
+      var s = e.target.closest('.suggestion'); if (!s || s.dataset.i == null) return;
+      var r = results[Number(s.dataset.i)];
+      var list = state.cfg.style.communeList || (state.cfg.style.communeList = []);
+      if (!list.some(function (x) { return x.type === r.type && x.code === r.code; })) list.push({ type: r.type, code: r.code, nom: r.nom });
+      saveCfg(); renderTab(); renderCommuneContours();
+    });
+    input.addEventListener('blur', function () { setTimeout(function () { box.classList.remove('open'); }, 150); });
+  }
+
+  // Effets d'une modification de réglage selon sa section
+  function onCfgChanged(path, rerenderTab) {
+    saveCfg();
+    var sec = path.split('.')[0];
+    if (sec === 'geo') {
+      if (path === 'geo.writeLat' || path === 'geo.writeLon') return;
+      didFitOnce = false;
+      resolveAll();
+    } else if (path === 'style.basemap') {
+      applyBasemap();
+    } else if (path.indexOf('style.commune') === 0) {
+      renderCommuneContours();
+    } else if (sec === 'style' || sec === 'data') {
+      if (path === 'data.selectByBounds') { if (state.cfg.data.selectByBounds) pushVisibleSelection(); else { try { grist.setSelectedRows(null); } catch (e) { /* ignore */ } } }
+      renderAll(true);
+    }
+    if (rerenderTab) renderTab();
+  }
+
+  var RERENDER_ON = ['geo.mode', 'geo.fallbackAddress', 'style.colorBy', 'style.sizeBy', 'style.heatmap', 'style.communeContour', 'data.fields'];
+
+  tabBody.addEventListener('input', function (e) {
+    var t = e.target;
+    if (t.matches('input[type=range][data-bind]')) {
+      var v = Number(t.value);
+      setPath(state.cfg, t.dataset.bind, v);
+      var lab = t.parentNode.querySelector('.val'); if (lab) lab.textContent = v + (lab.textContent.replace(/^[\d.,-]+/, ''));
+      onCfgChanged(t.dataset.bind, false);
+    } else if (t.matches('input[type=color][data-bind]')) {
+      setPath(state.cfg, t.dataset.bind, t.value);
+      onCfgChanged(t.dataset.bind, false);
+    } else if (t.matches('[data-layer-op]')) {
+      state.cfg.layers.opacity[t.dataset.layerOp] = Number(t.value);
+      setOverlayOpacity(t.dataset.layerOp, Number(t.value));
+      saveCfg();
+    }
+  });
+
+  tabBody.addEventListener('change', function (e) {
+    var t = e.target;
+    if (t.matches('select[data-bind]')) {
+      setPath(state.cfg, t.dataset.bind, t.value);
+      onCfgChanged(t.dataset.bind, RERENDER_ON.indexOf(t.dataset.bind) >= 0 || t.dataset.bind.indexOf('geo.') === 0);
+    } else if (t.matches('input[type=checkbox][data-bind]')) {
+      setPath(state.cfg, t.dataset.bind, t.checked);
+      onCfgChanged(t.dataset.bind, RERENDER_ON.indexOf(t.dataset.bind) >= 0);
+    } else if (t.matches('[data-fp-add]')) {
+      if (!t.value) return;
+      var p = t.dataset.fpAdd, list = (getPath(state.cfg, p) || []).slice();
+      list.push(t.value); setPath(state.cfg, p, list);
+      onCfgChanged(p, true);
+    } else if (t.matches('[data-layer]')) {
+      var id = t.dataset.layer, act = state.cfg.layers.active || (state.cfg.layers.active = []);
+      if (t.checked) { if (act.indexOf(id) < 0) act.push(id); } else state.cfg.layers.active = act.filter(function (x) { return x !== id; });
+      saveCfg(); applyOverlays(); renderLegend();
+    } else if (t.matches('[data-cat]')) {
+      state.cfg.style.catColors[t.dataset.cat] = t.value;
+      saveCfg(); renderAll(true);
+    }
+  });
+
+  tabBody.addEventListener('click', function (e) {
+    var t = e.target.closest('button'); if (!t) return;
+    if (t.dataset.mode) {
+      state.cfg.geo.mode = t.dataset.mode;
+      onCfgChanged('geo.mode', true);
+    } else if (t.dataset.fp) {
+      var p = t.dataset.fp, list = (getPath(state.cfg, p) || []).slice(), i = Number(t.dataset.i);
+      if (t.dataset.act === 'up') { var a = list[i - 1]; list[i - 1] = list[i]; list[i] = a; }
+      else if (t.dataset.act === 'down') { var b = list[i + 1]; list[i + 1] = list[i]; list[i] = b; }
+      else if (t.dataset.act === 'rm') list.splice(i, 1);
+      else if (t.dataset.act === 'all') state.columns.forEach(function (c) { if (list.indexOf(c.id) < 0) list.push(c.id); });
+      setPath(state.cfg, p, list);
+      onCfgChanged(p, true);
+    } else if (t.dataset.rmCommune != null) {
+      state.cfg.style.communeList.splice(Number(t.dataset.rmCommune), 1);
+      saveCfg(); renderTab(); renderCommuneContours();
+    } else if (t.dataset.rmLayer) {
+      var rid = t.dataset.rmLayer;
+      state.cfg.layers.custom = state.cfg.layers.custom.filter(function (c) { return c.id !== rid; });
+      state.cfg.layers.active = state.cfg.layers.active.filter(function (x) { return x !== rid; });
+      saveCfg(); applyOverlays(); renderTab(); renderLegend();
+    } else if (t.id === 'cl-add') {
+      addCustomLayer();
+    } else if (t.id === 'btn-reset-cat') {
+      state.cfg.style.catColors = {}; saveCfg(); renderAll(true);
+    } else if (t.id === 'btn-writeback') {
+      writeBack(t);
+    } else if (t.id === 'btn-export') {
+      exportGeojson();
+    }
+  });
+
+  function addCustomLayer() {
+    var name = document.getElementById('cl-name').value.trim();
+    var type = document.getElementById('cl-type').value;
+    var url = document.getElementById('cl-url').value.trim();
+    var layers = document.getElementById('cl-layers').value.trim();
+    if (!/^https:\/\//i.test(url)) { alert('Indiquez une URL commençant par https:// (les flux http ne sont pas autorisés dans Grist).'); return; }
+    if (type === 'wms' && !layers) { alert('Indiquez le nom de la couche WMS.'); return; }
+    if (type === 'wms') url = url.replace(/\?.*$/, '');
+    var def = { id: 'c' + Date.now().toString(36), name: name || layers || url.replace(/^https:\/\//, '').slice(0, 30), type: type, url: url, layers: layers, src: 'Perso', opts: { attribution: esc(url.replace(/^https:\/\/([^/]+).*/, '$1')) } };
+    state.cfg.layers.custom = (state.cfg.layers.custom || []).concat([def]);
+    state.cfg.layers.active = (state.cfg.layers.active || []).concat([def.id]);
+    saveCfg(); applyOverlays(); renderTab(); renderLegend();
+  }
+
+  async function writeBack(btn) {
+    var g = state.cfg.geo;
+    if (!colExists(g.writeLat) || !colExists(g.writeLon)) { alert('Choisissez les colonnes de destination (latitude et longitude).'); return; }
+    var updates = [];
+    state.records.forEach(function (r) {
+      var geo = state.geoms[r.id];
+      if (!geo || geo.kind !== 'point') return;
+      if (!isBlank(r[g.writeLat]) && !isBlank(r[g.writeLon])) return;
+      var fields = {};
+      fields[g.writeLat] = Math.round(geo.latlng[0] * 1e6) / 1e6;
+      fields[g.writeLon] = Math.round(geo.latlng[1] * 1e6) / 1e6;
+      updates.push({ id: r.id, fields: fields });
+    });
+    if (!updates.length) { alert('Rien à écrire : toutes les lignes localisées ont déjà des coordonnées.'); return; }
+    if (!confirm(updates.length + ' ligne(s) vont recevoir des coordonnées. Continuer ?')) return;
+    btn.disabled = true; btn.textContent = 'Écriture…';
+    try {
+      for (var i = 0; i < updates.length; i += 200) await grist.selectedTable.update(updates.slice(i, i + 200));
+      btn.textContent = '✓ ' + updates.length + ' ligne(s) mises à jour';
+    } catch (e) {
+      btn.textContent = 'Échec : ' + (e.message || 'accès refusé');
+    }
+    setTimeout(function () { btn.disabled = false; btn.textContent = 'Écrire dans la table'; }, 3000);
+  }
+
+  function exportGeojson() {
+    var d = state.cfg.data;
+    var cols = [d.title, d.subtitle].concat(d.fields || []).filter(colExists).filter(function (c, i, a) { return a.indexOf(c) === i; });
+    var feats = state.records.filter(function (r) { return state.geoms[r.id]; }).map(function (r) {
+      var g = state.geoms[r.id];
+      var props = { id: r.id };
+      cols.forEach(function (c) { props[colLabel(c)] = displayValue(r[c]); });
+      return { type: 'Feature', properties: props, geometry: g.kind === 'point' ? { type: 'Point', coordinates: [g.latlng[1], g.latlng[0]] } : g.geojson };
+    });
+    var blob = new Blob([JSON.stringify({ type: 'FeatureCollection', features: feats })], { type: 'application/geo+json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = (state.tableId || 'carte') + '.geojson';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+  }
+
+  // ---- onglets & panneaux ----
+  document.getElementById('tabs').addEventListener('click', function (e) {
+    var t = e.target.closest('.tab'); if (!t) return;
+    state.activeTab = t.dataset.tab;
+    Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (x) { x.classList.toggle('active', x === t); });
+    tabBody.scrollTop = 0;
+    renderTab();
+  });
+  function togglePanel(id, btnId, force) {
+    var p = document.getElementById(id);
+    var show = force != null ? force : p.classList.contains('hidden');
+    p.classList.toggle('hidden', !show);
+    document.getElementById(btnId).classList.toggle('on', show);
+    setTimeout(function () { map.invalidateSize(); }, 50);
+    return show;
+  }
+  document.getElementById('btn-config').addEventListener('click', function () { if (togglePanel('config-panel', 'btn-config')) renderTab(); });
+  document.getElementById('btn-list').addEventListener('click', function () { togglePanel('list-panel', 'btn-list'); });
+  document.getElementById('btn-reset').addEventListener('click', function () {
+    if (!confirm('Revenir aux réglages détectés automatiquement ? Vos choix actuels seront perdus.')) return;
+    state.cfg = autoDetect();
+    saveCfg(); applyBasemap(); applyOverlays(); didFitOnce = false; resolveAll(); renderTab();
+  });
+
+  // =====================================================================
+  // Grist
+  // =====================================================================
+  grist.ready({ requiredAccess: 'full', allowSelectBy: true });
+
+  var firstRecords = true;
+  var recordsTimer = null;
+  grist.onRecords(function (records) {
+    // Grist peut envoyer plusieurs mises à jour rapprochées : on regroupe
+    clearTimeout(recordsTimer);
+    recordsTimer = setTimeout(function () { handleRecords(records); }, firstRecords ? 0 : 150);
+  });
+
+  async function handleRecords(records) {
+    var wasFirst = firstRecords;
+    firstRecords = false;
+    state.records = records || [];
+    if (wasFirst || !state.colMeta) await loadColumnMeta();
+    computeColumns();
+    if (wasFirst) await initCfg();
+    if (!state.cfgLoaded && state.columns.length) {
+      // aucune configuration enregistrée : détection automatique
+      state.cfg = autoDetect(); state.cfgLoaded = true;
+      applyBasemap();
+      if (state.columns.length) saveCfg();
+    }
+    resolveAll();
+    if (!document.getElementById('config-panel').classList.contains('hidden')) renderTab();
+  }
+
+  var optionsReceived = null;
+  var optionsPromise = new Promise(function (res) { optionsReceived = res; });
+  setTimeout(function () { if (optionsReceived) { optionsReceived(null); optionsReceived = null; } }, 1500);
+  grist.onOptions(function (options) {
+    var s = options && options.cfg;
+    if (optionsReceived) { optionsReceived(s || null); optionsReceived = null; return; }
+    // modification venant d'un autre onglet / utilisateur
+    if (s && s !== state.cfgString) {
+      try {
+        state.cfg = deepMerge(defaultCfg(), JSON.parse(s)); state.cfgString = s; state.cfgLoaded = true;
+        applyBasemap(); applyOverlays(); resolveAll();
+        if (!document.getElementById('config-panel').classList.contains('hidden')) renderTab();
+      } catch (e) { /* ignore */ }
+    }
+  });
+
+  async function initCfg() {
+    var s = await optionsPromise;
+    optionsReceived = null;
+    if (!s) { try { s = localStorage.getItem(LS_KEY + ':' + (state.tableId || '')); } catch (e) { /* ignore */ } }
+    if (s) {
+      try { state.cfg = deepMerge(defaultCfg(), JSON.parse(s)); state.cfgString = s; state.cfgLoaded = true; } catch (e) { /* config illisible */ }
+    }
+    applyBasemap();
+    applyOverlays();
+  }
+
+  grist.onRecord(function (rec) {
+    if (!rec || rec.id === state.selectedId) return;
+    var prev = state.selectedId;
+    state.selectedId = rec.id;
+    restyleSelection(prev, rec.id);
+    highlightListItem();
+    var l = layerByRow[rec.id];
+    if (l) {
+      var inView = l.getLatLng ? map.getBounds().contains(l.getLatLng()) : map.getBounds().intersects(l.getBounds());
+      if (!inView) focusRow(rec.id, false);
+    }
+  });
+
+  // Fond de carte par défaut tant que Grist n'a rien envoyé (ex. ouverture hors Grist)
+  applyBasemap();
+  setTimeout(function () {
+    if (firstRecords) document.getElementById('status').textContent = 'En attente des données Grist (accès complet requis)…';
+  }, 2500);
+})();
+</script>
+</body>
+</html>
