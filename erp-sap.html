@@ -1,0 +1,2019 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ERP · Gestion intégrée</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<style>
+  :root{
+    --shell:#1d2d3e; --shell-2:#2a3d52; --shell-ink:#ffffff;
+    --bg:#f5f6f7; --surface:#ffffff; --surface-2:#f7f9fb;
+    --ink:#1d2d3e; --ink-soft:#556b82; --ink-faint:#8696a9;
+    --border:#d9dee4; --border-soft:#e8ecf0;
+    --primary:#0070f2; --primary-hover:#0064d9; --primary-soft:#e8f2ff;
+    --positive:#256f3a; --positive-soft:#e5f5e9;
+    --critical:#b44f00; --critical-soft:#fff2e0;
+    --negative:#aa0808; --negative-soft:#ffeaea;
+    --info:#0057d2; --info-soft:#e5f0ff;
+    --neutral-soft:#eef1f4;
+    --series-1:#2a78d6; --series-2:#eb6834;
+    --radius:8px; --radius-sm:5px;
+    --shadow:0 0 0 1px rgba(29,45,62,.06), 0 2px 6px rgba(29,45,62,.08);
+    --shadow-lg:0 12px 40px rgba(29,45,62,.28);
+    --font:'72','72full',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.4;-webkit-font-smoothing:antialiased}
+  button,input,select,textarea{font:inherit;color:inherit}
+  a{color:var(--primary);text-decoration:none;cursor:pointer}
+  a:hover{text-decoration:underline}
+  .mono{font-family:var(--mono);font-size:12.5px}
+  .r{text-align:right}
+  .muted{color:var(--ink-soft)}
+  .faint{color:var(--ink-faint)}
+  .neg{color:var(--negative)}
+  .pos{color:var(--positive)}
+
+  /* ---------- Shell ---------- */
+  #app{display:flex;flex-direction:column;height:100vh}
+  .shell{height:48px;flex:0 0 48px;display:flex;align-items:center;gap:10px;padding:0 10px;background:var(--shell);color:var(--shell-ink)}
+  .shell-btn{background:transparent;border:0;color:inherit;width:36px;height:36px;border-radius:6px;cursor:pointer;display:grid;place-items:center}
+  .shell-btn:hover{background:var(--shell-2)}
+  .shell-btn svg{width:18px;height:18px}
+  .brand{display:flex;align-items:center;gap:10px;min-width:0}
+  .logo{font-weight:800;letter-spacing:.5px;font-size:13px;padding:4px 8px;border-radius:4px;background:linear-gradient(135deg,#0a6ed1,#00a3e0);color:#fff}
+  .brand-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px}
+  .tcode{flex:1;display:flex;justify-content:center;min-width:0}
+  .tcode-box{display:flex;align-items:center;width:100%;max-width:380px;background:var(--shell-2);border-radius:18px;padding:0 6px 0 12px;border:1px solid transparent}
+  .tcode-box:focus-within{border-color:#5aa3ff;background:#33495f}
+  .tcode-box svg{width:15px;height:15px;opacity:.75;flex:0 0 auto}
+  .tcode input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:#fff;height:32px;padding:0 8px;font-family:var(--mono);font-size:13px}
+  .tcode input::placeholder{color:#a9b8c8;font-family:var(--font)}
+  .shell-right{display:flex;align-items:center;gap:6px}
+  .mode{font-size:11px;padding:3px 8px;border-radius:10px;background:var(--shell-2);color:#c9d6e3;white-space:nowrap}
+  .mode.grist{background:#1f5a3a;color:#d4f5df}
+  .mode.local{background:#5a3d1f;color:#ffe7c7}
+
+  .layout{flex:1;display:flex;min-height:0;position:relative}
+  #sidenav{width:232px;flex:0 0 232px;background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;padding:8px 0 20px}
+  #sidenav.collapsed{display:none}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:7px 16px;color:var(--ink);cursor:pointer;border-left:3px solid transparent;user-select:none}
+  .nav-item:hover{background:var(--surface-2)}
+  .nav-item.active{background:var(--primary-soft);border-left-color:var(--primary);color:var(--primary);font-weight:600}
+  .nav-item svg{width:17px;height:17px;flex:0 0 auto;color:var(--ink-soft)}
+  .nav-item.active svg{color:var(--primary)}
+  .nav-group{margin-top:10px}
+  .nav-group-title{display:flex;align-items:center;gap:10px;padding:6px 16px;font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-faint);font-weight:700}
+  .nav-group-title svg{width:15px;height:15px}
+  .nav-sub{padding-left:43px;font-size:13.5px}
+  .nav-sub .tc{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--ink-faint)}
+  #main{flex:1;overflow:auto;min-width:0}
+  @media (max-width:900px){
+    #sidenav{position:absolute;z-index:30;top:0;bottom:0;left:0;box-shadow:var(--shadow-lg)}
+    #sidenav:not(.open){display:none}
+    .brand-name{display:none}
+  }
+
+  /* ---------- Page ---------- */
+  .page-head{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 22px 12px;display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;position:sticky;top:0;z-index:5}
+  .crumb{font-size:12px;color:var(--ink-soft);margin-bottom:3px}
+  .crumb a{color:var(--ink-soft)}
+  .page-head h1{margin:0;font-size:20px;font-weight:700;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .page-head h1 .tc{font-family:var(--mono);font-size:11.5px;font-weight:600;color:var(--ink-soft);background:var(--neutral-soft);border-radius:4px;padding:2px 6px}
+  .page-head .sub{margin:4px 0 0;color:var(--ink-soft);font-size:13px}
+  .actions{display:flex;gap:8px;flex-wrap:wrap}
+  .page-body{padding:18px 22px 40px;display:flex;flex-direction:column;gap:18px}
+  @media (max-width:600px){.page-head,.page-body{padding-left:14px;padding-right:14px}}
+
+  /* ---------- Buttons ---------- */
+  .btn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface);color:var(--primary);font-weight:600;font-size:13.5px;cursor:pointer;white-space:nowrap}
+  .btn:hover{background:var(--surface-2);border-color:#b8c3cf}
+  .btn.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+  .btn.primary:hover{background:var(--primary-hover)}
+  .btn.positive{background:var(--positive);border-color:var(--positive);color:#fff}
+  .btn.danger{color:var(--negative)}
+  .btn.ghost{border-color:transparent;background:transparent}
+  .btn.sm{height:26px;padding:0 8px;font-size:12.5px}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .icon-btn{border:0;background:transparent;cursor:pointer;color:var(--ink-faint);width:26px;height:26px;border-radius:4px}
+  .icon-btn:hover{background:var(--negative-soft);color:var(--negative)}
+
+  /* ---------- Cards ---------- */
+  .card{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .card-h{padding:12px 16px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .card-h h2{margin:0;font-size:15px;font-weight:700}
+  .card-b{padding:14px 16px}
+  .card-b.flush{padding:0;overflow-x:auto}
+  .grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr));gap:18px}
+  .grid-3{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:18px}
+  @media (max-width:1100px){.grid-3{grid-template-columns:minmax(0,1fr)}}
+  
+  /* ---------- KPI ---------- */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:12px}
+  .kpi{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:12px 14px;display:flex;flex-direction:column;gap:4px;cursor:default}
+  .kpi[data-tc]{cursor:pointer}
+  .kpi[data-tc]:hover{box-shadow:0 0 0 1px var(--primary),0 2px 8px rgba(0,112,242,.15)}
+  .kpi .l{font-size:12.5px;color:var(--ink-soft);font-weight:600}
+  .kpi .v{font-size:22px;font-weight:700;letter-spacing:-.3px}
+  .kpi .s{font-size:12px;color:var(--ink-faint)}
+  .kpi.warn .v{color:var(--critical)}
+  .kpi.bad .v{color:var(--negative)}
+  .kpi.good .v{color:var(--positive)}
+
+  /* ---------- Launchpad tiles ---------- */
+  .lp-group h3{margin:4px 0 10px;font-size:14px;font-weight:700;color:var(--ink-soft)}
+  .tiles{display:flex;flex-wrap:wrap;gap:12px}
+  .tile{width:176px;height:176px;background:var(--surface);border-radius:12px;box-shadow:var(--shadow);padding:14px;display:flex;flex-direction:column;cursor:pointer;transition:box-shadow .15s}
+  .tile:hover{box-shadow:0 0 0 2px var(--primary),0 4px 14px rgba(0,112,242,.18)}
+  .tile .t{font-weight:700;font-size:14.5px;line-height:1.25}
+  .tile .st{font-size:12.5px;color:var(--ink-soft);margin-top:3px}
+  .tile .bot{margin-top:auto;display:flex;align-items:flex-end;justify-content:space-between;gap:6px}
+  .tile .ic svg{width:26px;height:26px;color:var(--primary)}
+  .tile .n{font-size:26px;font-weight:300;color:var(--primary);line-height:1}
+  .tile .n small{font-size:12px;color:var(--ink-soft);font-weight:400;margin-left:2px}
+  .tile .tcd{font-family:var(--mono);font-size:10.5px;color:var(--ink-faint);margin-top:4px}
+  @media (max-width:500px){.tile{width:calc(50% - 6px);height:150px}}
+
+  /* ---------- Lists ---------- */
+  .list-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 12px;border-bottom:1px solid var(--border-soft)}
+  .list-tools input[type=search],.list-tools select{height:30px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 10px;background:var(--surface)}
+  .list-tools input[type=search]{width:240px;max-width:100%}
+  .list-tools .count{margin-left:auto;font-size:12.5px;color:var(--ink-soft)}
+  .table-wrap{overflow:auto}
+  table.grid{width:100%;border-collapse:collapse;font-size:13.5px}
+  table.grid th{position:sticky;top:0;background:var(--surface-2);text-align:left;font-weight:600;color:var(--ink-soft);font-size:12.5px;padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap;user-select:none}
+  table.grid th.sortable{cursor:pointer}
+  table.grid th.sortable:hover{color:var(--ink)}
+  table.grid th .arr{font-size:10px;margin-left:3px;color:var(--primary)}
+  table.grid td{padding:7px 10px;border-bottom:1px solid var(--border-soft);vertical-align:middle}
+  table.grid tbody tr.click{cursor:pointer}
+  table.grid tbody tr.click:hover{background:#f2f7fd}
+  table.grid tfoot td{font-weight:700;background:var(--surface-2);border-top:1px solid var(--border);border-bottom:0}
+  table.grid .r,table.grid th.r{text-align:right}
+  table.grid td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .empty{padding:36px 16px;text-align:center;color:var(--ink-faint)}
+
+  /* ---------- Status badges ---------- */
+  .badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:10px;white-space:nowrap;background:var(--neutral-soft);color:var(--ink-soft)}
+  .badge::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}
+  .badge.info{background:var(--info-soft);color:var(--info)}
+  .badge.positive{background:var(--positive-soft);color:var(--positive)}
+  .badge.critical{background:var(--critical-soft);color:var(--critical)}
+  .badge.negative{background:var(--negative-soft);color:var(--negative)}
+
+  /* ---------- Forms ---------- */
+  .form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px}
+  .form.cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .form .full{grid-column:1/-1}
+  @media (max-width:640px){.form,.form.cols-3{grid-template-columns:1fr}}
+  .field label{display:block;font-size:12.5px;color:var(--ink-soft);font-weight:600;margin-bottom:4px}
+  .field label .req{color:var(--negative)}
+  .field input,.field select,.field textarea,.inp{width:100%;height:34px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 10px;background:var(--surface);outline:none}
+  .field textarea{height:auto;min-height:64px;padding:8px 10px;resize:vertical}
+  .field input:focus,.field select:focus,.field textarea:focus,.inp:focus{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft)}
+  .field input[readonly]{background:var(--surface-2)}
+  .field.check{display:flex;align-items:center;gap:8px;padding-top:20px}
+  .field.check input{width:auto;height:auto}
+  .field.check label{margin:0}
+  .invalid{border-color:var(--negative)!important;box-shadow:0 0 0 2px var(--negative-soft)!important}
+
+  /* ---------- Display fields ---------- */
+  .dl{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px 20px}
+  .dl .k{font-size:12px;color:var(--ink-soft);font-weight:600}
+  .dl .v{margin-top:2px;font-size:14px}
+
+  /* ---------- Line editor ---------- */
+  table.lines{width:100%;border-collapse:collapse;font-size:13.5px}
+  table.lines th{text-align:left;font-size:12px;color:var(--ink-soft);font-weight:600;padding:8px 6px;border-bottom:1px solid var(--border);background:var(--surface-2);white-space:nowrap}
+  table.lines td{padding:4px 6px;border-bottom:1px solid var(--border-soft)}
+  table.lines .inp{height:30px;padding:0 7px}
+  table.lines td.pos{width:34px;color:var(--ink-faint);text-align:center;font-size:12px}
+  table.lines td.ht{text-align:right;font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
+  table.lines input.n{text-align:right}
+  .totals{margin-left:auto;width:300px;max-width:100%;display:grid;grid-template-columns:1fr auto;gap:6px 18px;padding:12px 16px;font-variant-numeric:tabular-nums}
+  .totals .big{font-size:17px;font-weight:700;border-top:1px solid var(--border);padding-top:8px}
+
+  /* ---------- Doc flow ---------- */
+  .flow{display:flex;flex-direction:column;gap:0}
+  .flow-item{display:flex;align-items:center;gap:10px;padding:8px 0;position:relative}
+  .flow-item .dot{width:12px;height:12px;border-radius:50%;background:var(--border);flex:0 0 auto;position:relative;z-index:1}
+  .flow-item.cur .dot{background:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+  .flow-item:not(:last-child)::after{content:'';position:absolute;left:5px;top:22px;bottom:-8px;width:2px;background:var(--border)}
+  .flow-item .lbl{flex:1;min-width:0}
+  .flow-item .lbl small{display:block;color:var(--ink-soft)}
+
+  /* ---------- Chart ---------- */
+  .chart{position:relative}
+  .chart svg{width:100%;height:auto;display:block}
+  .chart .axis text{font-size:11px;fill:var(--ink-faint)}
+  .chart .gridline{stroke:var(--border-soft);stroke-width:1}
+  .chart .baseline{stroke:var(--border);stroke-width:1}
+  .legend{display:flex;gap:16px;font-size:12.5px;color:var(--ink-soft);margin-bottom:6px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+  .tip{position:absolute;pointer-events:none;background:var(--shell);color:#fff;font-size:12px;padding:8px 10px;border-radius:6px;box-shadow:var(--shadow-lg);opacity:0;transition:opacity .1s;white-space:nowrap;z-index:3}
+  .tip b{display:block;margin-bottom:3px}
+  .tip i{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:6px}
+  details.data summary{cursor:pointer;font-size:12.5px;color:var(--primary);margin-top:8px}
+
+  /* ---------- Aging bars ---------- */
+  .aging{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+
+  /* ---------- Modal ---------- */
+  .modal-back{position:fixed;inset:0;background:rgba(20,30,45,.45);display:flex;align-items:flex-start;justify-content:center;padding:6vh 14px 14px;z-index:100;overflow:auto}
+  .modal{background:var(--surface);border-radius:12px;box-shadow:var(--shadow-lg);width:560px;max-width:100%;display:flex;flex-direction:column;max-height:88vh}
+  .modal.wide{width:860px}
+  .modal-h{padding:14px 18px;border-bottom:1px solid var(--border-soft);font-weight:700;font-size:16px;display:flex;justify-content:space-between;align-items:center}
+  .modal-b{padding:16px 18px;overflow:auto}
+  .modal-f{padding:12px 18px;border-top:1px solid var(--border-soft);display:flex;justify-content:flex-end;gap:8px;background:var(--surface-2);border-radius:0 0 12px 12px}
+  .msg{padding:10px 12px;border-radius:6px;font-size:13px;margin-bottom:12px}
+  .msg.warn{background:var(--critical-soft);color:var(--critical)}
+  .msg.info{background:var(--info-soft);color:var(--info)}
+  .msg.err{background:var(--negative-soft);color:var(--negative)}
+
+  /* ---------- Toast & busy ---------- */
+  #toastRoot{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:8px;z-index:200;align-items:center}
+  .toast{background:var(--shell);color:#fff;padding:10px 16px;border-radius:8px;box-shadow:var(--shadow-lg);font-size:13.5px;max-width:90vw;animation:tin .18s ease-out}
+  .toast.err{background:var(--negative)}
+  .toast.ok{background:var(--positive)}
+  @keyframes tin{from{transform:translateY(8px);opacity:0}}
+  #busy{position:fixed;inset:0;background:rgba(255,255,255,.55);display:none;place-items:center;z-index:150}
+  #busy.on{display:grid}
+  .spinner{width:34px;height:34px;border:3px solid var(--primary-soft);border-top-color:var(--primary);border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* ---------- Splash ---------- */
+  .splash{max-width:620px;margin:8vh auto;padding:0 16px}
+  .splash .card-b{line-height:1.6}
+  .splash code{background:var(--neutral-soft);padding:1px 5px;border-radius:3px;font-size:12.5px}
+
+  /* ---------- Print ---------- */
+  #printArea{display:none}
+  @media print{
+    body>*:not(#printArea){display:none!important}
+    #printArea{display:block}
+    @page{margin:14mm}
+  }
+  .pdoc{font-size:12px;color:#000;font-family:Helvetica,Arial,sans-serif}
+  .pdoc .ph{display:flex;justify-content:space-between;gap:20px;margin-bottom:26px}
+  .pdoc h1{font-size:22px;margin:0 0 4px}
+  .pdoc .addr{border:1px solid #bbb;padding:10px 14px;min-width:240px;border-radius:4px}
+  .pdoc table{width:100%;border-collapse:collapse;margin-top:18px}
+  .pdoc th{background:#eee;text-align:left;padding:6px;font-size:11px}
+  .pdoc td{padding:6px;border-bottom:1px solid #ddd}
+  .pdoc .r{text-align:right}
+  .pdoc .tot{width:260px;margin-left:auto;margin-top:12px}
+  .pdoc .tot td{border:0;padding:3px 6px}
+  .pdoc .foot{margin-top:30px;font-size:10.5px;color:#444;border-top:1px solid #ccc;padding-top:8px}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="shell">
+    <button id="navToggle" class="shell-btn" title="Menu" aria-label="Afficher/masquer le menu"></button>
+    <div class="brand"><span class="logo">ERP</span><span class="brand-name" id="companyName">Gestion intégrée</span></div>
+    <form id="tcodeForm" class="tcode" autocomplete="off">
+      <div class="tcode-box"><span id="tcIcon"></span><input id="tcodeInput" list="tcodeList" placeholder="Code transaction (ex. VA01) ou recherche…" aria-label="Code transaction"></div>
+      <datalist id="tcodeList"></datalist>
+    </form>
+    <div class="shell-right">
+      <span id="modeBadge" class="mode">…</span>
+      <button id="refreshBtn" class="shell-btn" title="Actualiser les données" aria-label="Actualiser"></button>
+    </div>
+  </header>
+  <div class="layout">
+    <nav id="sidenav" aria-label="Navigation"></nav>
+    <main id="main"><div class="splash"><div class="card"><div class="card-b">Chargement…</div></div></div></main>
+  </div>
+</div>
+<div id="modalRoot"></div>
+<div id="toastRoot"></div>
+<div id="busy"><div class="spinner"></div></div>
+<div id="printArea"></div>
+
+<script>
+'use strict';
+/* ==================================================================
+   ERP « façon SAP » pour widget Grist
+   - En mode Grist : crée et utilise les tables ERP_* du document
+     (le widget doit avoir l'accès « complet » au document).
+   - Hors Grist : mode démo local (données dans le navigateur).
+   ================================================================== */
+
+/* ------------------------------ Utilitaires ------------------------------ */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const round2 = n => Math.round((Number(n) || 0) * 100) / 100;
+const round3 = n => Math.round((Number(n) || 0) * 1000) / 1000;
+const num = v => {
+  if (typeof v === 'number') return isFinite(v) ? v : 0;
+  const n = parseFloat(String(v ?? '').replace(/\s/g, '').replace(',', '.'));
+  return isNaN(n) ? 0 : n;
+};
+const sum = (arr, f) => arr.reduce((s, x) => s + (f ? f(x) : x), 0);
+const groupBy = (arr, f) => { const m = new Map(); for (const x of arr) { const k = f(x); if (!m.has(k)) m.set(k, []); m.get(k).push(x); } return m; };
+const currency = () => param('Devise', 'EUR') || 'EUR';
+const fmtMoney = n => { try { return new Intl.NumberFormat('fr-FR', {style:'currency', currency: currency()}).format(n || 0); } catch (e) { return fmtNum(n, 2) + ' ' + currency(); } };
+const fmtNum = (n, d = 2) => new Intl.NumberFormat('fr-FR', {minimumFractionDigits: 0, maximumFractionDigits: d}).format(n || 0);
+const fmtPct = n => fmtNum(n, 1) + ' %';
+// Dates : format Grist = secondes depuis l'epoch, à minuit UTC
+const todayS = () => { const d = new Date(); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 1000; };
+const isoToS = iso => { if (!iso) return null; const [y, m, d] = iso.split('-').map(Number); return Date.UTC(y, m - 1, d) / 1000; };
+const sToIso = s => s ? new Date(s * 1000).toISOString().slice(0, 10) : '';
+const fmtDate = s => { if (!s) return ''; const d = new Date(s * 1000); return String(d.getUTCDate()).padStart(2, '0') + '/' + String(d.getUTCMonth() + 1).padStart(2, '0') + '/' + d.getUTCFullYear(); };
+const addDays = (s, n) => s + n * 86400;
+const yearOf = s => new Date(s * 1000).getUTCFullYear();
+const monthKey = s => sToIso(s).slice(0, 7);
+const daysBetween = (a, b) => Math.round((b - a) / 86400);
+
+/* ------------------------------ Icônes ------------------------------ */
+const ICONS = {
+  menu: '<path d="M3 6h18M3 12h18M3 18h18"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
+  refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>',
+  home: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>',
+  sales: '<path d="M3 4h2l2.4 11.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.5L21 8H6"/><circle cx="10" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/>',
+  purchase: '<path d="M2 7h11v9H2zM13 10h4l4 4v2h-8z"/><circle cx="6" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/>',
+  stock: '<path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/>',
+  finance: '<path d="M3 10h18L12 4 3 10z"/><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  doc: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/>',
+  people: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.2A5 5 0 0 1 21.5 19"/>',
+  chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  alert: '<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.5"/>',
+  euro: '<path d="M18 6.5A7 7 0 1 0 18 17.5"/><path d="M4 10h10M4 14h10"/>'
+};
+const icon = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n] || ''}</svg>`;
+
+/* ------------------------------ Modèle de données ------------------------------ */
+const UNITS = ['U', 'kg', 'L', 'm', 'h', 'sac', 'lot', 'carton', 'palette'];
+const TVA_RATES = [20, 10, 5.5, 2.1, 0];
+const DOC = {
+  DV: {label: 'Devis',                plural: 'Devis',                  side: 'V', statuses: ['Brouillon', 'Envoyé', 'Accepté', 'Refusé'],                                list: 'VA25', create: 'VA21', print: 'DEVIS'},
+  CC: {label: 'Commande client',      plural: 'Commandes clients',      side: 'V', statuses: ['Brouillon', 'Confirmée', 'Livrée', 'Facturée', 'Annulée'],              list: 'VA05', create: 'VA01', print: 'CONFIRMATION DE COMMANDE'},
+  FC: {label: 'Facture client',       plural: 'Factures clients',       side: 'V', statuses: ['Brouillon', 'Comptabilisée', 'Partiellement réglée', 'Réglée', 'Annulée'], list: 'VF05', create: 'VF01', print: 'FACTURE'},
+  CF: {label: 'Commande fournisseur', plural: 'Commandes d\'achat',     side: 'A', statuses: ['Brouillon', 'Confirmée', 'Réceptionnée', 'Facturée', 'Annulée'],        list: 'ME2N', create: 'ME21N', print: 'BON DE COMMANDE'},
+  FF: {label: 'Facture fournisseur',  plural: 'Factures fournisseurs',  side: 'A', statuses: ['Brouillon', 'Comptabilisée', 'Partiellement réglée', 'Réglée', 'Annulée'], list: 'MIR5', create: 'MIRO', print: 'FACTURE FOURNISSEUR'}
+};
+const codeOfType = label => Object.keys(DOC).find(k => DOC[k].label === label);
+const ALL_STATUSES = [...new Set(Object.values(DOC).flatMap(d => d.statuses))];
+const STATUS_TONE = {
+  'Brouillon': '', 'Envoyé': 'info', 'Accepté': 'positive', 'Refusé': 'negative',
+  'Confirmée': 'info', 'Livrée': 'info', 'Réceptionnée': 'info', 'Facturée': 'positive', 'Annulée': 'negative',
+  'Comptabilisée': 'critical', 'Partiellement réglée': 'critical', 'Réglée': 'positive'
+};
+const badge = (s, tone) => `<span class="badge ${tone ?? STATUS_TONE[s] ?? ''}">${esc(s)}</span>`;
+
+const PCG = {
+  '101': 'Capital', '164': 'Emprunts', '401': 'Fournisseurs', '411': 'Clients',
+  '44566': 'TVA déductible sur ABS', '44571': 'TVA collectée', '512': 'Banque', '530': 'Caisse',
+  '601': 'Achats de matières premières', '604': 'Achats de prestations de services', '607': 'Achats de marchandises',
+  '613': 'Locations', '616': 'Primes d\'assurance', '622': 'Honoraires', '625': 'Déplacements, missions',
+  '626': 'Frais postaux et télécommunications', '627': 'Services bancaires', '641': 'Rémunérations du personnel',
+  '645': 'Charges de sécurité sociale', '661': 'Charges d\'intérêts',
+  '701': 'Ventes de produits finis', '706': 'Prestations de services', '707': 'Ventes de marchandises', '758': 'Produits divers de gestion'
+};
+const accountLabel = c => PCG[c] || PCG[String(c).slice(0, 3)] || '';
+const SALES_ACCOUNT = {'Marchandise': '707', 'Matière première': '707', 'Produit fini': '701', 'Service': '706'};
+const PURCHASE_ACCOUNT = {'Marchandise': '607', 'Matière première': '601', 'Produit fini': '607', 'Service': '604'};
+
+const SCHEMA = {
+  ERP_Parametres: [['Cle', 'Text'], ['Valeur', 'Text']],
+  ERP_Partenaires: [['Code', 'Text'], ['Nom', 'Text'], ['Type', 'Choice', ['Client', 'Fournisseur', 'Client et fournisseur']],
+    ['Email', 'Text'], ['Telephone', 'Text'], ['Adresse', 'Text'], ['Code_Postal', 'Text'], ['Ville', 'Text'], ['Pays', 'Text'],
+    ['SIRET', 'Text'], ['TVA_Intra', 'Text'], ['Delai_Paiement', 'Int'], ['Inactif', 'Bool']],
+  ERP_Articles: [['Code', 'Text'], ['Designation', 'Text'], ['Type', 'Choice', ['Marchandise', 'Matière première', 'Produit fini', 'Service']],
+    ['Categorie', 'Text'], ['Unite', 'Choice', UNITS], ['Prix_Achat', 'Numeric'], ['Prix_Vente', 'Numeric'], ['Taux_TVA', 'Numeric'],
+    ['Stock_Min', 'Numeric'], ['Fournisseur', 'Ref:ERP_Partenaires'], ['Inactif', 'Bool']],
+  ERP_Documents: [['Numero', 'Text'], ['Type', 'Choice', Object.values(DOC).map(d => d.label)], ['Partenaire', 'Ref:ERP_Partenaires'],
+    ['Date', 'Date'], ['Echeance', 'Date'], ['Statut', 'Choice', ALL_STATUSES], ['Reference', 'Text'], ['Origine', 'Text'],
+    ['Total_HT', 'Numeric'], ['Total_TVA', 'Numeric'], ['Total_TTC', 'Numeric'], ['Montant_Regle', 'Numeric'], ['Notes', 'Text']],
+  ERP_Lignes: [['Document', 'Ref:ERP_Documents'], ['Position', 'Int'], ['Article', 'Ref:ERP_Articles'], ['Designation', 'Text'],
+    ['Quantite', 'Numeric'], ['Unite', 'Text'], ['Prix_Unitaire', 'Numeric'], ['Remise', 'Numeric'], ['Taux_TVA', 'Numeric'], ['Montant_HT', 'Numeric']],
+  ERP_Mouvements: [['Date', 'Date'], ['Article', 'Ref:ERP_Articles'], ['Type', 'Choice', ['Entrée', 'Sortie', 'Inventaire']],
+    ['Quantite', 'Numeric'], ['Cout_Unitaire', 'Numeric'], ['Document', 'Ref:ERP_Documents'], ['Motif', 'Text']],
+  ERP_Ecritures: [['Date', 'Date'], ['Journal', 'Choice', ['VE', 'AC', 'BQ', 'OD']], ['Piece', 'Text'], ['Compte', 'Text'], ['Libelle', 'Text'],
+    ['Debit', 'Numeric'], ['Credit', 'Numeric'], ['Partenaire', 'Ref:ERP_Partenaires'], ['Document', 'Ref:ERP_Documents']]
+};
+// Colonne affichée dans Grist pour les colonnes de référence
+const REF_DISPLAY = {ERP_Partenaires: 'Nom', ERP_Articles: 'Designation', ERP_Documents: 'Numero'};
+const TABLES = Object.keys(SCHEMA);
+
+function defaults(t) {
+  const o = {};
+  for (const [c, type] of SCHEMA[t]) {
+    o[c] = (type === 'Text' || type === 'Choice') ? '' : type === 'Bool' ? false : type === 'Date' ? null : 0;
+  }
+  return o;
+}
+
+/* ------------------------------ Backends ------------------------------ */
+const LS_KEY = 'erp-grist-widget:v1';
+const LocalBackend = {
+  mode: 'local',
+  data: null,
+  load() { try { this.data = JSON.parse(localStorage.getItem(LS_KEY)); } catch (e) { this.data = null; } if (!this.data || !this.data.tables) this.data = {tables: {}}; },
+  save() { try { localStorage.setItem(LS_KEY, JSON.stringify(this.data)); } catch (e) { /* stockage indisponible : données en mémoire */ } },
+  async init() { this.load(); },
+  async ensureSchema() { for (const t of TABLES) if (!this.data.tables[t]) this.data.tables[t] = {nextId: 1, rows: []}; this.save(); },
+  async fetch(t) { return (this.data.tables[t]?.rows || []).map(r => ({...r})); },
+  async apply(actions) {
+    const ret = [];
+    for (const a of actions) {
+      const [op, t] = a; const tb = this.data.tables[t];
+      if (!tb) throw new Error('Table inconnue : ' + t);
+      const find = id => tb.rows.find(r => r.id === id);
+      switch (op) {
+        case 'AddRecord': { const id = tb.nextId++; tb.rows.push({...defaults(t), ...a[3], id}); ret.push(id); break; }
+        case 'BulkAddRecord': {
+          const ids = [];
+          a[2].forEach((_, i) => { const rec = defaults(t); for (const c in a[3]) rec[c] = a[3][c][i]; rec.id = tb.nextId++; tb.rows.push(rec); ids.push(rec.id); });
+          ret.push(ids); break;
+        }
+        case 'UpdateRecord': { const r = find(a[2]); if (r) Object.assign(r, a[3]); ret.push(null); break; }
+        case 'BulkUpdateRecord': { a[2].forEach((id, i) => { const r = find(id); if (r) for (const c in a[3]) r[c] = a[3][c][i]; }); ret.push(null); break; }
+        case 'RemoveRecord': tb.rows = tb.rows.filter(r => r.id !== a[2]); ret.push(null); break;
+        case 'BulkRemoveRecord': { const s = new Set(a[2]); tb.rows = tb.rows.filter(r => !s.has(r.id)); ret.push(null); break; }
+        default: throw new Error('Action non supportée : ' + op);
+      }
+    }
+    this.save();
+    return ret;
+  },
+  async reset() { this.data = {tables: {}}; await this.ensureSchema(); }
+};
+
+const GristBackend = {
+  mode: 'grist',
+  async init() {
+    grist.ready({requiredAccess: 'full', allowSelectBy: false});
+    // Si le widget est lié à une table, on suit ses modifications
+    grist.onRecords(() => scheduleReload());
+  },
+  colInfo(c) {
+    const [id, type, choices] = c;
+    return {id, type, isFormula: false, widgetOptions: choices ? JSON.stringify({choices}) : ''};
+  },
+  async ensureSchema() {
+    const existing = await withTimeout(grist.docApi.listTables(), 15000, 'Pas de réponse de Grist');
+    const created = [];
+    for (const t of TABLES) {
+      if (!existing.includes(t)) {
+        await grist.docApi.applyUserActions([['AddTable', t, SCHEMA[t].map(c => this.colInfo(c))]]);
+        created.push(t);
+      } else {
+        const data = await grist.docApi.fetchTable(t);
+        const missing = SCHEMA[t].filter(([c]) => !(c in data));
+        if (missing.length) {
+          await grist.docApi.applyUserActions(missing.map(c => { const {id, ...info} = this.colInfo(c); return ['AddColumn', t, id, info]; }));
+          created.push(t);
+        }
+      }
+    }
+    if (created.length) { try { await this.fixRefDisplays(); } catch (e) { console.warn('Colonnes de référence : affichage non configuré', e); } }
+  },
+  // Affiche le nom (et non l'identifiant) dans les colonnes Ref côté Grist
+  async fixRefDisplays() {
+    const tbl = await grist.docApi.fetchTable('_grist_Tables');
+    const cols = await grist.docApi.fetchTable('_grist_Tables_column');
+    const tableRow = {}; tbl.id.forEach((id, i) => tableRow[tbl.tableId[i]] = id);
+    const colRow = (t, c) => { for (let i = 0; i < cols.id.length; i++) if (cols.parentId[i] === tableRow[t] && cols.colId[i] === c) return {id: cols.id[i], visibleCol: cols.visibleCol[i]}; return null; };
+    const actions = [];
+    for (const t of TABLES) for (const [c, type] of SCHEMA[t]) {
+      if (!type.startsWith('Ref:')) continue;
+      const target = type.slice(4), show = REF_DISPLAY[target];
+      const rc = colRow(t, c), sc = colRow(target, show);
+      if (!rc || !sc || rc.visibleCol) continue;
+      actions.push(['UpdateRecord', '_grist_Tables_column', rc.id, {visibleCol: sc.id}]);
+      actions.push(['SetDisplayFormula', t, null, rc.id, `$${c}.${show}`]);
+    }
+    if (actions.length) await grist.docApi.applyUserActions(actions);
+  },
+  async fetch(t) {
+    const d = await grist.docApi.fetchTable(t);
+    const ids = d.id || [];
+    return ids.map((id, i) => { const r = {id}; for (const k in d) r[k] = d[k][i]; return r; });
+  },
+  async apply(actions) { const res = await grist.docApi.applyUserActions(actions); return res.retValues; }
+};
+
+function withTimeout(p, ms, msg) {
+  return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(msg || 'Délai dépassé')), ms))]);
+}
+
+let B = null; // backend actif
+
+/* ------------------------------ Cache des données ------------------------------ */
+const DB = {}, IDX = {};
+let CACHE = {};
+TABLES.forEach(t => { DB[t] = []; IDX[t] = new Map(); });
+
+async function loadTables(list = TABLES) {
+  await Promise.all(list.map(async t => {
+    const rows = await B.fetch(t);
+    DB[t] = rows; IDX[t] = new Map(rows.map(r => [r.id, r]));
+  }));
+  CACHE = {};
+}
+const get = (t, id) => (id ? IDX[t].get(id) : null);
+async function run(actions) {
+  if (!actions.length) return [];
+  const ret = await B.apply(actions);
+  await loadTables([...new Set(actions.map(a => a[1]))]);
+  return ret;
+}
+function bulkAdd(t, recs) {
+  const keys = [...new Set(recs.flatMap(r => Object.keys(r)))];
+  const def = defaults(t), cols = {};
+  for (const k of keys) cols[k] = recs.map(r => (r[k] === undefined ? def[k] : r[k]));
+  return ['BulkAddRecord', t, recs.map(() => null), cols];
+}
+
+/* --- Paramètres société --- */
+function param(k, def = '') { const r = DB.ERP_Parametres.find(p => p.Cle === k); return r && r.Valeur !== '' ? r.Valeur : def; }
+async function setParams(obj) {
+  const actions = [];
+  for (const [k, v] of Object.entries(obj)) {
+    const r = DB.ERP_Parametres.find(p => p.Cle === k);
+    if (r) { if (r.Valeur !== String(v)) actions.push(['UpdateRecord', 'ERP_Parametres', r.id, {Valeur: String(v)}]); }
+    else actions.push(['AddRecord', 'ERP_Parametres', null, {Cle: k, Valeur: String(v)}]);
+  }
+  await run(actions);
+}
+
+/* --- Calculs dérivés --- */
+const partnerName = id => get('ERP_Partenaires', id)?.Nom || '';
+const articleOf = id => get('ERP_Articles', id);
+const isClient = p => p.Type === 'Client' || p.Type === 'Client et fournisseur';
+const isSupplier = p => p.Type === 'Fournisseur' || p.Type === 'Client et fournisseur';
+const docsOf = code => DB.ERP_Documents.filter(d => d.Type === DOC[code].label);
+const linesOf = docId => DB.ERP_Lignes.filter(l => l.Document === docId).sort((a, b) => (a.Position || 0) - (b.Position || 0) || a.id - b.id);
+const docByNumero = n => DB.ERP_Documents.find(d => d.Numero === n);
+const isPostedInvoice = d => ['Comptabilisée', 'Partiellement réglée', 'Réglée'].includes(d.Statut);
+const remaining = d => round2(num(d.Total_TTC) - num(d.Montant_Regle));
+
+function calcLine(l) {
+  const ht = round2(num(l.Quantite) * num(l.Prix_Unitaire) * (1 - num(l.Remise) / 100));
+  return {ht, tva: round2(ht * num(l.Taux_TVA) / 100)};
+}
+function calcTotals(lines) {
+  let ht = 0, tva = 0;
+  for (const l of lines) { const c = calcLine(l); ht += c.ht; tva += c.tva; }
+  return {ht: round2(ht), tva: round2(tva), ttc: round2(ht + tva)};
+}
+
+function stockInfo() {
+  if (CACHE.stock) return CACHE.stock;
+  const m = new Map();
+  for (const a of DB.ERP_Articles) m.set(a.id, {qty: 0, inQty: 0, inVal: 0, reserved: 0, ordered: 0});
+  for (const mv of DB.ERP_Mouvements) {
+    const s = m.get(mv.Article); if (!s) continue;
+    s.qty += num(mv.Quantite);
+    if (mv.Type === 'Entrée' && num(mv.Quantite) > 0) { s.inQty += num(mv.Quantite); s.inVal += num(mv.Quantite) * num(mv.Cout_Unitaire); }
+  }
+  // Réservé = commandes clients confirmées non livrées ; commandé = commandes d'achat confirmées non reçues
+  for (const d of DB.ERP_Documents) {
+    if (d.Statut !== 'Confirmée') continue;
+    const code = codeOfType(d.Type);
+    if (code !== 'CC' && code !== 'CF') continue;
+    for (const l of linesOf(d.id)) { const s = m.get(l.Article); if (s) s[code === 'CC' ? 'reserved' : 'ordered'] += num(l.Quantite); }
+  }
+  for (const [id, s] of m) {
+    const a = get('ERP_Articles', id);
+    s.qty = round3(s.qty);
+    s.cmp = s.inQty > 0 ? s.inVal / s.inQty : num(a.Prix_Achat);
+    s.value = round2(Math.max(0, s.qty) * s.cmp);
+    s.available = round3(s.qty - s.reserved);
+    s.status = a.Type === 'Service' ? 'service' : s.qty <= 0 ? 'rupture' : s.qty < num(a.Stock_Min) ? 'bas' : 'ok';
+  }
+  return CACHE.stock = m;
+}
+
+function partnerBalance(pid) {
+  let client = 0, supplier = 0;
+  for (const e of DB.ERP_Ecritures) {
+    if (e.Partenaire !== pid) continue;
+    if (String(e.Compte).startsWith('411')) client += num(e.Debit) - num(e.Credit);
+    if (String(e.Compte).startsWith('401')) supplier += num(e.Credit) - num(e.Debit);
+  }
+  return {client: round2(client), supplier: round2(supplier)};
+}
+
+function nextNumero(code, date) {
+  const prefix = `${code}${yearOf(date)}-`;
+  let max = 0;
+  for (const d of DB.ERP_Documents) if (String(d.Numero).startsWith(prefix)) max = Math.max(max, parseInt(String(d.Numero).slice(prefix.length), 10) || 0);
+  return prefix + String(max + 1).padStart(4, '0');
+}
+function nextCode(table, prefix) {
+  let max = 0;
+  for (const r of DB[table]) { const m = String(r.Code || '').match(new RegExp('^' + prefix + '(\\d+)$')); if (m) max = Math.max(max, +m[1]); }
+  return prefix + String(max + 1).padStart(4, '0');
+}
+function defaultDue(code, partnerId, date) {
+  if (code === 'FC' || code === 'FF') {
+    const p = get('ERP_Partenaires', partnerId);
+    const delay = p && num(p.Delai_Paiement) ? num(p.Delai_Paiement) : num(param('Delai_Paiement', '30'));
+    return addDays(date, delay);
+  }
+  return addDays(date, code === 'DV' ? 30 : 14);
+}
+
+/* ------------------------------ Processus métier ------------------------------ */
+function lineFields(l, docId, pos) {
+  return {Document: docId, Position: pos, Article: l.Article || 0, Designation: l.Designation || '', Quantite: num(l.Quantite),
+    Unite: l.Unite || '', Prix_Unitaire: num(l.Prix_Unitaire), Remise: num(l.Remise), Taux_TVA: num(l.Taux_TVA), Montant_HT: calcLine(l).ht};
+}
+
+async function createDocument(code, h, lines) {
+  const date = h.Date || todayS();
+  const t = calcTotals(lines);
+  const fields = {
+    Numero: nextNumero(code, date), Type: DOC[code].label, Partenaire: h.Partenaire, Date: date,
+    Echeance: h.Echeance || defaultDue(code, h.Partenaire, date), Statut: h.Statut || 'Brouillon',
+    Reference: h.Reference || '', Origine: h.Origine || '', Notes: h.Notes || '',
+    Total_HT: t.ht, Total_TVA: t.tva, Total_TTC: t.ttc, Montant_Regle: 0
+  };
+  const [id] = await B.apply([['AddRecord', 'ERP_Documents', null, fields]]);
+  if (lines.length) await B.apply([bulkAdd('ERP_Lignes', lines.map((l, i) => lineFields(l, id, i + 1)))]);
+  await loadTables(['ERP_Documents', 'ERP_Lignes']);
+  return get('ERP_Documents', id);
+}
+
+async function updateDocument(doc, h, lines) {
+  const t = calcTotals(lines);
+  const actions = [['UpdateRecord', 'ERP_Documents', doc.id, {
+    Partenaire: h.Partenaire, Date: h.Date, Echeance: h.Echeance, Reference: h.Reference || '', Notes: h.Notes || '',
+    Total_HT: t.ht, Total_TVA: t.tva, Total_TTC: t.ttc
+  }]];
+  const keep = new Set(lines.filter(l => l.id).map(l => l.id));
+  const removed = linesOf(doc.id).filter(l => !keep.has(l.id)).map(l => l.id);
+  if (removed.length) actions.push(['BulkRemoveRecord', 'ERP_Lignes', removed]);
+  const added = [];
+  lines.forEach((l, i) => {
+    if (l.id) actions.push(['UpdateRecord', 'ERP_Lignes', l.id, lineFields(l, doc.id, i + 1)]);
+    else added.push(lineFields(l, doc.id, i + 1));
+  });
+  if (added.length) actions.push(bulkAdd('ERP_Lignes', added));
+  await run(actions);
+  return get('ERP_Documents', doc.id);
+}
+
+async function setStatus(doc, s) { await run([['UpdateRecord', 'ERP_Documents', doc.id, {Statut: s}]]); }
+
+async function deleteDocument(doc) {
+  const ids = linesOf(doc.id).map(l => l.id);
+  const actions = [];
+  if (ids.length) actions.push(['BulkRemoveRecord', 'ERP_Lignes', ids]);
+  actions.push(['RemoveRecord', 'ERP_Documents', doc.id]);
+  await run(actions);
+}
+
+const copyLines = docId => linesOf(docId).map(l => ({Article: l.Article, Designation: l.Designation, Quantite: l.Quantite, Unite: l.Unite, Prix_Unitaire: l.Prix_Unitaire, Remise: l.Remise, Taux_TVA: l.Taux_TVA}));
+
+async function convertDocument(doc, code, opts = {}) {
+  const date = opts.date || todayS();
+  return createDocument(code, {Partenaire: doc.Partenaire, Date: date, Origine: doc.Numero, Reference: opts.reference ?? doc.Reference, Statut: opts.statut || 'Brouillon', Notes: doc.Notes}, copyLines(doc.id));
+}
+
+function stockMoves(doc, date, direction) {
+  const st = stockInfo();
+  const recs = [];
+  for (const l of linesOf(doc.id)) {
+    const a = articleOf(l.Article);
+    if (!a || a.Type === 'Service' || !num(l.Quantite)) continue;
+    const q = num(l.Quantite);
+    if (direction === 'in') recs.push({Date: date, Article: a.id, Type: 'Entrée', Quantite: q, Cout_Unitaire: round2(calcLine(l).ht / q), Document: doc.id, Motif: `Réception ${doc.Numero}`});
+    else recs.push({Date: date, Article: a.id, Type: 'Sortie', Quantite: -q, Cout_Unitaire: round2(st.get(a.id)?.cmp || num(a.Prix_Achat)), Document: doc.id, Motif: `Livraison ${doc.Numero}`});
+  }
+  return recs;
+}
+function stockShortages(doc) {
+  const st = stockInfo(), out = [];
+  for (const l of linesOf(doc.id)) {
+    const a = articleOf(l.Article);
+    if (!a || a.Type === 'Service') continue;
+    const s = st.get(a.id);
+    if (s && s.qty < num(l.Quantite)) out.push(`${a.Code} ${a.Designation} : stock ${fmtNum(s.qty)} ${a.Unite} pour ${fmtNum(l.Quantite)} demandé(s)`);
+  }
+  return out;
+}
+
+async function deliverOrder(doc, date) {
+  const recs = stockMoves(doc, date || todayS(), 'out');
+  const actions = [['UpdateRecord', 'ERP_Documents', doc.id, {Statut: 'Livrée'}]];
+  if (recs.length) actions.push(bulkAdd('ERP_Mouvements', recs));
+  await run(actions);
+}
+async function receiveOrder(doc, date) {
+  const recs = stockMoves(doc, date || todayS(), 'in');
+  const actions = [['UpdateRecord', 'ERP_Documents', doc.id, {Statut: 'Réceptionnée'}]];
+  if (recs.length) actions.push(bulkAdd('ERP_Mouvements', recs));
+  await run(actions);
+}
+
+function invoiceEntries(inv) {
+  const code = codeOfType(inv.Type), sale = DOC[code].side === 'V';
+  const p = get('ERP_Partenaires', inv.Partenaire);
+  const lib = `${sale ? 'Fact.' : 'Fact. fourn.'} ${inv.Numero}${inv.Reference && !sale ? ' (' + inv.Reference + ')' : ''} – ${p ? p.Nom : ''}`.slice(0, 120);
+  const base = {Date: inv.Date, Journal: sale ? 'VE' : 'AC', Piece: inv.Numero, Libelle: lib, Document: inv.id, Partenaire: 0};
+  const byAcc = new Map(); let tva = 0;
+  for (const l of linesOf(inv.id)) {
+    const a = articleOf(l.Article), type = a ? a.Type : 'Service';
+    const acc = (sale ? SALES_ACCOUNT : PURCHASE_ACCOUNT)[type] || (sale ? '707' : '607');
+    const c = calcLine(l);
+    byAcc.set(acc, round2((byAcc.get(acc) || 0) + c.ht)); tva += c.tva;
+  }
+  tva = round2(tva);
+  const ttc = round2(sum([...byAcc.values()]) + tva);
+  const e = [];
+  if (sale) {
+    e.push({...base, Compte: '411', Debit: ttc, Credit: 0, Partenaire: inv.Partenaire});
+    for (const [acc, v] of byAcc) e.push({...base, Compte: acc, Debit: 0, Credit: v});
+    if (tva) e.push({...base, Compte: '44571', Debit: 0, Credit: tva});
+  } else {
+    for (const [acc, v] of byAcc) e.push({...base, Compte: acc, Debit: v, Credit: 0});
+    if (tva) e.push({...base, Compte: '44566', Debit: tva, Credit: 0});
+    e.push({...base, Compte: '401', Debit: 0, Credit: ttc, Partenaire: inv.Partenaire});
+  }
+  return e;
+}
+
+// Valide une facture : écritures comptables + (si facture directe) mouvements de stock
+async function postInvoice(inv) {
+  const code = codeOfType(inv.Type), sale = DOC[code].side === 'V';
+  const origin = inv.Origine ? docByNumero(inv.Origine) : null;
+  const actions = [['UpdateRecord', 'ERP_Documents', inv.id, {Statut: 'Comptabilisée'}], bulkAdd('ERP_Ecritures', invoiceEntries(inv))];
+  if (!origin) { const mv = stockMoves(inv, inv.Date, sale ? 'out' : 'in'); if (mv.length) actions.push(bulkAdd('ERP_Mouvements', mv)); }
+  if (origin) actions.push(['UpdateRecord', 'ERP_Documents', origin.id, {Statut: 'Facturée'}]);
+  await run(actions);
+}
+
+async function invoiceOrder(order, date, reference) {
+  const code = codeOfType(order.Type) === 'CC' ? 'FC' : 'FF';
+  const inv = await convertDocument(order, code, {date: date || todayS(), reference: reference ?? order.Reference});
+  await postInvoice(inv);
+  return get('ERP_Documents', inv.id);
+}
+
+async function registerPayment(inv, amount, date, mode) {
+  const sale = DOC[codeOfType(inv.Type)].side === 'V';
+  amount = round2(amount);
+  const lib = `${sale ? 'Règlement' : 'Paiement'} ${inv.Numero} – ${partnerName(inv.Partenaire)} (${mode})`.slice(0, 120);
+  const base = {Date: date, Journal: 'BQ', Piece: inv.Numero, Libelle: lib, Document: inv.id};
+  const bank = mode === 'Espèces' ? '530' : '512';
+  const e = sale
+    ? [{...base, Compte: bank, Debit: amount, Credit: 0, Partenaire: 0}, {...base, Compte: '411', Debit: 0, Credit: amount, Partenaire: inv.Partenaire}]
+    : [{...base, Compte: '401', Debit: amount, Credit: 0, Partenaire: inv.Partenaire}, {...base, Compte: bank, Debit: 0, Credit: amount, Partenaire: 0}];
+  const paid = round2(num(inv.Montant_Regle) + amount);
+  const statut = paid >= round2(num(inv.Total_TTC)) - 0.005 ? 'Réglée' : 'Partiellement réglée';
+  await run([bulkAdd('ERP_Ecritures', e), ['UpdateRecord', 'ERP_Documents', inv.id, {Montant_Regle: paid, Statut: statut}]]);
+}
+
+function nextOdPiece(date) {
+  const prefix = `OD${yearOf(date)}-`; let max = 0;
+  for (const e of DB.ERP_Ecritures) if (String(e.Piece).startsWith(prefix)) max = Math.max(max, parseInt(String(e.Piece).slice(prefix.length), 10) || 0);
+  return prefix + String(max + 1).padStart(4, '0');
+}
+
+/* ------------------------------ UI : composants ------------------------------ */
+function toast(msg, kind = '') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + kind; el.textContent = msg;
+  const root = $('#toastRoot'); root.appendChild(el);
+  while (root.children.length > 3) root.firstChild.remove();
+  setTimeout(() => el.remove(), kind === 'err' ? 6000 : 3200);
+}
+async function busy(fn) {
+  $('#busy').classList.add('on');
+  try { return await fn(); }
+  catch (e) { console.error(e); toast('Erreur : ' + (e && e.message ? e.message : e), 'err'); return undefined; }
+  finally { $('#busy').classList.remove('on'); }
+}
+
+function modal({title, body, buttons = [], wide = false, onMount}) {
+  return new Promise(resolve => {
+    const back = document.createElement('div');
+    back.className = 'modal-back';
+    back.innerHTML = `<div class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+      <div class="modal-h"><span>${esc(title)}</span><button class="icon-btn" data-x aria-label="Fermer">✕</button></div>
+      <div class="modal-b">${body}</div>
+      <div class="modal-f">${buttons.map((b, i) => `<button class="btn ${b.cls || ''}" data-b="${i}">${esc(b.label)}</button>`).join('')}</div></div>`;
+    $('#modalRoot').appendChild(back);
+    const close = v => { back.remove(); resolve(v); };
+    const ctx = {el: back, close};
+    back.querySelector('[data-x]').onclick = () => close(null);
+    back.addEventListener('keydown', e => { if (e.key === 'Escape') close(null); });
+    back.querySelectorAll('[data-b]').forEach(btn => btn.onclick = async () => {
+      const b = buttons[+btn.dataset.b];
+      if (!b.onClick) return close(b.value ?? null);
+      const r = await b.onClick(ctx);
+      if (r !== false && r !== undefined) close(r);
+    });
+    if (onMount) onMount(ctx);
+    const f = back.querySelector('input:not([type=hidden]):not([readonly]),select,textarea');
+    if (f) setTimeout(() => f.focus(), 30);
+  });
+}
+const confirmDlg = (title, msg, ok = 'Confirmer', cls = 'primary') =>
+  modal({title, body: `<div>${msg}</div>`, buttons: [{label: 'Annuler', value: false}, {label: ok, cls, value: true}]}).then(v => !!v);
+
+function fieldHtml(f, v) {
+  const id = 'f_' + f.key, req = f.required ? ' <span class="req">*</span>' : '';
+  const cls = 'field' + (f.full ? ' full' : '') + (f.type === 'checkbox' ? ' check' : '');
+  if (f.type === 'checkbox') return `<div class="${cls}"><input type="checkbox" id="${id}" data-k="${f.key}" ${v ? 'checked' : ''}><label for="${id}">${esc(f.label)}</label></div>`;
+  let input;
+  if (f.type === 'select') {
+    input = `<select id="${id}" data-k="${f.key}">${f.options.map(o => { const [ov, ol] = Array.isArray(o) ? o : [o, o]; return `<option value="${esc(ov)}" ${String(ov) === String(v ?? '') ? 'selected' : ''}>${esc(ol)}</option>`; }).join('')}</select>`;
+  } else if (f.type === 'textarea') {
+    input = `<textarea id="${id}" data-k="${f.key}" ${f.readonly ? 'readonly' : ''}>${esc(v)}</textarea>`;
+  } else {
+    const t = f.type === 'number' ? 'text' : (f.type || 'text');
+    const val = f.type === 'date' ? sToIso(v) : (f.type === 'number' && v !== '' && v != null ? String(v).replace('.', ',') : v);
+    input = `<input type="${t}" id="${id}" data-k="${f.key}" value="${esc(val)}" ${f.type === 'number' ? 'inputmode="decimal"' : ''} ${f.readonly ? 'readonly' : ''} ${f.placeholder ? `placeholder="${esc(f.placeholder)}"` : ''}>`;
+  }
+  return `<div class="${cls}"><label for="${id}">${esc(f.label)}${req}</label>${input}${f.hint ? `<div class="faint" style="font-size:12px;margin-top:3px">${esc(f.hint)}</div>` : ''}</div>`;
+}
+function readFields(root, fields) {
+  const out = {}; let ok = true;
+  for (const f of fields) {
+    const el = root.querySelector(`[data-k="${f.key}"]`); if (!el) continue;
+    let v;
+    if (f.type === 'checkbox') v = el.checked;
+    else if (f.type === 'number') v = el.value.trim() === '' ? 0 : num(el.value);
+    else if (f.type === 'date') v = isoToS(el.value);
+    else if (f.type === 'select' && f.numeric) v = +el.value || 0;
+    else v = el.value.trim();
+    el.classList.remove('invalid');
+    if (f.required && (v === '' || v === null || v === 0 && f.numeric)) { el.classList.add('invalid'); ok = false; }
+    out[f.key] = v;
+  }
+  return ok ? out : null;
+}
+function formDialog({title, fields, values = {}, okLabel = 'Enregistrer', intro = '', cols = 2, validate, wide}) {
+  return modal({
+    title, wide,
+    body: `${intro}<div class="form ${cols === 3 ? 'cols-3' : ''}">${fields.map(f => fieldHtml(f, values[f.key])).join('')}</div>`,
+    buttons: [{label: 'Annuler', value: null}, {label: okLabel, cls: 'primary', onClick: ({el}) => {
+      const v = readFields(el, fields);
+      if (!v) { toast('Veuillez compléter les champs obligatoires.', 'err'); return false; }
+      if (validate) { const err = validate(v); if (err) { toast(err, 'err'); return false; } }
+      return v;
+    }}]
+  });
+}
+
+/* --- Liste triable / filtrable --- */
+function mountList(host, cfg) {
+  const st = {q: '', sort: cfg.sort ?? null, dir: cfg.dir ?? 1, f: {}};
+  const filters = cfg.filters || [];
+  host.innerHTML = `<div class="list-tools">
+      <input type="search" placeholder="Rechercher…" aria-label="Rechercher">
+      ${filters.map((f, i) => `<select data-f="${i}" aria-label="${esc(f.label)}"><option value="">${esc(f.label)} : tous</option>${f.options.map(o => `<option ${f.default === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`).join('')}
+      ${cfg.tools || ''}<span class="count"></span></div>
+    <div class="table-wrap"><table class="grid"><thead></thead><tbody></tbody><tfoot></tfoot></table></div>`;
+  filters.forEach((f, i) => { if (f.default) st.f[i] = f.default; });
+  const cols = cfg.columns;
+  const val = (c, r) => (c.get ? c.get(r) : r[c.key]);
+  const draw = () => {
+    let rows = cfg.rows.slice();
+    for (const [i, v] of Object.entries(st.f)) if (v) rows = rows.filter(r => String(filters[i].get(r)) === v);
+    if (st.q) {
+      const q = st.q.toLowerCase();
+      rows = rows.filter(r => cols.some(c => String(c.text ? c.text(r) : val(c, r) ?? '').toLowerCase().includes(q)));
+    }
+    if (st.sort !== null) {
+      const c = cols[st.sort];
+      rows.sort((a, b) => { const x = val(c, a), y = val(c, b); return (x > y ? 1 : x < y ? -1 : 0) * st.dir; });
+    }
+    $('thead', host).innerHTML = '<tr>' + cols.map((c, i) => `<th class="${c.num ? 'r' : ''} ${c.nosort ? '' : 'sortable'}" data-s="${i}" style="${c.w ? 'width:' + c.w : ''}">${esc(c.label)}${st.sort === i ? `<span class="arr">${st.dir > 0 ? '▲' : '▼'}</span>` : ''}</th>`).join('') + '</tr>';
+    $('tbody', host).innerHTML = rows.length
+      ? rows.map(r => `<tr class="${cfg.onOpen ? 'click' : ''}" data-id="${r.id}">${cols.map(c => `<td class="${c.num ? 'num' : ''}">${c.fmt ? c.fmt(val(c, r), r) : esc(val(c, r))}</td>`).join('')}</tr>`).join('')
+      : `<tr><td colspan="${cols.length}"><div class="empty">${esc(cfg.empty || 'Aucune donnée')}</div></td></tr>`;
+    $('tfoot', host).innerHTML = cfg.footer && rows.length ? cfg.footer(rows) : '';
+    $('.count', host).textContent = `${rows.length} élément${rows.length > 1 ? 's' : ''}`;
+  };
+  $('input[type=search]', host).addEventListener('input', e => { st.q = e.target.value; draw(); });
+  $$('select[data-f]', host).forEach(s => s.addEventListener('change', () => { st.f[s.dataset.f] = s.value; draw(); }));
+  $('thead', host).addEventListener('click', e => {
+    const th = e.target.closest('th.sortable'); if (!th) return;
+    const i = +th.dataset.s; if (st.sort === i) st.dir *= -1; else { st.sort = i; st.dir = 1; } draw();
+  });
+  $('tbody', host).addEventListener('click', e => {
+    if (e.target.closest('a,button')) return;
+    const tr = e.target.closest('tr[data-id]'); if (tr && cfg.onOpen) cfg.onOpen(+tr.dataset.id);
+  });
+  draw();
+}
+const footRow = (cols, values) => `<tr>${cols.map((c, i) => `<td class="${c.num ? 'num' : ''}">${values[i] ?? ''}</td>`).join('')}</tr>`;
+
+/* ------------------------------ Navigation ------------------------------ */
+const TCODES = {
+  SMEN:    {label: 'Accueil (Launchpad)', go: ['home']},
+  VA21:    {label: 'Créer un devis', go: ['doc', {code: 'DV', id: 'new'}]},
+  VA25:    {label: 'Liste des devis', go: ['docs', {code: 'DV'}]},
+  VA01:    {label: 'Créer une commande client', go: ['doc', {code: 'CC', id: 'new'}]},
+  VA05:    {label: 'Liste des commandes clients', go: ['docs', {code: 'CC'}]},
+  VF01:    {label: 'Créer une facture client', go: ['doc', {code: 'FC', id: 'new'}]},
+  VF05:    {label: 'Liste des factures clients', go: ['docs', {code: 'FC'}]},
+  ME21N:   {label: 'Créer une commande d\'achat', go: ['doc', {code: 'CF', id: 'new'}]},
+  ME2N:    {label: 'Liste des commandes d\'achat', go: ['docs', {code: 'CF'}]},
+  MIRO:    {label: 'Saisir une facture fournisseur', go: ['doc', {code: 'FF', id: 'new'}]},
+  MIR5:    {label: 'Liste des factures fournisseurs', go: ['docs', {code: 'FF'}]},
+  BP:      {label: 'Partenaires commerciaux', go: ['partners', {}]},
+  XD01:    {label: 'Créer un client', run: () => { go('partners', {role: 'Client'}); editPartner(null, 'Client'); }},
+  XD03:    {label: 'Clients', go: ['partners', {role: 'Client'}]},
+  XK01:    {label: 'Créer un fournisseur', run: () => { go('partners', {role: 'Fournisseur'}); editPartner(null, 'Fournisseur'); }},
+  XK03:    {label: 'Fournisseurs', go: ['partners', {role: 'Fournisseur'}]},
+  MM01:    {label: 'Créer un article', run: () => { go('articles'); editArticle(null); }},
+  MM60:    {label: 'Liste des articles', go: ['articles']},
+  MMBE:    {label: 'Aperçu des stocks', go: ['stock']},
+  MB51:    {label: 'Liste des mouvements de stock', go: ['mvts']},
+  MB1C:    {label: 'Saisir un mouvement de stock', run: () => { go('stock'); stockMovementDialog(); }},
+  MI01:    {label: 'Inventaire physique', run: () => { go('stock'); stockMovementDialog(null, 'Inventaire'); }},
+  FB03:    {label: 'Journal des écritures', go: ['journal']},
+  FB50:    {label: 'Saisir une écriture d\'OD', run: () => { go('journal'); odDialog(); }},
+  'F.01':  {label: 'Balance générale', go: ['balance']},
+  FAGLL03: {label: 'Grand livre', go: ['ledger', {}]},
+  FBL5N:   {label: 'Postes ouverts clients', go: ['openitems', {side: 'V'}]},
+  FBL1N:   {label: 'Postes ouverts fournisseurs', go: ['openitems', {side: 'A'}]},
+  SPRO:    {label: 'Paramétrage', go: ['settings']}
+};
+const NAV = [
+  {label: 'Accueil', icon: 'home', tc: 'SMEN'},
+  {group: 'Ventes', icon: 'sales', items: ['VA25', 'VA05', 'VF05', 'XD03', 'FBL5N'], names: ['Devis', 'Commandes clients', 'Factures clients', 'Clients', 'Postes ouverts']},
+  {group: 'Achats', icon: 'purchase', items: ['ME2N', 'MIR5', 'XK03', 'FBL1N'], names: ['Commandes d\'achat', 'Factures fournisseurs', 'Fournisseurs', 'Postes ouverts']},
+  {group: 'Logistique', icon: 'stock', items: ['MM60', 'MMBE', 'MB51'], names: ['Articles', 'Aperçu des stocks', 'Mouvements']},
+  {group: 'Finance', icon: 'finance', items: ['FB03', 'F.01', 'FAGLL03'], names: ['Journal', 'Balance générale', 'Grand livre']},
+  {group: 'Système', icon: 'settings', items: ['SPRO'], names: ['Paramétrage']}
+];
+
+const state = {view: 'home', params: {}, editing: false, stack: []};
+
+function runTcode(raw) {
+  let code = String(raw || '').trim().toUpperCase().replace(/^\/[NO]/, '');
+  if (!code) return;
+  if (TCODES[code]) {
+    const t = TCODES[code];
+    if (t.run) t.run(); else go(t.go[0], t.go[1] || {});
+    return;
+  }
+  // Recherche libre : numéro de document, partenaire, article
+  const q = code.toLowerCase();
+  const d = DB.ERP_Documents.find(x => String(x.Numero).toLowerCase() === q);
+  if (d) return go('doc', {id: d.id});
+  const p = DB.ERP_Partenaires.find(x => String(x.Code).toLowerCase() === q || String(x.Nom).toLowerCase().includes(q));
+  if (p) return go('partner', {id: p.id});
+  const a = DB.ERP_Articles.find(x => String(x.Code).toLowerCase() === q || String(x.Designation).toLowerCase().includes(q));
+  if (a) return go('article', {id: a.id});
+  toast(`Transaction ou objet « ${raw} » introuvable`, 'err');
+}
+
+function navMatches(tc) {
+  const t = TCODES[tc]; if (!t || !t.go) return false;
+  const [v, p = {}] = t.go;
+  if (v !== state.view) {
+    const parent = {doc: 'docs', partner: 'partners', article: 'articles'}[state.view];
+    if (parent !== v) return false;
+    if (state.view === 'doc') { const code = state.params.code || codeOfType(get('ERP_Documents', state.params.id)?.Type); return p.code === code; }
+    return Object.keys(p).length === 0 || (p.role && state.params.role === p.role);
+  }
+  return Object.keys(p).every(k => state.params[k] === p[k]) && (v !== 'partners' || (p.role || '') === (state.params.role || ''));
+}
+
+function renderNav() {
+  const nav = $('#sidenav');
+  nav.innerHTML = NAV.map(n => n.tc
+    ? `<div class="nav-item ${navMatches(n.tc) ? 'active' : ''}" data-tc="${n.tc}">${icon(n.icon)}<span>${esc(n.label)}</span></div>`
+    : `<div class="nav-group"><div class="nav-group-title">${icon(n.icon)}${esc(n.group)}</div>${n.items.map((tc, i) =>
+        `<div class="nav-item nav-sub ${navMatches(tc) ? 'active' : ''}" data-tc="${tc}"><span>${esc(n.names[i])}</span><span class="tc">${tc}</span></div>`).join('')}</div>`).join('');
+}
+
+function go(view, params = {}) {
+  state.view = view; state.params = params; state.editing = false;
+  if (window.innerWidth <= 900) $('#sidenav').classList.remove('open');
+  render();
+  $('#main').scrollTop = 0;
+}
+
+function render() {
+  renderNav();
+  $('#companyName').textContent = param('Societe', 'Gestion intégrée');
+  const fn = VIEWS[state.view] || VIEWS.home;
+  const main = $('#main');
+  try { fn(main, state.params); }
+  catch (e) { console.error(e); main.innerHTML = page({title: 'Erreur', body: `<div class="msg err">${esc(e.message)}</div>`}); }
+}
+
+function page({title, tc, crumb, sub, actions = '', body}) {
+  return `<div class="page-head"><div>
+      ${crumb ? `<div class="crumb">${crumb}</div>` : ''}
+      <h1>${title}${tc ? `<span class="tc">${tc}</span>` : ''}</h1>
+      ${sub ? `<p class="sub">${sub}</p>` : ''}
+    </div><div class="actions">${actions}</div></div>
+    <div class="page-body">${body}</div>`;
+}
+const crumbHome = `<a data-tc="SMEN">Accueil</a>`;
+const docLink = id => { const d = get('ERP_Documents', id); return d ? `<a data-doc="${d.id}">${esc(d.Numero)}</a>` : ''; };
+const partnerLink = id => { const p = get('ERP_Partenaires', id); return p ? `<a data-partner="${p.id}">${esc(p.Nom)}</a>` : '<span class="faint">—</span>'; };
+const articleLink = id => { const a = get('ERP_Articles', id); return a ? `<a data-article="${a.id}">${esc(a.Code)}</a> ${esc(a.Designation)}` : '<span class="faint">—</span>'; };
+const money = n => `<span class="${n < 0 ? 'neg' : ''}">${fmtMoney(n)}</span>`;
+
+/* ------------------------------ Vues ------------------------------ */
+const VIEWS = {};
+
+/* --- Accueil / tableau de bord --- */
+VIEWS.home = main => {
+  const year = yearOf(todayS());
+  const inYear = d => d.Date && yearOf(d.Date) === year;
+  const fc = docsOf('FC').filter(isPostedInvoice), ff = docsOf('FF').filter(isPostedInvoice);
+  const ca = sum(fc.filter(inYear), d => num(d.Total_HT));
+  const achats = sum(ff.filter(inYear), d => num(d.Total_HT));
+  const cogs = sum(DB.ERP_Mouvements.filter(m => m.Type === 'Sortie' && m.Document && m.Date && yearOf(m.Date) === year), m => -num(m.Quantite) * num(m.Cout_Unitaire));
+  const marge = ca - cogs;
+  const creances = sum(fc, remaining), dettes = sum(ff, remaining);
+  const overdue = fc.filter(d => remaining(d) > 0 && d.Echeance && d.Echeance < todayS());
+  const st = stockInfo();
+  const stockVal = sum([...st.values()], s => s.value);
+  const low = DB.ERP_Articles.filter(a => !a.Inactif && ['bas', 'rupture'].includes(st.get(a.id)?.status));
+  const openCC = docsOf('CC').filter(d => ['Confirmée', 'Livrée'].includes(d.Statut));
+  const openCF = docsOf('CF').filter(d => ['Confirmée', 'Réceptionnée'].includes(d.Statut));
+  const openDV = docsOf('DV').filter(d => ['Brouillon', 'Envoyé'].includes(d.Statut));
+  const empty = !DB.ERP_Articles.length && !DB.ERP_Partenaires.length;
+
+  const kpi = (l, v, s, tc, tone = '') => `<div class="kpi ${tone}" ${tc ? `data-tc="${tc}"` : ''}><span class="l">${l}</span><span class="v">${v}</span><span class="s">${s}</span></div>`;
+  const tile = (tc, t, stt, n, unit, ic) => `<div class="tile" data-tc="${tc}" role="button" tabindex="0"><div class="t">${esc(t)}</div><div class="st">${esc(stt)}</div><div class="bot"><span class="ic">${icon(ic)}</span><span class="n">${n}${unit ? `<small>${unit}</small>` : ''}</span></div><div class="tcd">${tc}</div></div>`;
+
+  // Top clients
+  const byClient = [...groupBy(fc.filter(inYear), d => d.Partenaire)].map(([pid, ds]) => ({pid, v: sum(ds, d => num(d.Total_HT))})).sort((a, b) => b.v - a.v).slice(0, 5);
+  const recent = DB.ERP_Documents.slice().sort((a, b) => (b.Date || 0) - (a.Date || 0) || b.id - a.id).slice(0, 8);
+
+  main.innerHTML = page({
+    title: 'Tableau de bord', tc: 'SMEN', sub: `${esc(param('Societe', 'Votre société'))} · exercice ${year}`,
+    actions: `<button class="btn" data-tc="VA01">${icon('plus')}Commande client</button><button class="btn" data-tc="ME21N">${icon('plus')}Commande d'achat</button>`,
+    body: `
+    ${empty ? `<div class="msg info">La base est vide. Commencez par <a data-tc="SPRO">paramétrer votre société</a>, créer des <a data-tc="XD01">clients</a> et des <a data-tc="MM01">articles</a> — ou <a id="loadDemo">chargez un jeu de données de démonstration</a>.</div>` : ''}
+    <div class="kpis">
+      ${kpi('Chiffre d\'affaires HT', fmtMoney(ca), `Factures clients ${year}`, 'VF05')}
+      ${kpi('Marge brute', fmtMoney(marge), ca ? `Taux : ${fmtPct(marge / ca * 100)}` : 'CA − coût des ventes', null, marge < 0 ? 'bad' : 'good')}
+      ${kpi('Achats HT', fmtMoney(achats), `Factures fournisseurs ${year}`, 'MIR5')}
+      ${kpi('Créances clients', fmtMoney(creances), overdue.length ? `${overdue.length} facture(s) en retard` : 'Aucun retard', 'FBL5N', overdue.length ? 'warn' : '')}
+      ${kpi('Dettes fournisseurs', fmtMoney(dettes), `${ff.filter(d => remaining(d) > 0).length} facture(s) à payer`, 'FBL1N')}
+      ${kpi('Valeur du stock', fmtMoney(stockVal), low.length ? `${low.length} article(s) sous le seuil` : 'Stock au-dessus des seuils', 'MMBE', low.length ? 'warn' : '')}
+    </div>
+    <div class="grid-3">
+      <div class="card"><div class="card-h"><h2>Ventes et achats HT – 12 derniers mois</h2></div><div class="card-b" id="chartHost"></div></div>
+      <div class="card"><div class="card-h"><h2>Alertes stock</h2><a data-tc="MMBE">Voir tout</a></div><div class="card-b flush">
+        ${low.length ? `<table class="grid"><tbody>${low.slice(0, 7).map(a => { const s = st.get(a.id); return `<tr class="click" data-article-row="${a.id}"><td>${articleLink(a.id)}</td><td class="num">${fmtNum(s.qty)} / ${fmtNum(a.Stock_Min)} ${esc(a.Unite)}</td><td>${s.status === 'rupture' ? badge('Rupture', 'negative') : badge('Bas', 'critical')}</td></tr>`; }).join('')}</tbody></table>`
+          : '<div class="empty">Aucune alerte ✔</div>'}
+      </div></div>
+    </div>
+    <div class="lp-group"><h3>Ventes</h3><div class="tiles">
+      ${tile('VA21', 'Créer un devis', 'Proposition commerciale', '', '', 'doc')}
+      ${tile('VA25', 'Devis en cours', 'À relancer', openDV.length, '', 'doc')}
+      ${tile('VA05', 'Commandes clients', 'À livrer / facturer', openCC.length, '', 'sales')}
+      ${tile('FBL5N', 'Factures à encaisser', 'Postes ouverts', fmtNum(creances / 1000, 1), 'k€', 'euro')}
+      ${tile('XD03', 'Clients', 'Fichier clients', DB.ERP_Partenaires.filter(isClient).length, '', 'people')}
+    </div></div>
+    <div class="lp-group"><h3>Achats & logistique</h3><div class="tiles">
+      ${tile('ME21N', 'Créer une commande d\'achat', 'Approvisionnement', '', '', 'purchase')}
+      ${tile('ME2N', 'Commandes d\'achat', 'À réceptionner / facturer', openCF.length, '', 'purchase')}
+      ${tile('MMBE', 'Aperçu des stocks', 'Quantités et valorisation', low.length, low.length ? 'alertes' : '', 'stock')}
+      ${tile('MB1C', 'Mouvement de stock', 'Entrée / sortie manuelle', '', '', 'stock')}
+      ${tile('MM60', 'Articles', 'Données de base', DB.ERP_Articles.length, '', 'stock')}
+    </div></div>
+    <div class="lp-group"><h3>Finance</h3><div class="tiles">
+      ${tile('FB03', 'Journal', 'Écritures comptables', DB.ERP_Ecritures.length, '', 'finance')}
+      ${tile('F.01', 'Balance générale', 'Soldes par compte', '', '', 'chart')}
+      ${tile('FBL1N', 'Factures à payer', 'Fournisseurs', fmtNum(dettes / 1000, 1), 'k€', 'euro')}
+      ${tile('FB50', 'Écriture d\'OD', 'Opérations diverses', '', '', 'finance')}
+    </div></div>
+    <div class="grid-2">
+      <div class="card"><div class="card-h"><h2>Meilleurs clients ${year}</h2></div><div class="card-b flush">
+        ${byClient.length ? `<table class="grid"><tbody>${byClient.map(c => `<tr><td>${partnerLink(c.pid)}</td><td class="num">${fmtMoney(c.v)}</td><td class="num muted">${fmtPct(ca ? c.v / ca * 100 : 0)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">Pas encore de ventes facturées</div>'}
+      </div></div>
+      <div class="card"><div class="card-h"><h2>Derniers documents</h2></div><div class="card-b flush">
+        ${recent.length ? `<table class="grid"><tbody>${recent.map(d => `<tr class="click" data-doc-row="${d.id}"><td class="mono">${esc(d.Numero)}</td><td>${esc(d.Type)}</td><td>${esc(partnerName(d.Partenaire))}</td><td>${badge(d.Statut)}</td><td class="num">${fmtMoney(d.Total_TTC)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">Aucun document</div>'}
+      </div></div>
+    </div>`
+  });
+  mountChart($('#chartHost'));
+  $$('[data-doc-row]', main).forEach(tr => tr.onclick = e => { if (!e.target.closest('a')) go('doc', {id: +tr.dataset.docRow}); });
+  $$('[data-article-row]', main).forEach(tr => tr.onclick = e => { if (!e.target.closest('a')) go('article', {id: +tr.dataset.articleRow}); });
+  const ld = $('#loadDemo'); if (ld) ld.onclick = () => loadDemoData();
+};
+
+function mountChart(host) {
+  const now = new Date(), months = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth() - i, 1));
+    months.push({key: d.toISOString().slice(0, 7), label: d.toLocaleDateString('fr-FR', {month: 'short', timeZone: 'UTC'}).replace('.', ''), full: d.toLocaleDateString('fr-FR', {month: 'long', year: 'numeric', timeZone: 'UTC'}), v: 0, a: 0});
+  }
+  const idx = new Map(months.map((m, i) => [m.key, i]));
+  for (const d of DB.ERP_Documents) {
+    if (!isPostedInvoice(d) || !d.Date) continue;
+    const i = idx.get(monthKey(d.Date)); if (i === undefined) continue;
+    const c = codeOfType(d.Type);
+    if (c === 'FC') months[i].v += num(d.Total_HT); else if (c === 'FF') months[i].a += num(d.Total_HT);
+  }
+  const W = 720, H = 250, pl = 52, pr = 8, pt = 10, pb = 26;
+  const raw = Math.max(1, ...months.map(m => Math.max(m.v, m.a)));
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const [mx, stp] = [[1, .2], [2, .5], [3, .5], [4, 1], [5, 1], [6, 1], [8, 2], [10, 2]].find(([m]) => m * mag >= raw);
+  const max = mx * mag, step = stp * mag;
+  const y = v => pt + (H - pt - pb) * (1 - v / max);
+  const gw = (W - pl - pr) / 12, bw = Math.min(16, gw * 0.3);
+  const bar = (x, v, color) => {
+    if (v <= 0) return '';
+    const top = y(v), h = (H - pb) - top, r = Math.min(4, h, bw / 2);
+    return `<path d="M${x},${H - pb} V${top + r} Q${x},${top} ${x + r},${top} H${x + bw - r} Q${x + bw},${top} ${x + bw},${top + r} V${H - pb} Z" fill="${color}"/>`;
+  };
+  const kfmt = v => v >= 1000 ? fmtNum(v / 1000, 1) + ' k' : fmtNum(v, 0);
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Histogramme des ventes et achats HT par mois"><g class="axis">`;
+  for (let i = 0; i * step <= max + 1e-9; i++) { const v = i * step, yy = y(v); svg += `<line class="${i ? 'gridline' : 'baseline'}" x1="${pl}" x2="${W - pr}" y1="${yy}" y2="${yy}"/><text x="${pl - 8}" y="${yy + 4}" text-anchor="end">${kfmt(v)}</text>`; }
+  months.forEach((m, i) => { svg += `<text x="${pl + gw * i + gw / 2}" y="${H - 8}" text-anchor="middle">${esc(m.label)}</text>`; });
+  svg += '</g>';
+  months.forEach((m, i) => {
+    const cx = pl + gw * i + gw / 2;
+    svg += bar(cx - bw - 1, m.v, 'var(--series-1)') + bar(cx + 1, m.a, 'var(--series-2)');
+    svg += `<rect x="${pl + gw * i}" y="${pt}" width="${gw}" height="${H - pt - pb}" fill="transparent" data-m="${i}"/>`;
+  });
+  svg += '</svg>';
+  host.innerHTML = `<div class="legend"><span><i style="background:var(--series-1)"></i>Ventes</span><span><i style="background:var(--series-2)"></i>Achats</span></div>
+    <div class="chart">${svg}<div class="tip"></div></div>
+    <details class="data"><summary>Voir les données</summary><table class="grid"><thead><tr><th>Mois</th><th class="r">Ventes HT</th><th class="r">Achats HT</th></tr></thead><tbody>${months.map(m => `<tr><td>${esc(m.full)}</td><td class="num">${fmtMoney(m.v)}</td><td class="num">${fmtMoney(m.a)}</td></tr>`).join('')}</tbody></table></details>`;
+  const chart = $('.chart', host), tip = $('.tip', host);
+  $$('rect[data-m]', host).forEach(r => {
+    r.addEventListener('mouseenter', () => { r.setAttribute('fill', 'rgba(0,112,242,.06)'); });
+    r.addEventListener('mouseleave', () => { r.setAttribute('fill', 'transparent'); tip.style.opacity = 0; });
+    r.addEventListener('mousemove', e => {
+      const m = months[+r.dataset.m];
+      tip.innerHTML = `<b>${esc(m.full)}</b><div><i style="background:var(--series-1)"></i>Ventes : ${fmtMoney(m.v)}</div><div><i style="background:var(--series-2)"></i>Achats : ${fmtMoney(m.a)}</div>`;
+      const box = chart.getBoundingClientRect();
+      let x = e.clientX - box.left + 14; if (x + 190 > box.width) x = e.clientX - box.left - 200;
+      tip.style.left = x + 'px'; tip.style.top = Math.max(0, e.clientY - box.top - 30) + 'px'; tip.style.opacity = 1;
+    });
+  });
+}
+
+/* --- Listes de documents --- */
+VIEWS.docs = (main, {code}) => {
+  const T = DOC[code];
+  const invoice = code === 'FC' || code === 'FF';
+  const rows = docsOf(code);
+  const columns = [
+    {key: 'Numero', label: 'N°', fmt: v => `<span class="mono">${esc(v)}</span>`},
+    {label: T.side === 'V' ? 'Client' : 'Fournisseur', get: r => partnerName(r.Partenaire)},
+    {key: 'Date', label: 'Date', fmt: fmtDate, text: r => fmtDate(r.Date)},
+    {key: 'Echeance', label: invoice ? 'Échéance' : code === 'DV' ? 'Validité' : 'Livraison prévue', fmt: (v, r) => `<span class="${invoice && remaining(r) > 0 && v && v < todayS() && isPostedInvoice(r) ? 'neg' : ''}">${fmtDate(v)}</span>`, text: r => fmtDate(r.Echeance)},
+    {key: 'Reference', label: 'Référence'},
+    {key: 'Statut', label: 'Statut', fmt: v => badge(v)},
+    {key: 'Total_HT', label: 'Total HT', num: true, fmt: fmtMoney},
+    {key: 'Total_TTC', label: 'Total TTC', num: true, fmt: fmtMoney}
+  ];
+  if (invoice) columns.push({label: 'Reste dû', num: true, get: r => isPostedInvoice(r) ? remaining(r) : 0, fmt: v => v ? money(v) : '<span class="faint">—</span>'});
+  main.innerHTML = page({
+    title: esc(T.plural), tc: T.list, crumb: crumbHome,
+    actions: `<button class="btn primary" data-tc="${T.create}">${icon('plus')}Créer</button>`,
+    body: `<div class="card" id="listHost"></div>`
+  });
+  mountList($('#listHost'), {
+    rows, columns, sort: 0, dir: -1, empty: 'Aucun document. Cliquez sur « Créer ».',
+    filters: [{label: 'Statut', options: T.statuses, get: r => r.Statut}],
+    onOpen: id => go('doc', {id}),
+    footer: rs => footRow(columns, ['Total', '', '', '', '', '', fmtMoney(sum(rs, r => num(r.Total_HT))), fmtMoney(sum(rs, r => num(r.Total_TTC))), invoice ? fmtMoney(sum(rs.filter(isPostedInvoice), remaining)) : undefined])
+  });
+};
+
+/* --- Document : édition ou affichage --- */
+VIEWS.doc = (main, params) => {
+  const isNew = params.id === 'new';
+  const doc = isNew ? null : get('ERP_Documents', params.id);
+  if (!isNew && !doc) { main.innerHTML = page({title: 'Document introuvable', crumb: crumbHome, body: '<div class="msg err">Ce document n\'existe plus.</div>'}); return; }
+  const code = isNew ? params.code : codeOfType(doc.Type);
+  if (isNew || doc.Statut === 'Brouillon') docEditor(main, code, doc, params);
+  else docDisplay(main, code, doc);
+};
+
+function docEditor(main, code, doc, params) {
+  const T = DOC[code], sale = T.side === 'V';
+  state.editing = true;
+  const src = params.copyFrom ? get('ERP_Documents', params.copyFrom) : null;
+  const today = todayS();
+  const h = doc ? {Partenaire: doc.Partenaire, Date: doc.Date, Echeance: doc.Echeance, Reference: doc.Reference, Notes: doc.Notes}
+    : {Partenaire: src?.Partenaire || params.partner || 0, Date: today, Echeance: null, Reference: '', Notes: src?.Notes || ''};
+  if (!h.Echeance && h.Partenaire) h.Echeance = defaultDue(code, h.Partenaire, h.Date);
+  let dueTouched = !!doc;
+  let lines = doc ? linesOf(doc.id).map(l => ({...l})) : src ? copyLines(src.id) : [];
+  if (!lines.length) lines.push(emptyLine());
+  const partners = DB.ERP_Partenaires.filter(p => (sale ? isClient(p) : isSupplier(p)) && (!p.Inactif || p.id === h.Partenaire)).sort((a, b) => a.Nom.localeCompare(b.Nom));
+  const articles = DB.ERP_Articles.filter(a => !a.Inactif).sort((a, b) => String(a.Code).localeCompare(String(b.Code)));
+  const statusAction = {DV: 'Enregistrer et marquer envoyé', CC: 'Enregistrer et confirmer', CF: 'Enregistrer et confirmer', FC: 'Valider et comptabiliser', FF: 'Valider et comptabiliser'}[code];
+
+  function emptyLine() { return {Article: 0, Designation: '', Quantite: 1, Unite: 'U', Prix_Unitaire: 0, Remise: 0, Taux_TVA: num(param('TVA_Defaut', '20'))}; }
+  const artOptions = sel => `<option value="0">— Libre —</option>` + articles.map(a => `<option value="${a.id}" ${a.id === sel ? 'selected' : ''}>${esc(a.Code)} · ${esc(a.Designation)}</option>`).join('');
+  const tvaOptions = sel => TVA_RATES.map(r => `<option value="${r}" ${num(sel) === r ? 'selected' : ''}>${fmtNum(r, 1)} %</option>`).join('');
+  const nInput = (k, v, w) => `<input class="inp n" data-l="${k}" value="${esc(String(v ?? '').replace('.', ','))}" inputmode="decimal" style="width:${w}px">`;
+  const lineRow = (l, i) => `<tr data-i="${i}">
+      <td class="pos">${(i + 1) * 10}</td>
+      <td style="min-width:180px"><select class="inp" data-l="Article">${artOptions(l.Article)}</select></td>
+      <td style="min-width:180px"><input class="inp" data-l="Designation" value="${esc(l.Designation)}"></td>
+      <td>${nInput('Quantite', l.Quantite, 70)}</td>
+      <td><input class="inp" data-l="Unite" value="${esc(l.Unite)}" style="width:62px"></td>
+      <td>${nInput('Prix_Unitaire', l.Prix_Unitaire, 90)}</td>
+      <td>${nInput('Remise', l.Remise, 56)}</td>
+      <td><select class="inp" data-l="Taux_TVA" style="width:86px">${tvaOptions(l.Taux_TVA)}</select></td>
+      <td class="ht">${fmtMoney(calcLine(l).ht)}</td>
+      <td><button class="icon-btn" data-del title="Supprimer la ligne" aria-label="Supprimer la ligne">✕</button></td></tr>`;
+
+  const title = doc ? `${esc(T.label)} ${esc(doc.Numero)}` : `Nouveau document : ${esc(T.label.toLowerCase())}`;
+  main.innerHTML = page({
+    title, tc: doc ? '' : T.create,
+    crumb: `${crumbHome} › <a data-tc="${T.list}">${esc(T.plural)}</a>`,
+    sub: doc ? `${badge(doc.Statut)} ${doc.Origine ? ' · Origine : ' + (docByNumero(doc.Origine) ? docLink(docByNumero(doc.Origine).id) : esc(doc.Origine)) : ''}` : (src ? `Copie de ${esc(src.Numero)}` : ''),
+    actions: `${doc ? `<button class="btn danger" id="delBtn">Supprimer</button>` : ''}
+      <button class="btn" id="cancelBtn">Annuler</button>
+      <button class="btn" id="saveBtn">Enregistrer</button>
+      <button class="btn primary" id="saveActBtn">${esc(statusAction)}</button>`,
+    body: `
+      <div class="card"><div class="card-h"><h2>En-tête</h2></div><div class="card-b">
+        <div class="form cols-3" id="hdr">
+          <div class="field"><label for="hPart">${sale ? 'Client' : 'Fournisseur'} <span class="req">*</span></label>
+            <select id="hPart"><option value="0">— Sélectionner —</option>${partners.map(p => `<option value="${p.id}" ${p.id === h.Partenaire ? 'selected' : ''}>${esc(p.Nom)} (${esc(p.Code)})</option>`).join('')}</select>
+            ${!partners.length ? `<div class="faint" style="font-size:12px;margin-top:3px">Aucun ${sale ? 'client' : 'fournisseur'} : <a data-tc="${sale ? 'XD01' : 'XK01'}">en créer un</a></div>` : ''}</div>
+          <div class="field"><label for="hDate">Date</label><input type="date" id="hDate" value="${sToIso(h.Date)}"></div>
+          <div class="field"><label for="hDue">${code === 'DV' ? 'Valable jusqu\'au' : (code === 'FC' || code === 'FF') ? 'Échéance de paiement' : 'Livraison prévue'}</label><input type="date" id="hDue" value="${sToIso(h.Echeance)}"></div>
+          <div class="field"><label for="hRef">${code === 'FF' ? 'N° facture fournisseur' : sale ? 'Référence client' : 'Référence'}</label><input id="hRef" value="${esc(h.Reference)}"></div>
+          <div class="field full"><label for="hNotes">Notes</label><textarea id="hNotes" rows="2">${esc(h.Notes)}</textarea></div>
+        </div></div></div>
+      <div class="card"><div class="card-h"><h2>Postes</h2><button class="btn sm" id="addLine">${icon('plus')}Ajouter un poste</button></div>
+        <div class="table-wrap"><table class="lines"><thead><tr><th>Pos.</th><th>Article</th><th>Désignation</th><th class="r">Qté</th><th>Unité</th><th class="r">Prix unit. HT</th><th class="r">Remise %</th><th>TVA</th><th class="r">Montant HT</th><th></th></tr></thead><tbody id="linesBody"></tbody></table></div>
+        <div class="totals" id="totals"></div></div>`
+  });
+
+  const body = $('#linesBody');
+  const drawLines = () => { body.innerHTML = lines.map(lineRow).join(''); drawTotals(); };
+  const drawTotals = () => { const t = calcTotals(lines); $('#totals').innerHTML = `<span class="muted">Total HT</span><span class="r">${fmtMoney(t.ht)}</span><span class="muted">TVA</span><span class="r">${fmtMoney(t.tva)}</span><span class="big">Total TTC</span><span class="big r">${fmtMoney(t.ttc)}</span>`; };
+  drawLines();
+
+  body.addEventListener('input', e => {
+    const tr = e.target.closest('tr[data-i]'), k = e.target.dataset.l; if (!tr || !k || k === 'Article') return;
+    const l = lines[+tr.dataset.i];
+    l[k] = ['Quantite', 'Prix_Unitaire', 'Remise', 'Taux_TVA'].includes(k) ? num(e.target.value) : e.target.value;
+    $('.ht', tr).textContent = fmtMoney(calcLine(l).ht); drawTotals();
+  });
+  body.addEventListener('change', e => {
+    const tr = e.target.closest('tr[data-i]'), k = e.target.dataset.l; if (!tr) return;
+    const i = +tr.dataset.i, l = lines[i];
+    if (k === 'Taux_TVA') { l.Taux_TVA = num(e.target.value); $('.ht', tr).textContent = fmtMoney(calcLine(l).ht); drawTotals(); }
+    if (k === 'Article') {
+      const a = articleOf(+e.target.value);
+      l.Article = a ? a.id : 0;
+      if (a) Object.assign(l, {Designation: a.Designation, Unite: a.Unite || 'U', Prix_Unitaire: num(sale ? a.Prix_Vente : a.Prix_Achat), Taux_TVA: num(a.Taux_TVA)});
+      tr.outerHTML = lineRow(l, i); drawTotals();
+    }
+  });
+  body.addEventListener('click', e => {
+    if (!e.target.closest('[data-del]')) return;
+    lines.splice(+e.target.closest('tr').dataset.i, 1);
+    if (!lines.length) lines.push(emptyLine());
+    drawLines();
+  });
+  $('#addLine').onclick = () => { lines.push(emptyLine()); drawLines(); const s = $$('select[data-l=Article]', body).pop(); if (s) s.focus(); };
+  const recomputeDue = () => {
+    if (dueTouched) return;
+    const p = +$('#hPart').value, d = isoToS($('#hDate').value) || todayS();
+    if (p) $('#hDue').value = sToIso(defaultDue(code, p, d));
+  };
+  $('#hPart').onchange = recomputeDue; $('#hDate').onchange = recomputeDue;
+  $('#hDue').onchange = () => { dueTouched = true; };
+
+  const collect = () => {
+    const hdr = {Partenaire: +$('#hPart').value || 0, Date: isoToS($('#hDate').value) || todayS(), Echeance: isoToS($('#hDue').value), Reference: $('#hRef').value.trim(), Notes: $('#hNotes').value.trim()};
+    $('#hPart').classList.toggle('invalid', !hdr.Partenaire);
+    if (!hdr.Partenaire) { toast(`Sélectionnez un ${sale ? 'client' : 'fournisseur'}.`, 'err'); return null; }
+    const ls = lines.filter(l => l.Article || String(l.Designation).trim());
+    if (!ls.length) { toast('Ajoutez au moins un poste.', 'err'); return null; }
+    if (ls.some(l => num(l.Quantite) <= 0)) { toast('Les quantités doivent être positives.', 'err'); return null; }
+    if (!hdr.Echeance) hdr.Echeance = defaultDue(code, hdr.Partenaire, hdr.Date);
+    return {hdr, ls};
+  };
+  const save = async () => {
+    const c = collect(); if (!c) return null;
+    return busy(async () => doc ? updateDocument(doc, c.hdr, c.ls) : createDocument(code, {...c.hdr, Origine: ''}, c.ls));
+  };
+  $('#saveBtn').onclick = async () => { const d = await save(); if (d) { toast(`${T.label} ${d.Numero} enregistré(e)`, 'ok'); go('doc', {id: d.id}); } };
+  $('#saveActBtn').onclick = async () => {
+    const d = await save(); if (!d) return;
+    await busy(async () => {
+      if (code === 'DV') await setStatus(d, 'Envoyé');
+      else if (code === 'CC' || code === 'CF') await setStatus(d, 'Confirmée');
+      else await postInvoice(get('ERP_Documents', d.id));
+    });
+    toast(`${T.label} ${d.Numero} : ${get('ERP_Documents', d.id).Statut.toLowerCase()}`, 'ok');
+    go('doc', {id: d.id});
+  };
+  $('#cancelBtn').onclick = () => go('docs', {code});
+  if (doc) $('#delBtn').onclick = async () => {
+    if (!await confirmDlg('Supprimer le document', `Supprimer définitivement ${esc(doc.Numero)} ?`, 'Supprimer', 'primary')) return;
+    await busy(() => deleteDocument(doc)); toast('Document supprimé'); go('docs', {code});
+  };
+}
+
+function docDisplay(main, code, doc) {
+  const T = DOC[code], sale = T.side === 'V', invoice = code === 'FC' || code === 'FF';
+  const lines = linesOf(doc.id);
+  const p = get('ERP_Partenaires', doc.Partenaire);
+  const acts = [];
+  const A = (id, label, cls = '') => acts.push(`<button class="btn ${cls}" data-act="${id}">${label}</button>`);
+  if (code === 'DV' && doc.Statut === 'Envoyé') { A('refuse', 'Refusé'); A('accept', 'Accepté → commande', 'primary'); }
+  if (code === 'CC' && doc.Statut === 'Confirmée') { A('cancel', 'Annuler la commande', 'danger'); A('deliver', 'Livrer', 'primary'); }
+  if (code === 'CC' && doc.Statut === 'Livrée') A('invoice', 'Facturer', 'primary');
+  if (code === 'CF' && doc.Statut === 'Confirmée') { A('cancel', 'Annuler la commande', 'danger'); A('receive', 'Réceptionner', 'primary'); }
+  if (code === 'CF' && doc.Statut === 'Réceptionnée') A('invoice', 'Saisir la facture', 'primary');
+  if (invoice && ['Comptabilisée', 'Partiellement réglée'].includes(doc.Statut)) A('pay', sale ? 'Enregistrer un encaissement' : 'Enregistrer un paiement', 'primary');
+  A('copy', 'Dupliquer');
+  if (code !== 'FF') A('print', 'Imprimer');
+
+  // Flux de documents (amont + aval)
+  const chain = [];
+  let up = doc.Origine ? docByNumero(doc.Origine) : null;
+  while (up && chain.length < 6) { chain.unshift(up); up = up.Origine ? docByNumero(up.Origine) : null; }
+  chain.push(doc);
+  const down = d => DB.ERP_Documents.filter(x => x.Origine === d.Numero);
+  let frontier = down(doc);
+  while (frontier.length && chain.length < 10) { chain.push(...frontier); frontier = frontier.flatMap(down); }
+
+  const entries = DB.ERP_Ecritures.filter(e => e.Document === doc.id);
+  const moves = DB.ERP_Mouvements.filter(m => m.Document === doc.id);
+
+  main.innerHTML = page({
+    title: `${esc(T.label)} <span class="mono" style="font-size:18px">${esc(doc.Numero)}</span>`,
+    crumb: `${crumbHome} › <a data-tc="${T.list}">${esc(T.plural)}</a>`,
+    sub: `${badge(doc.Statut)}`,
+    actions: acts.join(''),
+    body: `
+      <div class="card"><div class="card-b"><div class="dl">
+        <div><div class="k">${sale ? 'Client' : 'Fournisseur'}</div><div class="v">${partnerLink(doc.Partenaire)}</div></div>
+        <div><div class="k">Date</div><div class="v">${fmtDate(doc.Date)}</div></div>
+        <div><div class="k">${code === 'DV' ? 'Valable jusqu\'au' : invoice ? 'Échéance' : 'Livraison prévue'}</div><div class="v ${invoice && remaining(doc) > 0 && doc.Echeance < todayS() ? 'neg' : ''}">${fmtDate(doc.Echeance)}</div></div>
+        <div><div class="k">${code === 'FF' ? 'N° facture fournisseur' : 'Référence'}</div><div class="v">${esc(doc.Reference) || '<span class="faint">—</span>'}</div></div>
+        <div><div class="k">Total TTC</div><div class="v"><b>${fmtMoney(doc.Total_TTC)}</b></div></div>
+        ${invoice ? `<div><div class="k">Reste dû</div><div class="v"><b class="${remaining(doc) > 0 ? 'neg' : 'pos'}">${fmtMoney(remaining(doc))}</b></div></div>` : ''}
+      </div>${doc.Notes ? `<div class="msg info" style="margin:14px 0 0">${esc(doc.Notes)}</div>` : ''}</div></div>
+      <div class="grid-3">
+        <div class="card"><div class="card-h"><h2>Postes</h2></div><div class="table-wrap"><table class="grid">
+          <thead><tr><th>Pos.</th><th>Article</th><th>Désignation</th><th class="r">Qté</th><th class="r">Prix unit.</th><th class="r">Remise</th><th class="r">TVA</th><th class="r">Montant HT</th></tr></thead>
+          <tbody>${lines.map((l, i) => `<tr><td class="faint">${(i + 1) * 10}</td><td>${l.Article ? `<a data-article="${l.Article}">${esc(articleOf(l.Article)?.Code || '')}</a>` : ''}</td><td>${esc(l.Designation)}</td><td class="num">${fmtNum(l.Quantite, 3)} ${esc(l.Unite)}</td><td class="num">${fmtMoney(l.Prix_Unitaire)}</td><td class="num">${num(l.Remise) ? fmtPct(l.Remise) : ''}</td><td class="num">${fmtPct(l.Taux_TVA)}</td><td class="num">${fmtMoney(calcLine(l).ht)}</td></tr>`).join('')}</tbody></table></div>
+          <div class="totals"><span class="muted">Total HT</span><span class="r">${fmtMoney(doc.Total_HT)}</span><span class="muted">TVA</span><span class="r">${fmtMoney(doc.Total_TVA)}</span><span class="big">Total TTC</span><span class="big r">${fmtMoney(doc.Total_TTC)}</span>
+          ${invoice ? `<span class="muted">Déjà réglé</span><span class="r">${fmtMoney(doc.Montant_Regle)}</span>` : ''}</div></div>
+        <div class="card"><div class="card-h"><h2>Flux de documents</h2></div><div class="card-b"><div class="flow">
+          ${chain.map(d => `<div class="flow-item ${d.id === doc.id ? 'cur' : ''}"><span class="dot"></span><div class="lbl">${d.id === doc.id ? `<b class="mono">${esc(d.Numero)}</b>` : `<a class="mono" data-doc="${d.id}">${esc(d.Numero)}</a>`}<small>${esc(d.Type)} · ${fmtDate(d.Date)}</small></div>${badge(d.Statut)}</div>`).join('')}
+        </div></div></div>
+      </div>
+      ${moves.length ? `<div class="card"><div class="card-h"><h2>Mouvements de stock</h2></div><div class="table-wrap"><table class="grid"><thead><tr><th>Date</th><th>Article</th><th>Type</th><th class="r">Quantité</th><th class="r">Coût unit.</th></tr></thead><tbody>
+        ${moves.map(m => `<tr><td>${fmtDate(m.Date)}</td><td>${articleLink(m.Article)}</td><td>${esc(m.Type)}</td><td class="num">${fmtNum(m.Quantite, 3)}</td><td class="num">${fmtMoney(m.Cout_Unitaire)}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
+      ${entries.length ? `<div class="card"><div class="card-h"><h2>Écritures comptables</h2><a data-tc="FB03">Journal</a></div><div class="table-wrap"><table class="grid"><thead><tr><th>Date</th><th>Jnl</th><th>Compte</th><th>Libellé</th><th class="r">Débit</th><th class="r">Crédit</th></tr></thead><tbody>
+        ${entries.map(e => `<tr><td>${fmtDate(e.Date)}</td><td>${esc(e.Journal)}</td><td><a data-account="${esc(e.Compte)}" class="mono">${esc(e.Compte)}</a> <span class="muted">${esc(accountLabel(e.Compte))}</span></td><td>${esc(e.Libelle)}</td><td class="num">${num(e.Debit) ? fmtMoney(e.Debit) : ''}</td><td class="num">${num(e.Credit) ? fmtMoney(e.Credit) : ''}</td></tr>`).join('')}</tbody></table></div></div>` : ''}`
+  });
+
+  const after = msg => { if (msg) toast(msg, 'ok'); go('doc', {id: doc.id}); };
+  const handlers = {
+    accept: async () => {
+      if (!await confirmDlg('Accepter le devis', `Créer une commande client à partir du devis ${esc(doc.Numero)} ?`)) return;
+      const cc = await busy(async () => { const c = await convertDocument(doc, 'CC', {statut: 'Confirmée'}); await setStatus(doc, 'Accepté'); return c; });
+      if (cc) { toast(`Commande ${cc.Numero} créée et confirmée`, 'ok'); go('doc', {id: cc.id}); }
+    },
+    refuse: async () => { if (await confirmDlg('Refuser le devis', 'Marquer ce devis comme refusé ?', 'Refusé')) { await busy(() => setStatus(doc, 'Refusé')); after(); } },
+    cancel: async () => { if (await confirmDlg('Annuler la commande', `Annuler ${esc(doc.Numero)} ?`, 'Annuler la commande')) { await busy(() => setStatus(doc, 'Annulée')); after('Commande annulée'); } },
+    deliver: async () => {
+      const short = stockShortages(doc);
+      const v = await formDialog({title: 'Livraison (sortie de marchandises)', okLabel: 'Livrer',
+        intro: short.length ? `<div class="msg warn"><b>Stock insuffisant :</b><br>${short.map(esc).join('<br>')}<br>La livraison rendra le stock négatif.</div>` : `<div class="msg info">Les quantités de la commande seront sorties du stock.</div>`,
+        fields: [{key: 'date', label: 'Date de livraison', type: 'date', required: true}], values: {date: todayS()}});
+      if (v) { await busy(() => deliverOrder(doc, v.date)); after('Livraison enregistrée'); }
+    },
+    receive: async () => {
+      const v = await formDialog({title: 'Réception (entrée de marchandises)', okLabel: 'Réceptionner', intro: '<div class="msg info">Les quantités commandées seront entrées en stock au prix de la commande.</div>',
+        fields: [{key: 'date', label: 'Date de réception', type: 'date', required: true}], values: {date: todayS()}});
+      if (v) { await busy(() => receiveOrder(doc, v.date)); after('Réception enregistrée'); }
+    },
+    invoice: async () => {
+      const fields = [{key: 'date', label: 'Date de facture', type: 'date', required: true}];
+      if (!sale) fields.push({key: 'ref', label: 'N° de facture du fournisseur', required: true});
+      const v = await formDialog({title: sale ? 'Facturer la commande' : 'Saisir la facture fournisseur', okLabel: 'Comptabiliser', fields, values: {date: todayS()},
+        intro: `<div class="msg info">Montant : <b>${fmtMoney(doc.Total_TTC)}</b> TTC. Les écritures seront générées dans le journal ${sale ? 'des ventes (VE)' : 'des achats (AC)'}.</div>`});
+      if (!v) return;
+      const inv = await busy(() => invoiceOrder(doc, v.date, sale ? doc.Reference : v.ref));
+      if (inv) { toast(`Facture ${inv.Numero} comptabilisée`, 'ok'); go('doc', {id: inv.id}); }
+    },
+    pay: async () => {
+      const rest = remaining(doc);
+      const v = await formDialog({title: sale ? 'Encaissement client' : 'Paiement fournisseur', okLabel: 'Enregistrer',
+        intro: `<div class="msg info">Reste dû : <b>${fmtMoney(rest)}</b></div>`,
+        fields: [{key: 'amount', label: 'Montant', type: 'number', required: true}, {key: 'date', label: 'Date', type: 'date', required: true},
+          {key: 'mode', label: 'Mode de règlement', type: 'select', options: ['Virement', 'Chèque', 'Carte bancaire', 'Prélèvement', 'Espèces'], full: true}],
+        values: {amount: rest, date: todayS(), mode: 'Virement'},
+        validate: x => x.amount <= 0 ? 'Le montant doit être positif.' : x.amount > rest + 0.005 ? 'Le montant dépasse le reste dû.' : null});
+      if (v) { await busy(() => registerPayment(doc, v.amount, v.date, v.mode)); after('Règlement enregistré'); }
+    },
+    copy: () => go('doc', {code, id: 'new', copyFrom: doc.id}),
+    print: () => printDocument(doc)
+  };
+  $$('[data-act]', main).forEach(b => b.onclick = () => handlers[b.dataset.act]());
+}
+
+function printDocument(doc) {
+  const code = codeOfType(doc.Type), T = DOC[code];
+  const p = get('ERP_Partenaires', doc.Partenaire) || {};
+  const lines = linesOf(doc.id);
+  const co = k => esc(param(k));
+  const tvaBy = [...groupBy(lines, l => num(l.Taux_TVA))].map(([r, ls]) => [r, sum(ls, l => calcLine(l).ht), sum(ls, l => calcLine(l).tva)]);
+  $('#printArea').innerHTML = `<div class="pdoc">
+    <div class="ph"><div><h1>${esc(param('Societe', 'Ma société'))}</h1><div>${co('Adresse')}<br>${co('Code_Postal')} ${co('Ville')}<br>${param('Telephone') ? 'Tél. ' + co('Telephone') + '<br>' : ''}${co('Email')}</div></div>
+      <div><h1>${esc(T.print)}</h1><div>N° <b>${esc(doc.Numero)}</b><br>Date : ${fmtDate(doc.Date)}<br>${code === 'FC' ? 'Échéance : ' + fmtDate(doc.Echeance) : code === 'DV' ? 'Valable jusqu\'au : ' + fmtDate(doc.Echeance) : 'Livraison prévue : ' + fmtDate(doc.Echeance)}${doc.Reference ? '<br>Votre réf. : ' + esc(doc.Reference) : ''}</div>
+      <div class="addr" style="margin-top:12px"><b>${esc(p.Nom)}</b><br>${esc(p.Adresse)}<br>${esc(p.Code_Postal)} ${esc(p.Ville)}${p.Pays ? '<br>' + esc(p.Pays) : ''}${p.TVA_Intra ? '<br>TVA : ' + esc(p.TVA_Intra) : ''}</div></div></div>
+    <table><thead><tr><th>Réf.</th><th>Désignation</th><th class="r">Qté</th><th class="r">P.U. HT</th><th class="r">Remise</th><th class="r">TVA</th><th class="r">Total HT</th></tr></thead>
+    <tbody>${lines.map(l => `<tr><td>${esc(articleOf(l.Article)?.Code || '')}</td><td>${esc(l.Designation)}</td><td class="r">${fmtNum(l.Quantite, 3)} ${esc(l.Unite)}</td><td class="r">${fmtMoney(l.Prix_Unitaire)}</td><td class="r">${num(l.Remise) ? fmtPct(l.Remise) : ''}</td><td class="r">${fmtPct(l.Taux_TVA)}</td><td class="r">${fmtMoney(calcLine(l).ht)}</td></tr>`).join('')}</tbody></table>
+    <table class="tot"><tr><td>Total HT</td><td class="r">${fmtMoney(doc.Total_HT)}</td></tr>${tvaBy.map(([r, , t]) => `<tr><td>TVA ${fmtPct(r)}</td><td class="r">${fmtMoney(t)}</td></tr>`).join('')}<tr><td><b>Total TTC</b></td><td class="r"><b>${fmtMoney(doc.Total_TTC)}</b></td></tr>
+    ${code === 'FC' && num(doc.Montant_Regle) ? `<tr><td>Déjà réglé</td><td class="r">${fmtMoney(doc.Montant_Regle)}</td></tr><tr><td><b>Net à payer</b></td><td class="r"><b>${fmtMoney(remaining(doc))}</b></td></tr>` : ''}</table>
+    ${doc.Notes ? `<p style="margin-top:18px">${esc(doc.Notes)}</p>` : ''}
+    <div class="foot">${esc(param('Societe'))} ${param('SIRET') ? '· SIRET ' + co('SIRET') : ''} ${param('TVA_Intra') ? '· TVA ' + co('TVA_Intra') : ''} ${param('IBAN') ? '· IBAN ' + co('IBAN') : ''}<br>${esc(param('Mentions', 'En cas de retard de paiement, pénalités au taux légal et indemnité forfaitaire de 40 € pour frais de recouvrement.'))}</div></div>`;
+  setTimeout(() => window.print(), 50);
+}
+
+/* --- Partenaires --- */
+VIEWS.partners = (main, {role}) => {
+  const rows = DB.ERP_Partenaires.filter(p => !role || (role === 'Client' ? isClient(p) : isSupplier(p)));
+  const columns = [
+    {key: 'Code', label: 'Code', fmt: v => `<span class="mono">${esc(v)}</span>`},
+    {key: 'Nom', label: 'Nom', fmt: v => `<b>${esc(v)}</b>`},
+    {key: 'Type', label: 'Rôle'},
+    {key: 'Ville', label: 'Ville'},
+    {key: 'Telephone', label: 'Téléphone'},
+    {key: 'Email', label: 'E-mail'},
+    {label: role === 'Fournisseur' ? 'Solde dû' : 'Solde client', num: true, get: r => role === 'Fournisseur' ? partnerBalance(r.id).supplier : partnerBalance(r.id).client, fmt: v => v ? money(v) : '<span class="faint">—</span>'},
+    {label: 'Statut', get: r => r.Inactif ? 'Inactif' : 'Actif', fmt: v => badge(v, v === 'Actif' ? 'positive' : '')}
+  ];
+  const title = role === 'Client' ? 'Clients' : role === 'Fournisseur' ? 'Fournisseurs' : 'Partenaires commerciaux';
+  main.innerHTML = page({title, tc: role === 'Client' ? 'XD03' : role === 'Fournisseur' ? 'XK03' : 'BP', crumb: crumbHome,
+    actions: `<button class="btn primary" id="newP">${icon('plus')}Créer</button>`, body: '<div class="card" id="listHost"></div>'});
+  mountList($('#listHost'), {rows, columns, sort: 1, empty: 'Aucun partenaire',
+    filters: [{label: 'Rôle', options: ['Client', 'Fournisseur', 'Client et fournisseur'], get: r => r.Type}, {label: 'Statut', options: ['Actif', 'Inactif'], default: 'Actif', get: r => r.Inactif ? 'Inactif' : 'Actif'}],
+    onOpen: id => go('partner', {id})});
+  $('#newP').onclick = () => editPartner(null, role || 'Client');
+};
+
+async function editPartner(p, role) {
+  const fields = [
+    {key: 'Code', label: 'Code', required: true}, {key: 'Nom', label: 'Raison sociale / nom', required: true},
+    {key: 'Type', label: 'Rôle', type: 'select', options: ['Client', 'Fournisseur', 'Client et fournisseur']},
+    {key: 'Delai_Paiement', label: 'Délai de paiement (jours)', type: 'number'},
+    {key: 'Adresse', label: 'Adresse', full: true}, {key: 'Code_Postal', label: 'Code postal'}, {key: 'Ville', label: 'Ville'},
+    {key: 'Pays', label: 'Pays'}, {key: 'Telephone', label: 'Téléphone'}, {key: 'Email', label: 'E-mail'},
+    {key: 'SIRET', label: 'SIRET'}, {key: 'TVA_Intra', label: 'N° TVA intracommunautaire'}, {key: 'Inactif', label: 'Inactif (bloqué)', type: 'checkbox'}
+  ];
+  const values = p ? {...p} : {Code: nextCode('ERP_Partenaires', role === 'Fournisseur' ? 'F' : 'C'), Type: role, Delai_Paiement: num(param('Delai_Paiement', '30')), Pays: 'France', Inactif: false};
+  const v = await formDialog({title: p ? `Modifier ${p.Nom}` : 'Nouveau partenaire', fields, values, wide: true,
+    validate: x => DB.ERP_Partenaires.some(o => o.Code === x.Code && (!p || o.id !== p.id)) ? 'Ce code existe déjà.' : null});
+  if (!v) return;
+  v.Delai_Paiement = Math.round(v.Delai_Paiement);
+  const r = await busy(() => p ? run([['UpdateRecord', 'ERP_Partenaires', p.id, v]]) : run([['AddRecord', 'ERP_Partenaires', null, v]]));
+  if (r) { toast(p ? 'Partenaire mis à jour' : `Partenaire ${v.Code} créé`, 'ok'); p ? render() : go('partner', {id: r[0]}); }
+}
+
+VIEWS.partner = (main, {id}) => {
+  const p = get('ERP_Partenaires', id);
+  if (!p) { main.innerHTML = page({title: 'Partenaire introuvable', crumb: crumbHome, body: ''}); return; }
+  const bal = partnerBalance(id);
+  const docs = DB.ERP_Documents.filter(d => d.Partenaire === id);
+  const ca = sum(docs.filter(d => codeOfType(d.Type) === 'FC' && isPostedInvoice(d)), d => num(d.Total_HT));
+  const ach = sum(docs.filter(d => codeOfType(d.Type) === 'FF' && isPostedInvoice(d)), d => num(d.Total_HT));
+  const role = isClient(p) && !isSupplier(p) ? 'Client' : isSupplier(p) && !isClient(p) ? 'Fournisseur' : '';
+  main.innerHTML = page({
+    title: esc(p.Nom), crumb: `${crumbHome} › <a data-tc="${role === 'Fournisseur' ? 'XK03' : 'XD03'}">${role === 'Fournisseur' ? 'Fournisseurs' : 'Clients'}</a>`,
+    sub: `<span class="mono">${esc(p.Code)}</span> · ${esc(p.Type)} ${p.Inactif ? '· ' + badge('Inactif') : ''}`,
+    actions: `${!docs.length ? '<button class="btn danger" id="delP">Supprimer</button>' : ''}<button class="btn" id="editP">Modifier</button>
+      ${isClient(p) ? `<button class="btn" id="newDV">${icon('plus')}Devis</button><button class="btn primary" id="newCC">${icon('plus')}Commande client</button>` : ''}
+      ${isSupplier(p) ? `<button class="btn primary" id="newCF">${icon('plus')}Commande d'achat</button>` : ''}`,
+    body: `<div class="kpis">
+        ${isClient(p) ? `<div class="kpi"><span class="l">CA facturé HT</span><span class="v">${fmtMoney(ca)}</span><span class="s">Toutes périodes</span></div><div class="kpi ${bal.client > 0 ? 'warn' : ''}"><span class="l">Solde client (411)</span><span class="v">${fmtMoney(bal.client)}</span><span class="s">Reste à encaisser</span></div>` : ''}
+        ${isSupplier(p) ? `<div class="kpi"><span class="l">Achats facturés HT</span><span class="v">${fmtMoney(ach)}</span><span class="s">Toutes périodes</span></div><div class="kpi"><span class="l">Solde fournisseur (401)</span><span class="v">${fmtMoney(bal.supplier)}</span><span class="s">Reste à payer</span></div>` : ''}
+      </div>
+      <div class="card"><div class="card-h"><h2>Coordonnées</h2></div><div class="card-b"><div class="dl">
+        ${[['Adresse', `${esc(p.Adresse)}<br>${esc(p.Code_Postal)} ${esc(p.Ville)} ${esc(p.Pays)}`], ['Téléphone', esc(p.Telephone)], ['E-mail', p.Email ? `<a href="mailto:${esc(p.Email)}">${esc(p.Email)}</a>` : ''], ['SIRET', esc(p.SIRET)], ['TVA intracom.', esc(p.TVA_Intra)], ['Délai de paiement', `${num(p.Delai_Paiement)} jours`]]
+          .map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${v || '<span class="faint">—</span>'}</div></div>`).join('')}
+      </div></div></div>
+      <div class="card"><div class="card-h"><h2>Documents</h2></div><div id="docList"></div></div>`
+  });
+  mountList($('#docList'), {rows: docs, sort: 2, dir: -1, empty: 'Aucun document', onOpen: did => go('doc', {id: did}),
+    filters: [{label: 'Type', options: Object.values(DOC).map(d => d.label), get: r => r.Type}],
+    columns: [{key: 'Numero', label: 'N°', fmt: v => `<span class="mono">${esc(v)}</span>`}, {key: 'Type', label: 'Type'}, {key: 'Date', label: 'Date', fmt: fmtDate, text: r => fmtDate(r.Date)},
+      {key: 'Statut', label: 'Statut', fmt: v => badge(v)}, {key: 'Total_TTC', label: 'Total TTC', num: true, fmt: fmtMoney}]});
+  $('#editP').onclick = () => editPartner(p);
+  const dp = $('#delP'); if (dp) dp.onclick = async () => { if (await confirmDlg('Supprimer', `Supprimer ${esc(p.Nom)} ?`, 'Supprimer')) { await busy(() => run([['RemoveRecord', 'ERP_Partenaires', p.id]])); go('partners', {role}); } };
+  const b = (sel, code) => { const el = $(sel); if (el) el.onclick = () => go('doc', {code, id: 'new', partner: p.id}); };
+  b('#newDV', 'DV'); b('#newCC', 'CC'); b('#newCF', 'CF');
+};
+
+/* --- Articles --- */
+VIEWS.articles = main => {
+  const st = stockInfo();
+  const columns = [
+    {key: 'Code', label: 'Code', fmt: v => `<span class="mono">${esc(v)}</span>`},
+    {key: 'Designation', label: 'Désignation', fmt: v => `<b>${esc(v)}</b>`},
+    {key: 'Type', label: 'Type'}, {key: 'Categorie', label: 'Catégorie'},
+    {key: 'Prix_Achat', label: 'Prix achat', num: true, fmt: fmtMoney},
+    {key: 'Prix_Vente', label: 'Prix vente', num: true, fmt: fmtMoney},
+    {label: 'Marge', num: true, get: r => num(r.Prix_Vente) ? (num(r.Prix_Vente) - num(r.Prix_Achat)) / num(r.Prix_Vente) * 100 : 0, fmt: v => fmtPct(v)},
+    {label: 'Stock', num: true, get: r => r.Type === 'Service' ? -Infinity : st.get(r.id).qty, fmt: (v, r) => r.Type === 'Service' ? '<span class="faint">—</span>' : `<span class="${st.get(r.id).status !== 'ok' ? 'neg' : ''}">${fmtNum(v, 3)} ${esc(r.Unite)}</span>`}
+  ];
+  main.innerHTML = page({title: 'Articles', tc: 'MM60', crumb: crumbHome, actions: `<button class="btn primary" id="newA">${icon('plus')}Créer</button>`, body: '<div class="card" id="listHost"></div>'});
+  const cats = [...new Set(DB.ERP_Articles.map(a => a.Categorie).filter(Boolean))].sort();
+  mountList($('#listHost'), {rows: DB.ERP_Articles, columns, sort: 0, empty: 'Aucun article', onOpen: id => go('article', {id}),
+    filters: [{label: 'Type', options: ['Marchandise', 'Matière première', 'Produit fini', 'Service'], get: r => r.Type}, {label: 'Catégorie', options: cats, get: r => r.Categorie}, {label: 'Statut', options: ['Actif', 'Inactif'], default: 'Actif', get: r => r.Inactif ? 'Inactif' : 'Actif'}]});
+  $('#newA').onclick = () => editArticle(null);
+};
+
+async function editArticle(a) {
+  const suppliers = DB.ERP_Partenaires.filter(isSupplier);
+  const fields = [
+    {key: 'Code', label: 'Code article', required: true}, {key: 'Designation', label: 'Désignation', required: true},
+    {key: 'Type', label: 'Type d\'article', type: 'select', options: ['Marchandise', 'Matière première', 'Produit fini', 'Service']},
+    {key: 'Categorie', label: 'Catégorie / groupe'},
+    {key: 'Unite', label: 'Unité de base', type: 'select', options: UNITS},
+    {key: 'Taux_TVA', label: 'Taux de TVA', type: 'select', options: TVA_RATES.map(r => [r, fmtNum(r, 1) + ' %'])},
+    {key: 'Prix_Achat', label: 'Prix d\'achat HT', type: 'number'}, {key: 'Prix_Vente', label: 'Prix de vente HT', type: 'number'},
+    {key: 'Stock_Min', label: 'Stock de sécurité (seuil)', type: 'number'},
+    {key: 'Fournisseur', label: 'Fournisseur principal', type: 'select', numeric: true, options: [[0, '—'], ...suppliers.map(s => [s.id, s.Nom])]},
+    {key: 'Inactif', label: 'Inactif (bloqué)', type: 'checkbox'}
+  ];
+  const values = a ? {...a} : {Code: nextCode('ERP_Articles', 'A'), Type: 'Marchandise', Unite: 'U', Taux_TVA: num(param('TVA_Defaut', '20')), Inactif: false};
+  const v = await formDialog({title: a ? `Modifier ${a.Code}` : 'Nouvel article', fields, values, wide: true,
+    validate: x => DB.ERP_Articles.some(o => o.Code === x.Code && (!a || o.id !== a.id)) ? 'Ce code article existe déjà.' : null});
+  if (!v) return;
+  v.Taux_TVA = num(v.Taux_TVA);
+  const r = await busy(() => a ? run([['UpdateRecord', 'ERP_Articles', a.id, v]]) : run([['AddRecord', 'ERP_Articles', null, v]]));
+  if (r) { toast(a ? 'Article mis à jour' : `Article ${v.Code} créé`, 'ok'); a ? render() : go('article', {id: r[0]}); }
+}
+
+VIEWS.article = (main, {id}) => {
+  const a = get('ERP_Articles', id);
+  if (!a) { main.innerHTML = page({title: 'Article introuvable', crumb: crumbHome, body: ''}); return; }
+  const s = stockInfo().get(id);
+  const moves = DB.ERP_Mouvements.filter(m => m.Article === id);
+  const used = moves.length || DB.ERP_Lignes.some(l => l.Article === id);
+  const service = a.Type === 'Service';
+  main.innerHTML = page({
+    title: esc(a.Designation), crumb: `${crumbHome} › <a data-tc="MM60">Articles</a>`,
+    sub: `<span class="mono">${esc(a.Code)}</span> · ${esc(a.Type)}${a.Categorie ? ' · ' + esc(a.Categorie) : ''} ${a.Inactif ? badge('Inactif') : ''}`,
+    actions: `${!used ? '<button class="btn danger" id="delA">Supprimer</button>' : ''}<button class="btn" id="editA">Modifier</button>${!service ? `<button class="btn primary" id="mvA">Mouvement de stock</button>` : ''}`,
+    body: `<div class="kpis">
+        ${!service ? `<div class="kpi ${s.status !== 'ok' ? 'warn' : ''}"><span class="l">Stock physique</span><span class="v">${fmtNum(s.qty, 3)} ${esc(a.Unite)}</span><span class="s">Seuil : ${fmtNum(a.Stock_Min)} ${esc(a.Unite)}</span></div>
+        <div class="kpi"><span class="l">Disponible</span><span class="v">${fmtNum(s.available, 3)}</span><span class="s">Réservé ${fmtNum(s.reserved)} · En commande ${fmtNum(s.ordered)}</span></div>
+        <div class="kpi"><span class="l">Coût moyen pondéré</span><span class="v">${fmtMoney(s.cmp)}</span><span class="s">Valeur : ${fmtMoney(s.value)}</span></div>` : ''}
+        <div class="kpi"><span class="l">Prix de vente HT</span><span class="v">${fmtMoney(a.Prix_Vente)}</span><span class="s">Achat : ${fmtMoney(a.Prix_Achat)} · TVA ${fmtPct(a.Taux_TVA)}</span></div>
+      </div>
+      <div class="card"><div class="card-h"><h2>Données de base</h2></div><div class="card-b"><div class="dl">
+        ${[['Unité', esc(a.Unite)], ['Fournisseur principal', a.Fournisseur ? partnerLink(a.Fournisseur) : ''], ['Marge théorique', num(a.Prix_Vente) ? fmtPct((num(a.Prix_Vente) - num(a.Prix_Achat)) / num(a.Prix_Vente) * 100) : '']]
+          .map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${v || '<span class="faint">—</span>'}</div></div>`).join('')}
+      </div></div></div>
+      ${!service ? `<div class="card"><div class="card-h"><h2>Mouvements de stock</h2></div><div id="mvList"></div></div>` : ''}`
+  });
+  if (!service) mountList($('#mvList'), {rows: moves, sort: 0, dir: -1, empty: 'Aucun mouvement', columns: mvColumns(false)});
+  $('#editA').onclick = () => editArticle(a);
+  const mv = $('#mvA'); if (mv) mv.onclick = () => stockMovementDialog(a.id);
+  const d = $('#delA'); if (d) d.onclick = async () => { if (await confirmDlg('Supprimer', `Supprimer l'article ${esc(a.Code)} ?`, 'Supprimer')) { await busy(() => run([['RemoveRecord', 'ERP_Articles', a.id]])); go('articles'); } };
+};
+
+/* --- Stock --- */
+VIEWS.stock = main => {
+  const st = stockInfo();
+  const rows = DB.ERP_Articles.filter(a => a.Type !== 'Service' && !a.Inactif);
+  const label = {ok: ['OK', 'positive'], bas: ['Sous le seuil', 'critical'], rupture: ['Rupture', 'negative']};
+  const columns = [
+    {key: 'Code', label: 'Article', fmt: (v, r) => `<span class="mono">${esc(v)}</span> ${esc(r.Designation)}`, text: r => r.Code + ' ' + r.Designation},
+    {label: 'Stock', num: true, get: r => st.get(r.id).qty, fmt: (v, r) => `${fmtNum(v, 3)} ${esc(r.Unite)}`},
+    {label: 'Réservé', num: true, get: r => st.get(r.id).reserved, fmt: v => v ? fmtNum(v, 3) : '<span class="faint">—</span>'},
+    {label: 'Disponible', num: true, get: r => st.get(r.id).available, fmt: v => `<span class="${v < 0 ? 'neg' : ''}">${fmtNum(v, 3)}</span>`},
+    {label: 'En commande', num: true, get: r => st.get(r.id).ordered, fmt: v => v ? fmtNum(v, 3) : '<span class="faint">—</span>'},
+    {key: 'Stock_Min', label: 'Seuil', num: true, fmt: v => fmtNum(v, 3)},
+    {label: 'CMP', num: true, get: r => st.get(r.id).cmp, fmt: fmtMoney},
+    {label: 'Valeur', num: true, get: r => st.get(r.id).value, fmt: fmtMoney},
+    {label: 'Statut', get: r => label[st.get(r.id).status][0], fmt: v => { const e = Object.values(label).find(x => x[0] === v); return badge(v, e ? e[1] : ''); }}
+  ];
+  const total = sum(rows, r => st.get(r.id).value);
+  main.innerHTML = page({title: 'Aperçu des stocks', tc: 'MMBE', crumb: crumbHome, sub: `Valeur totale du stock : <b>${fmtMoney(total)}</b> (coût moyen pondéré)`,
+    actions: `<button class="btn" id="invBtn">Inventaire</button><button class="btn" id="reorder">Proposition de réappro.</button><button class="btn primary" id="mvBtn">${icon('plus')}Mouvement</button>`,
+    body: '<div class="card" id="listHost"></div>'});
+  mountList($('#listHost'), {rows, columns, sort: 0, empty: 'Aucun article stockable', onOpen: id => go('article', {id}),
+    filters: [{label: 'Statut', options: ['OK', 'Sous le seuil', 'Rupture'], get: r => label[st.get(r.id).status][0]}],
+    footer: rs => footRow(columns, ['Total', '', '', '', '', '', '', fmtMoney(sum(rs, r => st.get(r.id).value)), ''])});
+  $('#mvBtn').onclick = () => stockMovementDialog();
+  $('#invBtn').onclick = () => stockMovementDialog(null, 'Inventaire');
+  $('#reorder').onclick = () => reorderProposal();
+};
+
+// MRP simplifié : génère des commandes d'achat pour les articles sous le seuil
+async function reorderProposal() {
+  const st = stockInfo();
+  const need = DB.ERP_Articles.filter(a => a.Type !== 'Service' && !a.Inactif).map(a => {
+    const s = st.get(a.id), proj = s.qty - s.reserved + s.ordered;
+    return {a, qty: proj < num(a.Stock_Min) ? round3(num(a.Stock_Min) * 2 - proj) : 0};
+  }).filter(x => x.qty > 0);
+  if (!need.length) { toast('Aucun besoin : tous les stocks projetés sont au-dessus des seuils.', 'ok'); return; }
+  const noSup = need.filter(x => !x.a.Fournisseur);
+  const bySup = groupBy(need.filter(x => x.a.Fournisseur), x => x.a.Fournisseur);
+  const ok = await confirmDlg('Proposition de réapprovisionnement',
+    `<p>Stock projeté = stock − réservé + en commande. Quantité proposée = 2 × seuil − stock projeté.</p>
+     <table class="grid"><thead><tr><th>Article</th><th>Fournisseur</th><th class="r">Qté proposée</th></tr></thead><tbody>${need.map(x => `<tr><td>${esc(x.a.Code)} ${esc(x.a.Designation)}</td><td>${x.a.Fournisseur ? esc(partnerName(x.a.Fournisseur)) : '<span class="neg">aucun</span>'}</td><td class="num">${fmtNum(x.qty, 3)} ${esc(x.a.Unite)}</td></tr>`).join('')}</tbody></table>
+     ${noSup.length ? '<div class="msg warn" style="margin-top:10px">Les articles sans fournisseur principal sont ignorés.</div>' : ''}`,
+    `Créer ${bySup.size} commande(s) d'achat`);
+  if (!ok || !bySup.size) return;
+  const created = await busy(async () => {
+    const out = [];
+    for (const [sid, xs] of bySup) out.push(await createDocument('CF', {Partenaire: sid, Date: todayS(), Notes: 'Proposition de réapprovisionnement automatique'},
+      xs.map(x => ({Article: x.a.id, Designation: x.a.Designation, Quantite: x.qty, Unite: x.a.Unite, Prix_Unitaire: num(x.a.Prix_Achat), Remise: 0, Taux_TVA: num(x.a.Taux_TVA)}))));
+    return out;
+  });
+  if (created) { toast(`${created.length} commande(s) d'achat créée(s) en brouillon`, 'ok'); go('docs', {code: 'CF'}); }
+}
+
+function mvColumns(withArticle = true) {
+  const c = [
+    {key: 'Date', label: 'Date', fmt: fmtDate, text: r => fmtDate(r.Date)},
+    {key: 'Type', label: 'Type', fmt: v => badge(v, v === 'Entrée' ? 'positive' : v === 'Sortie' ? 'info' : 'critical')},
+    {key: 'Quantite', label: 'Quantité', num: true, fmt: (v, r) => `<span class="${v < 0 ? 'neg' : 'pos'}">${v > 0 ? '+' : ''}${fmtNum(v, 3)}</span> ${esc(articleOf(r.Article)?.Unite || '')}`},
+    {key: 'Cout_Unitaire', label: 'Coût unit.', num: true, fmt: fmtMoney},
+    {label: 'Valeur', num: true, get: r => round2(num(r.Quantite) * num(r.Cout_Unitaire)), fmt: v => money(v)},
+    {label: 'Document', get: r => get('ERP_Documents', r.Document)?.Numero || '', fmt: (v, r) => v ? docLink(r.Document) : ''},
+    {key: 'Motif', label: 'Motif'}
+  ];
+  if (withArticle) c.splice(1, 0, {label: 'Article', get: r => { const a = articleOf(r.Article); return a ? a.Code + ' ' + a.Designation : ''; }, fmt: (v, r) => articleLink(r.Article)});
+  return c;
+}
+
+VIEWS.mvts = main => {
+  main.innerHTML = page({title: 'Mouvements de stock', tc: 'MB51', crumb: crumbHome, actions: `<button class="btn primary" data-tc="MB1C">${icon('plus')}Saisir</button>`, body: '<div class="card" id="listHost"></div>'});
+  mountList($('#listHost'), {rows: DB.ERP_Mouvements, columns: mvColumns(true), sort: 0, dir: -1, empty: 'Aucun mouvement',
+    filters: [{label: 'Type', options: ['Entrée', 'Sortie', 'Inventaire'], get: r => r.Type}]});
+};
+
+async function stockMovementDialog(articleId, type = 'Entrée') {
+  const arts = DB.ERP_Articles.filter(a => a.Type !== 'Service' && !a.Inactif);
+  if (!arts.length) { toast('Créez d\'abord un article stockable.', 'err'); return; }
+  const st = stockInfo();
+  const fields = [
+    {key: 'Article', label: 'Article', type: 'select', numeric: true, required: true, full: true, options: [[0, '— Sélectionner —'], ...arts.map(a => [a.id, `${a.Code} · ${a.Designation} (stock : ${fmtNum(st.get(a.id).qty, 3)} ${a.Unite})`])]},
+    {key: 'Type', label: 'Type de mouvement', type: 'select', options: [['Entrée', 'Entrée (501)'], ['Sortie', 'Sortie / consommation (201)'], ['Inventaire', 'Inventaire – quantité comptée (701)']]},
+    {key: 'Date', label: 'Date', type: 'date', required: true},
+    {key: 'Quantite', label: 'Quantité', type: 'number', required: true, hint: 'Pour un inventaire : quantité physiquement comptée'},
+    {key: 'Cout_Unitaire', label: 'Coût unitaire (entrées)', type: 'number', hint: 'Vide = coût moyen actuel'},
+    {key: 'Motif', label: 'Motif', full: true}
+  ];
+  const v = await formDialog({title: type === 'Inventaire' ? 'Inventaire physique' : 'Mouvement de stock', fields, values: {Article: articleId || 0, Type: type, Date: todayS(), Quantite: '', Cout_Unitaire: '', Motif: ''},
+    validate: x => !x.Article ? 'Sélectionnez un article.' : (x.Type !== 'Inventaire' && x.Quantite <= 0) ? 'La quantité doit être positive.' : x.Quantite < 0 ? 'Quantité invalide.' : null});
+  if (!v) return;
+  const s = st.get(v.Article), a = articleOf(v.Article);
+  let q = v.Quantite;
+  if (v.Type === 'Sortie') q = -q;
+  if (v.Type === 'Inventaire') { q = round3(v.Quantite - s.qty); if (!q) { toast('Aucun écart d\'inventaire.', 'ok'); return; } }
+  const cost = v.Type === 'Entrée' && v.Cout_Unitaire ? v.Cout_Unitaire : round2(s.cmp || num(a.Prix_Achat));
+  const r = await busy(() => run([['AddRecord', 'ERP_Mouvements', null, {Date: v.Date, Article: v.Article, Type: v.Type, Quantite: q, Cout_Unitaire: cost, Document: 0, Motif: v.Motif || (v.Type === 'Inventaire' ? `Écart d'inventaire (compté : ${fmtNum(v.Quantite, 3)})` : 'Mouvement manuel')}]]));
+  if (r) { toast(`Mouvement enregistré (${q > 0 ? '+' : ''}${fmtNum(q, 3)} ${a.Unite})`, 'ok'); render(); }
+}
+
+/* --- Finance --- */
+const entryColumns = () => [
+  {key: 'Date', label: 'Date', fmt: fmtDate, text: r => fmtDate(r.Date)},
+  {key: 'Journal', label: 'Jnl'},
+  {key: 'Piece', label: 'Pièce', fmt: (v, r) => r.Document ? `<a class="mono" data-doc="${r.Document}">${esc(v)}</a>` : `<span class="mono">${esc(v)}</span>`},
+  {key: 'Compte', label: 'Compte', fmt: v => `<a class="mono" data-account="${esc(v)}">${esc(v)}</a>`},
+  {label: 'Intitulé', get: r => accountLabel(r.Compte), fmt: v => `<span class="muted">${esc(v)}</span>`},
+  {key: 'Libelle', label: 'Libellé'},
+  {label: 'Tiers', get: r => partnerName(r.Partenaire)},
+  {key: 'Debit', label: 'Débit', num: true, fmt: v => num(v) ? fmtMoney(v) : ''},
+  {key: 'Credit', label: 'Crédit', num: true, fmt: v => num(v) ? fmtMoney(v) : ''}
+];
+
+VIEWS.journal = main => {
+  const columns = entryColumns();
+  main.innerHTML = page({title: 'Journal des écritures', tc: 'FB03', crumb: crumbHome, actions: `<button class="btn primary" data-tc="FB50">${icon('plus')}Écriture d'OD</button>`, body: '<div class="card" id="listHost"></div>'});
+  mountList($('#listHost'), {rows: DB.ERP_Ecritures, columns, sort: 0, dir: -1, empty: 'Aucune écriture',
+    filters: [{label: 'Journal', options: ['VE', 'AC', 'BQ', 'OD'], get: r => r.Journal}, {label: 'Exercice', options: years(), get: r => r.Date ? String(yearOf(r.Date)) : ''}],
+    footer: rs => footRow(columns, ['Total', '', '', '', '', '', '', fmtMoney(sum(rs, r => num(r.Debit))), fmtMoney(sum(rs, r => num(r.Credit)))])});
+};
+function years() { const s = new Set(DB.ERP_Ecritures.filter(e => e.Date).map(e => String(yearOf(e.Date)))); s.add(String(yearOf(todayS()))); return [...s].sort().reverse(); }
+
+VIEWS.balance = (main, params) => {
+  const year = params.year || String(yearOf(todayS()));
+  const es = DB.ERP_Ecritures.filter(e => e.Date && String(yearOf(e.Date)) === year);
+  const rows = [...groupBy(es, e => String(e.Compte))].map(([c, xs]) => {
+    const d = round2(sum(xs, e => num(e.Debit))), cr = round2(sum(xs, e => num(e.Credit)));
+    return {id: c, Compte: c, Libelle: accountLabel(c), Debit: d, Credit: cr, SD: d > cr ? round2(d - cr) : 0, SC: cr > d ? round2(cr - d) : 0};
+  });
+  const cls = c => String(c)[0];
+  const produits = sum(rows.filter(r => cls(r.Compte) === '7'), r => r.Credit - r.Debit);
+  const charges = sum(rows.filter(r => cls(r.Compte) === '6'), r => r.Debit - r.Credit);
+  const tresorerie = sum(rows.filter(r => /^5/.test(r.Compte)), r => r.Debit - r.Credit);
+  const tvaDue = sum(rows.filter(r => r.Compte === '44571'), r => r.Credit - r.Debit) - sum(rows.filter(r => r.Compte === '44566'), r => r.Debit - r.Credit);
+  const columns = [
+    {key: 'Compte', label: 'Compte', fmt: v => `<a class="mono" data-account="${esc(v)}">${esc(v)}</a>`},
+    {key: 'Libelle', label: 'Intitulé'},
+    {key: 'Debit', label: 'Mouvements débit', num: true, fmt: fmtMoney},
+    {key: 'Credit', label: 'Mouvements crédit', num: true, fmt: fmtMoney},
+    {key: 'SD', label: 'Solde débiteur', num: true, fmt: v => v ? fmtMoney(v) : ''},
+    {key: 'SC', label: 'Solde créditeur', num: true, fmt: v => v ? fmtMoney(v) : ''}
+  ];
+  main.innerHTML = page({title: 'Balance générale', tc: 'F.01', crumb: crumbHome,
+    actions: `<select class="inp" id="yearSel" style="width:120px" aria-label="Exercice">${years().map(y => `<option ${y === year ? 'selected' : ''}>${y}</option>`).join('')}</select>`,
+    body: `<div class="kpis">
+      <div class="kpi"><span class="l">Produits (classe 7)</span><span class="v">${fmtMoney(produits)}</span><span class="s">Exercice ${year}</span></div>
+      <div class="kpi"><span class="l">Charges (classe 6)</span><span class="v">${fmtMoney(charges)}</span><span class="s">Exercice ${year}</span></div>
+      <div class="kpi ${produits - charges < 0 ? 'bad' : 'good'}"><span class="l">Résultat</span><span class="v">${fmtMoney(produits - charges)}</span><span class="s">${produits - charges < 0 ? 'Perte' : 'Bénéfice'}</span></div>
+      <div class="kpi"><span class="l">Trésorerie (classe 5)</span><span class="v">${fmtMoney(tresorerie)}</span><span class="s">Mouvements de l'exercice</span></div>
+      <div class="kpi"><span class="l">TVA à décaisser</span><span class="v">${fmtMoney(tvaDue)}</span><span class="s">44571 − 44566</span></div>
+    </div><div class="card" id="listHost"></div>`});
+  mountList($('#listHost'), {rows, columns, sort: 0, empty: 'Aucune écriture sur cet exercice', onOpen: c => go('ledger', {account: String(c)}),
+    footer: rs => footRow(columns, ['Total', '', fmtMoney(sum(rs, r => r.Debit)), fmtMoney(sum(rs, r => r.Credit)), fmtMoney(sum(rs, r => r.SD)), fmtMoney(sum(rs, r => r.SC))])});
+  $('#yearSel').onchange = e => go('balance', {year: e.target.value});
+};
+
+VIEWS.ledger = (main, {account}) => {
+  const accounts = [...new Set([...Object.keys(PCG), ...DB.ERP_Ecritures.map(e => String(e.Compte))])].sort();
+  const acc = account || accounts.find(a => DB.ERP_Ecritures.some(e => String(e.Compte) === a)) || '512';
+  const es = DB.ERP_Ecritures.filter(e => String(e.Compte) === acc).sort((a, b) => (a.Date || 0) - (b.Date || 0) || a.id - b.id);
+  let bal = 0;
+  const rows = es.map(e => { bal = round2(bal + num(e.Debit) - num(e.Credit)); return {...e, Solde: bal}; });
+  const columns = [...entryColumns().filter(c => !['Compte', 'Intitulé'].includes(c.label)), {key: 'Solde', label: 'Solde progressif', num: true, fmt: v => money(v)}];
+  main.innerHTML = page({title: `Grand livre`, tc: 'FAGLL03', crumb: `${crumbHome} › <a data-tc="F.01">Balance</a>`,
+    sub: `Compte <b class="mono">${esc(acc)}</b> ${esc(accountLabel(acc))} · Solde : <b>${money(bal)}</b> ${bal > 0 ? '(débiteur)' : bal < 0 ? '(créditeur)' : ''}`,
+    actions: `<select class="inp" id="accSel" style="width:300px;max-width:100%" aria-label="Compte">${accounts.map(a => `<option value="${esc(a)}" ${a === acc ? 'selected' : ''}>${esc(a)} – ${esc(accountLabel(a))}</option>`).join('')}</select>`,
+    body: '<div class="card" id="listHost"></div>'});
+  mountList($('#listHost'), {rows, columns, empty: 'Aucune écriture sur ce compte',
+    footer: rs => footRow(columns, ['Total', '', '', '', '', fmtMoney(sum(rs, r => num(r.Debit))), fmtMoney(sum(rs, r => num(r.Credit))), ''])});
+  $('#accSel').onchange = e => go('ledger', {account: e.target.value});
+};
+
+VIEWS.openitems = (main, {side}) => {
+  const code = side === 'V' ? 'FC' : 'FF', today = todayS();
+  const rows = docsOf(code).filter(d => isPostedInvoice(d) && remaining(d) > 0.004);
+  const late = d => d.Echeance ? daysBetween(d.Echeance, today) : 0;
+  const buckets = [['Non échu', d => late(d) <= 0], ['1 – 30 jours', d => late(d) > 0 && late(d) <= 30], ['31 – 60 jours', d => late(d) > 30 && late(d) <= 60], ['> 60 jours', d => late(d) > 60]];
+  const columns = [
+    {key: 'Numero', label: 'Facture', fmt: v => `<span class="mono">${esc(v)}</span>`},
+    {label: side === 'V' ? 'Client' : 'Fournisseur', get: r => partnerName(r.Partenaire)},
+    {key: 'Reference', label: 'Référence'},
+    {key: 'Date', label: 'Date', fmt: fmtDate, text: r => fmtDate(r.Date)},
+    {key: 'Echeance', label: 'Échéance', fmt: fmtDate, text: r => fmtDate(r.Echeance)},
+    {label: 'Retard', num: true, get: late, fmt: v => v > 0 ? `<span class="neg">${v} j</span>` : '<span class="faint">—</span>'},
+    {key: 'Total_TTC', label: 'Montant TTC', num: true, fmt: fmtMoney},
+    {key: 'Montant_Regle', label: 'Réglé', num: true, fmt: fmtMoney},
+    {label: 'Reste dû', num: true, get: remaining, fmt: v => `<b>${fmtMoney(v)}</b>`}
+  ];
+  main.innerHTML = page({title: side === 'V' ? 'Postes ouverts clients' : 'Postes ouverts fournisseurs', tc: side === 'V' ? 'FBL5N' : 'FBL1N', crumb: crumbHome,
+    sub: `Total restant dû : <b>${fmtMoney(sum(rows, remaining))}</b>`,
+    body: `<div class="aging">${buckets.map(([l, f], i) => { const v = sum(rows.filter(f), remaining); return `<div class="kpi ${i && v ? (i > 1 ? 'bad' : 'warn') : ''}"><span class="l">${l}</span><span class="v">${fmtMoney(v)}</span><span class="s">${rows.filter(f).length} facture(s)</span></div>`; }).join('')}</div>
+      <div class="card" id="listHost"></div>`});
+  mountList($('#listHost'), {rows, columns, sort: 5, dir: -1, empty: 'Aucun poste ouvert ✔', onOpen: id => go('doc', {id}),
+    footer: rs => footRow(columns, ['Total', '', '', '', '', '', fmtMoney(sum(rs, r => num(r.Total_TTC))), fmtMoney(sum(rs, r => num(r.Montant_Regle))), fmtMoney(sum(rs, remaining))])});
+};
+
+async function odDialog() {
+  const accounts = Object.keys(PCG).sort();
+  let rows = [{Compte: '627', Libelle: '', Debit: 0, Credit: 0}, {Compte: '512', Libelle: '', Debit: 0, Credit: 0}];
+  const rowHtml = (r, i) => `<tr data-i="${i}"><td><input class="inp mono" list="accList" data-c="Compte" value="${esc(r.Compte)}" style="width:100px"></td><td><input class="inp" data-c="Libelle" value="${esc(r.Libelle)}"></td>
+    <td><input class="inp n" data-c="Debit" value="${r.Debit || ''}" inputmode="decimal" style="width:110px"></td><td><input class="inp n" data-c="Credit" value="${r.Credit || ''}" inputmode="decimal" style="width:110px"></td><td><button class="icon-btn" data-del aria-label="Supprimer">✕</button></td></tr>`;
+  await modal({title: 'Écriture d\'opérations diverses (FB50)', wide: true,
+    body: `<div class="form cols-3" style="margin-bottom:14px">
+        <div class="field"><label for="odDate">Date</label><input type="date" id="odDate" value="${sToIso(todayS())}"></div>
+        <div class="field" style="grid-column:span 2"><label for="odLib">Libellé général</label><input id="odLib" placeholder="ex. Frais bancaires du mois"></div></div>
+      <datalist id="accList">${accounts.map(a => `<option value="${a}">${esc(PCG[a])}</option>`).join('')}</datalist>
+      <table class="lines"><thead><tr><th>Compte</th><th>Libellé (optionnel)</th><th class="r">Débit</th><th class="r">Crédit</th><th></th></tr></thead><tbody id="odBody"></tbody></table>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:10px;flex-wrap:wrap"><button class="btn sm" id="odAdd">${icon('plus')}Ligne</button><span id="odBal"></span></div>`,
+    buttons: [{label: 'Annuler', value: null}, {label: 'Comptabiliser', cls: 'primary', onClick: async ({el}) => {
+      const date = isoToS($('#odDate', el).value) || todayS(), lib = $('#odLib', el).value.trim() || 'Opération diverse';
+      const ls = rows.filter(r => r.Compte && (r.Debit || r.Credit));
+      const d = round2(sum(ls, r => r.Debit)), c = round2(sum(ls, r => r.Credit));
+      if (ls.length < 2) { toast('Saisissez au moins deux lignes.', 'err'); return false; }
+      if (d !== c) { toast('L\'écriture n\'est pas équilibrée.', 'err'); return false; }
+      const piece = nextOdPiece(date);
+      const r = await busy(() => run([bulkAdd('ERP_Ecritures', ls.map(x => ({Date: date, Journal: 'OD', Piece: piece, Compte: String(x.Compte).trim(), Libelle: x.Libelle || lib, Debit: round2(x.Debit), Credit: round2(x.Credit), Partenaire: 0, Document: 0})))]));
+      if (!r) return false;
+      toast(`Pièce ${piece} comptabilisée`, 'ok'); render(); return true;
+    }}],
+    onMount: ({el}) => {
+      const body = $('#odBody', el);
+      const draw = () => { body.innerHTML = rows.map(rowHtml).join(''); bal(); };
+      const bal = () => { const d = round2(sum(rows, r => r.Debit)), c = round2(sum(rows, r => r.Credit)); $('#odBal', el).innerHTML = `Débit ${fmtMoney(d)} · Crédit ${fmtMoney(c)} · ${d === c && d ? '<span class="pos">équilibrée ✔</span>' : `<span class="neg">écart ${fmtMoney(d - c)}</span>`}`; };
+      body.addEventListener('input', e => { const tr = e.target.closest('tr'); const k = e.target.dataset.c; const r = rows[+tr.dataset.i]; r[k] = (k === 'Debit' || k === 'Credit') ? num(e.target.value) : e.target.value; bal(); });
+      body.addEventListener('click', e => { if (e.target.closest('[data-del]')) { rows.splice(+e.target.closest('tr').dataset.i, 1); draw(); } });
+      $('#odAdd', el).onclick = () => { rows.push({Compte: '', Libelle: '', Debit: 0, Credit: 0}); draw(); };
+      draw();
+    }});
+}
+
+/* --- Paramétrage --- */
+VIEWS.settings = main => {
+  const fields = [
+    {key: 'Societe', label: 'Raison sociale', required: true}, {key: 'SIRET', label: 'SIRET'},
+    {key: 'Adresse', label: 'Adresse', full: true}, {key: 'Code_Postal', label: 'Code postal'}, {key: 'Ville', label: 'Ville'},
+    {key: 'Telephone', label: 'Téléphone'}, {key: 'Email', label: 'E-mail'}, {key: 'TVA_Intra', label: 'N° TVA intracommunautaire'}, {key: 'IBAN', label: 'IBAN'},
+    {key: 'Devise', label: 'Devise (code ISO)', placeholder: 'EUR'},
+    {key: 'TVA_Defaut', label: 'Taux de TVA par défaut', type: 'select', options: TVA_RATES.map(r => [String(r), fmtNum(r, 1) + ' %'])},
+    {key: 'Delai_Paiement', label: 'Délai de paiement par défaut (jours)'},
+    {key: 'Mentions', label: 'Mentions en pied de facture', type: 'textarea', full: true}
+  ];
+  const values = {}; fields.forEach(f => values[f.key] = param(f.key, {Devise: 'EUR', TVA_Defaut: '20', Delai_Paiement: '30'}[f.key] || ''));
+  const counts = TABLES.map(t => `<tr><td class="mono">${t}</td><td class="num">${DB[t].length}</td></tr>`).join('');
+  main.innerHTML = page({title: 'Paramétrage', tc: 'SPRO', crumb: crumbHome,
+    body: `<div class="card"><div class="card-h"><h2>Société</h2><button class="btn primary" id="saveCo">Enregistrer</button></div><div class="card-b"><div class="form" id="coForm">${fields.map(f => fieldHtml(f, values[f.key])).join('')}</div></div></div>
+      <div class="grid-2">
+        <div class="card"><div class="card-h"><h2>Données</h2></div><div class="card-b">
+          <p class="muted" style="margin-top:0">Mode : <b>${B.mode === 'grist' ? 'Grist (tables ERP_* du document)' : 'Démo locale (navigateur)'}</b></p>
+          <table class="grid"><thead><tr><th>Table</th><th class="r">Lignes</th></tr></thead><tbody>${counts}</tbody></table>
+          <div class="actions" style="margin-top:14px"><button class="btn" id="demoBtn">Charger les données de démo</button>${B.mode === 'local' ? '<button class="btn danger" id="resetBtn">Effacer les données locales</button>' : ''}</div>
+        </div></div>
+        <div class="card"><div class="card-h"><h2>Codes transaction</h2></div><div class="card-b flush"><div class="table-wrap" style="max-height:360px"><table class="grid"><tbody>
+          ${Object.entries(TCODES).map(([k, t]) => `<tr class="click" data-tc="${k}"><td class="mono" style="width:90px">${k}</td><td>${esc(t.label)}</td></tr>`).join('')}</tbody></table></div></div></div>
+      </div>`});
+  $('#saveCo').onclick = async () => {
+    const v = readFields($('#coForm'), fields); if (!v) { toast('La raison sociale est obligatoire.', 'err'); return; }
+    v.Devise = (v.Devise || 'EUR').toUpperCase();
+    try { new Intl.NumberFormat('fr-FR', {style: 'currency', currency: v.Devise}); } catch (e) { toast('Code devise invalide (ex. EUR, CHF, USD).', 'err'); return; }
+    const r = await busy(async () => { await setParams(v); return true; });
+    if (r) { toast('Paramètres enregistrés', 'ok'); render(); }
+  };
+  $('#demoBtn').onclick = () => loadDemoData();
+  const rb = $('#resetBtn'); if (rb) rb.onclick = async () => {
+    if (!await confirmDlg('Effacer les données', 'Toutes les données locales de démonstration seront supprimées.', 'Effacer')) return;
+    await busy(async () => { await LocalBackend.reset(); await loadTables(); }); go('home');
+  };
+};
+
+/* ------------------------------ Données de démonstration ------------------------------ */
+async function loadDemoData() {
+  const hasData = DB.ERP_Documents.length || DB.ERP_Articles.length || DB.ERP_Partenaires.length;
+  if (!await confirmDlg('Données de démonstration',
+    `Un jeu de données (société, 8 partenaires, 9 articles, ~30 documents avec stocks et écritures) va être ajouté${B.mode === 'grist' ? ' aux tables ERP_* de ce document Grist' : ''}.${hasData ? '<div class="msg warn" style="margin-top:10px">Des données existent déjà : la démo s\'y ajoutera.</div>' : ''}`, 'Charger')) return;
+  const ok = await busy(async () => {
+    const T0 = todayS(), D = n => addDays(T0, -n);
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    if (!param('Societe')) await setParams({Societe: 'Coopérative du Val Fleuri', Adresse: '12 route des Vergers', Code_Postal: '69400', Ville: 'Villefranche-sur-Saône', Telephone: '04 74 00 00 00', Email: 'contact@valfleuri.example', SIRET: '123 456 789 00012', TVA_Intra: 'FR12123456789', IBAN: 'FR76 0000 0000 0000 0000 0000 000', Devise: 'EUR', TVA_Defaut: '20', Delai_Paiement: '30'});
+    const P = [
+      ['C', 'Boulangerie Martin', 'Client', 'Lyon', '69003', 30], ['C', 'Hôtel du Parc', 'Client', 'Annecy', '74000', 45], ['C', 'SARL Dupont Traiteur', 'Client', 'Grenoble', '38000', 30],
+      ['C', 'Mairie de Villefranche', 'Client', 'Villefranche-sur-Saône', '69400', 60], ['C', 'Café des Arts', 'Client', 'Lyon', '69001', 15],
+      ['F', 'Rhône Distribution', 'Fournisseur', 'Vénissieux', '69200', 30], ['F', 'Moulins de Savoie', 'Fournisseur', 'Chambéry', '73000', 45], ['F', 'TechnoPack Emballages', 'Fournisseur', 'Saint-Étienne', '42000', 30]
+    ];
+    const pRecs = P.map(([pre, nom, type, ville, cp, delai]) => ({Code: '', Nom: nom, Type: type, Ville: ville, Code_Postal: cp, Pays: 'France', Delai_Paiement: delai, Inactif: false,
+      Adresse: `${Math.floor(rnd() * 80) + 1} rue ${['de la République', 'Victor Hugo', 'des Lilas', 'du Commerce', 'Pasteur'][Math.floor(rnd() * 5)]}`,
+      Email: 'contact@' + nom.toLowerCase().normalize('NFD').replace(/[^a-z]/g, '').slice(0, 14) + '.example', Telephone: '0' + (4 + Math.floor(rnd() * 2)) + ' ' + Array.from({length: 4}, () => String(Math.floor(rnd() * 90) + 10)).join(' '), _pre: pre}));
+    let cC = 0, cF = 0;
+    pRecs.forEach(r => { const pre = r._pre; delete r._pre; r.Code = pre === 'C' ? nextCode('ERP_Partenaires', 'C').replace(/\d+$/, n => String(+n + cC++).padStart(4, '0')) : nextCode('ERP_Partenaires', 'F').replace(/\d+$/, n => String(+n + cF++).padStart(4, '0')); });
+    const [pIds] = await B.apply([bulkAdd('ERP_Partenaires', pRecs)]);
+    const [cl1, cl2, cl3, cl4, cl5, fo1, fo2, fo3] = pIds;
+    const A = [
+      ['Farine de blé T65 – sac 25 kg', 'Marchandise', 'Meunerie', 'sac', 18, 27, 5.5, 20, fo2], ['Farine de seigle – sac 25 kg', 'Marchandise', 'Meunerie', 'sac', 22, 33, 5.5, 10, fo2],
+      ['Huile de colza – bidon 5 L', 'Marchandise', 'Épicerie', 'U', 9.5, 15.9, 5.5, 15, fo1], ['Miel toutes fleurs – pot 1 kg', 'Produit fini', 'Épicerie', 'U', 8, 13.5, 5.5, 20, fo1],
+      ['Pommes de terre – filet 10 kg', 'Marchandise', 'Primeurs', 'U', 6, 10.5, 5.5, 30, fo1], ['Cartons d\'expédition (lot de 50)', 'Matière première', 'Emballages', 'lot', 24, 38, 20, 5, fo3],
+      ['Palette bois 120×80', 'Matière première', 'Emballages', 'palette', 9, 15, 20, 10, fo3], ['Livraison sur site', 'Service', 'Services', 'U', 0, 35, 20, 0, 0], ['Conseil / formation', 'Service', 'Services', 'h', 0, 85, 20, 0, 0]
+    ];
+    const base = DB.ERP_Articles.length;
+    const [aIds] = await B.apply([bulkAdd('ERP_Articles', A.map(([des, type, cat, u, pa, pv, tva, min, f], i) => ({Code: 'A' + String(base + i + 1).padStart(4, '0'), Designation: des, Type: type, Categorie: cat, Unite: u, Prix_Achat: pa, Prix_Vente: pv, Taux_TVA: tva, Stock_Min: min, Fournisseur: f, Inactif: false})))]);
+    await loadTables(['ERP_Partenaires', 'ERP_Articles']);
+    const L = (ai, q, sale, rem = 0) => { const a = get('ERP_Articles', aIds[ai]); return {Article: a.id, Designation: a.Designation, Quantite: q, Unite: a.Unite, Prix_Unitaire: sale ? a.Prix_Vente : a.Prix_Achat, Remise: rem, Taux_TVA: a.Taux_TVA}; };
+
+    // Approvisionnements (commande → réception → facture → paiement)
+    const purchase = async (sup, day, ls, {receive = true, invoice = true, pay = true} = {}) => {
+      const cf = await createDocument('CF', {Partenaire: sup, Date: D(day), Statut: 'Confirmée'}, ls);
+      if (!receive) return;
+      await receiveOrder(cf, D(day - 3));
+      if (!invoice) return;
+      const ff = await invoiceOrder(get('ERP_Documents', cf.id), D(day - 4), 'FA-' + Math.floor(rnd() * 90000 + 10000));
+      if (pay) await registerPayment(ff, num(ff.Total_TTC), D(Math.max(0, day - 30)), 'Virement');
+    };
+    await purchase(fo2, 170, [L(0, 80, false), L(1, 30, false)]);
+    await purchase(fo1, 165, [L(2, 60, false), L(3, 70, false), L(4, 120, false)]);
+    await purchase(fo3, 160, [L(5, 20, false), L(6, 40, false)]);
+    await purchase(fo2, 95, [L(0, 60, false)]);
+    await purchase(fo1, 70, [L(4, 80, false), L(2, 30, false)]);
+    await purchase(fo2, 25, [L(0, 40, false), L(1, 15, false)], {pay: false});
+
+    // Ventes réparties sur 6 mois
+    const clients = [cl1, cl2, cl3, cl4, cl5];
+    const sale = async (cli, day, ls, {deliver = true, invoice = true, payRatio = 1} = {}) => {
+      const cc = await createDocument('CC', {Partenaire: cli, Date: D(day), Statut: 'Confirmée', Reference: 'BC-' + Math.floor(rnd() * 9000 + 1000)}, ls);
+      if (!deliver) return;
+      await deliverOrder(cc, D(day - 2));
+      if (!invoice) return;
+      const fc = await invoiceOrder(get('ERP_Documents', cc.id), D(day - 2));
+      if (payRatio > 0) await registerPayment(fc, round2(num(fc.Total_TTC) * payRatio), D(Math.max(0, day - 25)), ['Virement', 'Chèque', 'Carte bancaire'][Math.floor(rnd() * 3)]);
+    };
+    const plans = [150, 140, 128, 115, 104, 92, 80, 66, 55, 44, 35];
+    for (let k = 0; k < plans.length; k++) {
+      const cli = clients[k % clients.length], ls = [];
+      const picks = [0, 1, 2, 3, 4].filter(() => rnd() > 0.45); if (!picks.length) picks.push(0);
+      for (const i of picks) ls.push(L(i, Math.ceil(rnd() * 8) + 2, true, rnd() > 0.7 ? 5 : 0));
+      if (rnd() > 0.5) ls.push(L(7, 1, true));
+      await sale(cli, plans[k], ls);
+    }
+    await sale(cl2, 48, [L(3, 12, true), L(8, 3, true)], {payRatio: 0});           // facture en retard
+    await sale(cl3, 20, [L(0, 6, true), L(2, 6, true), L(7, 1, true)], {payRatio: 0.5}); // partiellement réglée
+    await sale(cl1, 9, [L(0, 10, true), L(1, 4, true)], {payRatio: 0});
+    await sale(cl4, 6, [L(4, 20, true), L(6, 5, true)], {invoice: false});         // livrée, à facturer
+    await sale(cl5, 2, [L(3, 8, true), L(2, 4, true)], {deliver: false});          // confirmée, à livrer
+    // Devis
+    const dv1 = await createDocument('DV', {Partenaire: cl2, Date: D(4), Notes: 'Offre saisonnière – valable 30 jours'}, [L(3, 24, true, 10), L(8, 2, true)]);
+    await setStatus(dv1, 'Envoyé');
+    await createDocument('DV', {Partenaire: cl4, Date: D(1)}, [L(0, 15, true), L(7, 1, true)]);
+    // Commande d'achat en attente de réception
+    await purchase(fo3, 3, [L(5, 10, false)], {receive: false});
+    // OD : frais bancaires et loyer
+    for (const [day, acc, lib, amt] of [[120, '627', 'Frais bancaires', 38.5], [90, '613', 'Loyer entrepôt', 950], [60, '613', 'Loyer entrepôt', 950], [30, '613', 'Loyer entrepôt', 950], [15, '627', 'Frais bancaires', 41.2]]) {
+      const piece = nextOdPiece(D(day));
+      await run([bulkAdd('ERP_Ecritures', [{Date: D(day), Journal: 'OD', Piece: piece, Compte: acc, Libelle: lib, Debit: amt, Credit: 0}, {Date: D(day), Journal: 'OD', Piece: piece, Compte: '512', Libelle: lib, Debit: 0, Credit: amt}])]);
+    }
+    await loadTables();
+    return true;
+  });
+  if (ok) { toast('Données de démonstration chargées', 'ok'); go('home'); }
+}
+
+/* ------------------------------ Démarrage ------------------------------ */
+let reloadTimer = null;
+function scheduleReload() {
+  clearTimeout(reloadTimer);
+  reloadTimer = setTimeout(async () => {
+    if (!B) return;
+    try { await loadTables(); if (!state.editing && !$('#modalRoot').children.length) render(); } catch (e) { console.warn(e); }
+  }, 600);
+}
+
+function bindGlobal() {
+  $('#navToggle').innerHTML = icon('menu');
+  $('#refreshBtn').innerHTML = icon('refresh');
+  $('#tcIcon').innerHTML = icon('search');
+  $('#tcodeList').innerHTML = Object.entries(TCODES).map(([k, t]) => `<option value="${k}">${esc(t.label)}</option>`).join('');
+  $('#navToggle').onclick = () => {
+    const nav = $('#sidenav');
+    if (window.innerWidth <= 900) nav.classList.toggle('open'); else nav.classList.toggle('collapsed');
+  };
+  $('#tcodeForm').onsubmit = e => { e.preventDefault(); const v = $('#tcodeInput').value; $('#tcodeInput').value = ''; $('#tcodeInput').blur(); runTcode(v); };
+  $('#refreshBtn').onclick = async () => {
+    if (state.editing && !await confirmDlg('Actualiser', 'Les modifications non enregistrées seront perdues.', 'Actualiser')) return;
+    await busy(() => loadTables()); state.editing = false; render(); toast('Données actualisées');
+  };
+  document.addEventListener('click', e => {
+    const t = e.target.closest('[data-tc],[data-doc],[data-partner],[data-article],[data-account]');
+    if (!t || t.tagName === 'OPTION') return;
+    if (t.closest('#modalRoot') && !t.dataset.tc) return;
+    if (t.dataset.tc) { e.preventDefault(); const m = t.closest('.modal-back'); if (m) m.remove(); runTcode(t.dataset.tc); }
+    else if (t.dataset.doc) go('doc', {id: +t.dataset.doc});
+    else if (t.dataset.partner) go('partner', {id: +t.dataset.partner});
+    else if (t.dataset.article) go('article', {id: +t.dataset.article});
+    else if (t.dataset.account) go('ledger', {account: t.dataset.account});
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('tile')) e.target.click();
+    if ((e.ctrlKey || e.metaKey) && e.key === '/') { e.preventDefault(); $('#tcodeInput').focus(); }
+  });
+}
+
+function showStartError(err) {
+  $('#main').innerHTML = `<div class="splash"><div class="card"><div class="card-h"><h2>Connexion au document Grist impossible</h2></div><div class="card-b">
+    <p>Ce widget a besoin de l'<b>accès complet au document</b> pour créer et gérer ses tables (<code>ERP_Partenaires</code>, <code>ERP_Articles</code>, <code>ERP_Documents</code>…).</p>
+    <ol><li>Dans le panneau de droite du widget, onglet <b>Widget</b>, réglez le niveau d'accès sur <b>Accès complet au document</b>.</li><li>Rechargez la page.</li></ol>
+    <div class="msg err">${esc(err && err.message ? err.message : err)}</div>
+    <button class="btn" id="localBtn">Continuer en mode démo local</button></div></div></div>`;
+  $('#localBtn').onclick = () => start(LocalBackend);
+}
+
+async function start(backend) {
+  B = backend;
+  const badgeEl = $('#modeBadge');
+  badgeEl.textContent = B.mode === 'grist' ? 'Grist' : 'Démo locale';
+  badgeEl.className = 'mode ' + B.mode;
+  badgeEl.title = B.mode === 'grist' ? 'Données stockées dans les tables ERP_* du document' : 'Données stockées dans ce navigateur (hors Grist)';
+  try {
+    await B.init();
+    await B.ensureSchema();
+    await loadTables();
+  } catch (e) {
+    console.error(e);
+    if (B.mode === 'grist') return showStartError(e);
+    throw e;
+  }
+  go('home');
+}
+
+bindGlobal();
+const inGrist = window.self !== window.top && typeof grist !== 'undefined';
+start(inGrist ? GristBackend : LocalBackend);
+</script>
+</body>
+</html>
