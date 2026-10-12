@@ -3,20 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tableau de bord 2.0 — instruction DRAAF</title>
+<title>Tableau de bord — constructeur</title>
 
-<!-- Système de Design de l'État (DSFR) -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr/dist/dsfr.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr/dist/utility/icons/icons.min.css">
-
-<!-- API du widget Grist -->
 <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
 
 <style>
-/* =====================================================================
-   Jetons de couleur — palette catégorielle validée (contraste + daltonisme),
-   posée sur les codes DSFR pour le reste de l'habillage.
-   ===================================================================== */
 :root{
   --surface-1:      #ffffff;
   --surface-2:      #f6f6f6;
@@ -26,47 +19,18 @@
   --text-secondary: #3a3a3a;
   --text-muted:     #666666;
 
-  --series-1: #2a78d6; /* bleu */
-  --series-2: #eb6834; /* orange */
-  --series-3: #1baf7a; /* turquoise */
-  --series-4: #eda100; /* jaune */
-  --series-5: #e87ba4; /* magenta */
-  --series-6: #008300; /* vert */
-  --series-7: #4a3aa7; /* violet */
-  --series-8: #e34948; /* rouge */
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100;
+  --series-5: #e87ba4; --series-6: #008300; --series-7: #4a3aa7; --series-8: #e34948;
   --series-other: #929292;
-
-  --seq-1: #cde2fb;
-  --seq-2: #9ec5f4;
-  --seq-3: #5598e7;
-  --seq-4: #2a78d6;
-  --seq-5: #1c5cab;
-  --seq-6: #104281;
-  --seq-7: #0d366b;
-
-  --status-good:     #0ca30c;
-  --status-warning:  #c98500;
-  --status-serious:  #d9622e;
-  --status-critical: #d03b3b;
-  --status-neutral:  #757575;
-
   --focus: #0a76f6;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --surface-1: #1a1a19;
-    --surface-2: #262625;
-    --surface-3: #313130;
-    --border-1: #3a3a38;
-    --text-primary: #ffffff;
-    --text-secondary: #c3c2b7;
-    --text-muted: #9a9990;
-
+    --surface-1: #1a1a19; --surface-2: #262625; --surface-3: #313130; --border-1: #3a3a38;
+    --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #9a9990;
     --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
     --series-5: #d55181; --series-6: #2fae2f; --series-7: #9085e9; --series-8: #e66767;
     --series-other: #8a8a86;
-
-    --status-good:#2fae2f; --status-warning:#e0a530; --status-serious:#e0855f; --status-critical:#e66767; --status-neutral:#9a9990;
   }
 }
 
@@ -76,73 +40,54 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
 .mast{ padding: 1.25rem 0; border-bottom: 1px solid var(--border-1); }
 .mast h1{ color: var(--text-primary); }
 
-/* --- barre de filtre globale --- */
-.filter-row{
-  display:flex; align-items:flex-end; gap:1.25rem; flex-wrap:wrap;
-  padding: 0.75rem 1rem; margin-bottom: 1.5rem;
-  background: var(--surface-2); border-radius: 0.5rem; border: 1px solid var(--border-1);
+.toolbar{
+  display:flex; align-items:flex-end; gap:1rem; flex-wrap:wrap;
+  padding: 0.75rem 1rem; margin: 1.5rem 0; background: var(--surface-2);
+  border-radius: 0.5rem; border: 1px solid var(--border-1);
 }
-.filter-row .fr-select-group{ margin-bottom:0; min-width: 220px; }
-.filter-row .fr-label{ font-size:0.75rem; margin-bottom:0.25rem; }
-.filter-hint{ font-size:0.75rem; color: var(--text-muted); margin:0; padding-bottom:0.6rem; }
+.toolbar .fr-select-group{ margin-bottom:0; min-width: 200px; }
+.toolbar .fr-label{ font-size:0.75rem; margin-bottom:0.25rem; }
+.toolbar-spacer{ flex:1; }
+.toolbar-actions{ display:flex; gap:0.5rem; flex-wrap:wrap; }
 
-/* --- cartes KPI --- */
+.empty-state{
+  padding:2rem 1rem; text-align:center; color: var(--text-muted); font-size:0.9rem;
+  border:1px dashed var(--border-1); border-radius:0.35rem; background: var(--surface-2);
+}
+
+.widget-card{ position:relative; height:100%; }
+.widget-edit-tools{
+  position:absolute; top:0.4rem; right:0.4rem; display:flex; gap:0.15rem;
+  opacity:0; transition:opacity 0.15s ease; z-index:2;
+}
+.widget-card:hover .widget-edit-tools, .widget-card:focus-within .widget-edit-tools{ opacity:1; }
+.widget-tool-btn{
+  all:unset; cursor:pointer; width:1.6rem; height:1.6rem; display:inline-flex; align-items:center; justify-content:center;
+  font-size:0.8rem; border-radius:0.25rem; background: var(--surface-1); border:1px solid var(--border-1); color: var(--text-secondary);
+}
+.widget-tool-btn:hover{ background: var(--surface-2); color: var(--text-primary); }
+
 .kpi-card{
-  position:relative; height:100%; padding:1rem 1rem 0.85rem;
-  border:1px solid var(--border-1); border-left: 4px solid var(--series-1);
+  padding:1rem 1rem 0.85rem; border:1px solid var(--border-1); border-left: 4px solid var(--series-1);
   border-radius: 0.25rem; background: var(--surface-1);
 }
-.kpi-card .kpi-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:0.5rem; }
 .kpi-value{ font-weight:700; font-size: 1.75rem; line-height:1.1; color: var(--text-primary); margin: 0.15rem 0 0.2rem; }
 .kpi-label{ font-size:0.85rem; margin-bottom:0; color: var(--text-secondary); }
-.kpi-delta{ font-size:0.75rem; margin:0.35rem 0 0; display:flex; align-items:center; gap:0.25rem; }
-.kpi-delta.up{ color: var(--status-good); }
-.kpi-delta.down{ color: var(--status-critical); }
-.kpi-delta.flat{ color: var(--text-muted); }
 .kpi-hint{ font-size:0.72rem; color: var(--text-muted); margin:0.15rem 0 0; }
 
-/* --- cartes graphiques --- */
 .chart-card{
   border:1px solid var(--border-1); border-radius:0.25rem; background: var(--surface-1);
-  padding: 1rem 1.1rem 1.1rem; height:100%; display:flex; flex-direction:column;
+  padding: 1rem 1.1rem 1.1rem; height:100%;
 }
-.chart-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:0.75rem; margin-bottom:0.85rem; flex-wrap:wrap; }
-.chart-title-wrap{ display:flex; align-items:center; gap:0.4rem; }
-.chart-title{ font-size:1rem; font-weight:700; margin:0; color: var(--text-primary); }
-.chart-controls{ display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; }
-.chart-controls select.fr-select{ font-size:0.8rem; padding: 0.3rem 2rem 0.3rem 0.6rem; min-height:auto; width:auto; }
-.chart-body{ flex:1; min-height: 0; }
-.chart-foot{ margin-top:0.6rem; }
-.chart-foot details summary{ cursor:pointer; font-size:0.78rem; color: var(--text-muted); }
-.chart-foot details summary:hover{ color: var(--text-primary); }
+.chart-title{ font-size:1rem; font-weight:700; margin:0 0 0.85rem; color: var(--text-primary); }
 
-/* --- bouton d'aide + popover --- */
-.help-btn{
-  all:unset; cursor:pointer; display:inline-flex; align-items:center; justify-content:center;
-  width:1.4rem; height:1.4rem; border-radius:50%; color: var(--series-1);
-  background: color-mix(in srgb, var(--series-1) 12%, transparent);
-  flex-shrink:0;
+.text-card{
+  padding:1rem 1.1rem; border:1px solid var(--border-1); border-left:4px solid var(--series-1);
+  border-radius:0.25rem; background: var(--surface-1);
 }
-.help-btn:hover{ background: color-mix(in srgb, var(--series-1) 22%, transparent); }
-.help-btn:focus-visible{ outline: 2px solid var(--focus); outline-offset:2px; }
-.help-btn .fr-icon-information-line{ font-size:1rem; }
-.help-btn .fr-icon-information-line::before{ --icon-size:1rem; }
+.text-card h3{ font-size:1rem; margin:0 0 0.5rem; }
+.text-card-body{ font-size:0.88rem; color: var(--text-secondary); white-space:pre-wrap; }
 
-.help-panel{
-  position:absolute; z-index:50; width: min(320px, 86vw);
-  background: var(--surface-1); color: var(--text-primary);
-  border:1px solid var(--border-1); border-radius:0.35rem;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.18); padding:0.85rem 0.95rem;
-  font-size:0.82rem; line-height:1.4;
-}
-.help-panel h3{ font-size:0.85rem; margin:0 0 0.35rem; }
-.help-panel p{ margin:0 0 0.5rem; }
-.help-panel p:last-child{ margin-bottom:0; }
-.help-panel .help-choice{ margin:0.15rem 0; padding-left:0.9rem; position:relative; }
-.help-panel .help-choice::before{ content:"–"; position:absolute; left:0; }
-.help-panel[hidden]{ display:none; }
-
-/* --- barres horizontales (état / géo) --- */
 .bar-list{ display:flex; flex-direction:column; gap:0.65rem; }
 .bar-row{ display:grid; grid-template-columns: 152px 1fr 3.5rem; align-items:center; gap:0.6rem; }
 .bar-row-label{
@@ -150,89 +95,30 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 .bar-dot{ width:0.55rem; height:0.55rem; border-radius:50%; flex-shrink:0; }
-.bar-track{
-  position:relative; height: 0.85rem; border-radius:4px; background: var(--surface-2); overflow:hidden;
-}
-.bar-fill{
-  position:absolute; inset:0 auto 0 0; height:100%; border-radius:4px;
-  transition: width 0.4s ease; cursor:default;
-}
+.bar-track{ position:relative; height: 0.85rem; border-radius:4px; background: var(--surface-2); overflow:hidden; }
+.bar-fill{ position:absolute; inset:0 auto 0 0; height:100%; border-radius:4px; transition: width 0.4s ease; }
 .bar-value{ font-size:0.82rem; font-weight:600; text-align:right; font-variant-numeric: tabular-nums; }
-.bar-row:hover .bar-track{ box-shadow: 0 0 0 1px var(--border-1) inset; }
 
-/* --- donut --- */
 .donut-wrap{ display:flex; gap:1.25rem; align-items:center; flex-wrap:wrap; }
-.donut-svg-holder{ position:relative; width:150px; height:150px; flex-shrink:0; }
+.donut-svg-holder{ position:relative; width:130px; height:130px; flex-shrink:0; }
 .donut-svg-holder svg{ width:100%; height:100%; }
-.donut-center{
-  position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
-  pointer-events:none;
-}
-.donut-center strong{ font-size:1.3rem; line-height:1; color: var(--text-primary); }
-.donut-center span{ font-size:0.68rem; color: var(--text-muted); }
-.donut-legend{ flex:1; min-width:160px; display:flex; flex-direction:column; gap:0.4rem; }
-.legend-row{ display:flex; align-items:center; gap:0.5rem; font-size:0.8rem; cursor:default; }
-.legend-swatch{ width:0.65rem; height:0.65rem; border-radius:2px; flex-shrink:0; }
+.donut-center{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:none; }
+.donut-center strong{ font-size:1.2rem; line-height:1; color: var(--text-primary); }
+.donut-center span{ font-size:0.65rem; color: var(--text-muted); }
+.donut-legend{ flex:1; min-width:140px; display:flex; flex-direction:column; gap:0.4rem; }
+.legend-row{ display:flex; align-items:center; gap:0.5rem; font-size:0.78rem; }
+.legend-swatch{ width:0.6rem; height:0.6rem; border-radius:2px; flex-shrink:0; }
 .legend-label{ color: var(--text-secondary); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .legend-value{ font-weight:600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
-.legend-pct{ font-size:0.72rem; color: var(--text-muted); width:2.6rem; text-align:right; }
+.legend-pct{ font-size:0.7rem; color: var(--text-muted); width:2.6rem; text-align:right; }
 
-/* --- ligne / tendance --- */
-.trend-svg-holder{ position:relative; width:100%; }
-.trend-svg-holder svg{ width:100%; height:auto; display:block; overflow:visible; }
-.trend-crosshair{ stroke: var(--border-1); stroke-width:1; }
-.trend-point{ cursor:default; }
-
-/* --- tooltip flottant partagé --- */
 #floatTooltip{
   position:fixed; z-index:80; pointer-events:none; background: var(--text-primary); color: var(--surface-1);
   font-size:0.75rem; padding:0.4rem 0.55rem; border-radius:0.3rem; max-width:220px; line-height:1.35;
   box-shadow: 0 4px 10px rgba(0,0,0,0.25); opacity:0; transform: translate(-9999px,-9999px);
 }
-#floatTooltip strong{ display:block; font-size:0.8rem; }
-
-/* --- jauges --- */
-.meter-grid{ display:grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap:1rem; }
-.meter-block{ display:flex; flex-direction:column; gap:0.4rem; }
-.meter-top{ display:flex; justify-content:space-between; align-items:baseline; }
-.meter-value{ font-size:1.4rem; font-weight:700; font-variant-numeric: tabular-nums; }
-.meter-track{ height:0.9rem; border-radius:5px; overflow:hidden; }
-.meter-fill{ height:100%; border-radius:5px; transition: width 0.5s ease; }
-.meter-caption{ font-size:0.75rem; color: var(--text-muted); display:flex; align-items:center; gap:0.35rem; }
-.status-dot{ width:0.6rem; height:0.6rem; border-radius:50%; display:inline-block; }
-
-/* --- table d'action --- */
-.action-tabs{ display:flex; gap:0.4rem; flex-wrap:wrap; margin-bottom:0.85rem; }
-.action-tab{
-  all:unset; cursor:pointer; font-size:0.8rem; padding:0.35rem 0.75rem; border-radius:1rem;
-  border:1px solid var(--border-1); color: var(--text-secondary);
-}
-.action-tab[aria-pressed="true"]{ background: var(--series-1); border-color: var(--series-1); color:#fff; font-weight:600; }
-.action-tab:focus-visible{ outline:2px solid var(--focus); outline-offset:2px; }
-#actionTableWrap{ overflow-x:auto; }
-.anomaly-badge{ display:inline-block; font-size:0.68rem; padding:0.1rem 0.45rem; border-radius:0.8rem; margin:0.1rem 0.2rem 0.1rem 0; white-space:nowrap; }
-.badge-critical{ background: color-mix(in srgb, var(--status-critical) 16%, transparent); color: var(--status-critical); }
-.badge-serious{ background: color-mix(in srgb, var(--status-serious) 16%, transparent); color: var(--status-serious); }
-.action-empty{ padding:1.25rem 0; text-align:center; color: var(--text-muted); font-size:0.85rem; }
-.dept-tag{ display:inline-block; font-size:0.7rem; padding:0.05rem 0.4rem; border-radius:0.7rem; background: var(--surface-2); color: var(--text-secondary); }
-
-/* --- grille de section --- */
-.section-title{ display:flex; align-items:center; gap:0.6rem; margin: 0 0 1rem; }
-.section-title h2{ margin:0; }
 
 #noticeZone > * + *{ margin-top: 0.75rem; }
-.fr-table td, .fr-table th{ vertical-align: middle; }
-.tv-table{ width:100%; border-collapse:collapse; font-size:0.78rem; }
-.tv-table th, .tv-table td{ text-align:left; padding:0.3rem 0.5rem; border-bottom:1px solid var(--border-1); }
-.tv-table td:last-child, .tv-table th:last-child{ text-align:right; font-variant-numeric: tabular-nums; }
-
-/* --- indicateurs personnalisés + modale de configuration --- */
-.custom-kpi-empty{
-  padding:1.5rem; text-align:center; color: var(--text-muted); font-size:0.85rem;
-  border:1px dashed var(--border-1); border-radius:0.35rem; background: var(--surface-2);
-}
-.custom-section-heading{ font-size:0.8rem; font-weight:700; text-transform:uppercase; letter-spacing:0.02em; color: var(--text-muted); margin: 1rem 0 0.5rem; }
-.custom-section-heading:first-child{ margin-top:0; }
 
 .modal-backdrop{
   position:fixed; inset:0; background:rgba(22,22,22,0.55); z-index:100;
@@ -241,7 +127,7 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
 .modal-backdrop[hidden]{ display:none; }
 .modal-panel{
   background: var(--surface-1); color: var(--text-primary); border-radius:0.4rem;
-  width:min(880px, 100%); max-height:94vh; overflow-y:auto; padding:1.25rem 1.5rem 1.5rem;
+  width:min(720px, 100%); max-height:94vh; overflow-y:auto; padding:1.25rem 1.5rem 1.5rem;
   box-shadow: 0 12px 32px rgba(0,0,0,0.3);
 }
 .modal-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; margin-bottom:1rem; }
@@ -253,408 +139,172 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
 .cfg-table{ width:100%; border-collapse:collapse; font-size:0.8rem; margin-bottom:1.25rem; }
 .cfg-table th{ text-align:left; padding:0.4rem 0.5rem; border-bottom:2px solid var(--border-1); font-size:0.72rem; color: var(--text-muted); text-transform:uppercase; }
 .cfg-table td{ padding:0.35rem 0.5rem; border-bottom:1px solid var(--border-1); vertical-align:middle; }
-.cfg-table input[type="text"], .cfg-table input[type="number"], .cfg-table select{
-  width:100%; font-size:0.8rem; padding:0.3rem 0.4rem; border:1px solid var(--border-1); border-radius:0.25rem;
-  background: var(--surface-1); color: var(--text-primary);
-}
+.cfg-table input[type="text"]{ width:100%; font-size:0.8rem; padding:0.3rem 0.4rem; border:1px solid var(--border-1); border-radius:0.25rem; background: var(--surface-1); color: var(--text-primary); }
 .cfg-table td.cfg-actions{ white-space:nowrap; text-align:right; }
-.cfg-icon-btn{
-  all:unset; cursor:pointer; padding:0.2rem 0.4rem; border-radius:0.25rem; color: var(--text-secondary); font-size:0.9rem;
-}
+.cfg-icon-btn{ all:unset; cursor:pointer; padding:0.2rem 0.4rem; border-radius:0.25rem; color: var(--text-secondary); font-size:0.9rem; }
 .cfg-icon-btn:hover{ background: var(--surface-2); color: var(--text-primary); }
-.cfg-icon-btn.danger:hover{ background: color-mix(in srgb, var(--status-critical) 16%, transparent); color: var(--status-critical); }
-.cfg-empty-row td{ text-align:center; color: var(--text-muted); padding:1rem; }
+.cfg-icon-btn.danger:hover{ background: color-mix(in srgb, var(--series-8) 16%, transparent); color: var(--series-8); }
 
 .cfg-add-form{ border-top:1px solid var(--border-1); padding-top:1rem; }
 .cfg-add-form h3{ font-size:0.9rem; margin:0 0 0.75rem; }
-.cfg-grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap:0.75rem; margin-bottom:0.85rem; }
-.cfg-field label{ display:block; font-size:0.72rem; color: var(--text-muted); margin-bottom:0.2rem; }
-.cfg-field input[type="text"], .cfg-field input[type="number"], .cfg-field select{
-  width:100%; font-size:0.85rem; padding:0.4rem 0.5rem; border:1px solid var(--border-1); border-radius:0.25rem;
-  background: var(--surface-1); color: var(--text-primary);
+.cfg-field{ margin-bottom:0.85rem; }
+.cfg-field label{ display:block; font-size:0.78rem; color: var(--text-muted); margin-bottom:0.25rem; }
+.cfg-field input[type="text"], .cfg-field textarea, .cfg-field select{
+  width:100%; font-size:0.85rem; padding:0.45rem 0.55rem; border:1px solid var(--border-1); border-radius:0.25rem;
+  background: var(--surface-1); color: var(--text-primary); font-family:inherit;
 }
+.cfg-field textarea{ min-height:5rem; resize:vertical; }
+.cfg-grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap:0 0.9rem; }
 .cfg-setup{ text-align:center; padding:1.5rem; }
 .cfg-setup p{ margin:0 0 1rem; color: var(--text-muted); font-size:0.85rem; }
-.cfg-hint{ font-size:0.72rem; color: var(--text-muted); margin:0 0 1rem; }
-
-@media (max-width: 48em){
-  .bar-row{ grid-template-columns: 108px 1fr 3rem; }
-}
+.cfg-hint{ font-size:0.75rem; color: var(--text-muted); margin:0 0 1rem; }
+.modal-form-actions{ display:flex; justify-content:space-between; gap:0.75rem; margin-top:1.25rem; padding-top:1rem; border-top:1px solid var(--border-1); }
 </style>
 </head>
 <body>
 
 <div class="fr-container fr-py-4w">
 
-  <!-- En-tête -->
   <div class="mast fr-mb-3w">
     <div class="fr-grid-row fr-grid-row--gutters fr-grid-row--middle">
       <div class="fr-col-12 fr-col-md-8">
         <p class="fr-badge fr-badge--sm fr-badge--info fr-mb-2w">Démarche Simplifiée n°149963</p>
-        <h1 class="fr-h3 fr-mb-1v">Suivi de campagne reliquats — v2.0</h1>
+        <h1 class="fr-h3 fr-mb-1v">Tableau de bord — <span id="boardTitle">—</span></h1>
         <p class="fr-text--sm fr-mb-0" style="color:var(--text-muted)">Instruction DRAAF Bretagne</p>
       </div>
       <div class="fr-col-12 fr-col-md-4" style="text-align:right">
         <p class="fr-text--sm fr-mb-1w" id="syncLabel">Connexion à Grist…</p>
-        <button type="button" class="fr-btn fr-btn--secondary fr-btn--icon-left fr-icon-refresh-line" id="refreshBtn">
-          Rafraîchir
-        </button>
+        <button type="button" class="fr-btn fr-btn--secondary fr-btn--icon-left fr-icon-refresh-line" id="refreshBtn">Rafraîchir</button>
       </div>
     </div>
   </div>
 
-  <!-- Filtre global (s'applique à tous les indicateurs ci-dessous) -->
-  <div class="filter-row">
+  <div class="toolbar">
+    <div class="fr-select-group">
+      <label class="fr-label" for="boardSelect">Tableau de bord</label>
+      <select class="fr-select" id="boardSelect"></select>
+    </div>
     <div class="fr-select-group">
       <label class="fr-label" for="deptFilter">Département</label>
-      <select class="fr-select" id="deptFilter">
-        <option value="all">Tous les départements</option>
-      </select>
+      <select class="fr-select" id="deptFilter"><option value="all">Tous les départements</option></select>
     </div>
-    <p class="filter-hint">Ce filtre s'applique à l'ensemble des indicateurs et graphiques de la page.</p>
-  </div>
-
-  <!-- Indicateurs clés -->
-  <div class="fr-grid-row fr-grid-row--gutters fr-mb-4w" id="kpiRow">
-
-    <div class="fr-col-12 fr-col-sm-6 fr-col-md-4 fr-col-lg-2">
-      <div class="kpi-card">
-        <div class="kpi-top">
-          <p class="kpi-label fr-mb-0">Dossiers reçus</p>
-          <button class="help-btn" type="button" data-help="kpi-dossiers" aria-label="Aide sur cet indicateur">
-            <span class="fr-icon-information-line" aria-hidden="true"></span>
-          </button>
-        </div>
-        <p class="kpi-value" id="kpiDossiers">—</p>
-        <p class="kpi-delta flat" id="kpiDossiersDelta"></p>
-      </div>
-    </div>
-
-    <div class="fr-col-12 fr-col-sm-6 fr-col-md-4 fr-col-lg-2">
-      <div class="kpi-card">
-        <div class="kpi-top">
-          <p class="kpi-label fr-mb-0">Exploitants recensés</p>
-          <button class="help-btn" type="button" data-help="kpi-exploitants" aria-label="Aide sur cet indicateur">
-            <span class="fr-icon-information-line" aria-hidden="true"></span>
-          </button>
-        </div>
-        <p class="kpi-value" id="kpiExploitants">—</p>
-        <p class="kpi-hint" id="kpiExploitantsHint"></p>
-      </div>
-    </div>
-
-    <div class="fr-col-12 fr-col-sm-6 fr-col-md-4 fr-col-lg-2">
-      <div class="kpi-card">
-        <div class="kpi-top">
-          <p class="kpi-label fr-mb-0">Taux de dépôt</p>
-          <button class="help-btn" type="button" data-help="kpi-taux" aria-label="Aide sur cet indicateur">
-            <span class="fr-icon-information-line" aria-hidden="true"></span>
-          </button>
-        </div>
-        <p class="kpi-value" id="kpiTaux">—</p>
-        <p class="kpi-hint" id="kpiTauxHint"></p>
-      </div>
-    </div>
-
-    <div class="fr-col-12 fr-col-sm-6 fr-col-md-4 fr-col-lg-2">
-      <div class="kpi-card">
-        <div class="kpi-top">
-          <p class="kpi-label fr-mb-0">Dossiers finalisés</p>
-          <button class="help-btn" type="button" data-help="kpi-finalises" aria-label="Aide sur cet indicateur">
-            <span class="fr-icon-information-line" aria-hidden="true"></span>
-          </button>
-        </div>
-        <p class="kpi-value" id="kpiFinalises">—</p>
-        <p class="kpi-hint" id="kpiFinalisesHint"></p>
-      </div>
-    </div>
-
-    <div class="fr-col-12 fr-col-sm-6 fr-col-md-4 fr-col-lg-2">
-      <div class="kpi-card" style="border-left-color:var(--status-serious)">
-        <div class="kpi-top">
-          <p class="kpi-label fr-mb-0">Anomalies à corriger</p>
-          <button class="help-btn" type="button" data-help="kpi-anomalies" aria-label="Aide sur cet indicateur">
-            <span class="fr-icon-information-line" aria-hidden="true"></span>
-          </button>
-        </div>
-        <p class="kpi-value" id="kpiAnomalies">—</p>
-        <p class="kpi-hint" id="kpiAnomaliesHint"></p>
-      </div>
-    </div>
-
-    <div class="fr-col-12 fr-col-sm-6 fr-col-md-4 fr-col-lg-2">
-      <div class="kpi-card">
-        <div class="kpi-top">
-          <p class="kpi-label fr-mb-0">Appels enregistrés</p>
-          <button class="help-btn" type="button" data-help="kpi-appels" aria-label="Aide sur cet indicateur">
-            <span class="fr-icon-information-line" aria-hidden="true"></span>
-          </button>
-        </div>
-        <p class="kpi-value" id="kpiAppels">—</p>
-        <p class="kpi-hint" id="kpiAppelsHint"></p>
-      </div>
-    </div>
-
-  </div>
-
-  <!-- Relance téléphonique (vue RELANCE TEL, table DATA_Exploitants, libellés normalisés) -->
-  <div class="fr-mb-4w">
-    <div class="section-title">
-      <h2 class="fr-h5 fr-mb-0">Relance téléphonique</h2>
-    </div>
-    <div class="fr-grid-row fr-grid-row--gutters" id="kpiRowRelanceTel">
-
-      <div class="fr-col-12 fr-col-sm-6 fr-col-md-4">
-        <div class="kpi-card">
-          <div class="kpi-top">
-            <p class="kpi-label fr-mb-0">Ont contacté le numéro vert</p>
-            <button class="help-btn" type="button" data-help="kpi-numerovert" aria-label="Aide sur cet indicateur">
-              <span class="fr-icon-information-line" aria-hidden="true"></span>
-            </button>
-          </div>
-          <p class="kpi-value" id="kpiNumeroVert">—</p>
-          <p class="kpi-hint" id="kpiNumeroVertHint"></p>
-        </div>
-      </div>
-
-      <div class="fr-col-12 fr-col-sm-6 fr-col-md-4">
-        <div class="kpi-card">
-          <div class="kpi-top">
-            <p class="kpi-label fr-mb-0">Relancés par téléphone</p>
-            <button class="help-btn" type="button" data-help="kpi-relancetel" aria-label="Aide sur cet indicateur">
-              <span class="fr-icon-information-line" aria-hidden="true"></span>
-            </button>
-          </div>
-          <p class="kpi-value" id="kpiRelanceTel">—</p>
-          <p class="kpi-hint" id="kpiRelanceTelHint"></p>
-        </div>
-      </div>
-
-      <div class="fr-col-12 fr-col-sm-6 fr-col-md-4">
-        <div class="kpi-card" style="border-left-color:var(--status-serious)">
-          <div class="kpi-top">
-            <p class="kpi-label fr-mb-0">Refus de rendez-vous</p>
-            <button class="help-btn" type="button" data-help="kpi-refusrdd" aria-label="Aide sur cet indicateur">
-              <span class="fr-icon-information-line" aria-hidden="true"></span>
-            </button>
-          </div>
-          <p class="kpi-value" id="kpiRefusRdd">—</p>
-          <p class="kpi-hint" id="kpiRefusRddHint"></p>
-        </div>
-      </div>
-
+    <div class="toolbar-spacer"></div>
+    <div class="toolbar-actions">
+      <button type="button" class="fr-btn fr-btn--secondary fr-btn--sm fr-btn--icon-left fr-icon-settings-5-line" id="manageBoardsBtn">Gérer les tableaux de bord</button>
+      <button type="button" class="fr-btn fr-btn--sm fr-btn--icon-left fr-icon-add-line" id="openWidgetModalBtn">Ajouter un widget</button>
     </div>
   </div>
 
-  <!-- Indicateurs personnalisés (configurables : table / colonne / formule, disposition partagée via la table Grist Dashboard_Config) -->
-  <div class="fr-mb-4w">
-    <div class="section-title" style="justify-content:space-between">
-      <h2 class="fr-h5 fr-mb-0">Indicateurs personnalisés</h2>
-      <button type="button" class="fr-btn fr-btn--secondary fr-btn--sm fr-btn--icon-left fr-icon-settings-5-line" id="openConfigBtn">
-        Configurer les indicateurs
-      </button>
-    </div>
-    <div class="fr-grid-row fr-grid-row--gutters" id="customKpiRow">
-      <div class="fr-col-12"><p class="custom-kpi-empty">Chargement…</p></div>
-    </div>
+  <div class="fr-grid-row fr-grid-row--gutters fr-mb-4w" id="widgetGrid">
+    <div class="fr-col-12"><p class="empty-state">Chargement…</p></div>
   </div>
 
-  <!-- Modale de configuration des indicateurs personnalisés -->
-  <div class="modal-backdrop" id="configModal" hidden>
-    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="configModalTitle">
-      <div class="modal-head">
-        <div>
-          <h2 id="configModalTitle">Configurer les indicateurs</h2>
-          <p>Chaque indicateur est calculé à partir d'une table, d'une colonne et d'une formule. Les changements sont enregistrés dans le document Grist (table <code>Dashboard_Config</code>) et visibles par tous ceux qui ouvrent ce tableau de bord après un rafraîchissement.</p>
-        </div>
-        <button type="button" class="modal-close" id="closeConfigBtn" aria-label="Fermer">&times;</button>
-      </div>
-      <div id="configModalBody"></div>
-    </div>
-  </div>
-
-  <!-- Graphiques -->
-  <div class="fr-grid-row fr-grid-row--gutters fr-mb-4w">
-
-    <div class="fr-col-12 fr-col-lg-6">
-      <div class="chart-card">
-        <div class="chart-head">
-          <div class="chart-title-wrap">
-            <p class="chart-title">État d'avancement des dossiers</p>
-            <button class="help-btn" type="button" data-help="chart-etat" aria-label="Aide sur ce graphique"><span class="fr-icon-information-line" aria-hidden="true"></span></button>
-          </div>
-          <div class="chart-controls">
-            <label class="sr-only" for="etatDim">Regrouper par</label>
-            <select class="fr-select" id="etatDim">
-              <option value="etat" selected>Par état d'avancement</option>
-              <option value="dept">Par département</option>
-            </select>
-          </div>
-        </div>
-        <div class="chart-body"><div class="bar-list" id="chartEtat"></div></div>
-        <div class="chart-foot"><details><summary>Voir les données</summary><div id="chartEtatTable"></div></details></div>
-      </div>
-    </div>
-
-    <div class="fr-col-12 fr-col-lg-6">
-      <div class="chart-card">
-        <div class="chart-head">
-          <div class="chart-title-wrap">
-            <p class="chart-title">Appels enregistrés</p>
-            <button class="help-btn" type="button" data-help="chart-appels" aria-label="Aide sur ce graphique"><span class="fr-icon-information-line" aria-hidden="true"></span></button>
-          </div>
-          <div class="chart-controls">
-            <label class="sr-only" for="appelsDim">Regrouper par</label>
-            <select class="fr-select" id="appelsDim">
-              <option value="traitement" selected>Par traitement</option>
-              <option value="type">Par type d'appel</option>
-              <option value="statut">Par statut FAQ</option>
-            </select>
-          </div>
-        </div>
-        <div class="chart-body">
-          <div class="donut-wrap">
-            <div class="donut-svg-holder">
-              <svg viewBox="0 0 42 42" id="donutSvg"></svg>
-              <div class="donut-center"><strong id="donutTotal">—</strong><span>appels</span></div>
-            </div>
-            <div class="donut-legend" id="donutLegend"></div>
-          </div>
-        </div>
-        <div class="chart-foot"><details><summary>Voir les données</summary><div id="chartAppelsTable"></div></details></div>
-      </div>
-    </div>
-
-    <div class="fr-col-12 fr-col-lg-6">
-      <div class="chart-card">
-        <div class="chart-head">
-          <div class="chart-title-wrap">
-            <p class="chart-title">Dépôts de dossiers dans le temps</p>
-            <button class="help-btn" type="button" data-help="chart-trend" aria-label="Aide sur ce graphique"><span class="fr-icon-information-line" aria-hidden="true"></span></button>
-          </div>
-          <div class="chart-controls">
-            <label class="sr-only" for="trendMode">Mode d'affichage</label>
-            <select class="fr-select" id="trendMode">
-              <option value="period" selected>Dépôts par mois</option>
-              <option value="cumul">Cumul des dépôts</option>
-            </select>
-          </div>
-        </div>
-        <div class="chart-body"><div class="trend-svg-holder"><svg id="trendSvg" viewBox="0 0 600 220" preserveAspectRatio="none"></svg></div></div>
-        <div class="chart-foot"><details><summary>Voir les données</summary><div id="chartTrendTable"></div></details></div>
-      </div>
-    </div>
-
-    <div class="fr-col-12 fr-col-lg-6">
-      <div class="chart-card">
-        <div class="chart-head">
-          <div class="chart-title-wrap">
-            <p class="chart-title">Répartition géographique</p>
-            <button class="help-btn" type="button" data-help="chart-geo" aria-label="Aide sur ce graphique"><span class="fr-icon-information-line" aria-hidden="true"></span></button>
-          </div>
-          <div class="chart-controls">
-            <label class="sr-only" for="geoMetric">Indicateur</label>
-            <select class="fr-select" id="geoMetric">
-              <option value="exploitants" selected>Exploitants</option>
-              <option value="dossiers">Dossiers déposés</option>
-              <option value="anomalies">Anomalies signalées</option>
-            </select>
-          </div>
-        </div>
-        <div class="chart-body"><div class="bar-list" id="chartGeo"></div></div>
-        <div class="chart-foot"><details><summary>Voir les données</summary><div id="chartGeoTable"></div></details></div>
-      </div>
-    </div>
-
-  </div>
-
-  <!-- Jauges -->
-  <div class="fr-mb-4w">
-    <div class="section-title">
-      <h2 class="fr-h5 fr-mb-0">Taux de conformité</h2>
-    </div>
-    <div class="chart-card">
-      <div class="meter-grid">
-
-        <div class="meter-block">
-          <div class="chart-title-wrap">
-            <p class="chart-title" style="font-size:0.85rem">Taux de dossiers finalisés</p>
-            <button class="help-btn" type="button" data-help="meter-finalises" aria-label="Aide sur cet indicateur"><span class="fr-icon-information-line" aria-hidden="true"></span></button>
-          </div>
-          <div class="meter-top"><span class="meter-value" id="meterFinalisesValue">—</span></div>
-          <div class="meter-track" style="background:var(--surface-2)"><div class="meter-fill" id="meterFinalisesFill" style="width:0%"></div></div>
-          <p class="meter-caption" id="meterFinalisesCaption"><span class="status-dot" id="meterFinalisesDot"></span><span>—</span></p>
-        </div>
-
-        <div class="meter-block">
-          <div class="chart-title-wrap">
-            <p class="chart-title" style="font-size:0.85rem">Conformité des parcelles saisies</p>
-            <button class="help-btn" type="button" data-help="meter-parcelles" aria-label="Aide sur cet indicateur"><span class="fr-icon-information-line" aria-hidden="true"></span></button>
-          </div>
-          <div class="meter-top"><span class="meter-value" id="meterParcellesValue">—</span></div>
-          <div class="meter-track" style="background:var(--surface-2)"><div class="meter-fill" id="meterParcellesFill" style="width:0%"></div></div>
-          <p class="meter-caption" id="meterParcellesCaption"><span class="status-dot" id="meterParcellesDot"></span><span>—</span></p>
-        </div>
-
-      </div>
-    </div>
-  </div>
-
-  <!-- Table d'action -->
-  <div class="fr-mb-4w">
-    <div class="section-title">
-      <div class="chart-title-wrap">
-        <h2 class="fr-h5 fr-mb-0">Dossiers nécessitant une action</h2>
-        <button class="help-btn" type="button" data-help="table-action" aria-label="Aide sur ce tableau"><span class="fr-icon-information-line" aria-hidden="true"></span></button>
-      </div>
-    </div>
-    <div class="chart-card">
-      <div class="action-tabs" role="tablist" aria-label="Filtrer les dossiers à traiter">
-        <button class="action-tab" type="button" data-tab="anomalies" aria-pressed="true">Anomalies détectées</button>
-        <button class="action-tab" type="button" data-tab="association" aria-pressed="false">Association à faire</button>
-        <button class="action-tab" type="button" data-tab="valider" aria-pressed="false">À valider sur DN</button>
-      </div>
-      <div id="actionTableWrap">
-        <div class="fr-table fr-table--bordered">
-          <table>
-            <caption class="fr-hidden">Dossiers nécessitant une action</caption>
-            <thead>
-              <tr>
-                <th scope="col">N° dossier</th>
-                <th scope="col">Raison sociale</th>
-                <th scope="col">PACAGE</th>
-                <th scope="col">Dépt.</th>
-                <th scope="col">Motif</th>
-                <th scope="col"></th>
-              </tr>
-            </thead>
-            <tbody id="actionTableBody"></tbody>
-          </table>
-        </div>
-      </div>
-      <p class="fr-hint-text fr-mb-0" id="actionTableMore"></p>
-    </div>
-  </div>
-
-  <!-- Zone d'alertes dynamiques (données manquantes, erreurs) -->
   <div id="noticeZone"></div>
 
   <p class="fr-text--sm fr-mt-4w" style="color:var(--text-muted)" id="footNote">Chargement des données…</p>
-
 </div>
 
 <div id="floatTooltip" role="tooltip"></div>
 
+<!-- Modale : ajouter / modifier un widget -->
+<div class="modal-backdrop" id="widgetModal" hidden>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="widgetModalTitle">
+    <div class="modal-head">
+      <div>
+        <h2 id="widgetModalTitle">Ajouter un widget</h2>
+        <p>Choisis un type, une table et une colonne (le schéma de ton document est listé automatiquement).</p>
+      </div>
+      <button type="button" class="modal-close" id="closeWidgetModalBtn" aria-label="Fermer">&times;</button>
+    </div>
+    <div id="widgetModalBody">
+      <div class="cfg-field">
+        <label for="wmType">Type de widget</label>
+        <select id="wmType">
+          <option value="indicateur">Indicateur (un chiffre)</option>
+          <option value="barres">Graphique en barres</option>
+          <option value="donut">Graphique en anneau</option>
+          <option value="texte">Bloc de texte</option>
+        </select>
+      </div>
+      <div class="cfg-grid">
+        <div class="cfg-field">
+          <label for="wmTitre">Titre</label>
+          <input type="text" id="wmTitre" placeholder="Ex. Nombre de GAEC">
+        </div>
+        <div class="cfg-field">
+          <label for="wmTaille">Largeur</label>
+          <select id="wmTaille">
+            <option value="3">1/4 de largeur</option>
+            <option value="4">1/3 de largeur</option>
+            <option value="6" selected>1/2 largeur</option>
+            <option value="12">Pleine largeur</option>
+          </select>
+        </div>
+        <div class="cfg-field">
+          <label for="wmCouleur">Couleur</label>
+          <select id="wmCouleur">
+            <option value="bleu">Bleu</option>
+            <option value="orange">Orange</option>
+            <option value="turquoise">Turquoise</option>
+            <option value="jaune">Jaune</option>
+            <option value="magenta">Magenta</option>
+            <option value="vert">Vert</option>
+            <option value="violet">Violet</option>
+            <option value="rouge">Rouge</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="wmTableFieldWrap" class="cfg-field">
+        <label for="wmTable">Table source</label>
+        <select id="wmTable"><option value="">— choisir une table —</option></select>
+      </div>
+      <div id="wmColonneGroupeFieldWrap" class="cfg-field" hidden>
+        <label for="wmColonneGroupe">Regrouper par (colonne)</label>
+        <select id="wmColonneGroupe"><option value="">— aucune —</option></select>
+      </div>
+      <div id="wmColonneFieldWrap" class="cfg-field">
+        <label for="wmColonne">Colonne (mesure)</label>
+        <select id="wmColonne"><option value="">— aucune —</option></select>
+      </div>
+      <div id="wmFormuleFieldWrap" class="cfg-field">
+        <label for="wmFormule">Formule</label>
+        <select id="wmFormule"></select>
+      </div>
+      <div id="wmContenuFieldWrap" class="cfg-field" hidden>
+        <label for="wmContenu">Contenu</label>
+        <textarea id="wmContenu" placeholder="Texte libre affiché tel quel"></textarea>
+      </div>
+
+      <div class="modal-form-actions">
+        <button type="button" class="fr-btn fr-btn--secondary" id="wmDeleteBtn" style="display:none">Supprimer ce widget</button>
+        <span style="flex:1"></span>
+        <button type="button" class="fr-btn" id="wmSaveBtn">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modale : gérer les tableaux de bord -->
+<div class="modal-backdrop" id="boardsModal" hidden>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="boardsModalTitle">
+    <div class="modal-head">
+      <div>
+        <h2 id="boardsModalTitle">Gérer les tableaux de bord</h2>
+        <p>Un tableau de bord est un ensemble de widgets. Crée-en plusieurs (pilotage, instruction...) et bascule entre eux depuis le menu en haut de page.</p>
+      </div>
+      <button type="button" class="modal-close" id="closeBoardsModalBtn" aria-label="Fermer">&times;</button>
+    </div>
+    <div id="boardsModalBody"></div>
+  </div>
+</div>
+
 <script>
 (function(){
 
-  /* =====================================================================
-     Utilitaires génériques
-     ===================================================================== */
   const el = id => document.getElementById(id);
   const fmt = n => (n === null || n === undefined || Number.isNaN(n)) ? '—' : n.toLocaleString('fr-FR');
-  const fmtPct = n => (n === null || n === undefined || Number.isNaN(n)) ? '—' : Math.round(n) + ' %';
-
+  function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 
   function listValues(cell){
     if (Array.isArray(cell)){
@@ -665,55 +315,22 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
     return [cell];
   }
 
-  function toDate(raw){
-    if (raw === null || raw === undefined || raw === '') return null;
-    if (typeof raw === 'number'){
-      const d = new Date(raw * 1000);
-      return isNaN(d.getTime()) ? null : d;
-    }
-    let d = new Date(raw);
-    if (!isNaN(d.getTime())) return d;
-    const n = Number(raw);
-    if (!isNaN(n)){
-      d = new Date(n * 1000);
-      if (!isNaN(d.getTime())) return d;
-    }
-    return null;
-  }
-
   function formatDept(code){
     if (!code) return 'Non renseigné';
     return String(code).replace(/^0+/, '') || code;
   }
 
-  function rateToStatus(rate){
-    if (rate === null || rate === undefined || Number.isNaN(rate)) return 'neutral';
-    if (rate >= 80) return 'good';
-    if (rate >= 50) return 'warning';
-    return 'critical';
-  }
-  const statusVar = { good:'--status-good', warning:'--status-warning', serious:'--status-serious', critical:'--status-critical', neutral:'--status-neutral' };
-  const statusLabel = { good:'Bon niveau', warning:'À surveiller', serious:'À corriger', critical:'Priorité d’action', neutral:'Non évaluable' };
-  function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
-
   async function safeFetchTable(name){
-    try{
-      return await grist.docApi.fetchTable(name);
-    }catch(e){
-      console.warn('Table indisponible :', name, e);
-      return null;
-    }
+    try { return await grist.docApi.fetchTable(name); }
+    catch (e){ console.warn('Table indisponible :', name, e); return null; }
   }
 
   function renderAlert(kind, title, message){
     const wrap = document.createElement('div');
     wrap.className = 'fr-alert fr-alert--' + kind + ' fr-alert--sm';
     wrap.setAttribute('role', 'alert');
-    const t = document.createElement('p');
-    t.className = 'fr-alert__title';
-    t.textContent = title;
-    const m = document.createElement('p');
-    m.textContent = message;
+    const t = document.createElement('p'); t.className = 'fr-alert__title'; t.textContent = title;
+    const m = document.createElement('p'); m.textContent = message;
     if (title) wrap.appendChild(t);
     wrap.appendChild(m);
     return wrap;
@@ -721,20 +338,12 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
   function clearNotices(){ el('noticeZone').innerHTML = ''; }
   function pushNotice(node){ el('noticeZone').appendChild(node); }
 
-  /* =====================================================================
-     Tooltip flottant partagé (survol des barres / segments / points)
-     ===================================================================== */
   const tooltipEl = el('floatTooltip');
   function showTooltip(x, y, titleText, bodyText){
     tooltipEl.innerHTML = '';
-    const strong = document.createElement('strong');
-    strong.textContent = titleText;
+    const strong = document.createElement('strong'); strong.textContent = titleText;
     tooltipEl.appendChild(strong);
-    if (bodyText){
-      const span = document.createElement('span');
-      span.textContent = bodyText;
-      tooltipEl.appendChild(span);
-    }
+    if (bodyText){ const span = document.createElement('span'); span.textContent = bodyText; tooltipEl.appendChild(span); }
     const pad = 12;
     let left = x + pad, top = y + pad;
     tooltipEl.style.transform = 'translate(' + left + 'px,' + top + 'px)';
@@ -749,937 +358,187 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
   function hideTooltip(){ tooltipEl.style.opacity = '0'; tooltipEl.style.transform = 'translate(-9999px,-9999px)'; }
 
   /* =====================================================================
-     Popovers d'aide au choix (un par graphique / indicateur)
-     ===================================================================== */
-  const HELP_CONTENT = {
-    'kpi-dossiers': {
-      title: 'Dossiers reçus',
-      body: [
-        'Nombre de dossiers uniques déposés sur la démarche 149963 (table Demarche_149963_demandeurs, champ dossier_number).',
-        'La variation affichée compare les 7 derniers jours aux 7 jours précédents : elle signale un afflux ou un ralentissement des dépôts.'
-      ]
-    },
-    'kpi-exploitants': {
-      title: 'Exploitants recensés',
-      body: ['Nombre d’exploitants ciblés par la campagne, tels qu’importés dans la table DATA_Exploitants (un exploitant = un PACAGE sélectionné).']
-    },
-    'kpi-taux': {
-      title: 'Taux de dépôt',
-      body: ['Part des exploitants recensés ayant au moins un dossier déposé sur la démarche (dossiers reçus / exploitants recensés). Un taux bas indique un besoin de relance.']
-    },
-    'kpi-finalises': {
-      title: 'Dossiers finalisés',
-      body: ['Exploitants dont l’état d’avancement (DATA_Exploitants.Etat_d_avancement) vaut « Dossier finalisé » : parcelles saisies conformes et sans anomalie bloquante.']
-    },
-    'kpi-anomalies': {
-      title: 'Anomalies à corriger',
-      body: ['Exploitants pour lesquels au moins une anomalie a été détectée automatiquement (doublon de parcelle, nombre de parcelles insuffisant…). Ce sont les dossiers à recontacter en priorité.']
-    },
-    'kpi-appels': {
-      title: 'Appels enregistrés',
-      body: ['Nombre total d’évènements consignés dans DATA_Evenements (appels entrants, relances, courriers…). Le sous-texte indique combien restent à rappeler.']
-    },
-    'kpi-numerovert': {
-      title: 'Ont contacté le numéro vert',
-      body: ['Nombre d’exploitants recensés ayant déjà contacté le numéro vert (DATA_Exploitants, champ Ont_ils_deja_contacte_le_numero_vert_ — calculé automatiquement dès qu’un évènement existe pour leur PACAGE dans le journal des appels).']
-    },
-    'kpi-relancetel': {
-      title: 'Relancés par téléphone',
-      body: ['Nombre d’exploitants recensés ayant été relancés par téléphone (DATA_Exploitants, champ A_ete_relance_par_tel_).']
-    },
-    'kpi-refusrdd': {
-      title: 'Refus de rendez-vous',
-      body: ['Nombre d’exploitants recensés ayant refusé le rendez-vous proposé (DATA_Exploitants, champ Refuse_RDD_). Ce sont les dossiers à recontacter en priorité pour lever le refus ou documenter le motif.']
-    },
-    'chart-etat': {
-      title: 'État d’avancement des dossiers',
-      body: ['Répartit les exploitants recensés selon leur avancement dans la démarche, calculé par la formule Etat_d_avancement.'],
-      choices: [
-        ['Par état d’avancement', 'vue par défaut, utile pour piloter l’instruction au quotidien (quels dossiers valider, relancer, corriger).'],
-        ['Par département', 'utile pour identifier les territoires où concentrer les relances.']
-      ]
-    },
-    'chart-appels': {
-      title: 'Appels enregistrés',
-      body: ['Répartition des évènements du journal des appels (DATA_Evenements).'],
-      choices: [
-        ['Par traitement', 'montre comment les appels ont été traités (répondu, sans suite, à recontacter…).'],
-        ['Par type d’appel', 'montre la nature des sollicitations (information, réclamation, technique…).'],
-        ['Par statut FAQ', 'montre si les questions posées sont déjà couvertes par la foire aux questions.']
-      ]
-    },
-    'chart-trend': {
-      title: 'Dépôts de dossiers dans le temps',
-      body: ['Nombre de dossiers déposés par mois, d’après la date de dépôt (Depose_le).'],
-      choices: [
-        ['Dépôts par mois', 'utile pour repérer les pics et anticiper la charge d’instruction.'],
-        ['Cumul des dépôts', 'utile pour suivre la progression globale de la campagne par rapport à l’objectif.']
-      ]
-    },
-    'chart-geo': {
-      title: 'Répartition géographique',
-      body: ['Compare les départements bretons sur l’indicateur sélectionné (code du département déduit du PACAGE).'],
-      choices: [
-        ['Exploitants', 'où se trouvent les exploitants ciblés par la campagne.'],
-        ['Dossiers déposés', 'où la dynamique de dépôt est la plus forte ou la plus faible.'],
-        ['Anomalies signalées', 'où concentrer l’effort de correction et de relance.']
-      ]
-    },
-    'meter-finalises': {
-      title: 'Taux de dossiers finalisés',
-      body: ['Part des exploitants ayant déjà déposé une déclaration numérique (Nb_DN > 0) dont le dossier est finalisé, sans anomalie ni parcelle manquante.']
-    },
-    'meter-parcelles': {
-      title: 'Conformité des parcelles saisies',
-      body: ['Part des dossiers déposés dont le nombre de parcelles saisies correspond exactement au nombre de parcelles attendues (écart = 0).']
-    },
-    'table-action': {
-      title: 'Dossiers nécessitant une action',
-      body: ['Liste nominative des dossiers qui bloquent l’instruction, à traiter en priorité.'],
-      choices: [
-        ['Anomalies détectées', 'dossiers avec une anomalie de saisie (doublon, parcelles manquantes ou en trop).'],
-        ['Association à faire', 'dossiers déposés qui n’ont pas encore été rattachés à un exploitant de la base.'],
-        ['À valider sur DN', 'dossiers complets, en attente de validation dans Démarches Numériques.']
-      ]
-    }
-  };
-
-  let openPopover = null;
-  function closePopover(){
-    if (openPopover){
-      openPopover.panel.remove();
-      openPopover.btn.setAttribute('aria-expanded', 'false');
-      openPopover = null;
-    }
-  }
-  function buildHelpPanel(key){
-    const data = HELP_CONTENT[key];
-    const panel = document.createElement('div');
-    panel.className = 'help-panel';
-    panel.setAttribute('role', 'dialog');
-    if (!data) return panel;
-    const h3 = document.createElement('h3');
-    h3.textContent = data.title;
-    panel.appendChild(h3);
-    (data.body || []).forEach(t => {
-      const p = document.createElement('p');
-      p.textContent = t;
-      panel.appendChild(p);
-    });
-    if (data.choices && data.choices.length){
-      const intro = document.createElement('p');
-      intro.style.fontWeight = '600';
-      intro.style.margin = '0.5rem 0 0.15rem';
-      intro.textContent = 'Comment choisir :';
-      panel.appendChild(intro);
-      data.choices.forEach(([label, why]) => {
-        const p = document.createElement('p');
-        p.className = 'help-choice';
-        const strong = document.createElement('strong');
-        strong.textContent = label + ' — ';
-        p.appendChild(strong);
-        p.appendChild(document.createTextNode(why));
-        panel.appendChild(p);
-      });
-    }
-    return panel;
-  }
-  document.addEventListener('click', (evt) => {
-    const btn = evt.target.closest('.help-btn');
-    if (!btn){
-      if (openPopover && !evt.target.closest('.help-panel')) closePopover();
-      return;
-    }
-    const key = btn.getAttribute('data-help');
-    if (openPopover && openPopover.btn === btn){ closePopover(); return; }
-    closePopover();
-    const panel = buildHelpPanel(key);
-    document.body.appendChild(panel);
-    const r = btn.getBoundingClientRect();
-    const top = window.scrollY + r.bottom + 6;
-    let left = window.scrollX + r.left;
-    panel.style.position = 'absolute';
-    panel.style.top = top + 'px';
-    panel.style.left = left + 'px';
-    requestAnimationFrame(() => {
-      const pr = panel.getBoundingClientRect();
-      if (pr.right > window.innerWidth - 8){
-        left = window.scrollX + window.innerWidth - pr.width - 8;
-        panel.style.left = Math.max(8, left) + 'px';
-      }
-    });
-    btn.setAttribute('aria-expanded', 'true');
-    openPopover = { btn, panel };
-  });
-  document.addEventListener('keydown', (evt) => { if (evt.key === 'Escape') closePopover(); });
-  window.addEventListener('scroll', closePopover, { passive:true });
-  window.addEventListener('resize', closePopover);
-
-  /* =====================================================================
      État applicatif
      ===================================================================== */
   const state = {
-    demandeurs: null,
-    exploitants: null,
-    evenements: null,
-    syncMeta: null,
     dept: 'all',
-    etatDim: 'etat',
-    appelsDim: 'traitement',
-    trendMode: 'period',
-    geoMetric: 'exploitants',
-    actionTab: 'anomalies',
-    expById: new Map(),
-    configTableExists: null,
-    customIndicators: [],
+    boards: [],
+    currentBoard: null,
+    widgets: [],
     schemaTables: null,
     schemaColumnsByTable: null,
-    customTableCache: new Map()
+    tableCache: new Map(),
+    editingWidgetId: null
   };
 
+  const CAT_SLOTS = ['--series-1','--series-2','--series-3','--series-4','--series-5','--series-6','--series-7','--series-8'];
   const CUSTOM_KPI_COLORS = {
     bleu: '--series-1', orange: '--series-2', turquoise: '--series-3', jaune: '--series-4',
     magenta: '--series-5', vert: '--series-6', violet: '--series-7', rouge: '--series-8'
   };
-
-  // Formules disponibles pour un indicateur personnalisé (table + colonne choisies par l'utilisateur).
-  // Chaque formule reçoit les lignes de la table source, le masque de filtre département, et la colonne choisie.
-  const FORMULES = {
-    count: {
-      label: 'Nombre de lignes',
-      needsColumn: false,
-      compute(rows, mask){
-        let n = 0;
-        for (let i = 0; i < rows.id.length; i++) if (mask[i]) n++;
-        return { value: n, hint: '' };
-      }
-    },
-    count_nonempty: {
-      label: 'Nombre de lignes renseignées',
-      needsColumn: true,
-      compute(rows, mask, colId){
-        const col = rows[colId];
-        let n = 0, total = 0;
-        for (let i = 0; i < rows.id.length; i++){
-          if (!mask[i]) continue;
-          total++;
-          const v = col ? col[i] : null;
-          if (v !== null && v !== undefined && v !== '') n++;
-        }
-        return { value: n, hint: total ? Math.round(n / total * 100) + ' % des lignes' : '' };
-      }
-    },
-    sum_true: {
-      label: '% Vrai (colonne Oui/Non)',
-      needsColumn: true,
-      compute(rows, mask, colId){
-        const col = rows[colId];
-        let n = 0, total = 0;
-        for (let i = 0; i < rows.id.length; i++){
-          if (!mask[i]) continue;
-          total++;
-          if (col && col[i]) n++;
-        }
-        return { value: n, hint: total ? Math.round(n / total * 100) + ' % des lignes' : '' };
-      }
-    },
-    sum: {
-      label: 'Somme',
-      needsColumn: true,
-      compute(rows, mask, colId){
-        const col = rows[colId];
-        let s = 0;
-        for (let i = 0; i < rows.id.length; i++){
-          if (!mask[i]) continue;
-          const v = col ? Number(col[i]) : NaN;
-          if (!Number.isNaN(v)) s += v;
-        }
-        return { value: s, hint: '' };
-      }
-    },
-    avg: {
-      label: 'Moyenne',
-      needsColumn: true,
-      compute(rows, mask, colId){
-        const col = rows[colId];
-        let s = 0, n = 0;
-        for (let i = 0; i < rows.id.length; i++){
-          if (!mask[i]) continue;
-          const v = col ? Number(col[i]) : NaN;
-          if (!Number.isNaN(v)){ s += v; n++; }
-        }
-        return { value: n ? Math.round((s / n) * 100) / 100 : null, hint: n ? 'sur ' + fmt(n) + ' ligne(s)' : '' };
-      }
-    },
-    top_category: {
-      label: 'Catégorie la plus fréquente',
-      needsColumn: true,
-      isText: true,
-      compute(rows, mask, colId){
-        const col = rows[colId];
-        const counts = new Map();
-        let total = 0;
-        for (let i = 0; i < rows.id.length; i++){
-          if (!mask[i]) continue;
-          const vals = listValues(col ? col[i] : null);
-          if (!vals.length) continue;
-          vals.forEach(v => counts.set(v, (counts.get(v) || 0) + 1));
-          total++;
-        }
-        if (!counts.size) return { value: '—', hint: 'aucune donnée' };
-        const [label, count] = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0];
-        return { value: label, hint: fmt(count) + ' / ' + fmt(total) + ' (' + Math.round(count / total * 100) + ' %)' };
-      }
-    }
-  };
-
-  const ETAT_ORDER = ['En attente de DN', 'En attente du retour de l’agri', 'Anomalies à corriger', 'Dossier à valider sur DN', 'Dossier finalisé'];
-  const ETAT_STATUS = {
-    'En attente de DN': 'critical',
-    'En attente du retour de l’agri': 'neutral',
-    'Anomalies à corriger': 'serious',
-    'Dossier à valider sur DN': 'warning',
-    'Dossier finalisé': 'good',
-    'Non renseigné': 'neutral'
-  };
-  const SEQ_STEPS = ['--seq-1','--seq-2','--seq-3','--seq-4','--seq-5','--seq-6','--seq-7'];
-  const CAT_SLOTS = ['--series-1','--series-2','--series-3','--series-4','--series-5','--series-6','--series-7','--series-8'];
 
   function maskFor(codeDptArray){
     if (state.dept === 'all') return codeDptArray.map(() => true);
     return codeDptArray.map(c => c === state.dept);
   }
 
-  function buildDeptOptions(){
-    const set = new Set();
-    if (state.exploitants && state.exploitants.Code_dpt){
-      state.exploitants.Code_dpt.forEach(c => { if (c) set.add(c); });
+  // Chaque formule est un petit accumulateur (init/step/finalize), utilisé aussi bien pour
+  // une valeur unique (indicateur) que pour une agrégation groupée (graphique).
+  const FORMULES = {
+    count: {
+      label: 'Nombre de lignes', needsColumn: false,
+      init: () => ({ n: 0 }), step: (acc) => { acc.n++; }, finalize: (acc) => acc.n
+    },
+    count_nonempty: {
+      label: 'Nombre de lignes renseignées', needsColumn: true,
+      init: () => ({ n: 0 }),
+      step: (acc, col, i) => { const v = col ? col[i] : null; if (v !== null && v !== undefined && v !== '') acc.n++; },
+      finalize: (acc) => acc.n
+    },
+    sum_true: {
+      label: 'Nombre de "Vrai" (colonne Oui/Non)', needsColumn: true,
+      init: () => ({ n: 0 }), step: (acc, col, i) => { if (col && col[i]) acc.n++; }, finalize: (acc) => acc.n
+    },
+    sum: {
+      label: 'Somme', needsColumn: true,
+      init: () => ({ s: 0 }),
+      step: (acc, col, i) => { const v = col ? Number(col[i]) : NaN; if (!Number.isNaN(v)) acc.s += v; },
+      finalize: (acc) => acc.s
+    },
+    avg: {
+      label: 'Moyenne', needsColumn: true,
+      init: () => ({ s: 0, n: 0 }),
+      step: (acc, col, i) => { const v = col ? Number(col[i]) : NaN; if (!Number.isNaN(v)){ acc.s += v; acc.n++; } },
+      finalize: (acc) => acc.n ? Math.round((acc.s / acc.n) * 100) / 100 : null
+    },
+    top_category: {
+      label: 'Catégorie la plus fréquente', needsColumn: true, isText: true, scalarOnly: true
     }
-    if (state.demandeurs && state.demandeurs.Code_dpt){
-      state.demandeurs.Code_dpt.forEach(c => { if (c) set.add(c); });
+  };
+
+  function computeScalar(tableData, mask, colId, formuleKey){
+    if (formuleKey === 'top_category'){
+      const col = tableData[colId];
+      const counts = new Map(); let total = 0;
+      for (let i = 0; i < tableData.id.length; i++){
+        if (!mask[i]) continue;
+        const vals = listValues(col ? col[i] : null);
+        if (!vals.length) continue;
+        vals.forEach(v => counts.set(v, (counts.get(v) || 0) + 1));
+        total++;
+      }
+      if (!counts.size) return { value: '—', hint: 'aucune donnée' };
+      const [label, count] = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0];
+      return { value: label, hint: fmt(count) + ' / ' + fmt(total) + ' (' + Math.round(count / total * 100) + ' %)' };
     }
-    const sorted = Array.from(set).sort();
-    const sel = el('deptFilter');
-    const current = sel.value || 'all';
-    sel.innerHTML = '<option value="all">Tous les départements</option>' +
-      sorted.map(c => '<option value="' + c + '">' + formatDept(c) + '</option>').join('');
-    sel.value = sorted.includes(current) ? current : 'all';
-    state.dept = sel.value;
+    const f = FORMULES[formuleKey];
+    if (!f) return { value: null, hint: 'Formule inconnue' };
+    const col = tableData[colId];
+    const acc = f.init();
+    for (let i = 0; i < tableData.id.length; i++){ if (mask[i]) f.step(acc, col, i); }
+    return { value: f.finalize(acc), hint: '' };
+  }
+
+  function computeGrouped(tableData, mask, groupColId, colId, formuleKey){
+    const f = FORMULES[formuleKey];
+    if (!f || f.scalarOnly) return [];
+    const groupCol = tableData[groupColId];
+    const col = colId ? tableData[colId] : null;
+    const accByGroup = new Map();
+    for (let i = 0; i < tableData.id.length; i++){
+      if (!mask[i]) continue;
+      const groups = listValues(groupCol ? groupCol[i] : null);
+      if (!groups.length) continue;
+      groups.forEach(g => {
+        if (!accByGroup.has(g)) accByGroup.set(g, f.init());
+        f.step(accByGroup.get(g), col, i);
+      });
+    }
+    return Array.from(accByGroup.entries())
+      .map(([label, acc]) => ({ label, value: f.finalize(acc) }))
+      .filter(it => it.value !== null && !Number.isNaN(it.value))
+      .sort((a, b) => b.value - a.value);
   }
 
   /* =====================================================================
-     Composants de rendu — barres horizontales
+     Rendu générique — barres / donut (réutilisés par chaque widget graphique)
      ===================================================================== */
-  function renderBarList(containerId, tableContainerId, items, opts){
-    opts = opts || {};
-    const container = el(containerId);
+  function renderBarListInto(container, items){
     container.innerHTML = '';
-    if (!items.length){
-      container.innerHTML = '<p class="action-empty">Aucune donnée pour ce filtre.</p>';
-      if (tableContainerId) el(tableContainerId).innerHTML = '';
-      return;
-    }
+    const list = document.createElement('div'); list.className = 'bar-list';
     const max = Math.max(...items.map(i => i.value), 1);
     items.forEach(item => {
-      const row = document.createElement('div');
-      row.className = 'bar-row';
-
-      const label = document.createElement('div');
-      label.className = 'bar-row-label';
-      label.title = item.label;
-      const dot = document.createElement('span');
-      dot.className = 'bar-dot';
-      dot.style.background = item.color;
-      label.appendChild(dot);
-      label.appendChild(document.createTextNode(item.label));
+      const row = document.createElement('div'); row.className = 'bar-row';
+      const label = document.createElement('div'); label.className = 'bar-row-label'; label.title = item.label;
+      const dot = document.createElement('span'); dot.className = 'bar-dot'; dot.style.background = item.color;
+      label.appendChild(dot); label.appendChild(document.createTextNode(item.label));
       row.appendChild(label);
-
-      const track = document.createElement('div');
-      track.className = 'bar-track';
-      const fill = document.createElement('div');
-      fill.className = 'bar-fill';
-      fill.style.background = item.color;
+      const track = document.createElement('div'); track.className = 'bar-track';
+      const fill = document.createElement('div'); fill.className = 'bar-fill'; fill.style.background = item.color;
       fill.style.width = Math.round(item.value / max * 100) + '%';
       track.appendChild(fill);
-      track.tabIndex = 0;
-      track.setAttribute('role', 'img');
-      track.setAttribute('aria-label', item.label + ' : ' + fmt(item.value));
-      const showTip = (evt) => showTooltip(evt.clientX, evt.clientY, item.label, fmt(item.value) + (opts.unit ? ' ' + opts.unit : '') + (item.pct !== undefined ? ' (' + Math.round(item.pct) + ' %)' : ''));
+      const showTip = (evt) => showTooltip(evt.clientX, evt.clientY, item.label, fmt(item.value));
       track.addEventListener('pointermove', showTip);
-      track.addEventListener('pointerenter', showTip);
       track.addEventListener('pointerleave', hideTooltip);
-      track.addEventListener('focus', (evt) => showTooltip(track.getBoundingClientRect().right, track.getBoundingClientRect().top, item.label, fmt(item.value)));
-      track.addEventListener('blur', hideTooltip);
       row.appendChild(track);
-
-      const value = document.createElement('div');
-      value.className = 'bar-value';
-      value.textContent = fmt(item.value);
+      const value = document.createElement('div'); value.className = 'bar-value'; value.textContent = fmt(item.value);
       row.appendChild(value);
-
-      container.appendChild(row);
+      list.appendChild(row);
     });
-    if (tableContainerId) renderTableView(tableContainerId, items, opts.dimLabel || 'Catégorie');
+    container.appendChild(list);
   }
 
-  function renderTableView(containerId, items, dimLabel){
-    const c = el(containerId);
-    if (!c) return;
-    c.innerHTML = '';
-    const table = document.createElement('table');
-    table.className = 'tv-table';
-    const thead = document.createElement('thead');
-    thead.innerHTML = '<tr><th scope="col">' + dimLabel + '</th><th scope="col">Valeur</th></tr>';
-    table.appendChild(thead);
-    const tbody = document.createElement('tbody');
-    items.forEach(i => {
-      const tr = document.createElement('tr');
-      const td1 = document.createElement('td'); td1.textContent = i.label;
-      const td2 = document.createElement('td'); td2.textContent = fmt(i.value);
-      tr.appendChild(td1); tr.appendChild(td2);
-      tbody.appendChild(tr);
-    });
-    table.appendChild(tbody);
-    c.appendChild(table);
-  }
-
-  /* =====================================================================
-     Composant de rendu — donut
-     ===================================================================== */
-  function renderDonut(items, total){
-    const svg = el('donutSvg');
-    svg.innerHTML = '';
-    el('donutTotal').textContent = fmt(total);
-    const legend = el('donutLegend');
-    legend.innerHTML = '';
+  function renderDonutInto(container, items){
+    container.innerHTML = '';
+    const total = items.reduce((s, i) => s + i.value, 0);
+    const wrap = document.createElement('div'); wrap.className = 'donut-wrap';
+    const holder = document.createElement('div'); holder.className = 'donut-svg-holder';
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg'); svg.setAttribute('viewBox', '0 0 42 42');
+    const center = document.createElement('div'); center.className = 'donut-center';
+    const strong = document.createElement('strong'); strong.textContent = fmt(total);
+    const span = document.createElement('span'); span.textContent = 'total';
+    center.appendChild(strong); center.appendChild(span);
+    holder.appendChild(svg); holder.appendChild(center);
+    const legend = document.createElement('div'); legend.className = 'donut-legend';
 
     if (!total){
-      const p = document.createElement('p');
-      p.className = 'action-empty';
-      p.textContent = 'Aucune donnée pour ce filtre.';
+      const p = document.createElement('p'); p.className = 'empty-state'; p.textContent = 'Aucune donnée';
       legend.appendChild(p);
-      return;
-    }
-
-    const r = 15.9155, cx = 21, cy = 21, strokeW = 7;
-    let offset = 0;
-    const ns = 'http://www.w3.org/2000/svg';
-    items.forEach(item => {
-      const frac = item.value / total;
-      const circle = document.createElementNS(ns, 'circle');
-      circle.setAttribute('cx', cx); circle.setAttribute('cy', cy); circle.setAttribute('r', r);
-      circle.setAttribute('fill', 'transparent');
-      circle.setAttribute('stroke', item.color);
-      circle.setAttribute('stroke-width', strokeW);
-      const circumference = 2 * Math.PI * r;
-      const dash = Math.max(frac * circumference - 0.6, 0);
-      circle.setAttribute('stroke-dasharray', dash + ' ' + (circumference - dash));
-      circle.setAttribute('stroke-dashoffset', (-offset * circumference).toFixed(3));
-      circle.setAttribute('transform', 'rotate(-90 ' + cx + ' ' + cy + ')');
-      circle.style.cursor = 'default';
-      circle.addEventListener('pointermove', (evt) => showTooltip(evt.clientX, evt.clientY, item.label, fmt(item.value) + ' (' + Math.round(frac * 100) + ' %)'));
-      circle.addEventListener('pointerleave', hideTooltip);
-      svg.appendChild(circle);
-      offset += frac;
-    });
-
-    items.forEach(item => {
-      const row = document.createElement('div');
-      row.className = 'legend-row';
-      const sw = document.createElement('span'); sw.className = 'legend-swatch'; sw.style.background = item.color;
-      const lab = document.createElement('span'); lab.className = 'legend-label'; lab.textContent = item.label;
-      const val = document.createElement('span'); val.className = 'legend-value'; val.textContent = fmt(item.value);
-      const pct = document.createElement('span'); pct.className = 'legend-pct'; pct.textContent = Math.round(item.value / total * 100) + ' %';
-      row.appendChild(sw); row.appendChild(lab); row.appendChild(val); row.appendChild(pct);
-      legend.appendChild(row);
-    });
-  }
-
-  /* =====================================================================
-     Composant de rendu — ligne / tendance
-     ===================================================================== */
-  function renderTrend(points, opts){
-    opts = opts || {};
-    const svg = el('trendSvg');
-    svg.innerHTML = '';
-    if (!points.length){
-      el('chartTrendTable').innerHTML = '';
-      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      text.setAttribute('x', 300); text.setAttribute('y', 110); text.setAttribute('text-anchor','middle');
-      text.setAttribute('fill', cssVar('--text-muted') || '#666');
-      text.textContent = 'Aucune donnée pour ce filtre.';
-      svg.appendChild(text);
-      return;
-    }
-    const ns = 'http://www.w3.org/2000/svg';
-    const W = 600, H = 220, padL = 34, padR = 12, padT = 14, padB = 26;
-    const plotW = W - padL - padR, plotH = H - padT - padB;
-    const maxV = Math.max(...points.map(p => p.value), 1);
-    const stepX = points.length > 1 ? plotW / (points.length - 1) : 0;
-    const x = i => padL + i * stepX;
-    const y = v => padT + plotH - (v / maxV) * plotH;
-    const color = cssVar('--series-1') || '#2a78d6';
-
-    // gridlines (hairline, recessive)
-    const gridColor = cssVar('--border-1') || '#ddd';
-    [0, 0.5, 1].forEach(f => {
-      const gy = padT + plotH * (1 - f);
-      const line = document.createElementNS(ns, 'line');
-      line.setAttribute('x1', padL); line.setAttribute('x2', W - padR);
-      line.setAttribute('y1', gy); line.setAttribute('y2', gy);
-      line.setAttribute('stroke', gridColor); line.setAttribute('stroke-width', 1);
-      svg.appendChild(line);
-      const label = document.createElementNS(ns, 'text');
-      label.setAttribute('x', padL - 6); label.setAttribute('y', gy + 3); label.setAttribute('text-anchor', 'end');
-      label.setAttribute('font-size', '9'); label.setAttribute('fill', cssVar('--text-muted') || '#666');
-      label.textContent = fmt(Math.round(maxV * f));
-      svg.appendChild(label);
-    });
-
-    // area fill (10% opacity)
-    let areaPath = 'M ' + x(0) + ' ' + y(0);
-    points.forEach((p, i) => { areaPath += ' L ' + x(i) + ' ' + y(p.value); });
-    areaPath += ' L ' + x(points.length - 1) + ' ' + (padT + plotH) + ' L ' + x(0) + ' ' + (padT + plotH) + ' Z';
-    const area = document.createElementNS(ns, 'path');
-    area.setAttribute('d', areaPath); area.setAttribute('fill', color); area.setAttribute('opacity', '0.1');
-    svg.appendChild(area);
-
-    // line (2px)
-    let linePath = 'M ' + x(0) + ' ' + y(points[0].value);
-    points.forEach((p, i) => { if (i > 0) linePath += ' L ' + x(i) + ' ' + y(p.value); });
-    const line = document.createElementNS(ns, 'path');
-    line.setAttribute('d', linePath); line.setAttribute('fill', 'none'); line.setAttribute('stroke', color);
-    line.setAttribute('stroke-width', 2); line.setAttribute('stroke-linejoin', 'round'); line.setAttribute('stroke-linecap', 'round');
-    svg.appendChild(line);
-
-    // x-axis labels (sparse to avoid collision)
-    const labelEvery = Math.ceil(points.length / 8);
-    points.forEach((p, i) => {
-      if (i % labelEvery !== 0 && i !== points.length - 1) return;
-      const label = document.createElementNS(ns, 'text');
-      label.setAttribute('x', x(i)); label.setAttribute('y', H - 8); label.setAttribute('text-anchor', 'middle');
-      label.setAttribute('font-size', '9'); label.setAttribute('fill', cssVar('--text-muted') || '#666');
-      label.textContent = p.label;
-      svg.appendChild(label);
-    });
-
-    // points + hit areas
-    points.forEach((p, i) => {
-      const dot = document.createElementNS(ns, 'circle');
-      dot.setAttribute('cx', x(i)); dot.setAttribute('cy', y(p.value)); dot.setAttribute('r', i === points.length - 1 ? 4 : 3);
-      dot.setAttribute('fill', color); dot.setAttribute('stroke', cssVar('--surface-1') || '#fff'); dot.setAttribute('stroke-width', 2);
-      svg.appendChild(dot);
-
-      const hit = document.createElementNS(ns, 'circle');
-      hit.setAttribute('cx', x(i)); hit.setAttribute('cy', y(p.value)); hit.setAttribute('r', 12);
-      hit.setAttribute('fill', 'transparent'); hit.classList.add('trend-point');
-      hit.addEventListener('pointermove', (evt) => showTooltip(evt.clientX, evt.clientY, p.label, fmt(p.value) + (opts.unit || ' dossier(s)')));
-      hit.addEventListener('pointerleave', hideTooltip);
-      svg.appendChild(hit);
-    });
-
-    // end value label
-    const endLabel = document.createElementNS(ns, 'text');
-    endLabel.setAttribute('x', x(points.length - 1) - 4); endLabel.setAttribute('y', y(points[points.length - 1].value) - 8);
-    endLabel.setAttribute('text-anchor', 'end'); endLabel.setAttribute('font-size', '10'); endLabel.setAttribute('font-weight', '700');
-    endLabel.setAttribute('fill', cssVar('--text-primary') || '#161616');
-    endLabel.textContent = fmt(points[points.length - 1].value);
-    svg.appendChild(endLabel);
-
-    renderTableView('chartTrendTable', points, 'Période');
-  }
-
-  /* =====================================================================
-     Agrégations
-     ===================================================================== */
-  function buildExpMap(){
-    const map = new Map();
-    if (!state.exploitants) return map;
-    const e = state.exploitants;
-    for (let i = 0; i < e.id.length; i++){
-      map.set(e.id[i], {
-        Etat_d_avancement: e.Etat_d_avancement ? e.Etat_d_avancement[i] : null,
-        PacageREF: e.PacageREF ? e.PacageREF[i] : null,
-        Nom_Raison_sociale: e.Nom_Raison_sociale ? e.Nom_Raison_sociale[i] : null,
-        Code_dpt: e.Code_dpt ? e.Code_dpt[i] : null
-      });
-    }
-    return map;
-  }
-
-  function computeEtatChart(){
-    const e = state.exploitants;
-    if (!e || !e.id) return { items: [], missing: true };
-    const mask = maskFor(e.Code_dpt || e.id.map(() => null));
-
-    if (state.etatDim === 'dept'){
-      const counts = new Map();
-      for (let i = 0; i < e.id.length; i++){
-        if (!mask[i]) continue;
-        const d = e.Code_dpt ? e.Code_dpt[i] : null;
-        const key = d || 'Non renseigné';
-        counts.set(key, (counts.get(key) || 0) + 1);
-      }
-      const arr = Array.from(counts.entries()).map(([k, v]) => ({ key: k, label: k === 'Non renseigné' ? k : 'Dépt. ' + formatDept(k), value: v }))
-        .sort((a, b) => b.value - a.value);
-      arr.forEach((item, i) => { item.color = cssVar(SEQ_STEPS[Math.max(SEQ_STEPS.length - 1 - i, 0)]) || '#2a78d6'; });
-      return { items: arr, dimLabel: 'Département' };
-    }
-
-    const counts = new Map(ETAT_ORDER.map(k => [k, 0]));
-    let none = 0;
-    for (let i = 0; i < e.id.length; i++){
-      if (!mask[i]) continue;
-      const s = e.Etat_d_avancement ? e.Etat_d_avancement[i] : null;
-      if (s && counts.has(s)) counts.set(s, counts.get(s) + 1);
-      else none++;
-    }
-    const arr = Array.from(counts.entries()).map(([k, v]) => ({ key: k, label: k, value: v, color: cssVar(statusVar[ETAT_STATUS[k]]) }));
-    if (none > 0) arr.push({ key: 'Non renseigné', label: 'Non renseigné', value: none, color: cssVar(statusVar.neutral) });
-    return { items: arr, dimLabel: 'État' };
-  }
-
-  function computeAppelsChart(){
-    const ev = state.evenements;
-    if (!ev || !ev.id) return { items: [], total: 0 };
-    const mask = maskFor(ev.Code_dpt || ev.id.map(() => null));
-    const counts = new Map();
-    let total = 0;
-    for (let i = 0; i < ev.id.length; i++){
-      if (!mask[i]) continue;
-      let values;
-      if (state.appelsDim === 'type') values = listValues(ev.Type ? ev.Type[i] : null);
-      else if (state.appelsDim === 'statut') values = ev.Statut && ev.Statut[i] ? [ev.Statut[i]] : [];
-      else values = ev.Traitement && ev.Traitement[i] ? [ev.Traitement[i]] : [];
-      if (!values.length) values = ['Non renseigné'];
-      values.forEach(v => { counts.set(v, (counts.get(v) || 0) + 1); total++; });
-    }
-    let arr = Array.from(counts.entries()).map(([k, v]) => ({ label: k, value: v })).sort((a, b) => b.value - a.value);
-    let other = null;
-    if (arr.length > 6){
-      other = { label: 'Autres', value: arr.slice(5).reduce((s, i) => s + i.value, 0), other: true };
-      arr = arr.slice(0, 5);
-    }
-    // Couleur assignée par ordre alphabétique du libellé (identité stable),
-    // jamais par rang de valeur : sinon changer le filtre repeindrait les catégories.
-    const colorOrder = arr.map(i => i.label).slice().sort((a, b) => a.localeCompare(b, 'fr'));
-    const colorMap = new Map(colorOrder.map((label, i) => [label, cssVar(CAT_SLOTS[i]) || '#2a78d6']));
-    arr.forEach(item => { item.color = colorMap.get(item.label); });
-    if (other){ other.color = cssVar('--series-other') || '#929292'; arr.push(other); }
-    return { items: arr, total };
-  }
-
-  function computeTrend(){
-    const d = state.demandeurs;
-    if (!d || !d.id) return [];
-    const mask = maskFor(d.Code_dpt || d.id.map(() => null));
-    const byMonth = new Map();
-    for (let i = 0; i < d.id.length; i++){
-      if (!mask[i]) continue;
-      const date = toDate(d.Depose_le ? d.Depose_le[i] : null);
-      if (!date) continue;
-      const key = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0');
-      byMonth.set(key, (byMonth.get(key) || 0) + 1);
-    }
-    const keys = Array.from(byMonth.keys()).sort();
-    const monthFmt = new Intl.DateTimeFormat('fr-FR', { month: 'short', year: '2-digit' });
-    let running = 0;
-    return keys.map(k => {
-      const [y, m] = k.split('-').map(Number);
-      running += byMonth.get(k);
-      return {
-        label: monthFmt.format(new Date(y, m - 1, 1)),
-        value: state.trendMode === 'cumul' ? running : byMonth.get(k)
-      };
-    });
-  }
-
-  function computeGeoChart(){
-    const counts = new Map();
-    if (state.geoMetric === 'dossiers'){
-      const d = state.demandeurs;
-      if (!d || !d.id) return { items: [] };
-      const seen = new Set();
-      for (let i = 0; i < d.id.length; i++){
-        const dn = d.dossier_number ? d.dossier_number[i] : null;
-        if (!dn || seen.has(dn)) continue;
-        seen.add(dn);
-        const key = d.Code_dpt ? (d.Code_dpt[i] || 'Non renseigné') : 'Non renseigné';
-        counts.set(key, (counts.get(key) || 0) + 1);
-      }
     } else {
-      const e = state.exploitants;
-      if (!e || !e.id) return { items: [] };
-      for (let i = 0; i < e.id.length; i++){
-        if (state.geoMetric === 'anomalies' && e.Etat_d_avancement && e.Etat_d_avancement[i] !== 'Anomalies à corriger') continue;
-        const key = e.Code_dpt ? (e.Code_dpt[i] || 'Non renseigné') : 'Non renseigné';
-        counts.set(key, (counts.get(key) || 0) + 1);
-      }
-    }
-    const arr = Array.from(counts.entries()).map(([k, v]) => ({ label: k === 'Non renseigné' ? k : 'Dépt. ' + formatDept(k), value: v }))
-      .sort((a, b) => b.value - a.value);
-    arr.forEach((item, i) => { item.color = cssVar(SEQ_STEPS[Math.max(SEQ_STEPS.length - 1 - i, 0)]) || '#2a78d6'; });
-    return { items: arr };
-  }
-
-  /* =====================================================================
-     Table d'action
-     ===================================================================== */
-  function computeActionRows(){
-    const d = state.demandeurs;
-    if (!d || !d.id) return [];
-    const mask = maskFor(d.Code_dpt || d.id.map(() => null));
-    const rows = [];
-    for (let i = 0; i < d.id.length; i++){
-      if (!mask[i]) continue;
-      const assocId = d.Association ? d.Association[i] : 0;
-      const exp = assocId ? state.expById.get(assocId) : null;
-      const anomalies = listValues(d.Anomalies ? d.Anomalies[i] : null);
-      rows.push({
-        dossier_number: d.dossier_number ? d.dossier_number[i] : '',
-        raison_sociale: (d.raison_sociale && d.raison_sociale[i]) || (exp && exp.Nom_Raison_sociale) || '—',
-        pacage: (exp && exp.PacageREF) || '—',
-        dept: (exp && exp.Code_dpt) || (d.Code_dpt ? d.Code_dpt[i] : null),
-        anomalies,
-        hasAssociation: !!assocId,
-        etat: exp ? exp.Etat_d_avancement : null,
-        depose_le: toDate(d.Depose_le ? d.Depose_le[i] : null)
+      const r = 15.9155, cx = 21, cy = 21, strokeW = 7;
+      let offset = 0;
+      items.forEach(item => {
+        const frac = item.value / total;
+        const circle = document.createElementNS(ns, 'circle');
+        circle.setAttribute('cx', cx); circle.setAttribute('cy', cy); circle.setAttribute('r', r);
+        circle.setAttribute('fill', 'transparent'); circle.setAttribute('stroke', item.color); circle.setAttribute('stroke-width', strokeW);
+        const circumference = 2 * Math.PI * r;
+        const dash = Math.max(frac * circumference - 0.6, 0);
+        circle.setAttribute('stroke-dasharray', dash + ' ' + (circumference - dash));
+        circle.setAttribute('stroke-dashoffset', (-offset * circumference).toFixed(3));
+        circle.setAttribute('transform', 'rotate(-90 ' + cx + ' ' + cy + ')');
+        circle.addEventListener('pointermove', (evt) => showTooltip(evt.clientX, evt.clientY, item.label, fmt(item.value) + ' (' + Math.round(frac * 100) + ' %)'));
+        circle.addEventListener('pointerleave', hideTooltip);
+        svg.appendChild(circle);
+        offset += frac;
+      });
+      items.forEach(item => {
+        const row = document.createElement('div'); row.className = 'legend-row';
+        const sw = document.createElement('span'); sw.className = 'legend-swatch'; sw.style.background = item.color;
+        const lab = document.createElement('span'); lab.className = 'legend-label'; lab.textContent = item.label;
+        const val = document.createElement('span'); val.className = 'legend-value'; val.textContent = fmt(item.value);
+        const pct = document.createElement('span'); pct.className = 'legend-pct'; pct.textContent = Math.round(item.value / total * 100) + ' %';
+        row.appendChild(sw); row.appendChild(lab); row.appendChild(val); row.appendChild(pct);
+        legend.appendChild(row);
       });
     }
-    let filtered;
-    if (state.actionTab === 'association') filtered = rows.filter(r => !r.hasAssociation);
-    else if (state.actionTab === 'valider') filtered = rows.filter(r => r.etat === 'Dossier à valider sur DN');
-    else filtered = rows.filter(r => r.anomalies.length > 0);
-    filtered.sort((a, b) => (b.depose_le ? b.depose_le.getTime() : 0) - (a.depose_le ? a.depose_le.getTime() : 0));
-    return filtered;
-  }
-
-  function renderActionTable(){
-    const rows = computeActionRows();
-    const tbody = el('actionTableBody');
-    tbody.innerHTML = '';
-    const cap = 25;
-    if (!rows.length){
-      tbody.innerHTML = '<tr><td colspan="6" class="action-empty">Aucun dossier dans cette catégorie pour ce filtre.</td></tr>';
-      el('actionTableMore').textContent = '';
-      return;
-    }
-    rows.slice(0, cap).forEach(r => {
-      const tr = document.createElement('tr');
-
-      const tdDn = document.createElement('td');
-      const link = document.createElement('a');
-      link.className = 'fr-link';
-      link.target = '_blank'; link.rel = 'noopener';
-      link.href = 'https://www.demarches-simplifiees.fr/procedures/149963/dossiers/' + encodeURIComponent(r.dossier_number);
-      link.textContent = 'N° ' + r.dossier_number;
-      tdDn.appendChild(link);
-
-      const tdRaison = document.createElement('td'); tdRaison.textContent = r.raison_sociale;
-      const tdPacage = document.createElement('td'); tdPacage.textContent = r.pacage;
-      const tdDept = document.createElement('td');
-      const tag = document.createElement('span'); tag.className = 'dept-tag'; tag.textContent = formatDept(r.dept);
-      tdDept.appendChild(tag);
-
-      const tdMotif = document.createElement('td');
-      if (state.actionTab === 'association'){
-        const badge = document.createElement('span'); badge.className = 'anomaly-badge badge-critical'; badge.textContent = 'Association à faire';
-        tdMotif.appendChild(badge);
-      } else if (state.actionTab === 'valider'){
-        const badge = document.createElement('span'); badge.className = 'anomaly-badge badge-serious'; badge.textContent = 'À valider sur DN';
-        tdMotif.appendChild(badge);
-      } else if (r.anomalies.length){
-        r.anomalies.forEach(a => {
-          const badge = document.createElement('span'); badge.className = 'anomaly-badge badge-serious'; badge.textContent = a;
-          tdMotif.appendChild(badge);
-        });
-      } else {
-        tdMotif.textContent = '—';
-      }
-
-      const tdSpacer = document.createElement('td');
-
-      tr.appendChild(tdDn); tr.appendChild(tdRaison); tr.appendChild(tdPacage); tr.appendChild(tdDept); tr.appendChild(tdMotif); tr.appendChild(tdSpacer);
-      tbody.appendChild(tr);
-    });
-    el('actionTableMore').textContent = rows.length > cap ? ('+ ' + fmt(rows.length - cap) + ' autre(s) dossier(s) dans cette catégorie.') : '';
+    wrap.appendChild(holder); wrap.appendChild(legend);
+    container.appendChild(wrap);
   }
 
   /* =====================================================================
-     Jauges
-     ===================================================================== */
-  function renderMeter(prefix, rate, captionText){
-    const status = rateToStatus(rate);
-    const color = cssVar(statusVar[status]) || '#757575';
-    el(prefix + 'Value').textContent = rate === null ? '—' : fmtPct(rate);
-    el(prefix + 'Fill').style.width = (rate === null ? 0 : Math.max(0, Math.min(100, rate))) + '%';
-    el(prefix + 'Fill').style.background = color;
-    el(prefix + 'Dot').style.background = color;
-    el(prefix + 'Caption').lastElementChild.textContent = captionText + (rate !== null ? ' — ' + statusLabel[status] : '');
-  }
-
-  /* =====================================================================
-     Rendu principal
-     ===================================================================== */
-  function renderKPIs(){
-    const d = state.demandeurs, e = state.exploitants, ev = state.evenements;
-    const missing = [];
-
-    let nDossiers = null, deltaTxt = '';
-    if (d && d.id){
-      const mask = maskFor(d.Code_dpt || d.id.map(() => null));
-      const seen = new Set();
-      let last7 = 0, prev7 = 0;
-      const now = Date.now();
-      for (let i = 0; i < d.id.length; i++){
-        if (!mask[i]) continue;
-        const dn = d.dossier_number ? d.dossier_number[i] : null;
-        if (dn && !seen.has(dn)){ seen.add(dn); }
-        const date = toDate(d.Depose_le ? d.Depose_le[i] : null);
-        if (date){
-          const ageDays = (now - date.getTime()) / 86400000;
-          if (ageDays >= 0 && ageDays < 7) last7++;
-          else if (ageDays >= 7 && ageDays < 14) prev7++;
-        }
-      }
-      nDossiers = seen.size;
-      if (last7 || prev7){
-        const diff = last7 - prev7;
-        const cls = diff > 0 ? 'up' : (diff < 0 ? 'down' : 'flat');
-        const arrow = diff > 0 ? '▲' : (diff < 0 ? '▼' : '–');
-        deltaTxt = { cls, text: arrow + ' ' + fmt(last7) + ' cette semaine (' + (diff >= 0 ? '+' : '') + diff + ')' };
-      }
-    } else missing.push('Demarche_149963_demandeurs');
-    el('kpiDossiers').textContent = fmt(nDossiers);
-    const deltaEl = el('kpiDossiersDelta');
-    if (deltaTxt){ deltaEl.className = 'kpi-delta ' + deltaTxt.cls; deltaEl.textContent = deltaTxt.text; }
-    else { deltaEl.textContent = ''; }
-
-    let nExploitants = null;
-    if (e && e.id){
-      const mask = maskFor(e.Code_dpt || e.id.map(() => null));
-      nExploitants = mask.filter(Boolean).length;
-      el('kpiExploitantsHint').textContent = state.dept === 'all' ? 'ensemble de la campagne' : 'sur le département sélectionné';
-    } else missing.push('DATA_Exploitants');
-    el('kpiExploitants').textContent = fmt(nExploitants);
-
-    if (nDossiers !== null && nExploitants){
-      const tx = nDossiers / nExploitants * 100;
-      el('kpiTaux').textContent = fmtPct(tx);
-      el('kpiTauxHint').textContent = fmt(nDossiers) + ' / ' + fmt(nExploitants);
-    } else { el('kpiTaux').textContent = '—'; el('kpiTauxHint').textContent = ''; }
-
-    let nFinalises = 0, nConcernes = 0, nAnomalies = 0;
-    if (e && e.id){
-      const mask = maskFor(e.Code_dpt || e.id.map(() => null));
-      let nMasked = 0, nNumeroVert = 0, nRelanceTel = 0, nRefusRdd = 0;
-      for (let i = 0; i < e.id.length; i++){
-        if (!mask[i]) continue;
-        if (e.Etat_d_avancement && e.Etat_d_avancement[i] === 'Dossier finalisé') nFinalises++;
-        if (e.Etat_d_avancement && e.Etat_d_avancement[i] === 'Anomalies à corriger') nAnomalies++;
-        if (e.Nb_DN && e.Nb_DN[i] > 0) nConcernes++;
-        nMasked++;
-        if (e.Ont_ils_deja_contacte_le_numero_vert_ && e.Ont_ils_deja_contacte_le_numero_vert_[i]) nNumeroVert++;
-        if (e.A_ete_relance_par_tel_ && e.A_ete_relance_par_tel_[i]) nRelanceTel++;
-        if (e.Refuse_RDD_ && e.Refuse_RDD_[i]) nRefusRdd++;
-      }
-      el('kpiFinalises').textContent = fmt(nFinalises);
-      el('kpiFinalisesHint').textContent = nConcernes ? Math.round(nFinalises / nConcernes * 100) + ' % des dossiers avec DN' : '';
-      el('kpiAnomalies').textContent = fmt(nAnomalies);
-      el('kpiAnomaliesHint').textContent = nExploitants ? Math.round(nAnomalies / nExploitants * 100) + ' % des exploitants recensés' : '';
-
-      // Relance téléphonique — vue RELANCE TEL (libellés normalisés plutôt que noms de colonnes Grist)
-      el('kpiNumeroVert').textContent = fmt(nNumeroVert);
-      el('kpiNumeroVertHint').textContent = nMasked ? Math.round(nNumeroVert / nMasked * 100) + ' % des exploitants recensés' : '';
-      el('kpiRelanceTel').textContent = fmt(nRelanceTel);
-      el('kpiRelanceTelHint').textContent = nMasked ? Math.round(nRelanceTel / nMasked * 100) + ' % des exploitants recensés' : '';
-      el('kpiRefusRdd').textContent = fmt(nRefusRdd);
-      el('kpiRefusRddHint').textContent = nMasked ? Math.round(nRefusRdd / nMasked * 100) + ' % des exploitants recensés' : '';
-    } else {
-      el('kpiFinalises').textContent = '—'; el('kpiAnomalies').textContent = '—';
-      ['kpiNumeroVert','kpiRelanceTel','kpiRefusRdd'].forEach(id => { el(id).textContent = '—'; });
-      ['kpiNumeroVertHint','kpiRelanceTelHint','kpiRefusRddHint'].forEach(id => { el(id).textContent = ''; });
-    }
-
-    let nAppels = null, nRappels = 0;
-    if (ev && ev.id){
-      const mask = maskFor(ev.Code_dpt || ev.id.map(() => null));
-      nAppels = 0;
-      for (let i = 0; i < ev.id.length; i++){
-        if (!mask[i]) continue;
-        nAppels++;
-        if (ev.Rappel_par_la_DRAAF && ev.Rappel_par_la_DRAAF[i]) nRappels++;
-      }
-      el('kpiAppelsHint').textContent = nRappels ? fmt(nRappels) + ' à rappeler' : 'aucun rappel en attente';
-    } else missing.push('DATA_Evenements');
-    el('kpiAppels').textContent = fmt(nAppels);
-
-    return missing;
-  }
-
-  function renderCharts(){
-    const etat = computeEtatChart();
-    renderBarList('chartEtat', 'chartEtatTable', etat.items, { dimLabel: etat.dimLabel });
-
-    const appels = computeAppelsChart();
-    renderDonut(appels.items, appels.total);
-    renderTableView('chartAppelsTable', appels.items, 'Catégorie');
-
-    const trend = computeTrend();
-    renderTrend(trend, { unit: state.trendMode === 'cumul' ? ' cumulés' : ' dépôt(s)' });
-
-    const geo = computeGeoChart();
-    renderBarList('chartGeo', 'chartGeoTable', geo.items, { dimLabel: 'Département' });
-  }
-
-  function renderMeters(){
-    const e = state.exploitants, d = state.demandeurs;
-    if (e && e.id){
-      const mask = maskFor(e.Code_dpt || e.id.map(() => null));
-      let concernes = 0, finalises = 0;
-      for (let i = 0; i < e.id.length; i++){
-        if (!mask[i]) continue;
-        if (e.Nb_DN && e.Nb_DN[i] > 0){
-          concernes++;
-          if (e.Etat_d_avancement && e.Etat_d_avancement[i] === 'Dossier finalisé') finalises++;
-        }
-      }
-      const rate = concernes ? finalises / concernes * 100 : null;
-      renderMeter('meterFinalises', rate, concernes ? fmt(finalises) + ' / ' + fmt(concernes) + ' dossiers avec DN' : 'aucun dossier avec DN pour ce filtre');
-    }
-    if (d && d.id){
-      const mask = maskFor(d.Code_dpt || d.id.map(() => null));
-      let total = 0, ok = 0;
-      for (let i = 0; i < d.id.length; i++){
-        if (!mask[i]) continue;
-        if (!(d.Dossier_valide && d.Dossier_valide[i])) continue;
-        total++;
-        if (d.Ecart_parcelles && d.Ecart_parcelles[i] === 0) ok++;
-      }
-      const rate = total ? ok / total * 100 : null;
-      renderMeter('meterParcelles', rate, total ? fmt(ok) + ' / ' + fmt(total) + ' dossiers valides' : 'aucun dossier valide pour ce filtre');
-    }
-  }
-
-  function renderSyncLabel(){
-    const meta = state.syncMeta;
-    if (meta && meta.last_sync_at && meta.last_sync_at.length){
-      let latest = null;
-      meta.last_sync_at.forEach(raw => {
-        const d = toDate(raw);
-        if (d && (!latest || d.getTime() > latest.getTime())) latest = d;
-      });
-      el('syncLabel').innerHTML = 'Dernière synchro DN : <strong>' + (latest ? latest.toLocaleString('fr-FR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—') + '</strong>';
-      return null;
-    }
-    el('syncLabel').textContent = 'Synchronisation inconnue';
-    return 'Sync_metadata';
-  }
-
-  /* =====================================================================
-     Indicateurs personnalisés — configurables (table / colonne / formule),
-     disposition stockée dans la table Grist "Dashboard_Config" et donc
-     partagée avec tout le monde (lecture live à chaque chargement du widget).
+     Grist : tables Dashboard_Boards / Dashboard_Config
      ===================================================================== */
   function rowsFromColumnar(data){
     if (!data || !data.id) return [];
@@ -1692,23 +551,129 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
     return out;
   }
 
-  async function fetchConfigTable(){
-    try {
-      const data = await grist.docApi.fetchTable('Dashboard_Config');
-      return { exists: true, data };
-    } catch (e){
-      return { exists: false, data: null };
+  async function ensureTablesExist(){
+    const specs = [
+      ['Dashboard_Boards', [{ id: 'Nom', type: 'Text' }, { id: 'Ordre', type: 'Numeric' }]],
+      ['Dashboard_Config', [
+        { id: 'Board', type: 'Text' }, { id: 'Ordre', type: 'Numeric' }, { id: 'Taille', type: 'Numeric' },
+        { id: 'Type', type: 'Text' }, { id: 'Titre', type: 'Text' }, { id: 'Table', type: 'Text' },
+        { id: 'Colonne', type: 'Text' }, { id: 'ColonneGroupe', type: 'Text' }, { id: 'Formule', type: 'Text' },
+        { id: 'Couleur', type: 'Text' }, { id: 'Contenu', type: 'Text' }, { id: 'Actif', type: 'Bool' }
+      ]]
+    ];
+    for (const [tableName, cols] of specs){
+      try { await grist.docApi.fetchTable(tableName); continue; } catch (e){}
+      try { await grist.docApi.applyUserActions([['AddTable', tableName, cols]]); }
+      catch (e){ await grist.docApi.fetchTable(tableName); }
     }
   }
 
-  async function reloadCustomIndicators(){
-    const { exists, data } = await fetchConfigTable();
-    state.configTableExists = exists;
-    state.customIndicators = rowsFromColumnar(data);
+  async function reloadBoards(){
+    const data = await grist.docApi.fetchTable('Dashboard_Boards').catch(() => null);
+    state.boards = rowsFromColumnar(data).sort((a, b) => (a.Ordre || 0) - (b.Ordre || 0) || String(a.Nom).localeCompare(String(b.Nom)));
+  }
+  async function reloadWidgets(){
+    const data = await grist.docApi.fetchTable('Dashboard_Config').catch(() => null);
+    state.widgets = rowsFromColumnar(data);
   }
 
-  // Introspection du schéma via les tables internes _grist_Tables / _grist_Tables_column,
-  // seule façon pour un widget personnalisé de lister les tables/colonnes du document.
+  function persistCurrentBoard(){ try { localStorage.setItem('dashboardBoard', state.currentBoard || ''); } catch (e){} }
+  function restoreCurrentBoard(){ try { return localStorage.getItem('dashboardBoard'); } catch (e){ return null; } }
+
+  async function createBoard(name){
+    name = (name || '').trim();
+    if (!name) return;
+    if (state.boards.some(b => b.Nom === name)){ window.alert('Ce nom existe déjà.'); return; }
+    const nextOrdre = state.boards.reduce((m, b) => Math.max(m, b.Ordre || 0), 0) + 1;
+    await grist.docApi.applyUserActions([['AddRecord', 'Dashboard_Boards', null, { Nom: name, Ordre: nextOrdre }]]);
+    await reloadBoards();
+    state.currentBoard = name;
+    persistCurrentBoard();
+    renderBoardSelect();
+    renderBoardsModalBody();
+    await renderWidgetGrid();
+  }
+
+  async function renameBoard(oldName, newName){
+    newName = (newName || '').trim();
+    if (!newName || newName === oldName) return;
+    if (state.boards.some(b => b.Nom === newName)){ window.alert('Ce nom existe déjà.'); renderBoardsModalBody(); return; }
+    const board = state.boards.find(b => b.Nom === oldName);
+    if (!board) return;
+    const actions = [['UpdateRecord', 'Dashboard_Boards', board.id, { Nom: newName }]]
+      .concat(state.widgets.filter(w => w.Board === oldName).map(w => ['UpdateRecord', 'Dashboard_Config', w.id, { Board: newName }]));
+    await grist.docApi.applyUserActions(actions);
+    await Promise.all([reloadBoards(), reloadWidgets()]);
+    if (state.currentBoard === oldName){ state.currentBoard = newName; persistCurrentBoard(); }
+    renderBoardSelect();
+    renderBoardsModalBody();
+    await renderWidgetGrid();
+  }
+
+  async function duplicateBoard(name){
+    let newName = name + ' (copie)', n = 2;
+    while (state.boards.some(b => b.Nom === newName)){ newName = name + ' (copie ' + n + ')'; n++; }
+    const nextOrdre = state.boards.reduce((m, b) => Math.max(m, b.Ordre || 0), 0) + 1;
+    const sourceWidgets = state.widgets.filter(w => w.Board === name).sort((a, b) => (a.Ordre || 0) - (b.Ordre || 0));
+    const actions = [['AddRecord', 'Dashboard_Boards', null, { Nom: newName, Ordre: nextOrdre }]]
+      .concat(sourceWidgets.map((w, i) => ['AddRecord', 'Dashboard_Config', null, {
+        Board: newName, Ordre: i + 1, Taille: w.Taille, Type: w.Type, Titre: w.Titre, Table: w.Table,
+        Colonne: w.Colonne, ColonneGroupe: w.ColonneGroupe, Formule: w.Formule, Couleur: w.Couleur,
+        Contenu: w.Contenu, Actif: true
+      }]));
+    await grist.docApi.applyUserActions(actions);
+    await Promise.all([reloadBoards(), reloadWidgets()]);
+    renderBoardSelect();
+    renderBoardsModalBody();
+  }
+
+  async function deleteBoard(name){
+    if (state.boards.length <= 1){ window.alert('Impossible de supprimer le dernier tableau de bord.'); return; }
+    if (!window.confirm('Supprimer le tableau de bord « ' + name + ' » et tous ses widgets ?')) return;
+    const board = state.boards.find(b => b.Nom === name);
+    const actions = state.widgets.filter(w => w.Board === name).map(w => ['RemoveRecord', 'Dashboard_Config', w.id])
+      .concat(board ? [['RemoveRecord', 'Dashboard_Boards', board.id]] : []);
+    await grist.docApi.applyUserActions(actions);
+    await Promise.all([reloadBoards(), reloadWidgets()]);
+    if (state.currentBoard === name) { state.currentBoard = state.boards[0] ? state.boards[0].Nom : null; persistCurrentBoard(); }
+    renderBoardSelect();
+    renderBoardsModalBody();
+    await renderWidgetGrid();
+  }
+
+  async function addWidget(fields){
+    const boardWidgets = state.widgets.filter(w => w.Board === state.currentBoard);
+    const nextOrdre = boardWidgets.reduce((m, w) => Math.max(m, w.Ordre || 0), 0) + 1;
+    await grist.docApi.applyUserActions([['AddRecord', 'Dashboard_Config', null, Object.assign({ Ordre: nextOrdre, Actif: true }, fields)]]);
+    await reloadWidgets();
+    await renderWidgetGrid();
+  }
+  async function updateWidget(id, fields){
+    await grist.docApi.applyUserActions([['UpdateRecord', 'Dashboard_Config', id, fields]]);
+    await reloadWidgets();
+    await renderWidgetGrid();
+  }
+  async function deleteWidget(id){
+    if (!window.confirm('Supprimer ce widget ?')) return;
+    await grist.docApi.applyUserActions([['RemoveRecord', 'Dashboard_Config', id]]);
+    await reloadWidgets();
+    await renderWidgetGrid();
+  }
+  async function moveWidget(id, dir){
+    const rows = state.widgets.filter(w => w.Board === state.currentBoard).sort((a, b) => (a.Ordre || 0) - (b.Ordre || 0));
+    const idx = rows.findIndex(r => r.id === id);
+    const swapIdx = idx + dir;
+    if (idx < 0 || swapIdx < 0 || swapIdx >= rows.length) return;
+    const reordered = rows.slice();
+    const [item] = reordered.splice(idx, 1);
+    reordered.splice(swapIdx, 0, item);
+    const actions = reordered.map((r, i) => ['UpdateRecord', 'Dashboard_Config', r.id, { Ordre: i + 1 }]);
+    await grist.docApi.applyUserActions(actions);
+    await reloadWidgets();
+    await renderWidgetGrid();
+  }
+
+  // Introspection du schéma via les tables internes _grist_Tables / _grist_Tables_column.
   async function loadSchemaIfNeeded(){
     if (state.schemaTables) return;
     const [gristTables, gristColumns] = await Promise.all([
@@ -1742,381 +707,328 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
     state.schemaColumnsByTable = columnsByTable;
   }
 
-  async function renderCustomIndicators(){
-    const container = el('customKpiRow');
+  /* =====================================================================
+     Rendu de la grille de widgets
+     ===================================================================== */
+  function buildDeptOptionsFromTables(tableNames){
+    const set = new Set();
+    tableNames.forEach(t => {
+      const data = state.tableCache.get(t);
+      if (data && data.Code_dpt) data.Code_dpt.forEach(c => { if (c) set.add(c); });
+    });
+    const sorted = Array.from(set).sort();
+    const sel = el('deptFilter');
+    const current = sel.value || state.dept || 'all';
+    sel.innerHTML = '';
+    sel.appendChild(new Option('Tous les départements', 'all'));
+    sorted.forEach(c => sel.appendChild(new Option(formatDept(c), c)));
+    sel.value = sorted.includes(current) ? current : 'all';
+    state.dept = sel.value;
+  }
 
-    if (state.configTableExists === null){
-      container.innerHTML = '<div class="fr-col-12"><p class="custom-kpi-empty">Chargement…</p></div>';
-      return;
-    }
-    if (state.configTableExists === false){
-      container.innerHTML = '';
-      const wrap = document.createElement('div'); wrap.className = 'fr-col-12';
-      const box = document.createElement('p'); box.className = 'custom-kpi-empty';
-      box.textContent = 'Aucun indicateur personnalisé pour l’instant. Clique sur « Configurer les indicateurs » pour créer la table et ajouter le premier.';
-      wrap.appendChild(box);
-      container.appendChild(wrap);
-      return;
+  function buildWidgetCard(row){
+    const col = document.createElement('div');
+    col.className = 'fr-col-12 fr-col-md-6 fr-col-lg-' + (row.Taille || 6);
+
+    const card = document.createElement('div');
+    card.className = 'widget-card';
+
+    const tools = document.createElement('div'); tools.className = 'widget-edit-tools';
+    const mkBtn = (icon, title, handler) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'widget-tool-btn'; b.title = title; b.textContent = icon;
+      b.addEventListener('click', (e) => { e.stopPropagation(); handler(); });
+      return b;
+    };
+    tools.appendChild(mkBtn('▲', 'Monter', () => moveWidget(row.id, -1)));
+    tools.appendChild(mkBtn('▼', 'Descendre', () => moveWidget(row.id, 1)));
+    tools.appendChild(mkBtn('✏️', 'Modifier', () => openWidgetModal(row)));
+    tools.appendChild(mkBtn('🗑', 'Supprimer', () => deleteWidget(row.id)));
+    card.appendChild(tools);
+
+    if (row.Type === 'texte'){
+      const inner = document.createElement('div'); inner.className = 'text-card';
+      inner.style.borderLeftColor = cssVar(CUSTOM_KPI_COLORS[row.Couleur] || '--series-1') || '#2a78d6';
+      if (row.Titre){ const h = document.createElement('h3'); h.textContent = row.Titre; inner.appendChild(h); }
+      const body = document.createElement('div'); body.className = 'text-card-body'; body.textContent = row.Contenu || '';
+      inner.appendChild(body);
+      card.appendChild(inner);
+      col.appendChild(card);
+      return col;
     }
 
-    const rows = state.customIndicators.filter(r => r.Actif !== false).sort((a, b) => (a.Ordre || 0) - (b.Ordre || 0));
+    if (row.Type === 'indicateur'){
+      const inner = document.createElement('div'); inner.className = 'kpi-card';
+      inner.style.borderLeftColor = cssVar(CUSTOM_KPI_COLORS[row.Couleur] || '--series-1') || '#2a78d6';
+      const label = document.createElement('p'); label.className = 'kpi-label fr-mb-0'; label.textContent = row.Titre || '(sans titre)';
+      const value = document.createElement('p'); value.className = 'kpi-value';
+      const hint = document.createElement('p'); hint.className = 'kpi-hint';
+      const tableData = row.Table ? state.tableCache.get(row.Table) : null;
+      if (!row.Table){ value.textContent = '—'; hint.textContent = 'Table non définie'; }
+      else if (!tableData){ value.textContent = '—'; hint.textContent = 'Table « ' + row.Table + ' » introuvable'; }
+      else {
+        const mask = tableData.Code_dpt ? maskFor(tableData.Code_dpt) : tableData.id.map(() => true);
+        const result = computeScalar(tableData, mask, row.Colonne, row.Formule);
+        const isText = row.Formule === 'top_category';
+        value.textContent = isText ? (result.value || '—') : fmt(result.value);
+        if (isText){ value.style.fontSize = '1.05rem'; value.style.wordBreak = 'break-word'; }
+        hint.textContent = result.hint || '';
+      }
+      inner.appendChild(label); inner.appendChild(value); inner.appendChild(hint);
+      card.appendChild(inner);
+      col.appendChild(card);
+      return col;
+    }
+
+    // barres / donut
+    const inner = document.createElement('div'); inner.className = 'chart-card';
+    const title = document.createElement('p'); title.className = 'chart-title'; title.textContent = row.Titre || '(sans titre)';
+    inner.appendChild(title);
+    const body = document.createElement('div');
+    const tableData = row.Table ? state.tableCache.get(row.Table) : null;
+    if (!row.Table || !row.ColonneGroupe){
+      const p = document.createElement('p'); p.className = 'empty-state'; p.textContent = 'Configuration incomplète (table et colonne à regrouper requises)';
+      body.appendChild(p);
+    } else if (!tableData){
+      const p = document.createElement('p'); p.className = 'empty-state'; p.textContent = 'Table « ' + row.Table + ' » introuvable';
+      body.appendChild(p);
+    } else {
+      const mask = tableData.Code_dpt ? maskFor(tableData.Code_dpt) : tableData.id.map(() => true);
+      let items = computeGrouped(tableData, mask, row.ColonneGroupe, row.Colonne, row.Formule || 'count');
+      let other = null;
+      if (items.length > 7){ other = { label: 'Autres', value: items.slice(6).reduce((s, i) => s + i.value, 0) }; items = items.slice(0, 6); }
+      const colorOrder = items.map(i => i.label).slice().sort((a, b) => a.localeCompare(b, 'fr'));
+      const colorMap = new Map(colorOrder.map((l, i) => [l, cssVar(CAT_SLOTS[i % CAT_SLOTS.length]) || '#2a78d6']));
+      items.forEach(it => { it.color = colorMap.get(it.label); });
+      if (other){ other.color = cssVar('--series-other') || '#929292'; items.push(other); }
+
+      if (!items.length){
+        const p = document.createElement('p'); p.className = 'empty-state'; p.textContent = 'Aucune donnée pour ce filtre';
+        body.appendChild(p);
+      } else if (row.Type === 'donut'){
+        renderDonutInto(body, items);
+      } else {
+        renderBarListInto(body, items);
+      }
+    }
+    inner.appendChild(body);
+    card.appendChild(inner);
+    col.appendChild(card);
+    return col;
+  }
+
+  async function renderWidgetGrid(){
+    const container = el('widgetGrid');
+    el('boardTitle').textContent = state.currentBoard || '—';
+    const rows = state.widgets.filter(w => w.Board === state.currentBoard && w.Actif !== false).sort((a, b) => (a.Ordre || 0) - (b.Ordre || 0));
+
     if (!rows.length){
-      container.innerHTML = '';
-      const wrap = document.createElement('div'); wrap.className = 'fr-col-12';
-      const box = document.createElement('p'); box.className = 'custom-kpi-empty';
-      box.textContent = 'Aucun indicateur actif. Ajoute ou active-en un via « Configurer les indicateurs ».';
-      wrap.appendChild(box);
-      container.appendChild(wrap);
+      container.innerHTML = '<div class="fr-col-12"><p class="empty-state">Ce tableau de bord est vide. Clique sur « Ajouter un widget » pour commencer.</p></div>';
+      buildDeptOptionsFromTables([]);
       return;
     }
 
     const neededTables = Array.from(new Set(rows.map(r => r.Table).filter(Boolean)));
     await Promise.all(neededTables.map(async t => {
-      if (!state.customTableCache.has(t)) state.customTableCache.set(t, await safeFetchTable(t));
+      if (!state.tableCache.has(t)) state.tableCache.set(t, await safeFetchTable(t));
     }));
+    buildDeptOptionsFromTables(neededTables);
 
     container.innerHTML = '';
-    let lastSection = null;
-    rows.forEach(row => {
-      const section = row.Section || 'Indicateurs personnalisés';
-      if (section !== lastSection){
-        const headWrap = document.createElement('div'); headWrap.className = 'fr-col-12';
-        const h = document.createElement('p'); h.className = 'custom-section-heading'; h.textContent = section;
-        headWrap.appendChild(h);
-        container.appendChild(headWrap);
-        lastSection = section;
-      }
-
-      const tableData = row.Table ? state.customTableCache.get(row.Table) : null;
-      const formule = FORMULES[row.Formule];
-      let valueText = '—', hintText = '';
-      if (!row.Table) hintText = 'Table non définie';
-      else if (!tableData) hintText = 'Table « ' + row.Table + ' » introuvable ou inaccessible';
-      else if (!formule) hintText = 'Formule inconnue';
-      else if (formule.needsColumn && !row.Colonne) hintText = 'Colonne non définie';
-      else {
-        const mask = tableData.Code_dpt ? maskFor(tableData.Code_dpt) : tableData.id.map(() => true);
-        const result = formule.compute(tableData, mask, row.Colonne);
-        valueText = formule.isText ? (result.value || '—') : fmt(result.value);
-        hintText = result.hint || '';
-      }
-
-      const col = document.createElement('div');
-      col.className = 'fr-col-12 fr-col-sm-6 fr-col-md-4 fr-col-lg-3';
-      const card = document.createElement('div');
-      card.className = 'kpi-card';
-      card.style.borderLeftColor = cssVar(CUSTOM_KPI_COLORS[row.Couleur] || '--series-1') || '#2a78d6';
-      const label = document.createElement('p'); label.className = 'kpi-label fr-mb-0'; label.textContent = row.Titre || '(sans titre)';
-      const value = document.createElement('p'); value.className = 'kpi-value'; value.textContent = valueText;
-      if (formule && formule.isText){ value.style.fontSize = '1.05rem'; value.style.wordBreak = 'break-word'; }
-      const hint = document.createElement('p'); hint.className = 'kpi-hint'; hint.textContent = hintText;
-      card.appendChild(label); card.appendChild(value); card.appendChild(hint);
-      col.appendChild(card);
-      container.appendChild(col);
-    });
+    rows.forEach(row => container.appendChild(buildWidgetCard(row)));
   }
 
-  function showConfigError(e){
-    console.error(e);
-    el('configModalBody').prepend(renderAlert('error', 'Erreur', 'Action impossible : ' + (e && e.message ? e.message : String(e))));
-  }
-
-  async function ensureConfigTable(){
-    try {
-      await grist.docApi.applyUserActions([
-        ['AddTable', 'Dashboard_Config', [
-          { id: 'Ordre', type: 'Numeric' },
-          { id: 'Section', type: 'Text' },
-          { id: 'Titre', type: 'Text' },
-          { id: 'Table', type: 'Text' },
-          { id: 'Colonne', type: 'Text' },
-          { id: 'Formule', type: 'Text' },
-          { id: 'Couleur', type: 'Text' },
-          { id: 'Actif', type: 'Bool' }
-        ]]
-      ]);
-      await reloadCustomIndicators();
-      renderConfigModalBody();
-      renderCustomIndicators().catch(reportError);
-    } catch (e){ showConfigError(e); }
-  }
-
-  async function addCustomIndicator(fields){
-    const nextOrdre = state.customIndicators.reduce((m, r) => Math.max(m, r.Ordre || 0), 0) + 1;
-    await grist.docApi.applyUserActions([
-      ['AddRecord', 'Dashboard_Config', null, Object.assign({ Ordre: nextOrdre, Actif: true }, fields)]
-    ]);
-    await reloadCustomIndicators();
-    renderConfigModalBody();
-    renderCustomIndicators().catch(reportError);
-  }
-
-  async function updateCustomIndicator(rowId, fields){
-    try {
-      await grist.docApi.applyUserActions([['UpdateRecord', 'Dashboard_Config', rowId, fields]]);
-      await reloadCustomIndicators();
-      renderConfigModalBody();
-      renderCustomIndicators().catch(reportError);
-    } catch (e){ showConfigError(e); }
-  }
-
-  async function deleteCustomIndicator(rowId){
-    if (!window.confirm('Supprimer cet indicateur ?')) return;
-    try {
-      await grist.docApi.applyUserActions([['RemoveRecord', 'Dashboard_Config', rowId]]);
-      await reloadCustomIndicators();
-      renderConfigModalBody();
-      renderCustomIndicators().catch(reportError);
-    } catch (e){ showConfigError(e); }
-  }
-
-  async function moveCustomIndicator(rowId, dir){
-    const rows = state.customIndicators.slice().sort((a, b) => (a.Ordre || 0) - (b.Ordre || 0));
-    const idx = rows.findIndex(r => r.id === rowId);
-    const swapIdx = idx + dir;
-    if (idx < 0 || swapIdx < 0 || swapIdx >= rows.length) return;
-    const reordered = rows.slice();
-    const [item] = reordered.splice(idx, 1);
-    reordered.splice(swapIdx, 0, item);
-    const actions = reordered.map((r, i) => ['UpdateRecord', 'Dashboard_Config', r.id, { Ordre: i + 1 }]);
-    try {
-      await grist.docApi.applyUserActions(actions);
-      await reloadCustomIndicators();
-      renderConfigModalBody();
-      renderCustomIndicators().catch(reportError);
-    } catch (e){ showConfigError(e); }
-  }
-
-  function buildConfigRow(row, idx, total){
-    const tr = document.createElement('tr');
-
-    const tdOrdre = document.createElement('td'); tdOrdre.textContent = String(idx + 1);
-    tr.appendChild(tdOrdre);
-
-    const tdSection = document.createElement('td');
-    const inSection = document.createElement('input'); inSection.type = 'text'; inSection.value = row.Section || '';
-    inSection.addEventListener('change', () => updateCustomIndicator(row.id, { Section: inSection.value }));
-    tdSection.appendChild(inSection); tr.appendChild(tdSection);
-
-    const tdTitre = document.createElement('td');
-    const inTitre = document.createElement('input'); inTitre.type = 'text'; inTitre.value = row.Titre || '';
-    inTitre.addEventListener('change', () => updateCustomIndicator(row.id, { Titre: inTitre.value }));
-    tdTitre.appendChild(inTitre); tr.appendChild(tdTitre);
-
-    const tdTable = document.createElement('td');
-    const selTable = document.createElement('select');
-    selTable.appendChild(new Option('— choisir —', ''));
-    state.schemaTables.forEach(t => selTable.appendChild(new Option(t.tableId, t.tableId)));
-    selTable.value = row.Table || '';
-    selTable.addEventListener('change', () => updateCustomIndicator(row.id, { Table: selTable.value, Colonne: '' }));
-    tdTable.appendChild(selTable); tr.appendChild(tdTable);
-
-    const tdCol = document.createElement('td');
-    const selCol = document.createElement('select');
-    selCol.appendChild(new Option('— aucune —', ''));
-    (state.schemaColumnsByTable[row.Table] || []).forEach(c => selCol.appendChild(new Option(c.colId + ' (' + c.type + ')', c.colId)));
-    selCol.value = row.Colonne || '';
-    selCol.addEventListener('change', () => updateCustomIndicator(row.id, { Colonne: selCol.value }));
-    tdCol.appendChild(selCol); tr.appendChild(tdCol);
-
-    const tdFormule = document.createElement('td');
-    const selFormule = document.createElement('select');
-    Object.entries(FORMULES).forEach(([key, f]) => selFormule.appendChild(new Option(f.label, key)));
-    selFormule.value = row.Formule || 'count';
-    selFormule.addEventListener('change', () => updateCustomIndicator(row.id, { Formule: selFormule.value }));
-    tdFormule.appendChild(selFormule); tr.appendChild(tdFormule);
-
-    const tdCouleur = document.createElement('td');
-    const selCouleur = document.createElement('select');
-    Object.keys(CUSTOM_KPI_COLORS).forEach(k => selCouleur.appendChild(new Option(k, k)));
-    selCouleur.value = row.Couleur || 'bleu';
-    selCouleur.addEventListener('change', () => updateCustomIndicator(row.id, { Couleur: selCouleur.value }));
-    tdCouleur.appendChild(selCouleur); tr.appendChild(tdCouleur);
-
-    const tdActif = document.createElement('td');
-    const chkActif = document.createElement('input'); chkActif.type = 'checkbox'; chkActif.checked = row.Actif !== false;
-    chkActif.addEventListener('change', () => updateCustomIndicator(row.id, { Actif: chkActif.checked }));
-    tdActif.appendChild(chkActif); tr.appendChild(tdActif);
-
-    const tdActions = document.createElement('td'); tdActions.className = 'cfg-actions';
-    const upBtn = document.createElement('button'); upBtn.type = 'button'; upBtn.className = 'cfg-icon-btn'; upBtn.textContent = '▲'; upBtn.title = 'Monter';
-    upBtn.disabled = idx === 0;
-    upBtn.addEventListener('click', () => moveCustomIndicator(row.id, -1));
-    const downBtn = document.createElement('button'); downBtn.type = 'button'; downBtn.className = 'cfg-icon-btn'; downBtn.textContent = '▼'; downBtn.title = 'Descendre';
-    downBtn.disabled = idx === total - 1;
-    downBtn.addEventListener('click', () => moveCustomIndicator(row.id, 1));
-    const delBtn = document.createElement('button'); delBtn.type = 'button'; delBtn.className = 'cfg-icon-btn danger'; delBtn.textContent = '🗑'; delBtn.title = 'Supprimer';
-    delBtn.addEventListener('click', () => deleteCustomIndicator(row.id));
-    tdActions.appendChild(upBtn); tdActions.appendChild(downBtn); tdActions.appendChild(delBtn);
-    tr.appendChild(tdActions);
-
-    return tr;
-  }
-
-  function buildAddForm(){
-    const wrap = document.createElement('div'); wrap.className = 'cfg-add-form';
-    const h3 = document.createElement('h3'); h3.textContent = 'Ajouter un indicateur';
-    wrap.appendChild(h3);
-
-    const grid = document.createElement('div'); grid.className = 'cfg-grid';
-    function field(labelText, inputEl){
-      const f = document.createElement('div'); f.className = 'cfg-field';
-      const l = document.createElement('label'); l.textContent = labelText;
-      f.appendChild(l); f.appendChild(inputEl);
-      return f;
-    }
-
-    const inTitre = document.createElement('input'); inTitre.type = 'text'; inTitre.placeholder = 'Ex. Nombre de GAEC';
-    const inSection = document.createElement('input'); inSection.type = 'text'; inSection.placeholder = 'Indicateurs personnalisés';
-
-    const selTable = document.createElement('select');
-    selTable.appendChild(new Option('— choisir une table —', ''));
-    state.schemaTables.forEach(t => selTable.appendChild(new Option(t.tableId, t.tableId)));
-
-    const selCol = document.createElement('select');
-    selCol.appendChild(new Option('— aucune —', ''));
-    selTable.addEventListener('change', () => {
-      selCol.innerHTML = '';
-      selCol.appendChild(new Option('— aucune —', ''));
-      (state.schemaColumnsByTable[selTable.value] || []).forEach(c => selCol.appendChild(new Option(c.colId + ' (' + c.type + ')', c.colId)));
-    });
-
-    const selFormule = document.createElement('select');
-    Object.entries(FORMULES).forEach(([key, f]) => selFormule.appendChild(new Option(f.label, key)));
-
-    const selCouleur = document.createElement('select');
-    Object.keys(CUSTOM_KPI_COLORS).forEach(k => selCouleur.appendChild(new Option(k, k)));
-
-    grid.appendChild(field('Titre', inTitre));
-    grid.appendChild(field('Section', inSection));
-    grid.appendChild(field('Table', selTable));
-    grid.appendChild(field('Colonne', selCol));
-    grid.appendChild(field('Formule', selFormule));
-    grid.appendChild(field('Couleur', selCouleur));
-    wrap.appendChild(grid);
-
-    const addBtn = document.createElement('button');
-    addBtn.type = 'button'; addBtn.className = 'fr-btn fr-btn--icon-left fr-icon-add-line';
-    addBtn.textContent = 'Ajouter l’indicateur';
-    addBtn.addEventListener('click', () => {
-      if (!inTitre.value.trim() || !selTable.value){
-        window.alert('Indique au moins un titre et une table.');
-        return;
-      }
-      addCustomIndicator({
-        Titre: inTitre.value.trim(),
-        Section: inSection.value.trim() || 'Indicateurs personnalisés',
-        Table: selTable.value,
-        Colonne: selCol.value,
-        Formule: selFormule.value,
-        Couleur: selCouleur.value
-      }).catch(e => showConfigError(e));
-    });
-    wrap.appendChild(addBtn);
-
-    return wrap;
-  }
-
-  function renderConfigModalBody(){
-    const body = el('configModalBody');
-    body.innerHTML = '';
-
-    if (state.configTableExists === false){
-      const setup = document.createElement('div'); setup.className = 'cfg-setup';
-      const p = document.createElement('p');
-      p.textContent = 'La table « Dashboard_Config » n’existe pas encore dans ce document. Elle stocke la liste des indicateurs personnalisés et leur disposition, partagée avec tous ceux qui ouvrent ce tableau de bord.';
-      const btn = document.createElement('button');
-      btn.type = 'button'; btn.className = 'fr-btn'; btn.textContent = 'Créer la table Dashboard_Config';
-      btn.addEventListener('click', () => ensureConfigTable());
-      setup.appendChild(p); setup.appendChild(btn);
-      body.appendChild(setup);
-      return;
-    }
-
-    if (!state.schemaTables){
-      const p = document.createElement('p'); p.className = 'cfg-hint'; p.textContent = 'Chargement de la liste des tables…';
-      body.appendChild(p);
-      return;
-    }
-
-    const hint = document.createElement('p'); hint.className = 'cfg-hint';
-    hint.textContent = 'Les modifications sont enregistrées immédiatement dans le document Grist.';
-    body.appendChild(hint);
-
-    const table = document.createElement('table'); table.className = 'cfg-table';
-    const thead = document.createElement('thead');
-    thead.innerHTML = '<tr><th>#</th><th>Section</th><th>Titre</th><th>Table</th><th>Colonne</th><th>Formule</th><th>Couleur</th><th>Actif</th><th></th></tr>';
-    table.appendChild(thead);
-    const tbody = document.createElement('tbody');
-
-    const rows = state.customIndicators.slice().sort((a, b) => (a.Ordre || 0) - (b.Ordre || 0));
-    if (!rows.length){
-      const tr = document.createElement('tr'); tr.className = 'cfg-empty-row';
-      const td = document.createElement('td'); td.colSpan = 9; td.textContent = 'Aucun indicateur pour le moment.';
-      tr.appendChild(td); tbody.appendChild(tr);
-    } else {
-      rows.forEach((row, idx) => tbody.appendChild(buildConfigRow(row, idx, rows.length)));
-    }
-    table.appendChild(tbody);
-    body.appendChild(table);
-
-    body.appendChild(buildAddForm());
-  }
-
-  function openConfigModal(){
-    el('configModal').hidden = false;
-    document.body.style.overflow = 'hidden';
-    renderConfigModalBody();
-    if (state.configTableExists){
-      loadSchemaIfNeeded().then(renderConfigModalBody).catch(e => showConfigError(e));
-    }
-  }
-
-  function closeConfigModal(){
-    el('configModal').hidden = true;
-    document.body.style.overflow = '';
-  }
-
-  function renderAll(){
-    clearNotices();
-    const missing = renderKPIs();
-    renderCharts();
-    renderMeters();
-    renderActionTable();
-    renderCustomIndicators().catch(reportError);
-    const syncMissing = renderSyncLabel();
-    if (syncMissing) missing.push(syncMissing);
-
-    if (missing.length){
-      pushNotice(renderAlert('warning', 'Données incomplètes', 'Tables ou colonnes indisponibles : ' + missing.join(', ') + '. Vérifiez le nom des tables ou les droits d’accès du widget.'));
-    }
-    el('footNote').textContent = 'Source : document Grist DRAAF Bretagne — dernière actualisation locale : ' + new Date().toLocaleTimeString('fr-FR');
+  function renderBoardSelect(){
+    const sel = el('boardSelect');
+    sel.innerHTML = '';
+    state.boards.forEach(b => sel.appendChild(new Option(b.Nom, b.Nom)));
+    sel.value = state.currentBoard;
+    el('boardTitle').textContent = state.currentBoard || '—';
   }
 
   /* =====================================================================
-     Chargement des données
+     Modale : ajouter / modifier un widget
      ===================================================================== */
+  function showModalError(e, bodyId){
+    console.error(e);
+    el(bodyId).prepend(renderAlert('error', 'Erreur', 'Action impossible : ' + (e && e.message ? e.message : String(e))));
+  }
+
+  function populateTableSelect(selectEl){
+    const current = selectEl.value;
+    selectEl.innerHTML = '';
+    selectEl.appendChild(new Option('— choisir une table —', ''));
+    (state.schemaTables || []).forEach(t => selectEl.appendChild(new Option(t.tableId, t.tableId)));
+    selectEl.value = current;
+  }
+  function populateColumnSelect(selectEl, tableId){
+    const current = selectEl.value;
+    selectEl.innerHTML = '';
+    selectEl.appendChild(new Option('— aucune —', ''));
+    (state.schemaColumnsByTable[tableId] || []).forEach(c => selectEl.appendChild(new Option(c.colId + ' (' + c.type + ')', c.colId)));
+    selectEl.value = current;
+  }
+  function populateFormuleSelect(type){
+    const sel = el('wmFormule');
+    const current = sel.value;
+    sel.innerHTML = '';
+    Object.entries(FORMULES).forEach(([key, f]) => {
+      if (type === 'indicateur' || !f.scalarOnly) sel.appendChild(new Option(f.label, key));
+    });
+    sel.value = current || 'count';
+  }
+
+  function updateWidgetModalVisibility(){
+    const t = el('wmType').value;
+    el('wmTableFieldWrap').hidden = (t === 'texte');
+    el('wmColonneGroupeFieldWrap').hidden = !(t === 'barres' || t === 'donut');
+    el('wmColonneFieldWrap').hidden = (t === 'texte');
+    el('wmFormuleFieldWrap').hidden = (t === 'texte');
+    el('wmContenuFieldWrap').hidden = (t !== 'texte');
+  }
+
+  function openWidgetModal(row){
+    state.editingWidgetId = row ? row.id : null;
+    el('widgetModalTitle').textContent = row ? 'Modifier le widget' : 'Ajouter un widget';
+    el('wmDeleteBtn').style.display = row ? '' : 'none';
+    el('wmTitre').value = row ? (row.Titre || '') : '';
+    el('wmTaille').value = String(row ? (row.Taille || 6) : 6);
+    el('wmCouleur').value = row ? (row.Couleur || 'bleu') : 'bleu';
+    el('wmContenu').value = row ? (row.Contenu || '') : '';
+    el('wmType').value = row ? (row.Type || 'indicateur') : 'indicateur';
+    updateWidgetModalVisibility();
+    el('widgetModal').hidden = false;
+    document.body.style.overflow = 'hidden';
+
+    loadSchemaIfNeeded().then(() => {
+      populateTableSelect(el('wmTable'));
+      el('wmTable').value = row ? (row.Table || '') : '';
+      populateColumnSelect(el('wmColonne'), el('wmTable').value);
+      populateColumnSelect(el('wmColonneGroupe'), el('wmTable').value);
+      el('wmColonne').value = row ? (row.Colonne || '') : '';
+      el('wmColonneGroupe').value = row ? (row.ColonneGroupe || '') : '';
+      populateFormuleSelect(el('wmType').value);
+      el('wmFormule').value = row ? (row.Formule || 'count') : 'count';
+    }).catch(e => showModalError(e, 'widgetModalBody'));
+  }
+
+  function closeWidgetModal(){
+    el('widgetModal').hidden = true;
+    document.body.style.overflow = '';
+    state.editingWidgetId = null;
+  }
+
+  function saveWidget(){
+    const type = el('wmType').value;
+    const titre = el('wmTitre').value.trim();
+    if (!titre){ window.alert('Indique un titre.'); return; }
+    const fields = {
+      Type: type, Titre: titre, Taille: Number(el('wmTaille').value) || 6,
+      Couleur: el('wmCouleur').value, Board: state.currentBoard
+    };
+    if (type === 'texte'){
+      fields.Contenu = el('wmContenu').value;
+      fields.Table = ''; fields.Colonne = ''; fields.ColonneGroupe = ''; fields.Formule = '';
+    } else {
+      if (!el('wmTable').value){ window.alert('Choisis une table.'); return; }
+      fields.Table = el('wmTable').value;
+      fields.Formule = el('wmFormule').value;
+      fields.Contenu = '';
+      if (type === 'indicateur'){
+        fields.Colonne = el('wmColonne').value;
+        fields.ColonneGroupe = '';
+      } else {
+        fields.ColonneGroupe = el('wmColonneGroupe').value;
+        fields.Colonne = el('wmColonne').value;
+        if (!fields.ColonneGroupe){ window.alert('Choisis une colonne à regrouper.'); return; }
+      }
+    }
+    const action = state.editingWidgetId ? updateWidget(state.editingWidgetId, fields) : addWidget(fields);
+    action.then(closeWidgetModal).catch(e => showModalError(e, 'widgetModalBody'));
+  }
+
+  /* =====================================================================
+     Modale : gérer les tableaux de bord
+     ===================================================================== */
+  function renderBoardsModalBody(){
+    const body = el('boardsModalBody');
+    body.innerHTML = '';
+    const table = document.createElement('table'); table.className = 'cfg-table';
+    const thead = document.createElement('thead'); thead.innerHTML = '<tr><th>Nom</th><th></th></tr>';
+    table.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    state.boards.forEach(b => {
+      const tr = document.createElement('tr');
+      const tdName = document.createElement('td');
+      const input = document.createElement('input'); input.type = 'text'; input.value = b.Nom;
+      input.addEventListener('change', () => renameBoard(b.Nom, input.value).catch(e => showModalError(e, 'boardsModalBody')));
+      tdName.appendChild(input); tr.appendChild(tdName);
+      const tdActions = document.createElement('td'); tdActions.className = 'cfg-actions';
+      const dupBtn = document.createElement('button'); dupBtn.type = 'button'; dupBtn.className = 'cfg-icon-btn'; dupBtn.textContent = '⧉'; dupBtn.title = 'Dupliquer';
+      dupBtn.addEventListener('click', () => duplicateBoard(b.Nom).catch(e => showModalError(e, 'boardsModalBody')));
+      const delBtn = document.createElement('button'); delBtn.type = 'button'; delBtn.className = 'cfg-icon-btn danger'; delBtn.textContent = '🗑'; delBtn.title = 'Supprimer';
+      delBtn.addEventListener('click', () => deleteBoard(b.Nom).catch(e => showModalError(e, 'boardsModalBody')));
+      tdActions.appendChild(dupBtn); tdActions.appendChild(delBtn);
+      tr.appendChild(tdActions);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    body.appendChild(table);
+
+    const addWrap = document.createElement('div'); addWrap.className = 'cfg-add-form';
+    const h3 = document.createElement('h3'); h3.textContent = 'Nouveau tableau de bord';
+    addWrap.appendChild(h3);
+    const field = document.createElement('div'); field.className = 'cfg-field';
+    const input = document.createElement('input'); input.type = 'text'; input.placeholder = 'Ex. Tableau de bord pilotage';
+    field.appendChild(input);
+    addWrap.appendChild(field);
+    const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'fr-btn'; btn.textContent = 'Créer';
+    btn.addEventListener('click', () => createBoard(input.value).catch(e => showModalError(e, 'boardsModalBody')));
+    addWrap.appendChild(btn);
+    body.appendChild(addWrap);
+  }
+
+  function openBoardsModal(){
+    el('boardsModal').hidden = false;
+    document.body.style.overflow = 'hidden';
+    renderBoardsModalBody();
+  }
+  function closeBoardsModal(){
+    el('boardsModal').hidden = true;
+    document.body.style.overflow = '';
+  }
+
+  /* =====================================================================
+     Chargement
+     ===================================================================== */
+  async function renderAll(){
+    clearNotices();
+    await renderWidgetGrid();
+    el('footNote').textContent = 'Source : document Grist DRAAF Bretagne — dernière actualisation locale : ' + new Date().toLocaleTimeString('fr-FR');
+  }
+
   async function loadAll(){
     el('refreshBtn').disabled = true;
     el('syncLabel').textContent = 'Actualisation…';
-    state.customTableCache = new Map();
+    state.tableCache = new Map();
 
-    const [demandeurs, exploitants, evenements, syncMeta] = await Promise.all([
-      safeFetchTable('Demarche_149963_demandeurs'),
-      safeFetchTable('DATA_Exploitants'),
-      safeFetchTable('DATA_Evenements'),
-      safeFetchTable('Sync_metadata'),
-      reloadCustomIndicators(),
-    ]);
+    try {
+      await ensureTablesExist();
+    } catch (e){
+      pushNotice(renderAlert('error', 'Configuration indisponible', 'Impossible de créer/lire les tables Dashboard_Boards et Dashboard_Config : ' + e.message + '. Vérifie tes droits d’édition sur ce document.'));
+      el('syncLabel').textContent = 'Erreur de configuration';
+      el('refreshBtn').disabled = false;
+      return;
+    }
 
-    state.demandeurs = demandeurs;
-    state.exploitants = exploitants;
-    state.evenements = evenements;
-    state.syncMeta = syncMeta;
-    state.expById = buildExpMap();
-
-    buildDeptOptions();
-    renderAll();
+    await Promise.all([reloadBoards(), reloadWidgets()]);
+    if (!state.boards.length) await createBoard('Nouveau tableau de bord');
+    if (!state.currentBoard || !state.boards.some(b => b.Nom === state.currentBoard)){
+      const saved = restoreCurrentBoard();
+      state.currentBoard = (saved && state.boards.some(b => b.Nom === saved)) ? saved : state.boards[0].Nom;
+    }
+    renderBoardSelect();
+    await renderAll();
+    el('syncLabel').textContent = 'À jour — ' + new Date().toLocaleTimeString('fr-FR');
     el('refreshBtn').disabled = false;
   }
 
@@ -2124,23 +1036,31 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
      Écouteurs
      ===================================================================== */
   el('refreshBtn').addEventListener('click', () => loadAll().catch(reportError));
-  el('deptFilter').addEventListener('change', (e) => { state.dept = e.target.value; renderAll(); });
-  el('etatDim').addEventListener('change', (e) => { state.etatDim = e.target.value; renderCharts(); });
-  el('appelsDim').addEventListener('change', (e) => { state.appelsDim = e.target.value; renderCharts(); });
-  el('trendMode').addEventListener('change', (e) => { state.trendMode = e.target.value; renderCharts(); });
-  el('geoMetric').addEventListener('change', (e) => { state.geoMetric = e.target.value; renderCharts(); });
-  document.querySelectorAll('.action-tab').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.action-tab').forEach(b => b.setAttribute('aria-pressed', 'false'));
-      btn.setAttribute('aria-pressed', 'true');
-      state.actionTab = btn.getAttribute('data-tab');
-      renderActionTable();
-    });
+  el('deptFilter').addEventListener('change', (e) => { state.dept = e.target.value; renderWidgetGrid().catch(reportError); });
+  el('boardSelect').addEventListener('change', (e) => { state.currentBoard = e.target.value; persistCurrentBoard(); renderWidgetGrid().catch(reportError); });
+
+  el('openWidgetModalBtn').addEventListener('click', () => openWidgetModal(null));
+  el('closeWidgetModalBtn').addEventListener('click', closeWidgetModal);
+  el('widgetModal').addEventListener('click', (e) => { if (e.target === el('widgetModal')) closeWidgetModal(); });
+  el('wmSaveBtn').addEventListener('click', saveWidget);
+  el('wmDeleteBtn').addEventListener('click', () => {
+    if (state.editingWidgetId) deleteWidget(state.editingWidgetId).then(closeWidgetModal).catch(e => showModalError(e, 'widgetModalBody'));
   });
-  el('openConfigBtn').addEventListener('click', () => openConfigModal());
-  el('closeConfigBtn').addEventListener('click', () => closeConfigModal());
-  el('configModal').addEventListener('click', (e) => { if (e.target === el('configModal')) closeConfigModal(); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !el('configModal').hidden) closeConfigModal(); });
+  el('wmType').addEventListener('change', () => { updateWidgetModalVisibility(); populateFormuleSelect(el('wmType').value); });
+  el('wmTable').addEventListener('change', () => {
+    populateColumnSelect(el('wmColonne'), el('wmTable').value);
+    populateColumnSelect(el('wmColonneGroupe'), el('wmTable').value);
+  });
+
+  el('manageBoardsBtn').addEventListener('click', openBoardsModal);
+  el('closeBoardsModalBtn').addEventListener('click', closeBoardsModal);
+  el('boardsModal').addEventListener('click', (e) => { if (e.target === el('boardsModal')) closeBoardsModal(); });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (!el('widgetModal').hidden) closeWidgetModal();
+    if (!el('boardsModal').hidden) closeBoardsModal();
+  });
 
   function reportError(e){
     console.error(e);
