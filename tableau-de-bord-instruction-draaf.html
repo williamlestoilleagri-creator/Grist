@@ -551,17 +551,30 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
     return out;
   }
 
-  async function ensureTablesExist(){
-    const specs = [
-      ['Dashboard_Boards', [{ id: 'Nom', type: 'Text' }, { id: 'Ordre', type: 'Numeric' }]],
-      ['Dashboard_Config', [
-        { id: 'Board', type: 'Text' }, { id: 'Ordre', type: 'Numeric' }, { id: 'Taille', type: 'Numeric' },
-        { id: 'Type', type: 'Text' }, { id: 'Titre', type: 'Text' }, { id: 'Table', type: 'Text' },
-        { id: 'Colonne', type: 'Text' }, { id: 'ColonneGroupe', type: 'Text' }, { id: 'Formule', type: 'Text' },
-        { id: 'Couleur', type: 'Text' }, { id: 'Contenu', type: 'Text' }, { id: 'Actif', type: 'Bool' }
-      ]]
-    ];
-    for (const [tableName, cols] of specs){
+  const CONFIG_TABLE_SPECS = [
+    ['Dashboard_Boards', [{ id: 'Nom', type: 'Text' }, { id: 'Ordre', type: 'Numeric' }]],
+    ['Dashboard_Config', [
+      { id: 'Board', type: 'Text' }, { id: 'Ordre', type: 'Numeric' }, { id: 'Taille', type: 'Numeric' },
+      { id: 'Type', type: 'Text' }, { id: 'Titre', type: 'Text' }, { id: 'Table', type: 'Text' },
+      { id: 'Colonne', type: 'Text' }, { id: 'ColonneGroupe', type: 'Text' }, { id: 'Formule', type: 'Text' },
+      { id: 'Couleur', type: 'Text' }, { id: 'Contenu', type: 'Text' }, { id: 'Actif', type: 'Bool' }
+    ]]
+  ];
+
+  // Vérification seule, sans créer quoi que ce soit : évite de surprendre l'utilisateur
+  // avec des pages ajoutées automatiquement au chargement (Grist crée une page par table).
+  async function checkTablesExist(){
+    const results = await Promise.all(CONFIG_TABLE_SPECS.map(([tableName]) =>
+      grist.docApi.fetchTable(tableName).then(() => true).catch(() => false)
+    ));
+    return CONFIG_TABLE_SPECS.every((_, i) => results[i]);
+  }
+
+  // Création explicite, déclenchée une seule fois par un clic utilisateur (bouton du bandeau
+  // d'initialisation). Grist ajoute automatiquement une page par table créée : c'est normal,
+  // ces pages peuvent être renommées/déplacées/retirées du menu comme n'importe quelle page.
+  async function createConfigTables(){
+    for (const [tableName, cols] of CONFIG_TABLE_SPECS){
       try { await grist.docApi.fetchTable(tableName); continue; } catch (e){}
       try { await grist.docApi.applyUserActions([['AddTable', tableName, cols]]); }
       catch (e){ await grist.docApi.fetchTable(tableName); }
@@ -1006,16 +1019,51 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
     el('footNote').textContent = 'Source : document Grist DRAAF Bretagne — dernière actualisation locale : ' + new Date().toLocaleTimeString('fr-FR');
   }
 
-  async function loadAll(){
+  function renderSetupBanner(){
+    const alertBox = renderAlert('info', 'Configuration à initialiser',
+      'Ce tableau de bord a besoin de deux tables Grist (Dashboard_Boards et Dashboard_Config) pour stocker tableaux de bord et widgets. Elles n’existent pas encore dans ce document.');
+    const p = document.createElement('p');
+    p.className = 'fr-text--sm';
+    p.style.marginTop = '0.5rem';
+    p.textContent = 'Grist ajoutera une page par table créée dans le menu de gauche (comportement normal) : tu pourras les renommer, les déplacer ou retirer leur page sans supprimer les données.';
+    alertBox.appendChild(p);
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'fr-btn'; btn.style.marginTop = '0.75rem';
+    btn.textContent = 'Initialiser les tables de configuration';
+    btn.addEventListener('click', async () => {
+      btn.disabled = true; btn.textContent = 'Création en cours…';
+      try {
+        await createConfigTables();
+        await loadAll();
+      } catch (e){
+        reportError(e);
+        btn.disabled = false; btn.textContent = 'Réessayer';
+      }
+    });
+    alertBox.appendChild(btn);
+    pushNotice(alertBox);
+  }
+
+  let loadInFlight = null;
+  function loadAll(){
+    if (loadInFlight) return loadInFlight;
+    loadInFlight = loadAllInner().finally(() => { loadInFlight = null; });
+    return loadInFlight;
+  }
+
+  async function loadAllInner(){
     el('refreshBtn').disabled = true;
     el('syncLabel').textContent = 'Actualisation…';
     state.tableCache = new Map();
+    clearNotices();
 
-    try {
-      await ensureTablesExist();
-    } catch (e){
-      pushNotice(renderAlert('error', 'Configuration indisponible', 'Impossible de créer/lire les tables Dashboard_Boards et Dashboard_Config : ' + e.message + '. Vérifie tes droits d’édition sur ce document.'));
-      el('syncLabel').textContent = 'Erreur de configuration';
+    const ready = await checkTablesExist().catch(() => false);
+    if (!ready){
+      el('widgetGrid').innerHTML = '';
+      el('boardSelect').innerHTML = '';
+      el('boardTitle').textContent = '—';
+      renderSetupBanner();
+      el('syncLabel').textContent = 'Configuration requise';
       el('refreshBtn').disabled = false;
       return;
     }
