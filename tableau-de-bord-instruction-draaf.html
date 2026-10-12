@@ -226,6 +226,57 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
 .tv-table th, .tv-table td{ text-align:left; padding:0.3rem 0.5rem; border-bottom:1px solid var(--border-1); }
 .tv-table td:last-child, .tv-table th:last-child{ text-align:right; font-variant-numeric: tabular-nums; }
 
+/* --- indicateurs personnalisés + modale de configuration --- */
+.custom-kpi-empty{
+  padding:1.5rem; text-align:center; color: var(--text-muted); font-size:0.85rem;
+  border:1px dashed var(--border-1); border-radius:0.35rem; background: var(--surface-2);
+}
+.custom-section-heading{ font-size:0.8rem; font-weight:700; text-transform:uppercase; letter-spacing:0.02em; color: var(--text-muted); margin: 1rem 0 0.5rem; }
+.custom-section-heading:first-child{ margin-top:0; }
+
+.modal-backdrop{
+  position:fixed; inset:0; background:rgba(22,22,22,0.55); z-index:100;
+  display:flex; align-items:flex-start; justify-content:center; padding:3vh 1rem; overflow-y:auto;
+}
+.modal-backdrop[hidden]{ display:none; }
+.modal-panel{
+  background: var(--surface-1); color: var(--text-primary); border-radius:0.4rem;
+  width:min(880px, 100%); max-height:94vh; overflow-y:auto; padding:1.25rem 1.5rem 1.5rem;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.3);
+}
+.modal-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; margin-bottom:1rem; }
+.modal-head h2{ margin:0 0 0.2rem; font-size:1.15rem; }
+.modal-head p{ margin:0; font-size:0.8rem; color: var(--text-muted); }
+.modal-close{ all:unset; cursor:pointer; font-size:1.3rem; line-height:1; color: var(--text-muted); padding:0.1rem 0.4rem; }
+.modal-close:hover{ color: var(--text-primary); }
+
+.cfg-table{ width:100%; border-collapse:collapse; font-size:0.8rem; margin-bottom:1.25rem; }
+.cfg-table th{ text-align:left; padding:0.4rem 0.5rem; border-bottom:2px solid var(--border-1); font-size:0.72rem; color: var(--text-muted); text-transform:uppercase; }
+.cfg-table td{ padding:0.35rem 0.5rem; border-bottom:1px solid var(--border-1); vertical-align:middle; }
+.cfg-table input[type="text"], .cfg-table input[type="number"], .cfg-table select{
+  width:100%; font-size:0.8rem; padding:0.3rem 0.4rem; border:1px solid var(--border-1); border-radius:0.25rem;
+  background: var(--surface-1); color: var(--text-primary);
+}
+.cfg-table td.cfg-actions{ white-space:nowrap; text-align:right; }
+.cfg-icon-btn{
+  all:unset; cursor:pointer; padding:0.2rem 0.4rem; border-radius:0.25rem; color: var(--text-secondary); font-size:0.9rem;
+}
+.cfg-icon-btn:hover{ background: var(--surface-2); color: var(--text-primary); }
+.cfg-icon-btn.danger:hover{ background: color-mix(in srgb, var(--status-critical) 16%, transparent); color: var(--status-critical); }
+.cfg-empty-row td{ text-align:center; color: var(--text-muted); padding:1rem; }
+
+.cfg-add-form{ border-top:1px solid var(--border-1); padding-top:1rem; }
+.cfg-add-form h3{ font-size:0.9rem; margin:0 0 0.75rem; }
+.cfg-grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap:0.75rem; margin-bottom:0.85rem; }
+.cfg-field label{ display:block; font-size:0.72rem; color: var(--text-muted); margin-bottom:0.2rem; }
+.cfg-field input[type="text"], .cfg-field input[type="number"], .cfg-field select{
+  width:100%; font-size:0.85rem; padding:0.4rem 0.5rem; border:1px solid var(--border-1); border-radius:0.25rem;
+  background: var(--surface-1); color: var(--text-primary);
+}
+.cfg-setup{ text-align:center; padding:1.5rem; }
+.cfg-setup p{ margin:0 0 1rem; color: var(--text-muted); font-size:0.85rem; }
+.cfg-hint{ font-size:0.72rem; color: var(--text-muted); margin:0 0 1rem; }
+
 @media (max-width: 48em){
   .bar-row{ grid-template-columns: 108px 1fr 3rem; }
 }
@@ -392,6 +443,33 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
         </div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- Indicateurs personnalisés (configurables : table / colonne / formule, disposition partagée via la table Grist Dashboard_Config) -->
+  <div class="fr-mb-4w">
+    <div class="section-title" style="justify-content:space-between">
+      <h2 class="fr-h5 fr-mb-0">Indicateurs personnalisés</h2>
+      <button type="button" class="fr-btn fr-btn--secondary fr-btn--sm fr-btn--icon-left fr-icon-settings-5-line" id="openConfigBtn">
+        Configurer les indicateurs
+      </button>
+    </div>
+    <div class="fr-grid-row fr-grid-row--gutters" id="customKpiRow">
+      <div class="fr-col-12"><p class="custom-kpi-empty">Chargement…</p></div>
+    </div>
+  </div>
+
+  <!-- Modale de configuration des indicateurs personnalisés -->
+  <div class="modal-backdrop" id="configModal" hidden>
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="configModalTitle">
+      <div class="modal-head">
+        <div>
+          <h2 id="configModalTitle">Configurer les indicateurs</h2>
+          <p>Chaque indicateur est calculé à partir d'une table, d'une colonne et d'une formule. Les changements sont enregistrés dans le document Grist (table <code>Dashboard_Config</code>) et visibles par tous ceux qui ouvrent ce tableau de bord après un rafraîchissement.</p>
+        </div>
+        <button type="button" class="modal-close" id="closeConfigBtn" aria-label="Fermer">&times;</button>
+      </div>
+      <div id="configModalBody"></div>
     </div>
   </div>
 
@@ -851,7 +929,108 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
     trendMode: 'period',
     geoMetric: 'exploitants',
     actionTab: 'anomalies',
-    expById: new Map()
+    expById: new Map(),
+    configTableExists: null,
+    customIndicators: [],
+    schemaTables: null,
+    schemaColumnsByTable: null,
+    customTableCache: new Map()
+  };
+
+  const CUSTOM_KPI_COLORS = {
+    bleu: '--series-1', orange: '--series-2', turquoise: '--series-3', jaune: '--series-4',
+    magenta: '--series-5', vert: '--series-6', violet: '--series-7', rouge: '--series-8'
+  };
+
+  // Formules disponibles pour un indicateur personnalisé (table + colonne choisies par l'utilisateur).
+  // Chaque formule reçoit les lignes de la table source, le masque de filtre département, et la colonne choisie.
+  const FORMULES = {
+    count: {
+      label: 'Nombre de lignes',
+      needsColumn: false,
+      compute(rows, mask){
+        let n = 0;
+        for (let i = 0; i < rows.id.length; i++) if (mask[i]) n++;
+        return { value: n, hint: '' };
+      }
+    },
+    count_nonempty: {
+      label: 'Nombre de lignes renseignées',
+      needsColumn: true,
+      compute(rows, mask, colId){
+        const col = rows[colId];
+        let n = 0, total = 0;
+        for (let i = 0; i < rows.id.length; i++){
+          if (!mask[i]) continue;
+          total++;
+          const v = col ? col[i] : null;
+          if (v !== null && v !== undefined && v !== '') n++;
+        }
+        return { value: n, hint: total ? Math.round(n / total * 100) + ' % des lignes' : '' };
+      }
+    },
+    sum_true: {
+      label: '% Vrai (colonne Oui/Non)',
+      needsColumn: true,
+      compute(rows, mask, colId){
+        const col = rows[colId];
+        let n = 0, total = 0;
+        for (let i = 0; i < rows.id.length; i++){
+          if (!mask[i]) continue;
+          total++;
+          if (col && col[i]) n++;
+        }
+        return { value: n, hint: total ? Math.round(n / total * 100) + ' % des lignes' : '' };
+      }
+    },
+    sum: {
+      label: 'Somme',
+      needsColumn: true,
+      compute(rows, mask, colId){
+        const col = rows[colId];
+        let s = 0;
+        for (let i = 0; i < rows.id.length; i++){
+          if (!mask[i]) continue;
+          const v = col ? Number(col[i]) : NaN;
+          if (!Number.isNaN(v)) s += v;
+        }
+        return { value: s, hint: '' };
+      }
+    },
+    avg: {
+      label: 'Moyenne',
+      needsColumn: true,
+      compute(rows, mask, colId){
+        const col = rows[colId];
+        let s = 0, n = 0;
+        for (let i = 0; i < rows.id.length; i++){
+          if (!mask[i]) continue;
+          const v = col ? Number(col[i]) : NaN;
+          if (!Number.isNaN(v)){ s += v; n++; }
+        }
+        return { value: n ? Math.round((s / n) * 100) / 100 : null, hint: n ? 'sur ' + fmt(n) + ' ligne(s)' : '' };
+      }
+    },
+    top_category: {
+      label: 'Catégorie la plus fréquente',
+      needsColumn: true,
+      isText: true,
+      compute(rows, mask, colId){
+        const col = rows[colId];
+        const counts = new Map();
+        let total = 0;
+        for (let i = 0; i < rows.id.length; i++){
+          if (!mask[i]) continue;
+          const vals = listValues(col ? col[i] : null);
+          if (!vals.length) continue;
+          vals.forEach(v => counts.set(v, (counts.get(v) || 0) + 1));
+          total++;
+        }
+        if (!counts.size) return { value: '—', hint: 'aucune donnée' };
+        const [label, count] = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0];
+        return { value: label, hint: fmt(count) + ' / ' + fmt(total) + ' (' + Math.round(count / total * 100) + ' %)' };
+      }
+    }
   };
 
   const ETAT_ORDER = ['En attente de DN', 'En attente du retour de l’agri', 'Anomalies à corriger', 'Dossier à valider sur DN', 'Dossier finalisé'];
@@ -1497,12 +1676,414 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
     return 'Sync_metadata';
   }
 
+  /* =====================================================================
+     Indicateurs personnalisés — configurables (table / colonne / formule),
+     disposition stockée dans la table Grist "Dashboard_Config" et donc
+     partagée avec tout le monde (lecture live à chaque chargement du widget).
+     ===================================================================== */
+  function rowsFromColumnar(data){
+    if (!data || !data.id) return [];
+    const out = [];
+    for (let i = 0; i < data.id.length; i++){
+      const row = { id: data.id[i] };
+      Object.keys(data).forEach(k => { if (k !== 'id') row[k] = data[k][i]; });
+      out.push(row);
+    }
+    return out;
+  }
+
+  async function fetchConfigTable(){
+    try {
+      const data = await grist.docApi.fetchTable('Dashboard_Config');
+      return { exists: true, data };
+    } catch (e){
+      return { exists: false, data: null };
+    }
+  }
+
+  async function reloadCustomIndicators(){
+    const { exists, data } = await fetchConfigTable();
+    state.configTableExists = exists;
+    state.customIndicators = rowsFromColumnar(data);
+  }
+
+  // Introspection du schéma via les tables internes _grist_Tables / _grist_Tables_column,
+  // seule façon pour un widget personnalisé de lister les tables/colonnes du document.
+  async function loadSchemaIfNeeded(){
+    if (state.schemaTables) return;
+    const [gristTables, gristColumns] = await Promise.all([
+      grist.docApi.fetchTable('_grist_Tables').catch(() => null),
+      grist.docApi.fetchTable('_grist_Tables_column').catch(() => null)
+    ]);
+    const tables = [];
+    const columnsByTable = {};
+    if (gristTables && gristTables.id){
+      for (let i = 0; i < gristTables.id.length; i++){
+        const tableId = gristTables.tableId[i];
+        if (!tableId || tableId.indexOf('_grist') === 0 || tableId.indexOf('GristHidden') === 0) continue;
+        tables.push({ internalId: gristTables.id[i], tableId });
+      }
+    }
+    if (gristColumns && gristColumns.id){
+      const tableIdByInternalId = new Map(tables.map(t => [t.internalId, t.tableId]));
+      for (let i = 0; i < gristColumns.id.length; i++){
+        const parentTableId = tableIdByInternalId.get(gristColumns.parentId[i]);
+        if (!parentTableId) continue;
+        const colId = gristColumns.colId[i];
+        if (!colId || colId === 'manualSort' || colId.indexOf('gristHelper_') === 0) continue;
+        (columnsByTable[parentTableId] = columnsByTable[parentTableId] || []).push({
+          colId, type: gristColumns.type ? gristColumns.type[i] : ''
+        });
+      }
+    }
+    tables.sort((a, b) => a.tableId.localeCompare(b.tableId));
+    Object.values(columnsByTable).forEach(list => list.sort((a, b) => a.colId.localeCompare(b.colId)));
+    state.schemaTables = tables;
+    state.schemaColumnsByTable = columnsByTable;
+  }
+
+  async function renderCustomIndicators(){
+    const container = el('customKpiRow');
+
+    if (state.configTableExists === null){
+      container.innerHTML = '<div class="fr-col-12"><p class="custom-kpi-empty">Chargement…</p></div>';
+      return;
+    }
+    if (state.configTableExists === false){
+      container.innerHTML = '';
+      const wrap = document.createElement('div'); wrap.className = 'fr-col-12';
+      const box = document.createElement('p'); box.className = 'custom-kpi-empty';
+      box.textContent = 'Aucun indicateur personnalisé pour l’instant. Clique sur « Configurer les indicateurs » pour créer la table et ajouter le premier.';
+      wrap.appendChild(box);
+      container.appendChild(wrap);
+      return;
+    }
+
+    const rows = state.customIndicators.filter(r => r.Actif !== false).sort((a, b) => (a.Ordre || 0) - (b.Ordre || 0));
+    if (!rows.length){
+      container.innerHTML = '';
+      const wrap = document.createElement('div'); wrap.className = 'fr-col-12';
+      const box = document.createElement('p'); box.className = 'custom-kpi-empty';
+      box.textContent = 'Aucun indicateur actif. Ajoute ou active-en un via « Configurer les indicateurs ».';
+      wrap.appendChild(box);
+      container.appendChild(wrap);
+      return;
+    }
+
+    const neededTables = Array.from(new Set(rows.map(r => r.Table).filter(Boolean)));
+    await Promise.all(neededTables.map(async t => {
+      if (!state.customTableCache.has(t)) state.customTableCache.set(t, await safeFetchTable(t));
+    }));
+
+    container.innerHTML = '';
+    let lastSection = null;
+    rows.forEach(row => {
+      const section = row.Section || 'Indicateurs personnalisés';
+      if (section !== lastSection){
+        const headWrap = document.createElement('div'); headWrap.className = 'fr-col-12';
+        const h = document.createElement('p'); h.className = 'custom-section-heading'; h.textContent = section;
+        headWrap.appendChild(h);
+        container.appendChild(headWrap);
+        lastSection = section;
+      }
+
+      const tableData = row.Table ? state.customTableCache.get(row.Table) : null;
+      const formule = FORMULES[row.Formule];
+      let valueText = '—', hintText = '';
+      if (!row.Table) hintText = 'Table non définie';
+      else if (!tableData) hintText = 'Table « ' + row.Table + ' » introuvable ou inaccessible';
+      else if (!formule) hintText = 'Formule inconnue';
+      else if (formule.needsColumn && !row.Colonne) hintText = 'Colonne non définie';
+      else {
+        const mask = tableData.Code_dpt ? maskFor(tableData.Code_dpt) : tableData.id.map(() => true);
+        const result = formule.compute(tableData, mask, row.Colonne);
+        valueText = formule.isText ? (result.value || '—') : fmt(result.value);
+        hintText = result.hint || '';
+      }
+
+      const col = document.createElement('div');
+      col.className = 'fr-col-12 fr-col-sm-6 fr-col-md-4 fr-col-lg-3';
+      const card = document.createElement('div');
+      card.className = 'kpi-card';
+      card.style.borderLeftColor = cssVar(CUSTOM_KPI_COLORS[row.Couleur] || '--series-1') || '#2a78d6';
+      const label = document.createElement('p'); label.className = 'kpi-label fr-mb-0'; label.textContent = row.Titre || '(sans titre)';
+      const value = document.createElement('p'); value.className = 'kpi-value'; value.textContent = valueText;
+      if (formule && formule.isText){ value.style.fontSize = '1.05rem'; value.style.wordBreak = 'break-word'; }
+      const hint = document.createElement('p'); hint.className = 'kpi-hint'; hint.textContent = hintText;
+      card.appendChild(label); card.appendChild(value); card.appendChild(hint);
+      col.appendChild(card);
+      container.appendChild(col);
+    });
+  }
+
+  function showConfigError(e){
+    console.error(e);
+    el('configModalBody').prepend(renderAlert('error', 'Erreur', 'Action impossible : ' + (e && e.message ? e.message : String(e))));
+  }
+
+  async function ensureConfigTable(){
+    try {
+      await grist.docApi.applyUserActions([
+        ['AddTable', 'Dashboard_Config', [
+          { id: 'Ordre', type: 'Numeric' },
+          { id: 'Section', type: 'Text' },
+          { id: 'Titre', type: 'Text' },
+          { id: 'Table', type: 'Text' },
+          { id: 'Colonne', type: 'Text' },
+          { id: 'Formule', type: 'Text' },
+          { id: 'Couleur', type: 'Text' },
+          { id: 'Actif', type: 'Bool' }
+        ]]
+      ]);
+      await reloadCustomIndicators();
+      renderConfigModalBody();
+      renderCustomIndicators().catch(reportError);
+    } catch (e){ showConfigError(e); }
+  }
+
+  async function addCustomIndicator(fields){
+    const nextOrdre = state.customIndicators.reduce((m, r) => Math.max(m, r.Ordre || 0), 0) + 1;
+    await grist.docApi.applyUserActions([
+      ['AddRecord', 'Dashboard_Config', null, Object.assign({ Ordre: nextOrdre, Actif: true }, fields)]
+    ]);
+    await reloadCustomIndicators();
+    renderConfigModalBody();
+    renderCustomIndicators().catch(reportError);
+  }
+
+  async function updateCustomIndicator(rowId, fields){
+    try {
+      await grist.docApi.applyUserActions([['UpdateRecord', 'Dashboard_Config', rowId, fields]]);
+      await reloadCustomIndicators();
+      renderConfigModalBody();
+      renderCustomIndicators().catch(reportError);
+    } catch (e){ showConfigError(e); }
+  }
+
+  async function deleteCustomIndicator(rowId){
+    if (!window.confirm('Supprimer cet indicateur ?')) return;
+    try {
+      await grist.docApi.applyUserActions([['RemoveRecord', 'Dashboard_Config', rowId]]);
+      await reloadCustomIndicators();
+      renderConfigModalBody();
+      renderCustomIndicators().catch(reportError);
+    } catch (e){ showConfigError(e); }
+  }
+
+  async function moveCustomIndicator(rowId, dir){
+    const rows = state.customIndicators.slice().sort((a, b) => (a.Ordre || 0) - (b.Ordre || 0));
+    const idx = rows.findIndex(r => r.id === rowId);
+    const swapIdx = idx + dir;
+    if (idx < 0 || swapIdx < 0 || swapIdx >= rows.length) return;
+    const reordered = rows.slice();
+    const [item] = reordered.splice(idx, 1);
+    reordered.splice(swapIdx, 0, item);
+    const actions = reordered.map((r, i) => ['UpdateRecord', 'Dashboard_Config', r.id, { Ordre: i + 1 }]);
+    try {
+      await grist.docApi.applyUserActions(actions);
+      await reloadCustomIndicators();
+      renderConfigModalBody();
+      renderCustomIndicators().catch(reportError);
+    } catch (e){ showConfigError(e); }
+  }
+
+  function buildConfigRow(row, idx, total){
+    const tr = document.createElement('tr');
+
+    const tdOrdre = document.createElement('td'); tdOrdre.textContent = String(idx + 1);
+    tr.appendChild(tdOrdre);
+
+    const tdSection = document.createElement('td');
+    const inSection = document.createElement('input'); inSection.type = 'text'; inSection.value = row.Section || '';
+    inSection.addEventListener('change', () => updateCustomIndicator(row.id, { Section: inSection.value }));
+    tdSection.appendChild(inSection); tr.appendChild(tdSection);
+
+    const tdTitre = document.createElement('td');
+    const inTitre = document.createElement('input'); inTitre.type = 'text'; inTitre.value = row.Titre || '';
+    inTitre.addEventListener('change', () => updateCustomIndicator(row.id, { Titre: inTitre.value }));
+    tdTitre.appendChild(inTitre); tr.appendChild(tdTitre);
+
+    const tdTable = document.createElement('td');
+    const selTable = document.createElement('select');
+    selTable.appendChild(new Option('— choisir —', ''));
+    state.schemaTables.forEach(t => selTable.appendChild(new Option(t.tableId, t.tableId)));
+    selTable.value = row.Table || '';
+    selTable.addEventListener('change', () => updateCustomIndicator(row.id, { Table: selTable.value, Colonne: '' }));
+    tdTable.appendChild(selTable); tr.appendChild(tdTable);
+
+    const tdCol = document.createElement('td');
+    const selCol = document.createElement('select');
+    selCol.appendChild(new Option('— aucune —', ''));
+    (state.schemaColumnsByTable[row.Table] || []).forEach(c => selCol.appendChild(new Option(c.colId + ' (' + c.type + ')', c.colId)));
+    selCol.value = row.Colonne || '';
+    selCol.addEventListener('change', () => updateCustomIndicator(row.id, { Colonne: selCol.value }));
+    tdCol.appendChild(selCol); tr.appendChild(tdCol);
+
+    const tdFormule = document.createElement('td');
+    const selFormule = document.createElement('select');
+    Object.entries(FORMULES).forEach(([key, f]) => selFormule.appendChild(new Option(f.label, key)));
+    selFormule.value = row.Formule || 'count';
+    selFormule.addEventListener('change', () => updateCustomIndicator(row.id, { Formule: selFormule.value }));
+    tdFormule.appendChild(selFormule); tr.appendChild(tdFormule);
+
+    const tdCouleur = document.createElement('td');
+    const selCouleur = document.createElement('select');
+    Object.keys(CUSTOM_KPI_COLORS).forEach(k => selCouleur.appendChild(new Option(k, k)));
+    selCouleur.value = row.Couleur || 'bleu';
+    selCouleur.addEventListener('change', () => updateCustomIndicator(row.id, { Couleur: selCouleur.value }));
+    tdCouleur.appendChild(selCouleur); tr.appendChild(tdCouleur);
+
+    const tdActif = document.createElement('td');
+    const chkActif = document.createElement('input'); chkActif.type = 'checkbox'; chkActif.checked = row.Actif !== false;
+    chkActif.addEventListener('change', () => updateCustomIndicator(row.id, { Actif: chkActif.checked }));
+    tdActif.appendChild(chkActif); tr.appendChild(tdActif);
+
+    const tdActions = document.createElement('td'); tdActions.className = 'cfg-actions';
+    const upBtn = document.createElement('button'); upBtn.type = 'button'; upBtn.className = 'cfg-icon-btn'; upBtn.textContent = '▲'; upBtn.title = 'Monter';
+    upBtn.disabled = idx === 0;
+    upBtn.addEventListener('click', () => moveCustomIndicator(row.id, -1));
+    const downBtn = document.createElement('button'); downBtn.type = 'button'; downBtn.className = 'cfg-icon-btn'; downBtn.textContent = '▼'; downBtn.title = 'Descendre';
+    downBtn.disabled = idx === total - 1;
+    downBtn.addEventListener('click', () => moveCustomIndicator(row.id, 1));
+    const delBtn = document.createElement('button'); delBtn.type = 'button'; delBtn.className = 'cfg-icon-btn danger'; delBtn.textContent = '🗑'; delBtn.title = 'Supprimer';
+    delBtn.addEventListener('click', () => deleteCustomIndicator(row.id));
+    tdActions.appendChild(upBtn); tdActions.appendChild(downBtn); tdActions.appendChild(delBtn);
+    tr.appendChild(tdActions);
+
+    return tr;
+  }
+
+  function buildAddForm(){
+    const wrap = document.createElement('div'); wrap.className = 'cfg-add-form';
+    const h3 = document.createElement('h3'); h3.textContent = 'Ajouter un indicateur';
+    wrap.appendChild(h3);
+
+    const grid = document.createElement('div'); grid.className = 'cfg-grid';
+    function field(labelText, inputEl){
+      const f = document.createElement('div'); f.className = 'cfg-field';
+      const l = document.createElement('label'); l.textContent = labelText;
+      f.appendChild(l); f.appendChild(inputEl);
+      return f;
+    }
+
+    const inTitre = document.createElement('input'); inTitre.type = 'text'; inTitre.placeholder = 'Ex. Nombre de GAEC';
+    const inSection = document.createElement('input'); inSection.type = 'text'; inSection.placeholder = 'Indicateurs personnalisés';
+
+    const selTable = document.createElement('select');
+    selTable.appendChild(new Option('— choisir une table —', ''));
+    state.schemaTables.forEach(t => selTable.appendChild(new Option(t.tableId, t.tableId)));
+
+    const selCol = document.createElement('select');
+    selCol.appendChild(new Option('— aucune —', ''));
+    selTable.addEventListener('change', () => {
+      selCol.innerHTML = '';
+      selCol.appendChild(new Option('— aucune —', ''));
+      (state.schemaColumnsByTable[selTable.value] || []).forEach(c => selCol.appendChild(new Option(c.colId + ' (' + c.type + ')', c.colId)));
+    });
+
+    const selFormule = document.createElement('select');
+    Object.entries(FORMULES).forEach(([key, f]) => selFormule.appendChild(new Option(f.label, key)));
+
+    const selCouleur = document.createElement('select');
+    Object.keys(CUSTOM_KPI_COLORS).forEach(k => selCouleur.appendChild(new Option(k, k)));
+
+    grid.appendChild(field('Titre', inTitre));
+    grid.appendChild(field('Section', inSection));
+    grid.appendChild(field('Table', selTable));
+    grid.appendChild(field('Colonne', selCol));
+    grid.appendChild(field('Formule', selFormule));
+    grid.appendChild(field('Couleur', selCouleur));
+    wrap.appendChild(grid);
+
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button'; addBtn.className = 'fr-btn fr-btn--icon-left fr-icon-add-line';
+    addBtn.textContent = 'Ajouter l’indicateur';
+    addBtn.addEventListener('click', () => {
+      if (!inTitre.value.trim() || !selTable.value){
+        window.alert('Indique au moins un titre et une table.');
+        return;
+      }
+      addCustomIndicator({
+        Titre: inTitre.value.trim(),
+        Section: inSection.value.trim() || 'Indicateurs personnalisés',
+        Table: selTable.value,
+        Colonne: selCol.value,
+        Formule: selFormule.value,
+        Couleur: selCouleur.value
+      }).catch(e => showConfigError(e));
+    });
+    wrap.appendChild(addBtn);
+
+    return wrap;
+  }
+
+  function renderConfigModalBody(){
+    const body = el('configModalBody');
+    body.innerHTML = '';
+
+    if (state.configTableExists === false){
+      const setup = document.createElement('div'); setup.className = 'cfg-setup';
+      const p = document.createElement('p');
+      p.textContent = 'La table « Dashboard_Config » n’existe pas encore dans ce document. Elle stocke la liste des indicateurs personnalisés et leur disposition, partagée avec tous ceux qui ouvrent ce tableau de bord.';
+      const btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'fr-btn'; btn.textContent = 'Créer la table Dashboard_Config';
+      btn.addEventListener('click', () => ensureConfigTable());
+      setup.appendChild(p); setup.appendChild(btn);
+      body.appendChild(setup);
+      return;
+    }
+
+    if (!state.schemaTables){
+      const p = document.createElement('p'); p.className = 'cfg-hint'; p.textContent = 'Chargement de la liste des tables…';
+      body.appendChild(p);
+      return;
+    }
+
+    const hint = document.createElement('p'); hint.className = 'cfg-hint';
+    hint.textContent = 'Les modifications sont enregistrées immédiatement dans le document Grist.';
+    body.appendChild(hint);
+
+    const table = document.createElement('table'); table.className = 'cfg-table';
+    const thead = document.createElement('thead');
+    thead.innerHTML = '<tr><th>#</th><th>Section</th><th>Titre</th><th>Table</th><th>Colonne</th><th>Formule</th><th>Couleur</th><th>Actif</th><th></th></tr>';
+    table.appendChild(thead);
+    const tbody = document.createElement('tbody');
+
+    const rows = state.customIndicators.slice().sort((a, b) => (a.Ordre || 0) - (b.Ordre || 0));
+    if (!rows.length){
+      const tr = document.createElement('tr'); tr.className = 'cfg-empty-row';
+      const td = document.createElement('td'); td.colSpan = 9; td.textContent = 'Aucun indicateur pour le moment.';
+      tr.appendChild(td); tbody.appendChild(tr);
+    } else {
+      rows.forEach((row, idx) => tbody.appendChild(buildConfigRow(row, idx, rows.length)));
+    }
+    table.appendChild(tbody);
+    body.appendChild(table);
+
+    body.appendChild(buildAddForm());
+  }
+
+  function openConfigModal(){
+    el('configModal').hidden = false;
+    document.body.style.overflow = 'hidden';
+    renderConfigModalBody();
+    if (state.configTableExists){
+      loadSchemaIfNeeded().then(renderConfigModalBody).catch(e => showConfigError(e));
+    }
+  }
+
+  function closeConfigModal(){
+    el('configModal').hidden = true;
+    document.body.style.overflow = '';
+  }
+
   function renderAll(){
     clearNotices();
     const missing = renderKPIs();
     renderCharts();
     renderMeters();
     renderActionTable();
+    renderCustomIndicators().catch(reportError);
     const syncMissing = renderSyncLabel();
     if (syncMissing) missing.push(syncMissing);
 
@@ -1518,12 +2099,14 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
   async function loadAll(){
     el('refreshBtn').disabled = true;
     el('syncLabel').textContent = 'Actualisation…';
+    state.customTableCache = new Map();
 
     const [demandeurs, exploitants, evenements, syncMeta] = await Promise.all([
       safeFetchTable('Demarche_149963_demandeurs'),
       safeFetchTable('DATA_Exploitants'),
       safeFetchTable('DATA_Evenements'),
       safeFetchTable('Sync_metadata'),
+      reloadCustomIndicators(),
     ]);
 
     state.demandeurs = demandeurs;
@@ -1554,6 +2137,10 @@ body{ background-color: var(--surface-1); color: var(--text-primary); }
       renderActionTable();
     });
   });
+  el('openConfigBtn').addEventListener('click', () => openConfigModal());
+  el('closeConfigBtn').addEventListener('click', () => closeConfigModal());
+  el('configModal').addEventListener('click', (e) => { if (e.target === el('configModal')) closeConfigModal(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !el('configModal').hidden) closeConfigModal(); });
 
   function reportError(e){
     console.error(e);
