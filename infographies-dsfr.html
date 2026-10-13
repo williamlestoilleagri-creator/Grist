@@ -2502,7 +2502,7 @@ function renderToolbar() {
     <button class="btn sm ter" id="btnShuffle" title="Modèle au hasard">${ui('shuffle')}</button>
     <span style="flex:1"></span>
     <button class="btn sm sec" id="btnPng" title="Exporter en image PNG (haute définition)">${ui('image')}<span>PNG</span></button>
-    <button class="btn sm sec" id="btnPdf" title="Exporter en PDF">${ui('download')}<span>PDF</span></button>
+    <button class="btn sm sec" id="btnPdf" title="Exporter en PDF">${ui('download')}<span>PDF</span></button><select class="inp" id="pdfDpi" title="Qualité du PDF">${PDF_QUALITIES.map(([v, l]) => `<option value="${v}"${String(STATE.doc.pdfDpi || 300) === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
     <button class="btn sm ter" id="btnPrint" title="Imprimer">${ui('print')}</button>
     <button class="btn sm" id="btnSave" title="Enregistrer dans « Mes infographies »">${ui('save')}<span>Enregistrer</span></button>`;
 }
@@ -2828,44 +2828,71 @@ async function fontEmbedCSS() {
   _fontCSS = out.filter(Boolean).join('\n');
   return _fontCSS;
 }
-async function snapshot(type) {
+async function snapshot(type, ratio = 2) {
   if (!window.htmlToImage) await loadScript('https://cdn.jsdelivr.net/npm/html-to-image@1.11.13/dist/html-to-image.js');
   const poster = $('#poster'); const F = FORMATS.find(f => f.id === cur().format) || FORMATS[0];
   const wasIdent = poster.classList.contains('ident'); poster.classList.remove('ident');
   try {
-    const opt = {pixelRatio: 2, width: F.w, height: F.h, cacheBust: false, fontEmbedCSS: await fontEmbedCSS(), backgroundColor: makeTheme(cur().style).bg, style: {transform: 'none', margin: '0'}};
+    const opt = {pixelRatio: ratio, width: F.w, height: F.h, cacheBust: false, fontEmbedCSS: await fontEmbedCSS(), backgroundColor: makeTheme(cur().style).bg, style: {transform: 'none', margin: '0'}};
+    if (type === 'canvas') return await htmlToImage.toCanvas(poster, opt);
     return type === 'jpeg' ? await htmlToImage.toJpeg(poster, Object.assign(opt, {quality: .93})) : await htmlToImage.toPng(poster, opt);
   } finally { if (wasIdent) poster.classList.add('ident'); }
 }
 async function exportPng() {
   showStatus('Génération de l\'image…');
-  try { const url = await snapshot('png'); showStatus(''); exportModal(url, fileName() + '.png', 'Image PNG'); } catch (e) { showStatus(''); console.error(e); toast('Export impossible : ' + (e.message || e), 'err'); }
+  try { const url = await snapshot('png', 3); showStatus(''); exportModal(url, fileName() + '.png', 'Image PNG'); } catch (e) { showStatus(''); console.error(e); toast('Export impossible : ' + (e.message || e), 'err'); }
 }
+const PDF_QUALITIES = [['150', 'PDF 150 dpi (léger)'], ['300', 'PDF 300 dpi (impression)'], ['450', 'PDF 450 dpi (très haute qualité)']];
 async function exportPdf() {
-  showStatus('Génération du PDF…');
+  const dpi = +(STATE.doc.pdfDpi || 300);
+  showStatus('Génération du PDF ' + dpi + ' dpi…');
   try {
-    const url = await snapshot('jpeg'); const F = FORMATS.find(f => f.id === cur().format) || FORMATS[0];
-    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
-    const bytes = Uint8Array.from(atob(url.split(',')[1]), c => c.charCodeAt(0));
-    const pdf = buildPdf(bytes, img.naturalWidth, img.naturalHeight, F.w * .75, F.h * .75, altText().split('\n')[0]);
+    const F = FORMATS.find(f => f.id === cur().format) || FORMATS[0];
+    /* 96 px CSS = 1 pouce ; plafond de sécurité pour la mémoire du navigateur */
+    let ratio = dpi / 96; const maxPx = 70e6; if (F.w * F.h * ratio * ratio > maxPx) ratio = Math.sqrt(maxPx / (F.w * F.h)); ratio = Math.min(ratio, 16000 / Math.max(F.w, F.h));
+    const canvas = await snapshot('canvas', ratio);
+    const iw = canvas.width, ih = canvas.height; let img;
+    if (dpi <= 150) {
+      const url = canvas.toDataURL('image/jpeg', .95);
+      img = {data: Uint8Array.from(atob(url.split(',')[1]), c => c.charCodeAt(0)), filter: 'DCTDecode'};
+    } else {
+      img = {data: await deflateRGB(canvas), filter: 'FlateDecode'};
+    }
+    const pdf = buildPdf(img, iw, ih, F.w * .75, F.h * .75, altText().split('\n')[0]);
     const blobUrl = URL.createObjectURL(new Blob([pdf], {type: 'application/pdf'}));
-    showStatus(''); exportModal(blobUrl, fileName() + '.pdf', 'Document PDF', url);
+    const preview = canvas.toDataURL('image/jpeg', .8);
+    showStatus(''); exportModal(blobUrl, fileName() + '.pdf', 'Document PDF (' + dpi + ' dpi, ' + iw + '×' + ih + ' px, ' + fmtNum(pdf.length / 1048576, {dec: 1}) + ' Mo)', preview);
   } catch (e) { showStatus(''); console.error(e); toast('Export PDF impossible : ' + (e.message || e), 'err'); }
 }
-/* PDF minimal : une page, une image JPEG pleine page */
-function buildPdf(jpg, iw, ih, pw, ph, title) {
+/* Pixels RVB compressés sans perte (zlib = FlateDecode du PDF), traités par bandes pour limiter la mémoire */
+async function deflateRGB(canvas) {
+  if (typeof CompressionStream === 'undefined') throw new Error('navigateur trop ancien (CompressionStream) — choisissez 150 dpi');
+  const ctx = canvas.getContext('2d'); const w = canvas.width, h = canvas.height;
+  const cs = new CompressionStream('deflate'); const writer = cs.writable.getWriter();
+  const done = new Response(cs.readable).arrayBuffer();
+  const band = Math.max(1, Math.floor(4e6 / w));
+  for (let y = 0; y < h; y += band) {
+    const hh = Math.min(band, h - y); const px = ctx.getImageData(0, y, w, hh).data; const rgb = new Uint8Array(w * hh * 3);
+    for (let i = 0, j = 0; i < px.length; i += 4, j += 3) { rgb[j] = px[i]; rgb[j + 1] = px[i + 1]; rgb[j + 2] = px[i + 2]; }
+    await writer.write(rgb);
+  }
+  await writer.close();
+  return new Uint8Array(await done);
+}
+/* PDF minimal : une page, une image pleine page (JPEG ou sans perte) */
+function buildPdf(img, iw, ih, pw, ph, title) {
   const enc = new TextEncoder(); const parts = []; const offs = []; let len = 0;
   const push = d => { const b = typeof d === 'string' ? enc.encode(d) : d; parts.push(b); len += b.length; };
   const obj = (n, body) => { offs[n] = len; push(n + ' 0 obj\n'); body.forEach(push); push('\nendobj\n'); };
-  const t = String(title || '').replace(/[()\\]/g, ' ').replace(/[^\x20-\x7e]/g, c => ({'é': 'e', 'è': 'e', 'ê': 'e', 'à': 'a', 'ç': 'c', 'ô': 'o', 'î': 'i', 'û': 'u', 'É': 'E'}[c] || ' ')).slice(0, 200);
+  const t = '<FEFF' + [...String(title || '').slice(0, 300)].map(ch => { const c = ch.codePointAt(0); return c > 0xffff ? '' : c.toString(16).toUpperCase().padStart(4, '0'); }).join('') + '>';
   push('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n');
   obj(1, ['<< /Type /Catalog /Pages 2 0 R /Lang (fr-FR) >>']);
   obj(2, ['<< /Type /Pages /Kids [3 0 R] /Count 1 >>']);
   obj(3, [`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pw.toFixed(2)} ${ph.toFixed(2)}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>`]);
-  obj(4, [`<< /Type /XObject /Subtype /Image /Width ${iw} /Height ${ih} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpg.length} >>\nstream\n`, jpg, '\nendstream']);
+  obj(4, [`<< /Type /XObject /Subtype /Image /Width ${iw} /Height ${ih} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /${img.filter} /Length ${img.data.length} >>\nstream\n`, img.data, '\nendstream']);
   const content = `q ${pw.toFixed(2)} 0 0 ${ph.toFixed(2)} 0 0 cm /Im0 Do Q`;
   obj(5, [`<< /Length ${content.length} >>\nstream\n${content}\nendstream`]);
-  obj(6, [`<< /Title (${t}) /Producer (Studio infographies DSFR - Grist) >>`]);
+  obj(6, [`<< /Title ${t} /Producer (Studio infographies DSFR - Grist) >>`]);
   const xref = len; push('xref\n0 7\n0000000000 65535 f \n' + offs.slice(1).map(o => String(o).padStart(10, '0') + ' 00000 n \n').join(''));
   push(`trailer\n<< /Size 7 /Root 1 0 R /Info 6 0 R >>\nstartxref\n${xref}\n%%EOF`);
   const out = new Uint8Array(len); let p = 0; parts.forEach(b => { out.set(b, p); p += b.length; }); return out;
@@ -2908,6 +2935,7 @@ function bindEvents() {
   $('#tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) setTab(b.dataset.tab); });
   $('#toolbar').addEventListener('change', e => {
     if (e.target.id === 'fmtSel') { cur().format = e.target.value; cur().autoFormat = false; saveDoc(); render(); }
+    if (e.target.id === 'pdfDpi') { STATE.doc.pdfDpi = e.target.value; saveDoc(); }
     if (e.target.id === 'zoomSel') { STATE.ui.zoom = e.target.value; applyZoom(); }
   });
   $('#toolbar').addEventListener('click', e => {
