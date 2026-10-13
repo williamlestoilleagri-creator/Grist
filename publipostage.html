@@ -76,6 +76,8 @@
   .pp-link { border: 1px solid var(--border-default-grey); padding: .75rem 1rem; margin-bottom: .75rem; background: var(--background-alt-grey, #f6f6f6); }
   .pp-link__row { display: flex; gap: .75rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: .5rem; }
   .pp-link__row > .fr-select-group { flex: 1; min-width: 180px; margin-bottom: 0; }
+  .pp-linktag { cursor: pointer; margin: .125rem 0; }
+  .pp-linktag small { margin-left: .375rem; opacity: .7; }
   .pp-link__eq { font-weight: 700; padding-bottom: .6rem; }
   .pp-warn { color: var(--text-default-warning, #b34000); }
   .pp-list__item:hover { background: var(--background-default-grey-hover); }
@@ -275,6 +277,7 @@
     <div class="pp-bloc">
       <h2>Tables liées <span class="fr-badge fr-badge--sm fr-badge--no-icon">facultatif</span></h2>
       <p class="fr-text--sm fr-mb-1w">Pour utiliser dans le même courrier des colonnes d'autres tables (agrément, établissements, communes…). Chaque dossier est relié aux lignes de la table liée qui ont la même valeur dans la colonne choisie.</p>
+      <p class="fr-text--sm fr-mb-1w" id="linkHint"></p>
       <div id="linkList"></div>
       <button type="button" class="fr-btn fr-btn--secondary fr-btn--sm fr-icon-add-line fr-btn--icon-left" id="linkAdd">Ajouter une table liée</button>
     </div>
@@ -1122,11 +1125,43 @@ async function applyLinks(mainId, mainCols, rows) {
   }
   return { cols: out, stats };
 }
+// Tables « liables » à la table principale, d'après la structure (références Grist, colonnes communes)
+const LINK_GENERIC = new Set(['nom', 'prenom', 'date', 'adresse', 'email', 'mail', 'telephone', 'tel', 'observations', 'observation',
+  'commentaire', 'commentaires', 'statut', 'etat', 'type', 'libelle', 'intitule', 'description', 'remarque', 'notes', 'montant', 'annee']);
+function linkCandidates(mainId) {
+  const mainCols = (meta && meta.tables[mainId] || []).filter(c => !c.hidden);
+  const usable = (c) => !c.hidden && !['Attachments', 'Bool', 'Date', 'DateTime', 'Numeric'].includes(c.baseType);
+  const out = {};
+  for (const t of Object.keys((meta && meta.tables) || {})) {
+    if (t === mainId || t.startsWith('_grist') || /^GristHidden/.test(t)) continue;
+    const lcols = meta.tables[t].filter(c => !c.hidden);
+    const ref = mainCols.find(c => isRefTo(c, t)), back = lcols.find(c => isRefTo(c, mainId));
+    if (ref || back) { out[t] = { kind: 'ref', via: ref ? ref.label : back.label }; continue; }
+    const vias = [];
+    for (const mc of mainCols.filter(usable)) {
+      const k1 = normKey(mc.id), k2 = normKey(mc.label);
+      const lc = lcols.filter(usable).find(c => normKey(c.id) === k1 || normKey(c.label) === k2 || normKey(c.label) === k1 || normKey(c.id) === k2);
+      if (lc && !LINK_GENERIC.has(k1) && !LINK_GENERIC.has(normKey(lc.id)) && k1.length > 1 && !vias.includes(mc.label)) vias.push(mc.label);
+    }
+    out[t] = vias.length ? { kind: 'common', via: vias.slice(0, 3).join(', ') } : { kind: 'none' };
+  }
+  return out;
+}
 function renderLinks() {
   const mainCols = (meta && meta.tables[data.tableId] || []).filter(c => !c.hidden && c.baseType !== 'Attachments');
   const tables = Object.keys((meta && meta.tables) || {}).filter(t => t !== data.tableId && !t.startsWith('_grist') && !/^GristHidden/.test(t))
     .sort((a, b) => tableLabel(a).localeCompare(tableLabel(b), 'fr'));
   const mainLbl = tableLabel(data.tableId) || 'table principale';
+  const cand = linkCandidates(data.tableId);
+  const groups = [['ref', 'Liables : colonne Référence Grist'], ['common', 'Liables : colonne commune'], ['none', 'Sans lien détecté (colonnes à choisir)']];
+  const tableOpts = (sel) => groups.map(([kind, title]) => {
+    const ts = tables.filter(t => (cand[t] || { kind: 'none' }).kind === kind);
+    return ts.length ? `<optgroup label="${esc(title)}">` + ts.map(t => `<option value="${esc(t)}" ${t === sel ? 'selected' : ''}>${esc(tableLabel(t))}${tableLabel(t) !== t ? ' — ' + esc(t) : ''}${cand[t].via ? ' · par ' + esc(cand[t].via) : ''}</option>`).join('') + '</optgroup>' : '';
+  }).join('');
+  const nLinkable = tables.filter(t => cand[t] && cand[t].kind !== 'none');
+  $('linkHint').innerHTML = !data.tableId ? '' : nLinkable.length
+    ? `<b>${nLinkable.length} table(s) liable(s)</b> à « ${esc(mainLbl)} » : ` + nLinkable.slice(0, 8).map(t => `<span class="fr-tag fr-tag--sm pp-linktag" data-add="${esc(t)}" role="button" tabindex="0" title="Ajouter cette table liée">${esc(tableLabel(t))}<small>${cand[t].kind === 'ref' ? 'référence' : esc(cand[t].via)}</small></span>`).join(' ') + (nLinkable.length > 8 ? ' …' : '')
+    : 'Aucune table liable détectée automatiquement : vous pouvez quand même choisir une table et les colonnes qui la relient.';
   $('linkList').innerHTML = cfg.links.map((L, k) => {
     const lcols = L.tableId ? (meta.tables[L.tableId] || []).filter(c => !c.hidden && c.baseType !== 'Attachments') : [];
     const st = linkStats[k];
@@ -1138,7 +1173,7 @@ function renderLinks() {
     return `<div class="pp-link" data-k="${k}">
       <div class="pp-link__row">
         <div class="fr-select-group"><label class="fr-label" for="lk-t-${k}">Table liée</label>
-          <select class="fr-select" id="lk-t-${k}" data-f="tableId"><option value="">— Choisir une table —</option>${tables.map(t => `<option value="${esc(t)}" ${t === L.tableId ? 'selected' : ''}>${esc(tableLabel(t))}${tableLabel(t) !== t ? ' — ' + esc(t) : ''}</option>`).join('')}</select></div>
+          <select class="fr-select" id="lk-t-${k}" data-f="tableId"><option value="">— Choisir une table —</option>${tableOpts(L.tableId)}</select></div>
         <button type="button" class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-icon-delete-bin-line" data-f="del" title="Retirer cette table liée">Retirer</button>
       </div>
       ${L.tableId ? `<div class="pp-link__row">
@@ -1154,6 +1189,13 @@ function renderLinks() {
     </div>`;
   }).join('');
 }
+// Clic sur une table liable proposée : ajoutée directement
+$('linkHint').addEventListener('click', (e) => {
+  const t = e.target.closest('[data-add]'); if (!t) return;
+  if (cfg.links.some(l => l.tableId === t.dataset.add)) return;
+  cfg.links.push({ tableId: t.dataset.add, mainCol: '', linkCol: '', multi: 'first' });
+  saveConfig(); loadData().catch(showError);
+});
 $('linkAdd').onclick = () => { cfg.links.push({ tableId: '', mainCol: '', linkCol: '', multi: 'first' }); renderLinks(); };
 $('linkList').addEventListener('change', (e) => {
   const el = e.target.closest('[data-f]'), box = e.target.closest('.pp-link');
