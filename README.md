@@ -3,6 +3,7 @@
 | Fichier | Description |
 |---|---|
 | `erp-sap.html` | ERP intégré « façon SAP » (ventes, achats, stocks, comptabilité) |
+| `infographies-dsfr.html` | Studio d'infographies DSFR (63 modèles, bloc-marque Préfet / Préfète) |
 | `annuaire-adresses.html` | Annuaire d'adresses géocodées (BAN) |
 | `grist-assistant-claude.html` | Assistant Claude |
 
@@ -68,3 +69,36 @@ Structure (en-tête des documents, IBAN, mentions), devise, TVA et délai par d�
 - **Ventes** : devis → commande → livraison (sortie de stock au CMP) → facture (411 / 70x / 44571) → encaissement (512 / 411).
 - **Achats** : commande → réception (entrée de stock) → facture (60x / 44566 / 401) → paiement (401 / 512).
 - Proposition de réapprovisionnement depuis `MMBE`, impression des devis, confirmations et factures.
+
+## Studio infographies DSFR (`infographies-dsfr.html`)
+
+Générateur d'infographies à la charte de l'État : police Marianne, couleurs DSFR, pictogrammes officiels DSFR, bloc-marque **Préfet / Préfète** (région Bretagne, Côtes-d'Armor, Finistère, Ille-et-Vilaine, Morbihan ou saisie libre) ou « République française ».
+
+### Installation
+
+Widget personnalisé Grist, accès **Accès complet au document**. Hors de Grist, le fichier s'ouvre en **mode démonstration** (données fictives).
+
+### 63 modèles en 7 familles
+
+| Famille | Modèles |
+|---|---|
+| Chiffres clés | chiffre choc, bandeau 3 chiffres, mosaïque 6 chiffres, évolutions ▲▼, mini-courbes, jauge d'objectif, anneaux, « 1 sur N », avant/après, tableau de bord |
+| Comparer & classer | classement, colonnes, groupées, empilées, 100 %, podium, sucettes, haltères, pictogrammes proportionnels, bulles, tableau de classement |
+| Répartitions | anneau, camembert, demi-anneau, gaufre, treemap, barre 100 %, hémicycle, pyramide des âges, entonnoir |
+| Évolutions & temps | courbe, aire, courbes comparées, cascade, pente, calendrier thermique, saisonnalité, frise |
+| Territoires & cartes | Bretagne, France (départements / régions), symboles proportionnels, communes (geo.api.gouv.fr), fiche territoire (rangs), tuiles départementales, carte + chiffres |
+| Institutionnel | mosaïque des missions, fonctions, étapes, cycle, organigramme, FAQ, à faire / à éviter, matrice de règles, dépliant 3 volets, message clé |
+| Analyses avancées | matrice de chaleur, radar, nuage de points, nuage de mots, Sankey, réalisé / objectif, tableau |
+
+### Données
+
+- Chaque emplacement est relié à **une table**, des **colonnes**, un **calcul** (nombre, somme, moyenne, médiane, min, max, distincts, % vrai…), des **filtres**, une **comparaison** (tendance, part, ratio, écart, évolution, formule A/B) et une **mise en forme** (unité, décimales, k/M/Md).
+- Regroupements par date (année, trimestre, mois, semaine…), tri, top N + « Autres », % du total, cumul, base 100, ratio par catégorie (÷ population, pour 1 000…).
+- **Formules par ligne** : `$Montant / $Population * 1000`, `si($Note >= 4; 1; 0)`.
+- **Saisie manuelle** possible pour chaque emplacement.
+- **Identifier les données** : chaque élément de l'affiche affiche sa provenance ; un clic ouvre son réglage. Numérotation ①②③ et notes de pied de page en option.
+- Textes dynamiques : `**mise en avant**`, `{k1}`, `{s1:top}`, `{s1:total}`, `{date}`, `{signature}`.
+
+### Formats et exports
+
+A4 portrait / paysage, dépliant A3, carré, story, 16:9, bannière, page web. Export **PNG** haute définition, **PDF**, impression, **texte alternatif** et transcription (onglet Accessibilité, contrôles de contraste), données **CSV**. Les infographies sont enregistrées dans les options du widget (« Mes infographies »).
