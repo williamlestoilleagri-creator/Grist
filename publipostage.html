@@ -71,6 +71,13 @@
     padding: .375rem .75rem; border-bottom: 1px solid var(--border-default-grey);
   }
   .pp-list__item:last-child { border-bottom: none; }
+  .pp-list__group { padding: .375rem .75rem; font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .02em;
+    color: var(--text-title-blue-france, #000091); background: var(--background-alt-blue-france, #f5f5fe); border-bottom: 1px solid var(--border-default-grey); position: sticky; top: 0; z-index: 1; }
+  .pp-link { border: 1px solid var(--border-default-grey); padding: .75rem 1rem; margin-bottom: .75rem; background: var(--background-alt-grey, #f6f6f6); }
+  .pp-link__row { display: flex; gap: .75rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: .5rem; }
+  .pp-link__row > .fr-select-group { flex: 1; min-width: 180px; margin-bottom: 0; }
+  .pp-link__eq { font-weight: 700; padding-bottom: .6rem; }
+  .pp-warn { color: var(--text-default-warning, #b34000); }
   .pp-list__item:hover { background: var(--background-default-grey-hover); }
   .pp-list__item .fr-checkbox-group { flex: 1; min-width: 0; }
   .pp-list__item .fr-checkbox-group .fr-label { width: 100%; }
@@ -167,6 +174,7 @@
   .hl-missing { background: #ffe9e6; color: #ce0500; }
   .nohl .hl-ok, .nohl .hl-missing { background: transparent; color: inherit; }
 
+  [hidden] { display: none !important; }
   /* ---------- Signature ---------- */
   .pp-sigpad { border: 1px dashed var(--border-plain-grey, #929292); background: #fff; position: relative; }
   #sigCanvas { width: 100%; height: 180px; display: block; touch-action: none; cursor: crosshair; }
@@ -177,9 +185,19 @@
     background: repeating-conic-gradient(#f6f6f6 0% 25%, #fff 0% 50%) 50% / 16px 16px;
   }
   #sigPreview img { max-width: 100%; max-height: 140px; }
+  .pp-sigsetup { display: grid; grid-template-columns: minmax(200px, 1fr) 2fr; gap: 1.5rem; align-items: start; }
+  @media (max-width: 760px) { .pp-sigsetup { grid-template-columns: 1fr; } }
+  .pp-inkopts { display: inline-flex; align-items: center; gap: .5rem; margin-left: auto; }
+  .pp-inkopts .fr-select { margin: 0; width: auto; padding-top: .25rem; padding-bottom: .25rem; }
+  .pp-inkopts input[type=range] { width: 90px; }
+  .pp-accbloc { padding: 0; }
+  .pp-accbloc > .fr-accordion__title { margin: 0; font-size: 1.125rem; }
+  .pp-accbloc > .fr-accordion__title .fr-accordion__btn { padding: 1rem 1.5rem; font-weight: 700; }
+  .pp-accbloc > .fr-collapse { padding-left: 1.5rem; padding-right: 1.5rem; }
+  .fr-collapse--expanded { padding-bottom: 1rem; }
   .pp-sigtbl { min-height: 96px; display: flex; align-items: center; justify-content: center;
     border: 1px solid var(--border-default-grey); background: repeating-conic-gradient(#f6f6f6 0% 25%, #fff 0% 50%) 50% / 16px 16px; }
-  .pp-sigtbl img { max-width: 100%; max-height: 140px; }
+  .pp-sigtbl img { max-width: 100%; max-height: 90px; }
   .pp-range { display: flex; align-items: center; gap: .75rem; }
   .pp-range input { flex: 1; }
 
@@ -226,39 +244,44 @@
   <!-- =============================== 1. DONNÉES =============================== -->
   <div id="tab-donnees" class="fr-tabs__panel fr-tabs__panel--selected" role="tabpanel" aria-labelledby="tabbtn-donnees">
     <div id="accessMsg"></div>
-    <div class="pp-grid">
-      <div class="pp-bloc">
-        <h2>Source des données</h2>
-        <fieldset class="fr-fieldset" id="sourceFieldset">
-          <div class="fr-fieldset__element">
-            <div class="fr-radio-group">
-              <input type="radio" id="source-widget" name="source" value="widget" checked>
-              <label class="fr-label" for="source-widget">Lignes affichées par ce widget
-                <span class="fr-hint-text">Table choisie dans « Données de la vue », avec ses filtres et sa liaison éventuelle (ex : par département).</span>
-              </label>
-            </div>
+    <div class="pp-bloc">
+      <h2>Table principale</h2>
+      <p class="fr-text--sm fr-mb-1w">Un document est créé pour chaque ligne de cette table.</p>
+      <fieldset class="fr-fieldset fr-mb-1w" id="sourceFieldset">
+        <legend class="fr-fieldset__legend fr-sr-only">Origine des lignes</legend>
+        <div class="fr-fieldset__element fr-fieldset__element--inline">
+          <div class="fr-radio-group">
+            <input type="radio" id="source-widget" name="source" value="widget" checked>
+            <label class="fr-label" for="source-widget">Lignes affichées par ce widget</label>
           </div>
-          <div class="fr-fieldset__element">
-            <div class="fr-radio-group">
-              <input type="radio" id="source-table" name="source" value="table">
-              <label class="fr-label" for="source-table">Une autre table (toutes les lignes)</label>
-            </div>
-          </div>
-        </fieldset>
-        <div class="pp-inline">
-          <div class="fr-select-group">
-            <label class="fr-label" for="tableSelect">Table</label>
-            <select class="fr-select" id="tableSelect"></select>
-          </div>
-          <button type="button" class="fr-btn fr-btn--secondary fr-icon-refresh-line fr-btn--icon-left" id="reloadBtn">Recharger</button>
         </div>
-        <p class="fr-hint-text fr-mt-2w fr-mb-0" id="tableInfo"></p>
+        <div class="fr-fieldset__element fr-fieldset__element--inline">
+          <div class="fr-radio-group">
+            <input type="radio" id="source-table" name="source" value="table">
+            <label class="fr-label" for="source-table">Une table au choix (toutes ses lignes)</label>
+          </div>
+        </div>
+      </fieldset>
+      <div class="pp-inline">
+        <div class="fr-select-group" id="tableSelectGroup">
+          <label class="fr-label fr-sr-only" for="tableSelect">Table</label>
+          <select class="fr-select" id="tableSelect"></select>
+        </div>
+        <button type="button" class="fr-btn fr-btn--tertiary fr-icon-refresh-line fr-btn--icon-left" id="reloadBtn">Recharger</button>
       </div>
+      <p class="fr-hint-text fr-mt-1w fr-mb-0" id="tableInfo"></p>
+    </div>
+
+    <div class="pp-bloc">
+      <h2>Tables liées <span class="fr-badge fr-badge--sm fr-badge--no-icon">facultatif</span></h2>
+      <p class="fr-text--sm fr-mb-1w">Pour utiliser dans le même courrier des colonnes d'autres tables (agrément, établissements, communes…). Chaque dossier est relié aux lignes de la table liée qui ont la même valeur dans la colonne choisie.</p>
+      <div id="linkList"></div>
+      <button type="button" class="fr-btn fr-btn--secondary fr-btn--sm fr-icon-add-line fr-btn--icon-left" id="linkAdd">Ajouter une table liée</button>
     </div>
 
     <div class="pp-bloc">
       <h2>Colonnes à utiliser</h2>
-      <p class="fr-text--sm">Les colonnes cochées deviennent des champs <code>{{colonne}}</code> insérables dans le message, et les colonnes du fichier Excel.</p>
+      <p class="fr-text--sm fr-mb-1w">Les colonnes cochées deviennent des champs <code>{{colonne}}</code> du message et les colonnes du fichier Excel.</p>
       <div class="pp-inline pp-mb">
         <div class="fr-input-group">
           <label class="fr-label fr-sr-only" for="colFilter">Rechercher une colonne</label>
@@ -268,23 +291,22 @@
         <button type="button" class="fr-btn fr-btn--tertiary fr-btn--sm" id="colNone">Tout décocher</button>
       </div>
       <div class="pp-list" id="colList"></div>
-      <div class="fr-select-group fr-mt-3w fr-mb-0">
-        <label class="fr-label" for="labelCol">Colonne d'identification
-          <span class="fr-hint-text">Sert à reconnaître chaque enregistrement dans l'aperçu et la liste de génération.</span>
-        </label>
-        <select class="fr-select" id="labelCol"></select>
-      </div>
-      <div class="fr-mt-3w">
-        <p class="fr-label fr-mb-1v">Identifiant du dossier
-          <span class="fr-hint-text">Jusqu'à 3 colonnes ajoutées au nom pour distinguer les dossiers homonymes (n° de dossier, commune, SIRET…). Champ de fusion <code>{{IDENTIFIANT}}</code>, utile dans le nom des fichiers.</span>
-        </p>
-        <div class="pp-inline" id="idColsBox">
-          <div class="fr-select-group"><select class="fr-select" id="idCol0" data-idcol="0" aria-label="Colonne d'identifiant 1"></select></div>
-          <div class="fr-select-group"><select class="fr-select" id="idCol1" data-idcol="1" aria-label="Colonne d'identifiant 2"></select></div>
-          <div class="fr-select-group"><select class="fr-select" id="idCol2" data-idcol="2" aria-label="Colonne d'identifiant 3"></select></div>
+      <section class="fr-accordion fr-mt-2w">
+        <h3 class="fr-accordion__title"><button type="button" class="fr-accordion__btn" aria-expanded="false" aria-controls="identBox">Identification des dossiers <span class="fr-hint-text fr-ml-1w" id="identSummary"></span></button></h3>
+        <div class="fr-collapse" id="identBox">
+          <div class="fr-select-group">
+            <label class="fr-label" for="labelCol">Nom affiché <span class="fr-hint-text">Dans l'aperçu et la liste des dossiers.</span></label>
+            <select class="fr-select" id="labelCol"></select>
+          </div>
+          <p class="fr-label fr-mb-1v">Identifiant <span class="fr-hint-text">Jusqu'à 3 colonnes pour distinguer les homonymes. Champ <code>{{IDENTIFIANT}}</code>, utile dans le nom des fichiers.</span></p>
+          <div class="pp-inline" id="idColsBox">
+            <div class="fr-select-group"><select class="fr-select" id="idCol0" data-idcol="0" aria-label="Colonne d'identifiant 1"></select></div>
+            <div class="fr-select-group"><select class="fr-select" id="idCol1" data-idcol="1" aria-label="Colonne d'identifiant 2"></select></div>
+            <div class="fr-select-group"><select class="fr-select" id="idCol2" data-idcol="2" aria-label="Colonne d'identifiant 3"></select></div>
+          </div>
+          <p class="fr-text--xs fr-mt-1w fr-mb-0" id="idSample"></p>
         </div>
-        <p class="fr-text--xs fr-mt-1w fr-mb-0" id="idSample"></p>
-      </div>
+      </section>
     </div>
   </div>
 
@@ -292,7 +314,7 @@
   <div id="tab-message" class="fr-tabs__panel" role="tabpanel" aria-labelledby="tabbtn-message">
     <div class="pp-bloc" id="tplBloc">
       <h2>Modèle de document</h2>
-      <p class="fr-text--sm">Modèles déposés dans la table <code>Modele_publipostage</code> : Word (.docx), LibreOffice (.odt) ou PDF. Le corps du modèle s'ouvre dans l'éditeur ci-dessous ; l'en-tête, le pied de page et la mise en page du modèle sont conservés.</p>
+      <p class="fr-text--sm fr-mb-1w">Word, LibreOffice ou PDF déposé dans <code>Modele_publipostage</code>. En-tête, pied de page et mise en page sont conservés. Facultatif : vous pouvez aussi écrire directement dans l'éditeur.</p>
       <div id="tplMsg"></div>
       <div class="pp-inline pp-mb">
         <div class="fr-select-group">
@@ -318,7 +340,9 @@
           <div class="fr-input-group"><label class="fr-label" for="tplMr">Marge droite (cm)</label><input class="fr-input" type="number" step="0.1" min="0" id="tplMr"></div>
         </div>
       </div>
-      <h3 class="fr-h6 fr-mt-2w fr-mb-1w">Enregistrer le message dans <code>Modele_publipostage</code></h3>
+      <section class="fr-accordion fr-mt-2w">
+        <h3 class="fr-accordion__title"><button type="button" class="fr-accordion__btn" aria-expanded="false" aria-controls="tplSaveBox">Enregistrer le message comme modèle dans Grist</button></h3>
+        <div class="fr-collapse" id="tplSaveBox">
       <div class="pp-inline">
         <div class="fr-input-group">
           <label class="fr-label" for="tplName">Intitulé</label>
@@ -338,6 +362,8 @@
         <button type="button" class="fr-btn fr-icon-save-line fr-btn--icon-left" id="tplSave">Enregistrer dans Grist</button>
       </div>
       <p class="fr-hint-text fr-mt-1w fr-mb-0">Le modèle est enregistré au format Word (.docx). Pour un modèle Word, l'en-tête, le pied de page, les marges et les styles d'origine sont conservés ; les versions précédentes restent dans la pièce jointe.</p>
+            </div>
+      </section>
     </div>
 
     <div class="pp-pvbar">
@@ -436,185 +462,164 @@
     <div class="pp-bloc">
       <div class="fr-toggle fr-toggle--label-left">
         <input type="checkbox" class="fr-toggle__input" id="sigEnabled" aria-describedby="sigEnabled-hint">
-        <label class="fr-toggle__label" for="sigEnabled">Intégrer une signature électronique aux documents</label>
-        <p class="fr-hint-text" id="sigEnabled-hint">La signature est placée à l'emplacement du champ <code>{{SIGNATURE}}</code> (ou <code>#signature#</code>) dans le message, ou à la fin du document si ce champ est absent.</p>
+        <label class="fr-toggle__label" for="sigEnabled">Signer les documents</label>
+        <p class="fr-hint-text" id="sigEnabled-hint">La signature se place sur <code>{{SIGNATURE}}</code> ou <code>#signature#</code> dans le message, sinon à la fin.</p>
       </div>
     </div>
 
-    <div class="pp-bloc" id="sigTblBloc">
-      <h2>Signatures enregistrées</h2>
-      <p class="fr-text--sm">Signatures déposées dans la table <code>Signature_Num</code> (image ou PDF). Seules les signatures dont la case <b>Attestation</b> est cochée peuvent être utilisées.</p>
-      <div id="sigTblMsg"></div>
-      <div class="pp-grid">
-        <div>
+    <div id="sigBody">
+      <div class="pp-bloc" id="sigTblBloc">
+        <h2>1. Choisir la signature</h2>
+        <fieldset class="fr-segmented fr-segmented--sm fr-mb-2w">
+          <legend class="fr-segmented__legend fr-sr-only">Origine de la signature</legend>
+          <div class="fr-segmented__elements">
+            <div class="fr-segmented__element"><input value="table" type="radio" id="sigSrc-table" name="sigSrc"><label class="fr-label fr-icon-user-line" for="sigSrc-table">Signataire enregistré</label></div>
+            <div class="fr-segmented__element"><input value="draw" type="radio" id="sigSrc-draw" name="sigSrc"><label class="fr-label fr-icon-edit-line" for="sigSrc-draw">Dessiner</label></div>
+            <div class="fr-segmented__element"><input value="import" type="radio" id="sigSrc-import" name="sigSrc"><label class="fr-label fr-icon-upload-line" for="sigSrc-import">Importer une image</label></div>
+          </div>
+        </fieldset>
+        <div id="sigTblMsg"></div>
+
+        <div class="pp-sigsrc" data-sigsrc="table">
           <div class="pp-inline pp-mb">
             <div class="fr-select-group">
-              <label class="fr-label" for="sigTblSelect">Signataire</label>
+              <label class="fr-label" for="sigTblSelect">Signataire <span class="fr-hint-text">Table <code>Signature_Num</code> : seules les lignes avec « Attestation » cochée sont utilisables.</span></label>
               <select class="fr-select" id="sigTblSelect"></select>
             </div>
             <button type="button" class="fr-btn fr-btn--tertiary fr-icon-refresh-line fr-btn--icon-left" id="sigTblReload">Actualiser</button>
           </div>
           <div id="sigTblPreview" class="pp-sigtbl"><span class="fr-text--sm fr-mb-0">Choisissez un signataire.</span></div>
           <div id="sigTblInfo" class="fr-mt-1w"></div>
-          <button type="button" class="fr-btn fr-mt-2w" id="sigTblUse">Utiliser cette signature</button>
+          <button type="button" class="fr-btn fr-mt-2w" id="sigTblUse" hidden>Utiliser cette signature</button>
         </div>
-        <div>
-          <h3 class="fr-h6 fr-mb-1w">Ajouter la signature dessinée ou importée ci-dessous</h3>
-          <div class="pp-inline">
-            <div class="fr-input-group"><label class="fr-label" for="sigTblPrenom">Prénom</label><input class="fr-input" type="text" id="sigTblPrenom"></div>
-            <div class="fr-input-group"><label class="fr-label" for="sigTblNom">Nom</label><input class="fr-input" type="text" id="sigTblNom"></div>
-          </div>
-          <div class="fr-checkbox-group fr-mt-2w">
-            <input type="checkbox" id="sigTblAttest">
-            <label class="fr-label" for="sigTblAttest">J'atteste être le titulaire de cette signature, ou disposer de son autorisation écrite, et en autoriser l'usage dans les documents générés.</label>
-          </div>
-          <button type="button" class="fr-btn fr-btn--secondary fr-mt-2w fr-icon-save-line fr-btn--icon-left" id="sigTblSave">Enregistrer dans Signature_Num</button>
-        </div>
-      </div>
-      <section class="fr-accordion fr-mt-2w">
-        <h3 class="fr-accordion__title">
-          <button type="button" class="fr-accordion__btn" aria-expanded="false" id="sigFmtBtn">Quel format de fichier pour la signature ?</button>
-        </h3>
-        <div class="fr-collapse" id="sigFmtHelp">
-          <ul class="fr-text--sm">
-            <li><b>Image (signature scannée ou dessinée)</b> : le format conseillé est le <b>PNG à fond transparent</b>, d'au moins 600 pixels de large. JPG et PDF scannés sont acceptés : le fond blanc est retiré automatiquement.</li>
-            <li>Le format de l'image ne change <b>pas</b> sa valeur juridique : une image de signature n'est qu'une représentation visuelle, que n'importe qui peut copier. Elle ne prouve ni l'identité du signataire ni l'intégrité du document.</li>
-            <li><b>PDF signé avec un certificat</b> : le widget en reprend l'apparence visuelle et affiche le titulaire du certificat, mais la signature électronique d'un PDF ne peut pas être transférée à un autre document : elle ne vaut que pour le fichier signé.</li>
-            <li>La seule signature à valeur probante est la <b>signature électronique certifiée</b> apposée sur chaque document avec votre certificat (bloc « Signature électronique certifiée » en bas de cet onglet), ou avec le parapheur de votre ministère.</li>
-            <li>Ne déposez <b>jamais</b> votre certificat (.p12 / .pfx) ni son mot de passe dans Grist : toute personne ayant accès au document pourrait signer à votre place.</li>
-          </ul>
-        </div>
-      </section>
-    </div>
 
-    <div class="pp-grid">
-      <div class="pp-bloc">
-        <h2>Dessiner la signature</h2>
-        <div class="pp-sigpad">
-          <canvas id="sigCanvas" aria-label="Zone de signature"></canvas>
-          <div class="pp-base"></div>
-        </div>
-        <div class="pp-inline fr-mt-2w">
-          <div class="fr-select-group">
-            <label class="fr-label" for="sigInk">Couleur de l'encre</label>
-            <select class="fr-select" id="sigInk">
-              <option value="#000091">Bleu</option>
-              <option value="#161616">Noir</option>
-            </select>
+        <div class="pp-sigsrc" data-sigsrc="draw">
+          <div class="pp-sigpad">
+            <canvas id="sigCanvas" aria-label="Zone de signature"></canvas>
+            <div class="pp-base"></div>
           </div>
-          <div class="fr-input-group">
-            <label class="fr-label" for="sigThick">Épaisseur du trait</label>
-            <input type="range" id="sigThick" min="1" max="6" step="0.5" value="2.5" style="width:100%; margin: .75rem 0">
+          <div class="pp-inline fr-mt-1w">
+            <button type="button" class="fr-btn fr-btn--sm" id="sigUse">Utiliser ce tracé</button>
+            <button type="button" class="fr-btn fr-btn--sm fr-btn--secondary" id="sigClear">Effacer</button>
+            <span class="pp-inkopts">
+              <label for="sigInk" class="fr-text--sm fr-mb-0">Encre</label>
+              <select class="fr-select fr-select--sm" id="sigInk"><option value="#000091">Bleu</option><option value="#161616">Noir</option></select>
+              <label for="sigThick" class="fr-text--sm fr-mb-0">Trait</label>
+              <input type="range" id="sigThick" min="1" max="6" step="0.5" value="2.5">
+            </span>
           </div>
         </div>
-        <ul class="fr-btns-group fr-btns-group--inline-sm fr-btns-group--sm fr-mt-2w">
-          <li><button type="button" class="fr-btn" id="sigUse">Utiliser ce tracé</button></li>
-          <li><button type="button" class="fr-btn fr-btn--secondary" id="sigClear">Effacer</button></li>
-          <li><button type="button" class="fr-btn fr-btn--tertiary fr-icon-upload-line fr-btn--icon-left" id="sigImport">Importer une image (PNG/JPG)</button></li>
-        </ul>
-        <input type="file" id="sigFile" accept="image/*" hidden>
+
+        <div class="pp-sigsrc" data-sigsrc="import">
+          <button type="button" class="fr-btn fr-icon-upload-line fr-btn--icon-left" id="sigImport">Choisir une image (PNG, JPG)</button>
+          <p class="fr-hint-text fr-mt-1w fr-mb-0">De préférence un PNG à fond transparent ; le fond blanc d'un JPG est retiré automatiquement.</p>
+          <input type="file" id="sigFile" accept="image/*" hidden>
+        </div>
+
+        <section class="fr-accordion fr-mt-2w pp-sigsave">
+          <h3 class="fr-accordion__title"><button type="button" class="fr-accordion__btn" aria-expanded="false" aria-controls="sigSaveBox">Enregistrer cette signature dans Signature_Num pour la réutiliser</button></h3>
+          <div class="fr-collapse" id="sigSaveBox">
+            <div class="pp-inline">
+              <div class="fr-input-group"><label class="fr-label" for="sigTblPrenom">Prénom</label><input class="fr-input" type="text" id="sigTblPrenom"></div>
+              <div class="fr-input-group"><label class="fr-label" for="sigTblNom">Nom</label><input class="fr-input" type="text" id="sigTblNom"></div>
+            </div>
+            <div class="fr-checkbox-group fr-checkbox-group--sm fr-mt-2w">
+              <input type="checkbox" id="sigTblAttest">
+              <label class="fr-label" for="sigTblAttest">J'atteste être le titulaire de cette signature, ou disposer de son autorisation écrite.</label>
+            </div>
+            <button type="button" class="fr-btn fr-btn--secondary fr-btn--sm fr-mt-2w fr-icon-save-line fr-btn--icon-left" id="sigTblSave">Enregistrer</button>
+          </div>
+        </section>
       </div>
 
       <div class="pp-bloc">
-        <h2>Signature enregistrée</h2>
-        <div id="sigPreview"><span class="fr-text--sm fr-mb-0">Aucune signature</span></div>
-        <div class="fr-input-group fr-mt-2w">
-          <label class="fr-label" for="sigWidth">Largeur dans le document</label>
-          <div class="pp-range">
-            <input type="range" id="sigWidth" min="80" max="360" step="10" value="180">
-            <span id="sigWidthVal" class="fr-text--sm fr-mb-0"></span>
+        <h2>2. Présentation</h2>
+        <div class="pp-sigsetup">
+          <div>
+            <div id="sigPreview" class="pp-sigprev"><span class="fr-text--sm fr-mb-0">Aucune signature choisie</span></div>
+            <button type="button" class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-icon-delete-bin-line fr-btn--icon-left" id="sigRemove">Retirer</button>
+          </div>
+          <div>
+            <div class="pp-inline">
+              <div class="fr-input-group">
+                <label class="fr-label" for="sigWidth">Largeur <span id="sigWidthVal" class="fr-hint-text"></span></label>
+                <input type="range" id="sigWidth" min="80" max="360" step="10" value="180" style="width:100%">
+              </div>
+              <div class="fr-select-group">
+                <label class="fr-label" for="sigAlign">Position</label>
+                <select class="fr-select" id="sigAlign"><option value="left">À gauche</option><option value="center">Au centre</option><option value="right" selected>À droite</option></select>
+              </div>
+            </div>
+            <div class="pp-inline fr-mt-2w">
+              <div class="fr-checkbox-group fr-checkbox-group--sm">
+                <input type="checkbox" id="sigFaitA" checked>
+                <label class="fr-label" for="sigFaitA">« Fait à …, le … »</label>
+              </div>
+              <div class="fr-input-group">
+                <label class="fr-label fr-sr-only" for="sigLieu">Lieu</label>
+                <input class="fr-input" type="text" id="sigLieu" placeholder="Lieu, ex : Rennes">
+              </div>
+            </div>
+            <div class="fr-input-group fr-mt-1w">
+              <label class="fr-label" for="sigFonction">Fonction <span class="fr-hint-text">Champs de fusion acceptés</span></label>
+              <input class="fr-input" type="text" id="sigFonction" placeholder="ex : Pour la préfète et par délégation, le directeur régional">
+            </div>
+            <div class="fr-input-group">
+              <label class="fr-label" for="sigNom">Nom du signataire</label>
+              <input class="fr-input" type="text" id="sigNom" placeholder="ex : Prénom NOM">
+            </div>
+            <div class="fr-checkbox-group fr-checkbox-group--sm">
+              <input type="checkbox" id="sigMention" checked>
+              <label class="fr-label" for="sigMention">Mention « Signé électroniquement par … le … »</label>
+            </div>
           </div>
         </div>
-        <div class="fr-select-group">
-          <label class="fr-label" for="sigAlign">Alignement du bloc signature</label>
-          <select class="fr-select" id="sigAlign">
-            <option value="left">Gauche</option>
-            <option value="center">Centré</option>
-            <option value="right" selected>Droite</option>
-          </select>
-        </div>
-        <button type="button" class="fr-btn fr-btn--tertiary fr-btn--sm fr-icon-delete-bin-line fr-btn--icon-left" id="sigRemove">Supprimer la signature</button>
       </div>
-    </div>
 
-    <div class="pp-bloc">
-      <h2>Bloc signataire</h2>
-      <p class="fr-text--sm">Ces textes acceptent aussi les champs de fusion (ex : <code>{{Code_dpt}}</code>).</p>
-      <div class="fr-checkbox-group fr-mb-2w">
-        <input type="checkbox" id="sigFaitA" checked>
-        <label class="fr-label" for="sigFaitA">Ajouter « Fait à …, le … »</label>
-      </div>
-      <div class="fr-input-group">
-        <label class="fr-label" for="sigLieu">Lieu</label>
-        <input class="fr-input" type="text" id="sigLieu" placeholder="ex : Rennes">
-      </div>
-      <div class="fr-input-group">
-        <label class="fr-label" for="sigFonction">Fonction / qualité</label>
-        <input class="fr-input" type="text" id="sigFonction" placeholder="ex : Pour le préfet et par délégation, le directeur départemental">
-      </div>
-      <div class="fr-input-group">
-        <label class="fr-label" for="sigNom">Nom du signataire</label>
-        <input class="fr-input" type="text" id="sigNom" placeholder="ex : Prénom NOM">
-      </div>
-      <div class="fr-checkbox-group">
-        <input type="checkbox" id="sigMention" checked>
-        <label class="fr-label" for="sigMention">Ajouter la mention « Signé électroniquement par … le … »</label>
-      </div>
-    </div>
-    <div class="pp-bloc" id="certBloc">
-      <h2>Signature électronique certifiée (PDF)</h2>
-      <div class="fr-alert fr-alert--info fr-alert--sm">
-        <p>Signe cryptographiquement chaque PDF généré avec <b>votre certificat de signature</b> (fichier <code>.p12</code> ou <code>.pfx</code>), au format <b>PAdES</b> reconnu par Adobe Acrobat et les outils de validation européens. Toute modification du PDF après signature est détectée.</p>
-      </div>
-      <div class="fr-alert fr-alert--warning fr-alert--sm">
-        <p>Le certificat et son mot de passe restent <b>uniquement dans la mémoire de ce navigateur</b>, le temps de la session : ils ne sont jamais enregistrés dans Grist ni envoyés sur Internet. Il faut les réimporter à chaque ouverture du widget. Les certificats sur carte à puce ou clé USB ne sont pas accessibles depuis un navigateur (voir l'aide ci-dessous).</p>
-      </div>
-      <div class="pp-grid">
-        <div>
-          <div class="fr-upload-group fr-mb-2w">
-            <label class="fr-label" for="certFile">Certificat de signature
-              <span class="fr-hint-text">Fichier .p12 ou .pfx contenant la clé privée (certificat RSA).</span>
-            </label>
-            <input class="fr-upload" type="file" id="certFile" accept=".p12,.pfx,application/x-pkcs12">
+      <section class="fr-accordion pp-bloc pp-accbloc" id="certBloc">
+        <h2 class="fr-accordion__title"><button type="button" class="fr-accordion__btn" aria-expanded="false" aria-controls="certBox">3. Signature certifiée des PDF (certificat .p12) — facultatif <span class="fr-badge fr-badge--sm fr-badge--success fr-ml-1w" id="certBadge" hidden>Active</span></button></h2>
+        <div class="fr-collapse" id="certBox">
+          <p class="fr-text--sm">Signe chaque PDF avec votre certificat (PAdES, reconnu par Adobe Acrobat). Le certificat et son mot de passe restent <b>uniquement en mémoire</b> : jamais enregistrés dans Grist, à recharger à chaque ouverture.</p>
+          <div class="pp-grid">
+            <div>
+              <div class="fr-upload-group fr-mb-2w">
+                <label class="fr-label" for="certFile">Certificat (.p12 ou .pfx)</label>
+                <input class="fr-upload" type="file" id="certFile" accept=".p12,.pfx,application/x-pkcs12">
+              </div>
+              <div class="fr-input-group">
+                <label class="fr-label" for="certPass">Mot de passe</label>
+                <input class="fr-input" type="password" id="certPass" autocomplete="off">
+              </div>
+              <ul class="fr-btns-group fr-btns-group--inline-sm fr-btns-group--sm">
+                <li><button type="button" class="fr-btn" id="certLoad">Charger</button></li>
+                <li><button type="button" class="fr-btn fr-btn--tertiary" id="certClear">Retirer</button></li>
+              </ul>
+              <div id="certMsg"></div>
+            </div>
+            <div>
+              <div id="certInfo"><p class="fr-text--sm">Aucun certificat chargé.</p></div>
+              <div class="fr-toggle fr-mt-2w">
+                <input type="checkbox" class="fr-toggle__input" id="certEnabled" disabled>
+                <label class="fr-toggle__label" for="certEnabled">Signer les PDF générés</label>
+              </div>
+              <div class="pp-inline fr-mt-2w">
+                <div class="fr-input-group"><label class="fr-label" for="certReason">Motif</label><input class="fr-input" type="text" id="certReason"></div>
+                <div class="fr-input-group"><label class="fr-label" for="certLocation">Lieu</label><input class="fr-input" type="text" id="certLocation" placeholder="ex : Rennes"></div>
+              </div>
+            </div>
           </div>
-          <div class="fr-input-group">
-            <label class="fr-label" for="certPass">Mot de passe du certificat</label>
-            <input class="fr-input" type="password" id="certPass" autocomplete="off">
-          </div>
-          <ul class="fr-btns-group fr-btns-group--inline-sm fr-btns-group--sm">
-            <li><button type="button" class="fr-btn" id="certLoad">Charger le certificat</button></li>
-            <li><button type="button" class="fr-btn fr-btn--tertiary" id="certClear">Retirer</button></li>
-          </ul>
-          <div id="certMsg"></div>
-        </div>
-        <div>
-          <div id="certInfo"><p class="fr-text--sm">Aucun certificat chargé.</p></div>
-          <div class="fr-toggle fr-mt-2w">
-            <input type="checkbox" class="fr-toggle__input" id="certEnabled" disabled>
-            <label class="fr-toggle__label" for="certEnabled">Signer électroniquement les PDF générés</label>
-          </div>
-          <div class="fr-input-group fr-mt-2w">
-            <label class="fr-label" for="certReason">Motif de la signature</label>
-            <input class="fr-input" type="text" id="certReason">
-          </div>
-          <div class="fr-input-group">
-            <label class="fr-label" for="certLocation">Lieu de signature</label>
-            <input class="fr-input" type="text" id="certLocation" placeholder="ex : Saint-Brieuc">
-          </div>
-        </div>
-      </div>
-      <section class="fr-accordion fr-mt-2w">
-        <h3 class="fr-accordion__title">
-          <button type="button" class="fr-accordion__btn" aria-expanded="false" id="certHelpBtn">Valeur juridique et certificats compatibles</button>
-        </h3>
-        <div class="fr-collapse" id="certHelp">
-          <ul class="fr-text--sm">
-            <li>La valeur de la signature dépend du <b>certificat</b> utilisé, pas du widget. Pour un acte administratif, l'article L212-3 du code des relations entre le public et l'administration exige un procédé conforme au <b>référentiel général de sécurité (RGS)</b> : utilisez un certificat de signature délivré par votre ministère ou par un prestataire qualifié (liste de confiance de l'ANSSI / de l'Union européenne).</li>
-            <li>Avec un certificat logiciel (.p12) qualifié ou RGS, la signature produite est une <b>signature électronique avancée</b> reposant sur ce certificat. Une <b>signature qualifiée</b> au sens du règlement eIDAS exige en plus un dispositif matériel (carte agent, clé USB cryptographique) : elle ne peut pas être produite depuis un navigateur.</li>
-            <li>Si votre certificat est sur carte ou clé USB : générez les PDF ici (un fichier par dossier), puis signez-les avec l'outil de signature de votre ministère (parapheur électronique) ou avec Adobe Acrobat Reader (« Utiliser un certificat »).</li>
-            <li>La date de signature est celle de l'ordinateur (pas d'horodatage certifié). Faites valider l'usage par votre service juridique ou votre RSSI avant d'envoyer des décisions signées.</li>
-            <li>La signature certifiée s'applique aux <b>PDF</b> uniquement, pas aux fichiers Word ou Excel.</li>
-          </ul>
+          <section class="fr-accordion fr-mt-2w">
+            <h3 class="fr-accordion__title"><button type="button" class="fr-accordion__btn" aria-expanded="false" id="certHelpBtn">Valeur juridique, formats et certificats compatibles</button></h3>
+            <div class="fr-collapse" id="certHelp">
+              <ul class="fr-text--sm">
+                <li>Une <b>image</b> de signature (dessinée, scannée, PDF) n'est qu'une représentation visuelle : elle ne prouve ni l'identité du signataire ni l'intégrité du document. Le format (PNG, JPG, PDF) n'y change rien.</li>
+                <li>Un <b>PDF déjà signé</b> déposé dans <code>Signature_Num</code> : seule son apparence est reprise, sa signature certifiée ne se transfère pas aux autres documents.</li>
+                <li>La valeur de la signature certifiée dépend du <b>certificat</b>. Pour un acte administratif (art. L212-3 du CRPA), utilisez un certificat conforme au <b>RGS</b> délivré par votre ministère ou un prestataire qualifié. Un certificat logiciel (.p12) donne une signature <b>avancée</b> ; une signature <b>qualifiée</b> eIDAS exige une carte ou une clé USB, inaccessibles depuis un navigateur : générez alors les PDF ici et signez-les avec le parapheur de votre ministère.</li>
+                <li>La date de signature est celle de l'ordinateur (pas d'horodatage certifié). Seuls les <b>PDF</b> sont signés, pas les fichiers Word ou Excel.</li>
+                <li>Ne déposez <b>jamais</b> votre certificat ni son mot de passe dans Grist.</li>
+              </ul>
+            </div>
+          </section>
         </div>
       </section>
     </div>
@@ -627,24 +632,44 @@
       <div class="pp-grid">
         <div>
           <div class="fr-select-group">
-            <label class="fr-label" for="selView">Filtres d'une vue Grist
-              <span class="fr-hint-text">Applique les filtres enregistrés et le tri d'une vue de la même table (ex : Traitement22, Traitement35, Traitement56).</span>
-            </label>
+            <label class="fr-label" for="selView">Filtres d'une vue Grist <span class="fr-hint-text">ex : Traitement22, Traitement35, Traitement56</span></label>
             <select class="fr-select" id="selView"></select>
           </div>
-          <div class="fr-select-group">
-            <label class="fr-label" for="selDone">Dossiers déjà générés
-              <span class="fr-hint-text" id="selDoneHint"></span>
-            </label>
+          <div class="fr-select-group fr-mb-0">
+            <label class="fr-label" for="selDone">Dossiers déjà générés <span class="fr-hint-text" id="selDoneHint"></span></label>
             <select class="fr-select" id="selDone">
               <option value="hide">Exclure les dossiers déjà générés</option>
               <option value="all">Inclure tous les dossiers</option>
               <option value="only">Uniquement les dossiers déjà générés</option>
             </select>
           </div>
+        </div>
+        <div>
+          <div class="fr-input-group">
+            <label class="fr-label" for="selNumbers">Numéros de dossier <span class="fr-hint-text">Un par ligne (ou séparés par des virgules). Vide = pas de filtre.</span></label>
+            <textarea class="fr-input" id="selNumbers" rows="3" placeholder="ex : 33875608&#10;33875612"></textarea>
+          </div>
+          <div class="fr-select-group fr-mb-0">
+            <label class="fr-label" for="selNumCol">Colonne du numéro</label>
+            <select class="fr-select" id="selNumCol"></select>
+          </div>
+          <div id="selNumMsg"></div>
+        </div>
+      </div>
+      <section class="fr-accordion fr-mt-2w">
+        <h3 class="fr-accordion__title"><button type="button" class="fr-accordion__btn" aria-expanded="false" aria-controls="condBox">Filtres sur les colonnes <span class="fr-badge fr-badge--sm fr-badge--info fr-badge--no-icon fr-ml-1w" id="condBadge" hidden></span></button></h3>
+        <div class="fr-collapse" id="condBox">
+          <p class="fr-text--sm fr-mb-1w">Toutes les conditions doivent être remplies (colonnes de la table principale et des tables liées).</p>
+          <div id="condList"></div>
+          <button type="button" class="fr-btn fr-btn--secondary fr-btn--sm fr-icon-add-line fr-btn--icon-left" id="condAdd">Ajouter un filtre</button>
+        </div>
+      </section>
+      <section class="fr-accordion">
+        <h3 class="fr-accordion__title"><button type="button" class="fr-accordion__btn" aria-expanded="false" aria-controls="markBox">Suivi des dossiers générés</button></h3>
+        <div class="fr-collapse" id="markBox">
           <div class="fr-select-group">
             <label class="fr-label" for="selMark">Marquer comme généré dans la colonne
-              <span class="fr-hint-text">Facultatif. Après chaque génération, la date (ou « vrai » pour une case à cocher) est écrite dans cette colonne Grist. Elle sert aussi à repérer les dossiers déjà générés, pour tous les utilisateurs.</span>
+              <span class="fr-hint-text">Facultatif. La date (ou « vrai » pour une case à cocher) y est écrite après chaque génération : le suivi est alors partagé avec tous les utilisateurs.</span>
             </label>
             <select class="fr-select" id="selMark"></select>
           </div>
@@ -654,24 +679,7 @@
           </div>
           <button type="button" class="fr-btn fr-btn--tertiary fr-btn--sm fr-icon-refresh-line fr-btn--icon-left" id="selForget">Oublier l'historique des dossiers affichés</button>
         </div>
-        <div>
-          <div class="fr-input-group">
-            <label class="fr-label" for="selNumbers">Numéros de dossier
-              <span class="fr-hint-text">Collez une liste (un par ligne, ou séparés par des virgules ou des espaces). Laissez vide pour ne pas filtrer.</span>
-            </label>
-            <textarea class="fr-input" id="selNumbers" rows="5" placeholder="ex : 33875608&#10;33875612"></textarea>
-          </div>
-          <div class="fr-select-group">
-            <label class="fr-label" for="selNumCol">Colonne du numéro de dossier</label>
-            <select class="fr-select" id="selNumCol"></select>
-          </div>
-          <div id="selNumMsg"></div>
-        </div>
-      </div>
-      <h3 class="fr-h6 fr-mt-2w fr-mb-1w">Filtres sur les colonnes</h3>
-      <p class="fr-text--sm fr-mb-1w">Toutes les conditions doivent être remplies. Les colonnes proposées sont toutes celles de la table, pas seulement les colonnes cochées.</p>
-      <div id="condList"></div>
-      <button type="button" class="fr-btn fr-btn--secondary fr-btn--sm fr-icon-add-line fr-btn--icon-left" id="condAdd">Ajouter un filtre</button>
+      </section>
     </div>
 
     <div class="pp-grid">
@@ -690,39 +698,40 @@
       </div>
 
       <div class="pp-bloc">
-        <h2>Options</h2>
+        <h2>Fichiers</h2>
         <div class="fr-select-group">
-          <label class="fr-label" for="expMode">Fichiers Word et PDF</label>
+          <label class="fr-label" for="expMode">Word et PDF</label>
           <select class="fr-select" id="expMode">
-            <option value="single">Un seul fichier (un enregistrement par page)</option>
-            <option value="multi">Un fichier par enregistrement (archive ZIP)</option>
+            <option value="single">Un seul fichier (un dossier par page)</option>
+            <option value="multi">Un fichier par dossier (archive ZIP)</option>
           </select>
         </div>
         <div class="fr-input-group">
-          <label class="fr-label" for="expName">Nom des fichiers
-            <span class="fr-hint-text">Champs de fusion acceptés, ex : Decision_{{raison_sociale}}</span>
-          </label>
+          <label class="fr-label" for="expName">Nom des fichiers <span class="fr-hint-text">ex : Decision_{{IDENTIFIANT}}</span></label>
           <input class="fr-input" type="text" id="expName">
         </div>
-        <div class="fr-select-group">
-          <label class="fr-label" for="expFont">Police des documents
-            <span class="fr-hint-text">Marianne est intégrée au PDF. Dans Word, elle doit être installée sur le poste (sinon Word la remplace).</span>
-          </label>
-          <select class="fr-select" id="expFont">
-            <option value="Marianne">Marianne</option>
-            <option value="Arial">Arial</option>
-          </select>
-        </div>
-        <div class="fr-select-group">
-          <label class="fr-label" for="expAttach">Joindre dans la colonne
-            <span class="fr-hint-text">Chaque document généré (un par enregistrement) est ajouté à cette colonne « Pièces jointes » de la ligne. En mode « Un seul fichier », les documents sont uniquement joints dans Grist, sans téléchargement.</span>
-          </label>
-          <select class="fr-select" id="expAttach"><option value="">— Ne pas joindre à Grist —</option></select>
-        </div>
-        <div class="fr-checkbox-group">
-          <input type="checkbox" id="expMessage" checked>
-          <label class="fr-label" for="expMessage">Excel : ajouter une colonne « Message » (texte fusionné)</label>
-        </div>
+        <section class="fr-accordion">
+          <h3 class="fr-accordion__title"><button type="button" class="fr-accordion__btn" aria-expanded="false" aria-controls="expMoreBox">Autres options</button></h3>
+          <div class="fr-collapse" id="expMoreBox">
+            <div class="fr-select-group">
+              <label class="fr-label" for="expAttach">Joindre dans la colonne
+                <span class="fr-hint-text">Chaque document est ajouté à cette colonne « Pièces jointes » de sa ligne. En mode « Un seul fichier », les documents sont seulement joints dans Grist.</span>
+              </label>
+              <select class="fr-select" id="expAttach"><option value="">— Ne pas joindre à Grist —</option></select>
+            </div>
+            <div class="fr-select-group">
+              <label class="fr-label" for="expFont">Police <span class="fr-hint-text">Marianne est intégrée au PDF ; dans Word elle doit être installée sur le poste.</span></label>
+              <select class="fr-select" id="expFont">
+                <option value="Marianne">Marianne</option>
+                <option value="Arial">Arial</option>
+              </select>
+            </div>
+            <div class="fr-checkbox-group fr-checkbox-group--sm">
+              <input type="checkbox" id="expMessage" checked>
+              <label class="fr-label" for="expMessage">Excel : ajouter une colonne « Message » (texte fusionné)</label>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
 
@@ -778,6 +787,7 @@ let cfg = {
   cols: [],
   labelCol: '',
   idCols: null,  // colonnes qui complètent l'identification (null = choix automatique)
+  links: [],     // tables liées : [{ tableId, mainCol, linkCol, multi: 'first' | 'all' }]
   html: DEFAULT_TEMPLATE,
   sig: {
     enabled: false, image: null, imgW: 0, imgH: 0, width: 180, align: 'right',
@@ -858,6 +868,7 @@ function applyConfig(c) {
   cfg.sel.conds = (c.sel && c.sel.conds) || [];
   cfg.history = c.history || {};
   cfg.models = c.models || {};
+  cfg.links = Array.isArray(c.links) ? c.links : [];
 }
 
 /* ========================================================================
@@ -1027,6 +1038,140 @@ function tableLabel(t) {
   return humanizeId(t);
 }
 
+/* ----- Tables liées ----- */
+let linkStats = [];
+const isRefTo = (c, t) => c && (c.type === 'Ref:' + t || c.type === 'RefList:' + t);
+// Colonne commune la plus probable entre la table principale et la table liée
+function guessLinkKeys(mainId, mainCols, mainRows, linkId, linkCols, linkRows) {
+  const ref = mainCols.find(c => isRefTo(c, linkId));
+  if (ref) return { mainCol: ref.id, linkCol: 'id' };
+  const back = linkCols.find(c => isRefTo(c, mainId));
+  if (back) return { mainCol: 'id', linkCol: back.id };
+  const usable = (c) => !['Attachments', 'Bool', 'Date', 'DateTime', 'Numeric'].includes(c.baseType);
+  const sample = (c, rows) => { const set = new Set(); for (const r of rows.slice(0, 3000)) { const v = linkKey(formatValue(c, r)); if (v) set.add(v); } return set; };
+  let best = null, bestSc = 0;
+  for (const mc of mainCols.filter(usable)) {
+    for (const lc of linkCols.filter(usable)) {
+      const same = normKey(mc.id) === normKey(lc.id) || normKey(mc.label) === normKey(lc.label);
+      const keyish = /siret|siren|pacage|dossier|numero|agrement|immat|insee|code|^n$|^id/.test(normKey(lc.id));
+      if (!same && !keyish) continue;
+      const a = sample(mc, mainRows), b = sample(lc, linkRows);
+      if (!a.size || !b.size) continue;
+      let hit = 0; a.forEach(v => { if (b.has(v)) hit++; });
+      const sc = hit / a.size + (same ? 0.3 : 0) + (keyish ? 0.1 : 0);
+      if (hit && sc > bestSc) { best = { mainCol: mc.id, linkCol: lc.id }; bestSc = sc; }
+    }
+  }
+  return best || { mainCol: '', linkCol: '' };
+}
+const linkKey = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[\s.\-]/g, '');
+// Valeurs de rapprochement d'une ligne : n° de ligne pour les références, sinon valeur normalisée
+function linkKeys(col, row, byId) {
+  if (!col) return [String(row.id)];
+  const v = row[col.id];
+  if (byId && /^Ref(List)?:/.test(col.type)) {
+    if (Array.isArray(v) && v[0] === 'L') return v.slice(1).map(String);
+    return v ? [String(v)] : [];
+  }
+  if (Array.isArray(v) && v[0] === 'L' && col.baseType !== 'Attachments') return v.slice(1).map(x => linkKey(x)).filter(Boolean);
+  const k = linkKey(formatValue(col, row));
+  return k ? [k] : [];
+}
+async function applyLinks(mainId, mainCols, rows) {
+  const out = [], stats = [];
+  const used = new Set();
+  for (let k = 0; k < cfg.links.length; k++) {
+    const L = cfg.links[k];
+    if (!L.tableId || L.tableId === mainId) { stats.push(null); continue; }
+    const { cols: lcols, rows: lrows } = await readGristTable(L.tableId);
+    if (!L.mainCol || !L.linkCol) Object.assign(L, guessLinkKeys(mainId, mainCols, rows, L.tableId, lcols, lrows));
+    const mc = L.mainCol === 'id' ? null : mainCols.find(c => c.id === L.mainCol);
+    const lc = L.linkCol === 'id' ? null : lcols.find(c => c.id === L.linkCol);
+    if ((L.mainCol !== 'id' && !mc) || (L.linkCol !== 'id' && !lc)) { stats.push({ ok: false, n: lrows.length }); continue; }
+    // Une référence se compare au n° de ligne de l'autre table
+    const byIdMain = L.linkCol === 'id', byIdLink = L.mainCol === 'id';
+    const index = new Map();
+    for (const lr of lrows) for (const key of linkKeys(lc, lr, byIdLink)) { if (!index.has(key)) index.set(key, []); index.get(key).push(lr); }
+    let prefix = L.tableId, n = 2;
+    while (used.has(prefix)) prefix = L.tableId + n++;
+    used.add(prefix);
+    const tl = tableLabel(L.tableId);
+    const vcols = lcols.filter(c => c.baseType !== 'Attachments').map(c => L.multi === 'all'
+      ? { id: prefix + '.' + c.id, label: tl + ' › ' + c.label, short: c.label, type: 'Text', baseType: 'Text', opts: {}, virtual: true, src: c, srcTable: L.tableId, linkIdx: k }
+      : Object.assign({}, c, { id: prefix + '.' + c.id, label: tl + ' › ' + c.label, short: c.label, displayId: c.displayId ? prefix + '.' + c.displayId : null,
+        isFormula: true, virtual: true, src: c, srcTable: L.tableId, linkIdx: k }));
+    const nbCol = { id: prefix + '._nb', label: tl + ' › nombre de lignes liées', short: 'Nombre de lignes liées', type: 'Int', baseType: 'Int', opts: {}, isFormula: true, virtual: true, srcTable: L.tableId, linkIdx: k };
+    let matched = 0;
+    for (const r of rows) {
+      const seen = new Set(), m = [];
+      for (const key of linkKeys(mc, r, byIdMain)) for (const lr of index.get(key) || []) if (!seen.has(lr.id)) { seen.add(lr.id); m.push(lr); }
+      if (m.length) matched++;
+      r[nbCol.id] = m.length;
+      for (const vc of vcols) {
+        if (L.multi === 'all') {
+          const vals = [...new Set(m.map(lr => formatValue(vc.src, lr)).filter(Boolean))];
+          r[vc.id] = vals.join('\n');
+        } else {
+          r[vc.id] = m.length ? m[0][vc.src.id] : null;
+          if (vc.displayId) r[vc.displayId] = m.length ? m[0][vc.src.displayId] : null;
+        }
+      }
+    }
+    out.push(...vcols, nbCol);
+    stats.push({ ok: true, matched, total: rows.length, n: lrows.length });
+  }
+  return { cols: out, stats };
+}
+function renderLinks() {
+  const mainCols = (meta && meta.tables[data.tableId] || []).filter(c => !c.hidden && c.baseType !== 'Attachments');
+  const tables = Object.keys((meta && meta.tables) || {}).filter(t => t !== data.tableId && !t.startsWith('_grist') && !/^GristHidden/.test(t))
+    .sort((a, b) => tableLabel(a).localeCompare(tableLabel(b), 'fr'));
+  const mainLbl = tableLabel(data.tableId) || 'table principale';
+  $('linkList').innerHTML = cfg.links.map((L, k) => {
+    const lcols = L.tableId ? (meta.tables[L.tableId] || []).filter(c => !c.hidden && c.baseType !== 'Attachments') : [];
+    const st = linkStats[k];
+    const info = !L.tableId ? '' : !st ? '' : !st.ok
+      ? alertHTML('warn', 'Choisissez les colonnes qui relient les deux tables.')
+      : `<p class="fr-text--xs fr-mb-0 ${st.matched ? '' : 'pp-warn'}">${st.matched} dossier(s) sur ${st.total} relié(s) à au moins une ligne de « ${esc(tableLabel(L.tableId))} »${st.matched ? '' : ' : vérifiez les colonnes de liaison'}.</p>`;
+    const opt = (cols, sel, idLabel) => `<option value="id" ${sel === 'id' ? 'selected' : ''}>${idLabel}</option>` +
+      cols.map(c => `<option value="${esc(c.id)}" ${c.id === sel ? 'selected' : ''}>${esc(c.label)}</option>`).join('');
+    return `<div class="pp-link" data-k="${k}">
+      <div class="pp-link__row">
+        <div class="fr-select-group"><label class="fr-label" for="lk-t-${k}">Table liée</label>
+          <select class="fr-select" id="lk-t-${k}" data-f="tableId"><option value="">— Choisir une table —</option>${tables.map(t => `<option value="${esc(t)}" ${t === L.tableId ? 'selected' : ''}>${esc(tableLabel(t))}${tableLabel(t) !== t ? ' — ' + esc(t) : ''}</option>`).join('')}</select></div>
+        <button type="button" class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-icon-delete-bin-line" data-f="del" title="Retirer cette table liée">Retirer</button>
+      </div>
+      ${L.tableId ? `<div class="pp-link__row">
+        <div class="fr-select-group"><label class="fr-label" for="lk-m-${k}">Colonne de « ${esc(mainLbl)} »</label>
+          <select class="fr-select" id="lk-m-${k}" data-f="mainCol"><option value="">—</option>${opt(mainCols, L.mainCol, 'N° de ligne (id)')}</select></div>
+        <span class="pp-link__eq" aria-hidden="true">=</span>
+        <div class="fr-select-group"><label class="fr-label" for="lk-l-${k}">Colonne de « ${esc(tableLabel(L.tableId))} »</label>
+          <select class="fr-select" id="lk-l-${k}" data-f="linkCol"><option value="">—</option>${opt(lcols, L.linkCol, 'N° de ligne (id)')}</select></div>
+        <div class="fr-select-group"><label class="fr-label" for="lk-x-${k}">Si plusieurs lignes</label>
+          <select class="fr-select" id="lk-x-${k}" data-f="multi"><option value="first" ${L.multi !== 'all' ? 'selected' : ''}>Prendre la première</option><option value="all" ${L.multi === 'all' ? 'selected' : ''}>Toutes (une par ligne)</option></select></div>
+      </div>` : ''}
+      ${info}
+    </div>`;
+  }).join('');
+}
+$('linkAdd').onclick = () => { cfg.links.push({ tableId: '', mainCol: '', linkCol: '', multi: 'first' }); renderLinks(); };
+$('linkList').addEventListener('change', (e) => {
+  const el = e.target.closest('[data-f]'), box = e.target.closest('.pp-link');
+  if (!el || !box) return;
+  const L = cfg.links[+box.dataset.k];
+  const oldPrefix = L.tableId;
+  L[el.dataset.f] = el.value;
+  if (el.dataset.f === 'tableId') { L.mainCol = ''; L.linkCol = ''; cfg.cols = cfg.cols.filter(id => !id.startsWith(oldPrefix + '.')); }
+  saveConfig(); loadData().catch(showError);
+});
+$('linkList').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-f=del]'), box = e.target.closest('.pp-link');
+  if (!b || !box) return;
+  const L = cfg.links.splice(+box.dataset.k, 1)[0];
+  if (L && L.tableId) cfg.cols = cfg.cols.filter(id => !id.startsWith(L.tableId + '.'));
+  saveConfig(); loadData().catch(showError);
+});
+
 async function currentTableId() {
   return cfg.source === 'widget' ? widgetTableId : cfg.tableId;
 }
@@ -1057,8 +1202,13 @@ async function loadData() {
   } else {
     rows = ids.map(id => rowsById.get(id));
   }
-  const cols = (meta.tables[tableId] || []).filter(c => !c.hidden);
+  const mainCols = (meta.tables[tableId] || []).filter(c => !c.hidden);
+  // Tables liées : leurs colonnes sont ajoutées à chaque dossier (colonnes « Table.colonne »)
+  const linked = await applyLinks(tableId, mainCols, rows).catch(e => { console.error(e); return { cols: [], stats: [] }; });
+  const cols = mainCols.concat(linked.cols);
+  linkStats = linked.stats;
   data = { tableId, cols, rows }; idColsCache.key = "";
+  renderLinks();
 
   // Première utilisation de cette table : on coche quelques colonnes par défaut
   const valid = new Set(cols.map(c => c.id));
@@ -1068,7 +1218,8 @@ async function loadData() {
     cfg.labelCol = firstText ? firstText.id : '';
   }
   const lbl = tableLabel(tableId);
-  $('tableInfo').textContent = lbl + (lbl !== tableId ? ' (' + tableId + ')' : '') + ' — ' + rows.length + ' enregistrement(s), ' + cols.length + ' colonne(s)';
+  $('tableInfo').textContent = lbl + (lbl !== tableId ? ' (' + tableId + ')' : '') + ' — ' + rows.length + ' ligne(s), ' + mainCols.length + ' colonne(s)' +
+    (linked.cols.length ? ' + ' + linked.cols.length + ' colonne(s) de ' + cfg.links.filter(l => l.tableId).length + ' table(s) liée(s)' : '');
   setStatus(lbl + ' · ' + rows.length + ' ligne(s)');
   if (pvIndex >= rows.length) pvIndex = 0;
   renderAll();
@@ -1103,20 +1254,27 @@ const TYPE_FR = { Text: 'Texte', Numeric: 'Numérique', Int: 'Entier', Bool: 'Bo
 function renderColList() {
   const q = $('colFilter').value.trim().toLowerCase();
   const sel = new Set(cfg.cols);
+  let group = null;
+  const multi = data.cols.some(c => c.virtual);
   $('colList').innerHTML = data.cols
     .filter(c => !q || c.label.toLowerCase().includes(q) || c.id.toLowerCase().includes(q))
-    .map(c => `<div class="pp-list__item"><div class="fr-checkbox-group fr-checkbox-group--sm">
+    .map(c => {
+      const g = c.virtual ? 'Table liée : ' + tableLabel(c.srcTable) : 'Table principale : ' + tableLabel(data.tableId);
+      const head = multi && g !== group ? `<div class="pp-list__group">${esc(g)}</div>` : '';
+      group = g;
+      return head + `<div class="pp-list__item"><div class="fr-checkbox-group fr-checkbox-group--sm">
       <input type="checkbox" id="col-${esc(c.id)}" data-col="${esc(c.id)}" ${sel.has(c.id) ? 'checked' : ''}>
-      <label class="fr-label" for="col-${esc(c.id)}">${esc(c.label)}</label></div>
+      <label class="fr-label" for="col-${esc(c.id)}">${esc(c.short || c.label)}</label></div>
       <span class="pp-list__meta"><span class="fr-badge fr-badge--sm fr-badge--no-icon">${esc(TYPE_FR[c.baseType] || c.baseType)}</span>
-      <span class="pp-code">${esc(c.id)}</span></span></div>`).join('')
+      <span class="pp-code">${esc(c.id)}</span></span></div>`;
+    }).join('')
     || '<div class="pp-empty">Aucune colonne.</div>';
 
   $('labelCol').innerHTML = data.cols.map(c =>
     `<option value="${esc(c.id)}" ${c.id === cfg.labelCol ? 'selected' : ''}>${esc(c.label)}</option>`).join('');
   renderIdCols();
 
-  const attachable = data.cols.filter(c => c.baseType === 'Attachments' && (!c.isFormula || !c.formula));
+  const attachable = data.cols.filter(c => !c.virtual && c.baseType === 'Attachments' && (!c.isFormula || !c.formula));
   $('expAttach').innerHTML = '<option value="">— Ne pas joindre à Grist —</option>' +
     attachable.map(c => `<option value="${esc(c.id)}" ${c.id === cfg.exp.attachCol ? 'selected' : ''}>${esc(c.label)}</option>`).join('');
 }
@@ -1150,6 +1308,8 @@ function renderIdCols() {
   }
   const sample = data.rows.slice(0, 3).map(r => rowLabel(r) + (rowIdent(r) ? ' — ' + rowIdent(r) : ''));
   $('idSample').textContent = sample.length ? 'Exemple : ' + sample.join(' ; ') : '';
+  const lc = data.cols.find(c => c.id === cfg.labelCol);
+  $('identSummary').textContent = lc ? '— ' + (lc.short || lc.label) + (idColumns().length ? ' + ' + idColumns().map(c => c.short || c.label).join(', ') : '') : '';
 }
 $('idColsBox').addEventListener('change', () => {
   cfg.idCols = [0, 1, 2].map(i => $('idCol' + i).value).filter(Boolean);
@@ -1159,11 +1319,11 @@ $('idColsBox').addEventListener('change', () => {
 
 document.querySelectorAll('input[name=source]').forEach(r => r.addEventListener('change', () => {
   cfg.source = document.querySelector('input[name=source]:checked').value;
-  $('tableSelect').disabled = cfg.source !== 'table';
+  $('tableSelect').disabled = cfg.source !== 'table'; $('tableSelectGroup').hidden = cfg.source !== 'table';
   excluded.clear(); resetTableSelection(); saveConfig(); loadData().catch(showError);
 }));
 $('tableSelect').onchange = (e) => {
-  cfg.tableId = e.target.value; cfg.cols = []; cfg.labelCol = ''; cfg.idCols = null; excluded.clear(); resetTableSelection();
+  cfg.tableId = e.target.value; cfg.cols = []; cfg.labelCol = ''; cfg.idCols = null; cfg.links = []; excluded.clear(); resetTableSelection();
   saveConfig(); loadData().catch(showError);
 };
 $('reloadBtn').onclick = () => { meta = null; loadData().catch(showError); };
@@ -1837,17 +1997,32 @@ function setSignature(src, w, h) {
   renderSig(); saveConfig();
   setStatus('Signature enregistrée');
 }
+// Origine de la signature : signataire enregistré, tracé, image importée
+function sigSource() { return cfg.sig.src || (cfg.sig.sigRow || !cfg.sig.image ? 'table' : 'draw'); }
+function renderSigSource() {
+  const src = sigSource();
+  document.querySelectorAll('input[name=sigSrc]').forEach(r => { r.checked = r.value === src; });
+  document.querySelectorAll('.pp-sigsrc').forEach(d => { d.hidden = d.dataset.sigsrc !== src; });
+  document.querySelector('.pp-sigsave').hidden = src === 'table';
+  if (src === 'draw') setTimeout(resizeSigCanvas, 0);
+}
+document.querySelectorAll('input[name=sigSrc]').forEach(r => r.addEventListener('change', () => {
+  cfg.sig.src = r.value; $('sigTblMsg').innerHTML = ''; renderSigSource(); saveConfig();
+}));
 function renderSig() {
   const s = cfg.sig;
   $('sigEnabled').checked = !!s.enabled;
-  $('sigPreview').innerHTML = s.image ? `<img src="${s.image}" style="width:${s.width}px">` : '<span class="fr-text--sm fr-mb-0">Aucune signature</span>';
-  $('sigWidth').value = s.width; $('sigWidthVal').textContent = s.width + ' px';
+  $('sigBody').hidden = !s.enabled;
+  renderSigSource();
+  $('sigPreview').innerHTML = s.image ? `<img src="${s.image}" style="width:${s.width}px">` : '<span class="fr-text--sm fr-mb-0">Aucune signature choisie</span>';
+  $('sigRemove').hidden = !s.image;
+  $('sigWidth').value = s.width; $('sigWidthVal').textContent = '(' + s.width + ' px)';
   $('sigAlign').value = s.align;
   $('sigFaitA').checked = !!s.faitA; $('sigLieu').value = s.lieu || '';
   $('sigFonction').value = s.fonction || ''; $('sigNom').value = s.nom || '';
   $('sigMention').checked = !!s.mention;
 }
-$('sigEnabled').onchange = (e) => { cfg.sig.enabled = e.target.checked; saveConfig(); };
+$('sigEnabled').onchange = (e) => { cfg.sig.enabled = e.target.checked; renderSig(); saveConfig(); if (e.target.checked && sigSource() === 'draw') resizeSigCanvas(); };
 $('sigWidth').oninput = (e) => { cfg.sig.width = +e.target.value; renderSig(); saveConfig(); };
 $('sigAlign').onchange = (e) => { cfg.sig.align = e.target.value; saveConfig(); };
 $('sigFaitA').onchange = (e) => { cfg.sig.faitA = e.target.checked; saveConfig(); };
@@ -2101,7 +2276,7 @@ $('recList').addEventListener('change', (e) => {
 });
 
 /* ----- Interface de sélection ----- */
-function dataColsAll() { return (meta && meta.tables[data.tableId] || []).filter(c => !c.hidden); }
+function dataColsAll() { return (meta && meta.tables[data.tableId] || []).filter(c => !c.hidden).concat(data.cols.filter(c => c.virtual)); }
 // Colonne la plus probable pour le numéro de dossier (jamais une coordonnée géographique)
 function guessNumCol(cols) {
   const score = (c) => {
@@ -2126,7 +2301,7 @@ function renderSelControls() {
     `<option value="${x.ref}" ${x.ref === +cfg.sel.view ? 'selected' : ''}>${esc(x.view)}${x.title ? ' › ' + esc(x.title) : ''} (${x.filters.length} filtre(s))</option>`).join('');
   $('selDone').value = cfg.sel.done;
   $('selAutoMark').checked = cfg.sel.autoMark !== false;
-  const markable = cols.filter(c => ['Date', 'DateTime', 'Bool', 'Text', 'Any'].includes(c.baseType) && (!c.isFormula || !c.formula));
+  const markable = cols.filter(c => !c.virtual && ['Date', 'DateTime', 'Bool', 'Text', 'Any'].includes(c.baseType) && (!c.isFormula || !c.formula));
   $('selMark').innerHTML = '<option value="">— Aucune (historique du widget uniquement) —</option>' + markable.map(c =>
     `<option value="${esc(c.id)}" ${c.id === cfg.sel.mark ? 'selected' : ''}>${esc(c.label)} (${esc(TYPE_FR[c.baseType] || c.baseType)})</option>`).join('');
   const curNum = cols.find(c => c.id === cfg.sel.numCol);
@@ -2140,6 +2315,8 @@ function renderSelControls() {
 }
 function renderConds() {
   const cols = dataColsAll();
+  const nc = cfg.sel.conds.length;
+  $('condBadge').hidden = !nc; $('condBadge').textContent = nc + ' actif' + (nc > 1 ? 's' : '');
   $('condList').innerHTML = cfg.sel.conds.map((c, i) => {
     const col = cols.find(x => x.id === c.col);
     const values = [];
@@ -3843,6 +4020,7 @@ function renderCertInfo() {
   if (!signer) {
     $('certInfo').innerHTML = '<p class="fr-text--sm">Aucun certificat chargé.</p>';
     $('certEnabled').checked = false; $('certEnabled').disabled = true;
+    updCertBadge();
     return;
   }
   const c = signer.cert, st = certStatus(c);
@@ -3863,7 +4041,10 @@ function renderCertInfo() {
     </dl>`;
   $('certEnabled').disabled = st.expired || st.notYet || !st.canSign;
   if ($('certEnabled').disabled) $('certEnabled').checked = false;
+  updCertBadge();
 }
+function updCertBadge() { $('certBadge').hidden = !(signer && $('certEnabled').checked); }
+$('certEnabled').addEventListener('change', updCertBadge);
 
 $('certLoad').onclick = async () => {
   const f = $('certFile').files[0];
@@ -3872,7 +4053,7 @@ $('certLoad').onclick = async () => {
   try {
     signer = await loadCertificate(f, $('certPass').value);
     $('certPass').value = '';
-    $('certEnabled').checked = true;
+    $('certEnabled').checked = true; updCertBadge();
     renderCertInfo();
     if ($('certEnabled').disabled) {
       $('certMsg').innerHTML = alertHTML('err', 'Ce certificat ne peut pas être utilisé pour signer (expiré ou usage non autorisé).');
@@ -3897,6 +4078,15 @@ $('certHelpBtn').onclick = () => {
   $('certHelpBtn').setAttribute('aria-expanded', open ? 'false' : 'true');
   $('certHelp').classList.toggle('fr-collapse--expanded', !open);
 };
+// Sections repliables (accordéons DSFR) : bouton avec aria-controls
+document.addEventListener('click', (e) => {
+  const b = e.target.closest && e.target.closest('button.fr-accordion__btn[aria-controls]');
+  if (!b) return;
+  const open = b.getAttribute('aria-expanded') === 'true';
+  b.setAttribute('aria-expanded', open ? 'false' : 'true');
+  const box = $(b.getAttribute('aria-controls'));
+  if (box) box.classList.toggle('fr-collapse--expanded', !open);
+});
 function signingActive() { return !!(signer && $('certEnabled').checked); }
 
 // --- Construction de la signature CMS (CAdES détachée, profil PAdES baseline B-B) ---
@@ -4895,7 +5085,8 @@ async function renderSigTblPreview() {
     $('sigTblInfo').innerHTML = `<div class="fr-badges-group">${badges.join('')}</div>` + alertHTML('err', esc(e.message || e));
   }
 }
-$('sigTblSelect').onchange = () => renderSigTblPreview();
+// Choisir un signataire suffit : sa signature est utilisée tout de suite
+$('sigTblSelect').onchange = async () => { await renderSigTblPreview(); if (sigSelectedRow()) $('sigTblUse').onclick(); };
 $('sigTblReload').onclick = () => { sigImgCache.clear(); loadSigTable().catch(e => { $('sigTblMsg').innerHTML = alertHTML('err', esc(e.message || e)); }); };
 $('sigTblUse').onclick = async () => {
   const row = sigSelectedRow();
@@ -4949,11 +5140,7 @@ $('sigTblSave').onclick = async () => {
     $('sigTblSave').disabled = false;
   }
 };
-$('sigFmtBtn').onclick = () => {
-  const open = $('sigFmtBtn').getAttribute('aria-expanded') === 'true';
-  $('sigFmtBtn').setAttribute('aria-expanded', open ? 'false' : 'true');
-  $('sigFmtHelp').classList.toggle('fr-collapse--expanded', !open);
-};
+
 
 /* ========================================================================
  * Initialisation
@@ -4961,7 +5148,7 @@ $('sigFmtBtn').onclick = () => {
 function applyCfgToUI() {
   document.querySelector(`input[name=source][value="${cfg.source}"]`).checked = true;
   $('tableSelect').value = cfg.tableId || '';
-  $('tableSelect').disabled = cfg.source !== 'table';
+  $('tableSelect').disabled = cfg.source !== 'table'; $('tableSelectGroup').hidden = cfg.source !== 'table';
   editor.innerHTML = cfg.html || DEFAULT_TEMPLATE;
   $('expMode').value = cfg.exp.mode;
   $('expName').value = cfg.exp.name;
