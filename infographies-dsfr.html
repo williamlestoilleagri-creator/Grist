@@ -2817,12 +2817,23 @@ function fileName() { const t = String(tokens(cur().texts.title ?? curTpl().text
 
 /* ---------- Exports PNG / PDF ---------- */
 function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('Chargement impossible : ' + src)); document.head.appendChild(s); }); }
+/* Polices embarquées pour l'export (évite la lecture des feuilles de style par html-to-image, défaillante sous Firefox) */
+let _fontCSS = null;
+async function fontEmbedCSS() {
+  if (_fontCSS != null) return _fontCSS;
+  const rules = [];
+  for (const sh of document.styleSheets) { let rs; try { rs = sh.cssRules; } catch (e) { continue; } for (const r of rs || []) if (r.type === CSSRule.FONT_FACE_RULE) rules.push(r.cssText); }
+  const toData = async url => { const blob = await (await fetch(url)).blob(); return await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob); }); };
+  const out = await Promise.all(rules.map(async css => { const m = /url\(["']?([^"')]+)["']?\)/.exec(css); if (!m) return ''; try { return css.replace(m[0], 'url(' + await toData(m[1]) + ')'); } catch (e) { console.warn('Police non embarquée', m[1], e); return ''; } }));
+  _fontCSS = out.filter(Boolean).join('\n');
+  return _fontCSS;
+}
 async function snapshot(type) {
   if (!window.htmlToImage) await loadScript('https://cdn.jsdelivr.net/npm/html-to-image@1.11.13/dist/html-to-image.js');
   const poster = $('#poster'); const F = FORMATS.find(f => f.id === cur().format) || FORMATS[0];
   const wasIdent = poster.classList.contains('ident'); poster.classList.remove('ident');
   try {
-    const opt = {pixelRatio: 2, width: F.w, height: F.h, cacheBust: false, backgroundColor: makeTheme(cur().style).bg, style: {transform: 'none', margin: '0'}};
+    const opt = {pixelRatio: 2, width: F.w, height: F.h, cacheBust: false, fontEmbedCSS: await fontEmbedCSS(), backgroundColor: makeTheme(cur().style).bg, style: {transform: 'none', margin: '0'}};
     return type === 'jpeg' ? await htmlToImage.toJpeg(poster, Object.assign(opt, {quality: .93})) : await htmlToImage.toPng(poster, opt);
   } finally { if (wasIdent) poster.classList.add('ident'); }
 }
