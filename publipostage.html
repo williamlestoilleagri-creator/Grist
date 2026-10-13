@@ -123,6 +123,8 @@
     background: #fff; color: #929292; font-size: 11px; padding: 0 6px; font-family: Marianne, sans-serif;
   }
   #editor img.sel { outline: 2px solid var(--bleu); }
+  .paper::after, .pp-hf::after { content: ""; display: block; clear: both; }
+  .paper img.pp-float { max-width: 50%; }
   .paper table.pp-tbl { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 0 0 6pt; }
   .paper table.pp-tbl td { vertical-align: top; padding: 2px 4px; border: 1px dashed #d5d5d5; }
   .paper table.pp-tbl[data-border="1"] td { border: 1px solid #161616; }
@@ -140,7 +142,16 @@
   .pp-hf.bg { padding: 0; opacity: 1; }
   .pp-hf.bg img { display: block; width: 100%; }
 
-  .pp-fields { max-height: 460px; overflow: auto; }
+  /* Le panneau des champs et la barre d'outils restent visibles pendant le défilement */
+  .pp-editor-wrap { align-items: start; }
+  .pp-fieldsbloc { position: sticky; top: .5rem; max-height: calc(100vh - 1rem); display: flex; flex-direction: column; margin-bottom: 0; }
+  .pp-fieldsbloc > h3, .pp-fieldsbloc > p, .pp-fieldsbloc > .fr-input-group { flex: 0 0 auto; }
+  .pp-fields { overflow: auto; flex: 1 1 auto; min-height: 0; }
+  .pp-toolbar { position: sticky; top: 0; z-index: 5; }
+  @media (max-width: 820px) {
+    .pp-fieldsbloc { order: -1; position: sticky; top: 0; z-index: 6; max-height: 40vh; }
+    .pp-toolbar { top: 0; }
+  }
   .pp-fields .fr-tags-group { flex-direction: column; align-items: stretch; }
   .pp-fields .fr-tag { display: flex; flex-direction: column; align-items: flex-start; width: 100%; max-width: 100%; height: auto; padding-top: .375rem; padding-bottom: .375rem; }
   .pp-fields .fr-tag small { font-family: var(--mono); font-size: .7rem; opacity: .8; }
@@ -181,6 +192,9 @@
   .pp-progress div { height: 100%; width: 0; background: var(--bleu); transition: width .15s; }
   #genStatus { margin-top: 1rem; }
   .fr-alert { margin-bottom: 1rem; }
+  .pp-map { border: 1px solid var(--border-default-grey); background: var(--background-alt-blue-france, #f5f5fe); padding: .75rem 1rem; }
+  .pp-map__row { display: grid; grid-template-columns: minmax(120px, max-content) auto minmax(200px, 1fr) auto; gap: .5rem; align-items: center; margin-bottom: .375rem; }
+  .pp-map__row .fr-select { margin: 0; padding-top: .25rem; padding-bottom: .25rem; }
   .pp-certdl { display: grid; grid-template-columns: auto 1fr; gap: .25rem 1rem; margin: 0; }
   .pp-certdl dt { color: var(--text-mention-grey); }
   .pp-certdl dd { margin: 0; word-break: break-word; }
@@ -277,6 +291,7 @@
         <button type="button" class="fr-btn fr-btn--tertiary fr-icon-refresh-line fr-btn--icon-left" id="tplReload">Actualiser</button>
       </div>
       <div id="tplActive"></div>
+      <div id="tplMap"></div>
       <div id="tplBgOptions" style="display:none" class="fr-mb-2w">
         <div class="fr-toggle">
           <input type="checkbox" class="fr-toggle__input" id="tplBg">
@@ -391,9 +406,13 @@
         </div>
       </div>
 
-      <div class="pp-bloc">
+      <div class="pp-bloc pp-fieldsbloc" id="fieldsBloc">
         <h3>Champs de fusion</h3>
-        <p class="fr-text--sm">Cliquez pour insérer à l'emplacement du curseur.</p>
+        <p class="fr-text--sm fr-mb-1w">Cliquez pour insérer à l'emplacement du curseur. Ce panneau reste visible quand vous faites défiler le document.</p>
+        <div class="fr-input-group fr-mb-1w">
+          <label class="fr-label fr-sr-only" for="fieldSearch">Rechercher un champ</label>
+          <input class="fr-input" type="search" id="fieldSearch" placeholder="Rechercher un champ…">
+        </div>
         <div class="pp-fields" id="fieldsBox"></div>
       </div>
     </div>
@@ -405,7 +424,7 @@
       <div class="fr-toggle fr-toggle--label-left">
         <input type="checkbox" class="fr-toggle__input" id="sigEnabled" aria-describedby="sigEnabled-hint">
         <label class="fr-toggle__label" for="sigEnabled">Intégrer une signature électronique aux documents</label>
-        <p class="fr-hint-text" id="sigEnabled-hint">La signature est placée à l'emplacement du champ <code>{{SIGNATURE}}</code> dans le message, ou à la fin du document si ce champ est absent.</p>
+        <p class="fr-hint-text" id="sigEnabled-hint">La signature est placée à l'emplacement du champ <code>{{SIGNATURE}}</code> (ou <code>#signature#</code>) dans le message, ou à la fin du document si ce champ est absent.</p>
       </div>
     </div>
 
@@ -952,7 +971,46 @@ async function loadMeta() {
       filters: fl
     });
   });
-  meta = { tables: byTable, sections: secs };
+  // Description des tables : nom de page, table résumée, nombre de colonnes
+  const tblInfo = {};
+  tables.id.forEach((id, i) => {
+    const t = tables.tableId[i];
+    tblInfo[t] = {
+      page: tables.primaryViewId && viewName[tables.primaryViewId[i]] || '',
+      summaryOf: tables.summarySourceTable && tables.summarySourceTable[i] ? tableById[tables.summarySourceTable[i]] : null,
+      nCols: (byTable[t] || []).filter(c => !c.hidden).length
+    };
+  });
+  meta = { tables: byTable, sections: secs, tblInfo };
+}
+/* ----- Libellés lisibles des tables ----- */
+const TABLE_GROUPS = ['Tables principales', 'Données importées', 'Listes et paramètres', 'Résumés (tables récapitulatives)', 'Tables du publipostage', 'Tables techniques'];
+function tableGroup(t) {
+  const info = (meta && meta.tblInfo && meta.tblInfo[t]) || {};
+  if (info.summaryOf || /_summary_/.test(t)) return TABLE_GROUPS[3];
+  if (t === 'Modele_publipostage' || t === 'Signature_Num') return TABLE_GROUPS[4];
+  if (/^(Liste|Listes|Parametre|Parametres|Param|Ref|Referentiel|Nomenclature)_/i.test(t)) return TABLE_GROUPS[2];
+  if (/^(TT_|Sync_|Droit_|Config|Table_info$|Aide$|Aides_|Evolution$|Recherche$)/i.test(t)) return TABLE_GROUPS[5];
+  if (/^DATA_/i.test(t)) return TABLE_GROUPS[1];
+  return TABLE_GROUPS[0];
+}
+function humanizeId(t) {
+  let x = String(t || '').replace(/^(DATA|Liste|Listes|Parametre|Parametres|TT)_/i, '');
+  x = x.replace(/([a-zà-ÿ])([A-Z])/g, '$1 $2').replace(/_+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!x) return t;
+  return x === x.toUpperCase() ? x : x.charAt(0).toUpperCase() + x.slice(1);
+}
+function tableLabel(t) {
+  if (!t) return '';
+  const info = (meta && meta.tblInfo && meta.tblInfo[t]) || {};
+  if (info.summaryOf || /_summary_/.test(t)) {
+    const src = info.summaryOf || t.split('_summary_')[0];
+    const by = (t.split('_summary_')[1] || '').split('_').filter(Boolean).join(', ');
+    return 'Résumé de « ' + tableLabel(src) + ' »' + (by ? ' par ' + by : '');
+  }
+  // Nom de la page Grist de la table s'il est plus parlant que l'identifiant
+  if (info.page && normKey(info.page) !== normKey(t)) return info.page;
+  return humanizeId(t);
 }
 
 async function currentTableId() {
@@ -995,8 +1053,9 @@ async function loadData() {
     const firstText = cols.find(c => c.baseType === 'Text') || cols[0];
     cfg.labelCol = firstText ? firstText.id : '';
   }
-  $('tableInfo').textContent = tableId + ' — ' + rows.length + ' enregistrement(s), ' + cols.length + ' colonne(s)';
-  setStatus(tableId + ' · ' + rows.length + ' ligne(s)');
+  const lbl = tableLabel(tableId);
+  $('tableInfo').textContent = lbl + (lbl !== tableId ? ' (' + tableId + ')' : '') + ' — ' + rows.length + ' enregistrement(s), ' + cols.length + ' colonne(s)';
+  setStatus(lbl + ' · ' + rows.length + ' ligne(s)');
   if (pvIndex >= rows.length) pvIndex = 0;
   renderAll();
 }
@@ -1004,10 +1063,17 @@ async function loadData() {
 async function fillTableSelect() {
   let list = [];
   try { list = await grist.docApi.listTables(); } catch (e) {}
-  list.sort((a, b) => a.localeCompare(b));
+  if (!meta) { try { await loadMeta(); } catch (e) {} }
+  const groups = {};
+  for (const t of list) (groups[tableGroup(t)] = groups[tableGroup(t)] || []).push(t);
   const sel = $('tableSelect');
-  sel.innerHTML = '<option value="">— Choisir une table —</option>' +
-    list.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+  sel.innerHTML = '<option value="">— Choisir une table —</option>' + TABLE_GROUPS.filter(g => groups[g]).map(g =>
+    `<optgroup label="${esc(g)}">` + groups[g].map(t => ({ t, l: tableLabel(t) })).sort((a, b) => a.l.localeCompare(b.l, 'fr'))
+      .map(({ t, l }) => {
+        const info = (meta && meta.tblInfo && meta.tblInfo[t]) || {};
+        const extra = [l !== t ? t : '', info.nCols ? info.nCols + ' col.' : ''].filter(Boolean).join(' · ');
+        return `<option value="${esc(t)}" title="${esc(t)}">${esc(l)}${extra ? ' — ' + esc(extra) : ''}</option>`;
+      }).join('') + '</optgroup>').join('');
   sel.value = cfg.tableId || '';
 }
 
@@ -1064,10 +1130,10 @@ $('labelCol').onchange = (e) => { cfg.labelCol = e.target.value; saveConfig(); }
 document.querySelectorAll('input[name=source]').forEach(r => r.addEventListener('change', () => {
   cfg.source = document.querySelector('input[name=source]:checked').value;
   $('tableSelect').disabled = cfg.source !== 'table';
-  excluded.clear(); saveConfig(); loadData().catch(showError);
+  excluded.clear(); resetTableSelection(); saveConfig(); loadData().catch(showError);
 }));
 $('tableSelect').onchange = (e) => {
-  cfg.tableId = e.target.value; cfg.cols = []; cfg.labelCol = ''; excluded.clear();
+  cfg.tableId = e.target.value; cfg.cols = []; cfg.labelCol = ''; excluded.clear(); resetTableSelection();
   saveConfig(); loadData().catch(showError);
 };
 $('reloadBtn').onclick = () => { meta = null; loadData().catch(showError); };
@@ -1168,7 +1234,7 @@ let edTimer = null;
 function onEditorChange() {
   if (!applyingTemplate && cfg.tpl && !cfg.tpl.edited) { cfg.tpl.edited = true; renderTplState(); }
   clearTimeout(edTimer);
-  edTimer = setTimeout(() => { syncEditorToCfg(); saveConfig(); }, 400);
+  edTimer = setTimeout(() => { syncEditorToCfg(); saveConfig(); if (cfg.tpl) renderTplMap(); }, 600);
 }
 editor.addEventListener('input', onEditorChange);
 function syncEditorToCfg() { cfg.html = editor.innerHTML; }
@@ -1182,13 +1248,15 @@ const SPECIAL_FIELDS = [
 ];
 function renderFields() {
   const byId = Object.fromEntries(data.cols.map(c => [c.id, c]));
-  const cols = cfg.cols.map(id => byId[id]).filter(Boolean);
+  const q = ($('fieldSearch') && $('fieldSearch').value || '').trim().toLowerCase();
+  const cols = cfg.cols.map(id => byId[id]).filter(Boolean).filter(c => !q || c.label.toLowerCase().includes(q) || c.id.toLowerCase().includes(q));
   $('fieldsBox').innerHTML =
     (cols.length ? '<ul class="fr-tags-group">' + cols.map(c => `<li><button type="button" class="fr-tag fr-tag--sm chip" data-tok="${esc(c.id)}">${esc(c.label)}<small>{{${esc(c.id)}}}</small></button></li>`).join('') + '</ul>'
-      : '<p class="fr-text--sm">Aucune colonne cochée (onglet 1).</p>') +
+      : '<p class="fr-text--sm">' + (q ? 'Aucun champ ne correspond.' : 'Aucune colonne cochée (onglet 1).') + '</p>') +
     '<p class="fr-text--sm fr-text--bold fr-mt-2w fr-mb-1w">Champs spéciaux</p><ul class="fr-tags-group">' +
     SPECIAL_FIELDS.map(f => `<li><button type="button" class="fr-tag fr-tag--sm fr-tag--blue-ecume chip" data-tok="${f.id}">${esc(f.label)}<small>{{${f.id}}}</small></button></li>`).join('') + '</ul>';
 }
+$('fieldSearch').addEventListener('input', renderFields);
 $('fieldsBox').addEventListener('mousedown', (e) => { if (e.target.closest('.chip')) e.preventDefault(); });
 $('fieldsBox').addEventListener('click', (e) => {
   const c = e.target.closest('.chip'); if (!c) return;
@@ -1295,6 +1363,10 @@ function htmlToIR(root) {
       const nw = node.naturalWidth, nh = node.naturalHeight;
       let h = (nw && nh) ? w * nh / nw : (parseFloat(st.height) || parseFloat(node.getAttribute('height')) || w / 2);
       const img = { type: 'image', src, w, h, align: ctx.align || 'left' };
+      // Image flottante (logo…) : position d'origine conservée
+      const fl = st.cssFloat || st.float;
+      if (fl === 'left' || fl === 'right') { img.float = fl; img.align = fl; }
+      try { const a = node.getAttribute('data-anchor'); if (a) { const o = JSON.parse(a); if (o && o.h) img.anchor = o; } } catch (e) {}
       // Une image seule dans un paragraphe prend l'alignement du paragraphe
       finishPara();
       blocks.push(img);
@@ -1376,7 +1448,8 @@ function makeResolver(row, index) {
     if (key === 'DATE_JOUR_LONGUE') return { v: dateLongueFR(now) };
     if (key === 'NUMERO') return { v: String(index + 1) };
     if (key === 'id') return { v: String(row ? row.id : '') };
-    const col = byId[key] || byLabel[key.toLowerCase()] || byIdLower[key.toLowerCase()];
+    const mapped = cfg.tpl && cfg.tpl.map && cfg.tpl.map[key];
+    const col = (mapped && byId[mapped]) || byId[key] || byLabel[key.toLowerCase()] || byIdLower[key.toLowerCase()];
     if (!col || !row) return { v: '{{' + key + '}}', missing: true };
     return { v: formatValue(col, row) };
   };
@@ -1427,7 +1500,8 @@ function signatureBlocks(resolve) {
   return out;
 }
 
-const SIG_RE = /\{\{\s*SIGNATURE\s*\}\}/;
+// Emplacement de la signature : {{SIGNATURE}} ou #signature# (marqueur courant des modèles Word)
+const SIG_RE = /\{\{\s*SIGNATURE\s*\}\}|#\s*signature\s*#/i;
 function mergeRecord(ir, row, index) {
   const resolve = makeResolver(row, index);
   const state = { sigPlaced: false, sig: true };
@@ -1461,7 +1535,7 @@ function mergeBlocks(ir, resolve, index, state) {
       segment = [];
     };
     for (const r of b.runs) {
-      const parts = r.text.split(/\{\{\s*SIGNATURE\s*\}\}/);
+      const parts = r.text.split(new RegExp(SIG_RE.source, 'i'));
       parts.forEach((p, k) => {
         if (k > 0) {
           flush();
@@ -1518,9 +1592,15 @@ function irToHTML(ir, opts) {
   const closeList = () => { if (openList) { html += '</' + openList.kind + '>'; openList = null; } };
   for (const b of ir) {
     if (b.type === 'pagebreak') { closeList(); html += opts.editable ? '<hr>' : '<div class="pv-break"></div>'; continue; }
+    if (b.type === 'image' && b.float) {
+      closeList();
+      const mg = b.float === 'left' ? '0 14px 6px 0' : '0 0 6px 14px';
+      html += `<img class="pp-float" src="${b.src}" data-anchor="${esc(JSON.stringify(b.anchor || {}))}" style="float:${b.float};width:${Math.round(b.w)}px;margin:${mg}">`;
+      continue;
+    }
     if (b.type === 'image') {
       closeList();
-      html += `<p style="text-align:${b.align}"><img src="${b.src}" style="width:${Math.round(b.w)}px"></p>`;
+      html += `<p style="text-align:${b.align}"><img src="${b.src}"${b.anchor ? ` data-anchor="${esc(JSON.stringify(b.anchor))}"` : ''} style="width:${Math.round(b.w)}px"></p>`;
       continue;
     }
     if (b.type === 'table') {
@@ -1888,21 +1968,26 @@ function refreshSelection() {
   filteredRows = rows;
 }
 
-function renderRecList() {
+const REC_LIST_MAX = 1000;
+// Dossiers retenus par les filtres et par la recherche de la liste
+function recMatches() {
   const q = $('recSearch').value.trim().toLowerCase();
+  if (!q) return filteredRows;
   const byId = Object.fromEntries(data.cols.map(c => [c.id, c]));
   const searchCols = [cfg.labelCol].concat(cfg.cols).map(id => byId[id]).filter(Boolean);
+  return filteredRows.filter(r => searchCols.some(c => formatValue(c, r).toLowerCase().includes(q)));
+}
+function renderRecList() {
+  const matches = recMatches();
   const html = [];
-  let shown = 0;
-  for (const r of filteredRows) {
-    if (q && !searchCols.some(c => formatValue(c, r).toLowerCase().includes(q))) continue;
-    if (++shown > 1500) break;
+  for (const r of matches.slice(0, REC_LIST_MAX)) {
     const done = doneInfo(r);
     html.push(`<div class="pp-list__item"><div class="fr-checkbox-group fr-checkbox-group--sm">
       <input type="checkbox" id="rec-${r.id}" data-id="${r.id}" ${excluded.has(r.id) ? '' : 'checked'}>
       <label class="fr-label" for="rec-${r.id}">${esc(rowLabel(r))}</label></div>
       <span class="pp-list__meta">${done ? `<span class="fr-badge fr-badge--sm fr-badge--success">Généré ${esc(done)}</span>` : ''}<span class="pp-code">#${r.id}</span></span></div>`);
   }
+  if (matches.length > REC_LIST_MAX) html.push(`<div class="pp-empty">… et ${matches.length - REC_LIST_MAX} autre(s) dossier(s) non affiché(s). Ils sont pris en compte par « Tout », « Aucun » et la génération ; affinez la recherche pour les voir.</div>`);
   $('recList').innerHTML = html.join('') || '<div class="pp-empty">Aucun dossier ne correspond aux filtres.</div>';
   updateRecCount();
   renderSelInfo();
@@ -1929,6 +2014,23 @@ $('recList').addEventListener('change', (e) => {
 
 /* ----- Interface de sélection ----- */
 function dataColsAll() { return (meta && meta.tables[data.tableId] || []).filter(c => !c.hidden); }
+// Colonne la plus probable pour le numéro de dossier (jamais une coordonnée géographique)
+function guessNumCol(cols) {
+  const score = (c) => {
+    const id = c.id.toLowerCase(), lb = c.label.toLowerCase(), all = id + ' ' + lb;
+    if (/lat|lon|geo|coord/.test(all) || c.baseType === 'Attachments') return -1;
+    if (id === 'dossier_number') return 10;
+    if (/dossier/.test(all)) return 8;
+    if (/^(n|no|num|numero)(_|$)/.test(id) || /n°|numéro|numero/.test(lb)) return 6;
+    if (/immat|agrement|siret|pacage/.test(all)) return 4;
+    return 0;
+  };
+  let best = null, bs = 0;
+  for (const c of cols) { const sc = score(c); if (sc > bs) { best = c; bs = sc; } }
+  return best || cols.find(c => c.id === cfg.labelCol) || null;
+}
+// En changeant de table, les réglages de sélection qui désignent des colonnes de l'ancienne table sont remis à zéro
+function resetTableSelection() { cfg.sel.view = 0; cfg.sel.conds = []; cfg.sel.numCol = ''; cfg.sel.mark = ''; }
 function renderSelControls() {
   const cols = dataColsAll();
   const secs = (meta && meta.sections || []).filter(x => x.tableId === data.tableId);
@@ -1939,8 +2041,9 @@ function renderSelControls() {
   const markable = cols.filter(c => ['Date', 'DateTime', 'Bool', 'Text', 'Any'].includes(c.baseType) && (!c.isFormula || !c.formula));
   $('selMark').innerHTML = '<option value="">— Aucune (historique du widget uniquement) —</option>' + markable.map(c =>
     `<option value="${esc(c.id)}" ${c.id === cfg.sel.mark ? 'selected' : ''}>${esc(c.label)} (${esc(TYPE_FR[c.baseType] || c.baseType)})</option>`).join('');
-  if (!cfg.sel.numCol || !cols.some(c => c.id === cfg.sel.numCol)) {
-    const guess = cols.find(c => c.id === 'dossier_number') || cols.find(c => /dossier|numero|num_/i.test(c.id)) || cols.find(c => c.id === cfg.labelCol);
+  const curNum = cols.find(c => c.id === cfg.sel.numCol);
+  if (!curNum || /lat|lon|geo|coord/i.test(curNum.id + ' ' + curNum.label)) {
+    const guess = guessNumCol(cols);
     cfg.sel.numCol = guess ? guess.id : '';
   }
   $('selNumCol').innerHTML = cols.map(c => `<option value="${esc(c.id)}" ${c.id === cfg.sel.numCol ? 'selected' : ''}>${esc(c.label)}</option>`).join('');
@@ -2054,9 +2157,8 @@ async function markGenerated(rows, kindLabel) {
   return note;
 }
 $('recSearch').addEventListener('input', renderRecList);
-function visibleRecIds() { return [...$('recList').querySelectorAll('input[data-id]')].map(i => +i.dataset.id); }
-$('recAll').onclick = () => { visibleRecIds().forEach(id => excluded.delete(id)); renderRecList(); };
-$('recNone').onclick = () => { visibleRecIds().forEach(id => excluded.add(id)); renderRecList(); };
+$('recAll').onclick = () => { recMatches().forEach(r => excluded.delete(r.id)); renderRecList(); };
+$('recNone').onclick = () => { recMatches().forEach(r => excluded.add(r.id)); renderRecList(); };
 
 $('expMode').onchange = (e) => { cfg.exp.mode = e.target.value; saveConfig(); };
 $('expName').oninput = (e) => { cfg.exp.name = e.target.value; saveConfig(); };
@@ -2102,18 +2204,21 @@ class DocxBuilder {
   constructor(opts) {
     opts = opts || {};
     this.tpl = !!opts.template;
-    this.prefix = this.tpl ? 'Pp' : '';
+    // Mode modèle : jeton unique à chaque génération, pour ne jamais écraser une image ou une
+    // relation déjà présente dans le modèle (ex. modèle réenregistré depuis le widget)
+    this.uid = this.tpl ? 'pp' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) : '';
+    this.prefix = this.tpl ? this.uid : '';
     this.page = Object.assign({}, DEFAULT_PAGE, opts.page || {});
     this.body = [];
     this.media = [];                 // {name, data(base64), ext}
     this.mediaBySrc = new Map();
     this.rels = { document: [], header: [], footer: [] };
     this.relBySrc = { document: new Map(), header: new Map(), footer: new Map() };
-    this.numBase = this.tpl ? 9000 : 1;
+    this.numBase = this.tpl ? (opts.numBase || 9000) : 1;
     this.nums = [];                  // listes numérotées : chacune son w:num pour redémarrer à 1
     this.numByList = new Map();
     this.usedBullets = false;
-    this.docPrId = this.tpl ? 9000 : 1;
+    this.docPrId = this.tpl ? 90000 : 1;
     this.header = null;              // IR de l'en-tête (mode autonome)
     this.footer = null;              // IR du pied de page (mode autonome)
     this.bgImage = null;             // {src, w, h} : fond de page pleine page (papier à en-tête)
@@ -2124,7 +2229,7 @@ class DocxBuilder {
     const m = src.match(/^data:image\/(png|jpe?g);base64,(.*)$/);
     if (!m) return null;
     const ext = m[1] === 'png' ? 'png' : 'jpeg';
-    const media = { name: (this.tpl ? 'pp_image' : 'image') + (this.media.length + 1) + '.' + ext, data: m[2], ext };
+    const media = { name: (this.tpl ? this.uid + '_image' : 'image') + (this.media.length + 1) + '.' + ext, data: m[2], ext };
     this.media.push(media); this.mediaBySrc.set(src, media);
     return media;
   }
@@ -2190,7 +2295,27 @@ class DocxBuilder {
       `<wp:docPr id="${id}" name="Fond de page"/><wp:cNvGraphicFramePr/>` + this.graphicXml(rel, id, cx, cy) +
       `</wp:anchor></w:drawing></w:r></w:p>`;
   }
-  paraXml(b) {
+  // Image ancrée (logo…) : même position que dans le modèle d'origine
+  anchorRunXml(b, maxW, part) {
+    const rel = this.imageRel(b.src, part);
+    if (!rel) return '';
+    const a = b.anchor;
+    const scale = b.w > maxW * 1.5 ? maxW * 1.5 / b.w : 1;
+    const cx = Math.round(b.w * scale * EMU_PER_PX), cy = Math.round(b.h * scale * EMU_PER_PX);
+    const id = this.docPrId++;
+    const pos = (q, tag, okRel, def) => `<wp:${tag} relativeFrom="${okRel.includes(q.rel) ? q.rel : def}">` +
+      (q.align ? `<wp:align>${q.align}</wp:align>` : `<wp:posOffset>${Math.round(q.off || 0)}</wp:posOffset>`) + `</wp:${tag}>`;
+    const wrap = ({ wrapSquare: '<wp:wrapSquare wrapText="bothSides"/>', wrapTight: '<wp:wrapSquare wrapText="bothSides"/>',
+      wrapThrough: '<wp:wrapSquare wrapText="bothSides"/>', wrapTopAndBottom: '<wp:wrapTopAndBottom/>' })[a.wrap] || '<wp:wrapNone/>';
+    return `<w:r><w:drawing><wp:anchor distT="0" distB="0" distL="114300" distR="114300" simplePos="0" relativeHeight="${251658240 + id}" ` +
+      `behindDoc="${a.behind ? 1 : 0}" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/>` +
+      pos(a.h, 'positionH', ['character', 'column', 'insideMargin', 'leftMargin', 'margin', 'outsideMargin', 'page', 'rightMargin'], 'column') +
+      pos(a.v, 'positionV', ['bottomMargin', 'insideMargin', 'line', 'margin', 'outsideMargin', 'page', 'paragraph', 'topMargin'], 'paragraph') +
+      `<wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/>${wrap}` +
+      `<wp:docPr id="${id}" name="Image ${id}"/><wp:cNvGraphicFramePr/>` + this.graphicXml(rel, id, cx, cy) +
+      `</wp:anchor></w:drawing></w:r>`;
+  }
+  paraXml(b, preRuns) {
     const ppr = [];
     let runs = b.runs;
     if (b.style !== 'normal') {
@@ -2206,7 +2331,7 @@ class DocxBuilder {
     if (b.list) ppr.push('<w:spacing w:after="40"/>');
     else if (this.tpl && b.style !== 'normal') ppr.push('<w:spacing w:before="200" w:after="120"/>');
     ppr.push(`<w:jc w:val="${this.jc(b.align)}"/>`);
-    return `<w:p><w:pPr>${ppr.join('')}</w:pPr>${runs.map(r => this.run(r)).join('')}</w:p>`;
+    return `<w:p><w:pPr>${ppr.join('')}</w:pPr>${preRuns || ''}${runs.map(r => this.run(r)).join('')}</w:p>`;
   }
   tableXml(b, maxW, part) {
     const n = tableColCount(b);
@@ -2240,13 +2365,18 @@ class DocxBuilder {
   }
   blocksXml(ir, maxW, part, inCell) {
     maxW = maxW || this.maxWpx();
-    let x = '';
+    let x = '', pending = '';
+    // Les images ancrées sont rattachées au paragraphe qui les suit, comme dans Word
+    const flush = () => { if (pending) { x += `<w:p><w:pPr><w:spacing w:after="0"/></w:pPr>${pending}</w:p>`; pending = ''; } };
     for (const b of ir) {
+      if (b.type === 'image' && b.anchor) { pending += this.anchorRunXml(b, maxW, part); continue; }
+      if (b.type === 'p') { x += this.paraXml(b, pending); pending = ''; continue; }
+      flush();
       if (b.type === 'pagebreak') { if (!inCell) x += PAGE_BREAK_XML; continue; }
       if (b.type === 'image') { x += this.imageXml(b, maxW, part); continue; }
       if (b.type === 'table') { x += this.tableXml(b, maxW, part); continue; }
-      x += this.paraXml(b);
     }
+    flush();
     return x;
   }
   addBlocks(ir) { this.body.push(this.blocksXml(ir, this.maxWpx(), 'document')); }
@@ -2372,7 +2502,7 @@ class DocxBuilder {
         zip.file(np, x);
       } else {
         zip.file(np, `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:numbering xmlns:w="${W_NS}">${defs.abstract}${defs.num}</w:numbering>`);
-        extraRels.push({ rId: 'rIdPpNum', type: REL_NUMBERING, target: 'numbering.xml' });
+        extraRels.push({ rId: 'rId' + this.uid + 'Num', type: REL_NUMBERING, target: 'numbering.xml' });
       }
     }
     if (extraRels.length) {
@@ -2518,14 +2648,15 @@ function replaceInWordTexts(ts, re, fn) {
   ts.forEach((t, i) => { if (t.textContent !== texts[i]) setWordText(t, texts[i]); });
   return true;
 }
-const SIG_RE_G = /\{\{\s*SIGNATURE\s*\}\}/g;
+const SIG_RE_G = /\{\{\s*SIGNATURE\s*\}\}|#\s*signature\s*#/gi;
 // Remplit les {{champs}} d'un fragment Word ; makeSig() renvoie les nœuds du bloc signature
 function fillWordXml(root, resolve, makeSig) {
   let placed = false;
   for (const p of [...root.getElementsByTagNameNS(W_NS, 'p')]) {
     if (!p.parentNode) continue;
     const ts = [...p.getElementsByTagNameNS(W_NS, 't')].filter(t => closestW(t, 'p') === p);
-    if (!ts.length || !ts.map(t => t.textContent).join('').includes('{{')) continue;
+    const txt = ts.map(t => t.textContent).join('');
+    if (!ts.length || !(txt.includes('{{') || /#\s*signature\s*#/i.test(txt))) continue;
     const hasSig = replaceInWordTexts(ts, SIG_RE_G, () => '');
     if (hasSig && makeSig) {
       const nodes = makeSig();
@@ -2576,7 +2707,13 @@ async function buildDocxFromTemplate(buf, records, edited, opts) {
   const holder0 = doc.createElementNS(W_NS, 'w:holder');
   tplNodes.forEach(n => holder0.appendChild(n));
   normalizeMergeFields(holder0);
-  const builder = new DocxBuilder({ template: true, page: sect ? docxPageFromSect(sect) : null });
+  // Numéros de listes libres : au-delà de ceux déjà utilisés par le modèle
+  let numBase = 9000;
+  if (zip.file('word/numbering.xml')) {
+    const nx = await zip.file('word/numbering.xml').async('string');
+    for (const m of nx.matchAll(/w:(?:abstractNumId|numId)="(\d+)"/g)) numBase = Math.max(numBase, +m[1] + 10);
+  }
+  const builder = new DocxBuilder({ template: true, page: sect ? docxPageFromSect(sect) : null, numBase });
   const maxW = builder.maxWpx();
   const insert = (nodes) => nodes.forEach(n => sect ? body.insertBefore(n, sect) : body.appendChild(n));
 
@@ -2595,7 +2732,7 @@ async function buildDocxFromTemplate(buf, records, edited, opts) {
     insert([...holder.childNodes]);
   });
   if (!body.firstChild || body.firstChild === sect) insert(parseWordFragment(doc, '<w:p/>'));
-  // Identifiants d'objets dessinés uniques (le corps est dupliqué pour chaque dossier)
+  // Identifiants d'objets dessinés uniques dans tout le document (le corps est dupliqué pour chaque dossier)
   let id = 1;
   for (const d of doc.getElementsByTagNameNS(WP_NS, 'docPr')) d.setAttribute('id', String(id++));
   zip.file(docPath, new XMLSerializer().serializeToString(doc));
@@ -2608,6 +2745,7 @@ async function buildDocxFromTemplate(buf, records, edited, opts) {
     const d = xmlDoc(await zip.file(path).async('string'));
     normalizeMergeFields(d.documentElement);
     if (!opts.keepTokens) fillWordXml(d.documentElement, resolve0, null);
+    for (const dp of d.getElementsByTagNameNS(WP_NS, 'docPr')) dp.setAttribute('id', String(id++));
     zip.file(path, new XMLSerializer().serializeToString(d));
   }
   await builder.injectInto(zip);
@@ -2655,10 +2793,29 @@ function impBreakOut(s, block) {
 function impImage(s, src, w, h) {
   impBreakOut(s, { type: 'image', src, w: Math.max(8, Math.round(w)), h: Math.max(8, Math.round(h)), align: s.cur.align === 'justify' ? 'left' : s.cur.align });
 }
+// Image flottante (ancrée) : placée avant le paragraphe qui la porte, sans couper son texte
+function impFloat(s, block) { (s.floats = s.floats || []).push(block); }
 function impFinish(s) {
   if (s.cur._split && !s.cur.runs.length) s.out.splice(s.out.indexOf(s.cur), 1);
   delete s.cur._split;
+  if (s.floats && s.floats.length) s.out.splice(Math.min(s.start != null ? s.start : s.out.length, s.out.length), 0, ...s.floats);
   s.out.push(...s.extra);
+}
+// Côté d'une image ancrée (gauche / droite / centre) d'après sa position sur la page (page en twips)
+function anchorSide(a, wPx, page) {
+  const h = a && a.h;
+  if (!h) return 'left';
+  if (h.align) return /right|outside/.test(h.align) ? 'right' : h.align === 'center' ? 'center' : 'left';
+  page = page || DEFAULT_PAGE;
+  const base = (h.rel === 'page' || h.rel === 'leftMargin' || h.rel === 'insideMargin') ? 0
+    : (h.rel === 'rightMargin' || h.rel === 'outsideMargin') ? page.w - page.mr : page.ml;
+  const center = base + h.off / 635 + wPx * 15 / 2;
+  return center < page.w * 0.42 ? 'left' : center > page.w * 0.58 ? 'right' : 'center';
+}
+function floatBlock(src, w, h, anchor, page) {
+  const side = anchorSide(anchor, w, page);
+  return { type: 'image', src, w: Math.max(8, Math.round(w)), h: Math.max(8, Math.round(h)),
+    align: side, float: side === 'center' || anchor.wrap === 'wrapTopAndBottom' ? null : side, anchor };
 }
 
 /* ---------- Word (.docx) ---------- */
@@ -2777,7 +2934,7 @@ function docxPara(p, ctx, out) {
   }
   if (pPr && kid(pPr, 'pageBreakBefore') && onOff(kid(pPr, 'pageBreakBefore'))) out.push({ type: 'pagebreak' });
   const mk = () => ({ type: 'p', style, align, list, runs: [] });
-  const s = { cur: mk(), out, mk, extra: [] };
+  const s = { cur: mk(), out, mk, extra: [], start: out.length };
   out.push(s.cur);
   docxInline(p, Object.assign({}, st.r), ctx, s);
   impFinish(s);
@@ -2851,12 +3008,28 @@ function docxRun(r, pfmt, ctx, s) {
     }
   }
 }
+function docxPos(el, def) {
+  if (!el) return { rel: def, align: null, off: 0 };
+  const al = kid(el, 'align'), off = kid(el, 'posOffset');
+  return { rel: el.getAttribute('relativeFrom') || def, align: al ? al.textContent.trim() : null, off: off ? (+off.textContent.trim() || 0) : 0 };
+}
+function docxAnchor(a) {
+  const wrapEl = [...a.children].find(c => /^wrap/.test(c.localName));
+  return { h: docxPos(kid(a, 'positionH'), 'column'), v: docxPos(kid(a, 'positionV'), 'paragraph'),
+    wrap: wrapEl ? wrapEl.localName : 'wrapNone', behind: a.getAttribute('behindDoc') === '1' };
+}
 function docxDrawing(d, ctx, s) {
   const ext = d.getElementsByTagNameNS(WP_NS, 'extent')[0];
   const w = ext ? +ext.getAttribute('cx') / EMU_PER_PX : 200, h = ext ? +ext.getAttribute('cy') / EMU_PER_PX : 100;
+  const holder = [...d.children].find(c => c.localName === 'anchor' || c.localName === 'inline');
+  const anchor = holder && holder.localName === 'anchor' ? docxAnchor(holder) : null;
   for (const b of d.getElementsByTagNameNS(A_NS, 'blip')) {
     const src = ctx.media[ctx.rels[b.getAttributeNS(R_NS, 'embed') || b.getAttribute('r:embed')]];
-    if (src) impImage(s, src, w, h); else ctx.warn.add('Certaines images (format EMF/WMF ou images liées) n\'ont pas pu être reprises.');
+    if (!src) { ctx.warn.add('Certaines images (format EMF/WMF ou images liées) n\'ont pas pu être reprises.'); continue; }
+    // Grande image placée derrière le texte : fond de page, conservé comme image simple
+    const bigBehind = anchor && anchor.behind && w * 15 > (ctx.page || DEFAULT_PAGE).w * 0.6;
+    if (anchor && !bigBehind) impFloat(s, floatBlock(src, w, h, anchor, ctx.page));
+    else impImage(s, src, w, h);
   }
   for (const tb of d.getElementsByTagNameNS(W_NS, 'txbxContent')) {
     if (closestW(tb, 'txbxContent')) continue;
@@ -2906,12 +3079,12 @@ async function docxToTemplate(zip, warn) {
   const base = { styles, numbering, media, warn: new Set(), defSize: styles.defSize, mergeFields: 0 };
   const doc = xmlDoc(await zip.file(main).async('string'));
   const body = doc.getElementsByTagNameNS(W_NS, 'body')[0];
-  const ctx = Object.assign({}, base, { rels: await docxRels(zip, main), fields: [] });
-  const out = { body: docxConvert(body, ctx), header: [], footer: [], page: Object.assign({}, DEFAULT_PAGE) };
-  base.mergeFields = ctx.mergeFields;
   const sect = kid(body, 'sectPr');
+  base.page = sect ? docxPageFromSect(sect) : Object.assign({}, DEFAULT_PAGE);
+  const ctx = Object.assign({}, base, { rels: await docxRels(zip, main), fields: [] });
+  const out = { body: docxConvert(body, ctx), header: [], footer: [], page: base.page };
+  base.mergeFields = ctx.mergeFields;
   if (sect) {
-    out.page = docxPageFromSect(sect);
     const part = async (refName) => {
       const refs = kids(sect, refName);
       const ref = refs.find(r => (wv(r, 'type') || 'default') === 'default') || refs[0];
@@ -2969,10 +3142,13 @@ function odtStyles(docs) {
         const vals = ['border', 'border-top', 'border-bottom', 'border-left', 'border-right'].map(a => oa(cp, 'fo', a)).filter(Boolean);
         if (vals.length) border = vals.some(v => v !== 'none');
       }
+      const gp = kid(s, 'graphic-properties');
       map.set(oa(s, 'style', 'name'), {
         parent: oa(s, 'style', 'parent-style-name'), r, align: pp && oa(pp, 'fo', 'text-align'),
         pageBreak: !!(pp && oa(pp, 'fo', 'break-before') === 'page'), border,
-        colWidth: colp ? lenToPx(oa(colp, 'style', 'column-width')) : null
+        colWidth: colp ? lenToPx(oa(colp, 'style', 'column-width')) : null,
+        g: gp ? { hpos: oa(gp, 'style', 'horizontal-pos'), hrel: oa(gp, 'style', 'horizontal-rel'), vpos: oa(gp, 'style', 'vertical-pos'),
+          vrel: oa(gp, 'style', 'vertical-rel'), wrap: oa(gp, 'style', 'wrap'), runThrough: oa(gp, 'style', 'run-through') } : null
       });
     }
     for (const l of d.getElementsByTagNameNS(ODF.text, 'list-style')) {
@@ -2993,7 +3169,8 @@ function odtStyles(docs) {
     if (cache.has(name)) return cache.get(name) || { r: {}, align: null };
     cache.set(name, null);
     const s = map.get(name), p = get(s.parent);
-    const o = { r: Object.assign({}, p.r, s.r), align: s.align || p.align, pageBreak: s.pageBreak, border: s.border, colWidth: s.colWidth };
+    const o = { r: Object.assign({}, p.r, s.r), align: s.align || p.align, pageBreak: s.pageBreak, border: s.border, colWidth: s.colWidth,
+      g: Object.assign({}, p.g || {}, s.g ? Object.fromEntries(Object.entries(s.g).filter(([, v]) => v)) : {}) };
     cache.set(name, o);
     return o;
   }
@@ -3018,7 +3195,7 @@ function odtBlocks(container, ctx, out, listCtx) {
     } else if (ns === ODF.text && /index$|table-of-content/.test(n)) {
       const b = kid(el, 'index-body'); if (b) odtBlocks(b, ctx, out, listCtx);
     } else if (ns === ODF.draw && n === 'frame') {
-      const s = { cur: { type: 'p', style: 'normal', align: 'left', list: null, runs: [], _split: true }, out, extra: [] };
+      const s = { cur: { type: 'p', style: 'normal', align: 'left', list: null, runs: [], _split: true }, out, extra: [], start: out.length };
       s.mk = () => ({ type: 'p', style: 'normal', align: 'left', list: null, runs: [] });
       out.push(s.cur);
       odtFrame(el, ctx, s);
@@ -3036,7 +3213,7 @@ function odtPara(el, ctx, out, listCtx, heading) {
     list = { kind: lv[listCtx.level + 1] || 'ul', id: 2000 + listCtx.id, level: Math.min(listCtx.level, 2) };
   }
   const mk = () => ({ type: 'p', style: heading ? 'h' + heading : 'normal', align, list, runs: [] });
-  const s = { cur: mk(), out, mk, extra: [] };
+  const s = { cur: mk(), out, mk, extra: [], start: out.length };
   out.push(s.cur);
   odtInline(el, Object.assign({}, st.r), ctx, s);
   impFinish(s);
@@ -3061,13 +3238,30 @@ function odtInline(el, fmt, ctx, s) {
     }
   }
 }
+// Cadre LibreOffice ancré (paragraphe, page…) -> même description que les images ancrées Word
+function odtAnchor(fr, ctx) {
+  const type = oa(fr, 'text', 'anchor-type') || 'paragraph';
+  if (type === 'as-char') return null;
+  const g = ctx.styles.get(oa(fr, 'draw', 'style-name')).g || {};
+  const pageH = type === 'page' || /^page/.test(g.hrel || ''), pageV = type === 'page' || /^page/.test(g.vrel || '');
+  const emu = (len) => Math.round((lenToPx(len) || 0) * EMU_PER_PX);
+  const hp = g.hpos || 'from-left', vp = g.vpos || 'from-top';
+  const h = { rel: pageH ? 'page' : 'column', align: ({ left: 'left', right: 'right', center: 'center', inside: 'inside', outside: 'outside' })[hp] || null, off: 0 };
+  if (!h.align) h.off = emu(oa(fr, 'svg', 'x'));
+  const v = { rel: pageV ? 'page' : 'paragraph', align: ({ top: 'top', middle: 'center', bottom: 'bottom' })[vp] || null, off: 0 };
+  if (!v.align) v.off = emu(oa(fr, 'svg', 'y'));
+  const wrap = g.wrap === 'run-through' ? 'wrapNone' : g.wrap === 'none' ? 'wrapTopAndBottom' : 'wrapSquare';
+  return { h, v, wrap, behind: g.wrap === 'run-through' && g.runThrough === 'background' };
+}
 function odtFrame(fr, ctx, s) {
   const w = lenToPx(oa(fr, 'svg', 'width')) || 200, h = lenToPx(oa(fr, 'svg', 'height')) || 100;
   const img = kid(fr, 'image');
   if (img) {
     const href = oa(img, 'xlink', 'href');
     const src = ctx.media[href];
-    if (src) impImage(s, src, w, h);
+    const anchor = odtAnchor(fr, ctx);
+    if (src && anchor && !(anchor.behind && w * 15 > (ctx.page || DEFAULT_PAGE).w * 0.6)) impFloat(s, floatBlock(src, w, h, anchor, ctx.page));
+    else if (src) impImage(s, src, w, h);
     else if (href) ctx.warn.add('Certaines images n\'ont pas pu être reprises.');
   }
   const tb = kid(fr, 'text-box');
@@ -3117,27 +3311,26 @@ async function odtToTemplate(zip, warn) {
   const content = xmlDoc(await zip.file('content.xml').async('string'));
   const stylesDoc = zip.file('styles.xml') ? xmlDoc(await zip.file('styles.xml').async('string')) : null;
   const styles = odtStyles([stylesDoc, content]);
-  const ctx = { styles, media, warn: new Set(), listSeq: 0, defSize: styles.defSize, mergeFields: 0 };
   const out = { body: [], header: [], footer: [], page: Object.assign({}, DEFAULT_PAGE) };
+  const mp = stylesDoc && stylesDoc.getElementsByTagNameNS(ODF.style, 'master-page')[0];
+  const hEl = mp && kid(mp, 'header'), fEl = mp && kid(mp, 'footer');
+  // Mise en page d'abord : elle sert à situer les images ancrées
+  const lay = mp && styles.layouts.get(oa(mp, 'style', 'page-layout-name'));
+  if (lay) {
+    const p = out.page;
+    if (lay.w) p.w = pxToTw(lay.w); if (lay.h) p.h = pxToTw(lay.h);
+    if (lay.mt != null) p.mt = Math.max(pxToTw(lay.mt), 567); if (lay.mb != null) p.mb = Math.max(pxToTw(lay.mb), 567);
+    if (lay.ml != null) p.ml = pxToTw(lay.ml); if (lay.mr != null) p.mr = pxToTw(lay.mr);
+    // LibreOffice place l'en-tête dans la marge : on réserve sa hauteur
+    if (hEl) p.mt += 700;
+    if (fEl) p.mb += 700;
+    p.hd = Math.min(567, p.mt); p.ft = Math.min(567, p.mb);
+  }
+  const ctx = { styles, media, warn: new Set(), listSeq: 0, defSize: styles.defSize, mergeFields: 0, page: out.page };
   const textEl = content.getElementsByTagNameNS(ODF.office, 'text')[0];
   if (textEl) odtBlocks(textEl, ctx, out.body, null);
-  const mp = stylesDoc && stylesDoc.getElementsByTagNameNS(ODF.style, 'master-page')[0];
-  if (mp) {
-    const h = kid(mp, 'header'), f = kid(mp, 'footer');
-    if (h) odtBlocks(h, ctx, out.header, null);
-    if (f) odtBlocks(f, ctx, out.footer, null);
-    const lay = styles.layouts.get(oa(mp, 'style', 'page-layout-name'));
-    if (lay) {
-      const p = out.page;
-      if (lay.w) p.w = pxToTw(lay.w); if (lay.h) p.h = pxToTw(lay.h);
-      if (lay.mt != null) p.mt = Math.max(pxToTw(lay.mt), 567); if (lay.mb != null) p.mb = Math.max(pxToTw(lay.mb), 567);
-      if (lay.ml != null) p.ml = pxToTw(lay.ml); if (lay.mr != null) p.mr = pxToTw(lay.mr);
-      // LibreOffice place l'en-tête dans la marge : on réserve sa hauteur
-      if (out.header.length) p.mt += 700;
-      if (out.footer.length) p.mb += 700;
-      p.hd = Math.min(567, p.mt); p.ft = Math.min(567, p.mb);
-    }
-  }
+  if (hEl) odtBlocks(hEl, ctx, out.header, null);
+  if (fEl) odtBlocks(fEl, ctx, out.footer, null);
   if (ctx.mergeFields) warn.push(ctx.mergeFields + ' champ(s) de base de données LibreOffice converti(s) en {{champ}}.');
   ctx.warn.forEach(w => warn.push(w));
   return out;
@@ -3251,6 +3444,30 @@ async function fileToTemplate(buf, name, warn) {
  * Export PDF — pdfmake
  * ====================================================================== */
 const PDF_MAX_W_PT = 481;  // A4 (595pt) - 2 x 57pt de marge
+// Géométrie de la page en cours de génération (points), pour placer les images ancrées
+const PDF_GEOM_DEFAULT = { W: 595.28, H: 841.89, ml: 57, mr: 57, mt: 57, mb: 57, hd: 28, ft: 28 };
+let pdfGeom = PDF_GEOM_DEFAULT;
+// Position absolue (points) d'une image ancrée, ou null si elle dépend du texte qui l'entoure
+function anchorAbsPt(a, w, h, part) {
+  const g = pdfGeom, E = 12700, H = a && a.h, V = a && a.v;
+  if (!H || !V) return null;
+  let x0, refW;
+  if (H.rel === 'page') { x0 = 0; refW = g.W; }
+  else if (H.rel === 'leftMargin' || H.rel === 'insideMargin') { x0 = 0; refW = g.ml; }
+  else if (H.rel === 'rightMargin' || H.rel === 'outsideMargin') { x0 = g.W - g.mr; refW = g.mr; }
+  else { x0 = g.ml; refW = g.W - g.ml - g.mr; }
+  const x = H.align ? (/right|outside/.test(H.align) ? x0 + refW - w : H.align === 'center' ? x0 + (refW - w) / 2 : x0) : x0 + H.off / E;
+  let y0, refH;
+  if (V.rel === 'page') { y0 = 0; refH = g.H; }
+  else if (V.rel === 'topMargin') { y0 = 0; refH = g.mt; }
+  else if (V.rel === 'bottomMargin') { y0 = g.H - g.mb; refH = g.mb; }
+  else if (V.rel === 'margin') { y0 = g.mt; refH = g.H - g.mt - g.mb; }
+  else if (part === 'header') { y0 = g.hd; refH = 0; }          // ancrée au paragraphe de l'en-tête
+  else if (part === 'footer') { y0 = g.ftTop != null ? g.ftTop : g.H - g.mb; refH = 0; }
+  else return null;
+  const y = V.align ? (V.align === 'bottom' ? y0 + refH - h : V.align === 'center' ? y0 + (refH - h) / 2 : y0) : y0 + V.off / E;
+  return { x: Math.max(0, Math.min(x, g.W - w)), y: Math.max(0, Math.min(y, g.H - h)) };
+}
 function runsToPdf(runs, justify) {
   // Fusionne les runs de même mise en forme (le surlignage n'existe pas en PDF)
   const merged = [];
@@ -3282,7 +3499,7 @@ function runsToPdf(runs, justify) {
   });
   return t.length ? t : ' ';
 }
-function irToPdfContent(ir, maxW, inCell) {
+function irToPdfContent(ir, maxW, inCell, part) {
   maxW = maxW || PDF_MAX_W_PT;
   const prefix = listPrefixer();
   const content = [];
@@ -3297,7 +3514,7 @@ function irToPdfContent(ir, maxW, inCell) {
           if (col >= n) break;
           const span = Math.max(1, Math.min(c.span || 1, n - col));
           const pct = w.slice(col, col + span).reduce((a, x) => a + x, 0);
-          const stack = irToPdfContent(c.blocks || [], Math.max(20, maxW * pct / 100 - 10), true);
+          const stack = irToPdfContent(c.blocks || [], Math.max(20, maxW * pct / 100 - 10), true, 'cell');
           const cell = { stack: stack.length ? stack : [{ text: ' ' }] };
           if (span > 1) cell.colSpan = span;
           cells.push(cell);
@@ -3312,6 +3529,8 @@ function irToPdfContent(ir, maxW, inCell) {
     }
     if (b.type === 'image') {
       const w = Math.min(b.w * 0.75, maxW);
+      const abs = b.anchor && part !== 'cell' ? anchorAbsPt(b.anchor, w, w * b.h / Math.max(1, b.w), part) : null;
+      if (abs) { content.push({ image: b.src, width: w, absolutePosition: abs }); continue; }
       content.push({ image: b.src, width: w, alignment: b.align === 'justify' ? 'left' : b.align, margin: [0, 2, 0, 2] });
       continue;
     }
@@ -3880,7 +4099,7 @@ function confirmClick(btn, label) {
   btn._confirmTimer = setTimeout(() => { if (btn.dataset.confirm) { delete btn.dataset.confirm; btn.textContent = btn.dataset.label; } }, 4000);
   return false;
 }
-function unknownTokens() {
+function unknownTokens(opts) {
   const names = new Set();
   const re = new RegExp(TOKEN_RE.source, 'g');
   const text = editor.innerText + ' ' + (tplRt ? irToPlainText(tplRt.header) + ' ' + irToPlainText(tplRt.footer) : '');
@@ -3888,8 +4107,68 @@ function unknownTokens() {
   while ((m = re.exec(text))) names.add(m[1].trim());
   const known = new Set(['id'].concat(SPECIAL_FIELDS.map(f => f.id.toLowerCase()),
     data.cols.flatMap(c => [c.id.toLowerCase(), c.label.toLowerCase()])));
+  if (opts && opts.withMapped && cfg.tpl && cfg.tpl.map) Object.keys(cfg.tpl.map).forEach(k => { if (cfg.tpl.map[k]) known.add(k.toLowerCase()); });
   return [...names].filter(n => !known.has(n.toLowerCase()));
 }
+/* ----- Correspondance des champs du modèle avec les colonnes de la table ----- */
+const normKey = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const FIELD_SYNONYMS = {
+  cp: ['codepostal', 'cp', 'postal'], localite: ['commune', 'ville', 'localite'], ville: ['commune', 'ville', 'localite'],
+  n: ['numero', 'num', 'immatriculation', 'agrement'], numero: ['numero', 'num', 'immatriculation'],
+  adresse: ['adresse', 'rue', 'voie'], enseigne: ['enseigne', 'raisonsociale', 'denomination', 'nom'],
+  nom: ['nom', 'raisonsociale', 'denomination'], siret: ['siret']
+};
+function guessColumn(token) {
+  const t = normKey(token);
+  if (!t) return null;
+  const cands = FIELD_SYNONYMS[t] || [t];
+  let best = null, bestScore = 0;
+  for (const c of data.cols) {
+    if (c.baseType === 'Attachments') continue;
+    const id = normKey(c.id), lb = normKey(c.label);
+    let sc = 0;
+    if (id === t || lb === t) sc = 5;
+    else for (const k of cands) {
+      if (k.length < 2) continue;
+      if (id === k || lb === k) sc = Math.max(sc, 4);
+      else if (k.length >= 3 && (id.includes(k) || lb.includes(k))) sc = Math.max(sc, 3 - (id.length > k.length * 3 ? 1 : 0));
+    }
+    if (sc > bestScore) { best = c; bestScore = sc; }
+  }
+  return bestScore >= 2 ? best : null;
+}
+// Champs du modèle qui ne correspondent directement à aucune colonne : association manuelle
+function renderTplMap() {
+  const box = $('tplMap');
+  if (!box) return;
+  if (!cfg.tpl || !data.cols.length) { box.innerHTML = ''; return; }
+  cfg.tpl.map = cfg.tpl.map || {};
+  const map = cfg.tpl.map;
+  const unknown = unknownTokens();
+  const tokens = [...new Set(unknown.concat(Object.keys(map)))].filter(t => unknown.includes(t) || map[t]);
+  if (!tokens.length) { box.innerHTML = ''; return; }
+  let changed = false;
+  for (const t of unknown) {
+    if (map[t] === undefined) { const g = guessColumn(t); map[t] = g ? g.id : ''; if (g) { (cfg.tpl.auto = cfg.tpl.auto || {})[t] = true; } changed = true; }
+  }
+  if (changed) saveConfig();
+  const opts = (sel) => '<option value="">— Choisir une colonne —</option>' + data.cols.filter(c => c.baseType !== 'Attachments')
+    .map(c => `<option value="${esc(c.id)}" ${c.id === sel ? 'selected' : ''}>${esc(c.label)}${c.label !== c.id ? ' (' + esc(c.id) + ')' : ''}</option>`).join('');
+  const missing = tokens.filter(t => !map[t]).length;
+  box.innerHTML = `<div class="pp-map fr-mb-2w"><p class="fr-text--sm fr-text--bold fr-mb-1w">Champs du modèle à associer à une colonne de la table « ${esc(tableLabel(data.tableId))} »</p>
+    <p class="fr-hint-text fr-mb-1w">Le modèle utilise des noms de champs qui n'existent pas tels quels dans la table. Choisissez la colonne à utiliser pour chacun${missing ? ' — ' + missing + ' champ(s) encore sans colonne : ils resteront affichés tels quels' : ''}.</p>
+    ${tokens.map(t => `<div class="pp-map__row"><code>{{${esc(t)}}}</code><span aria-hidden="true">→</span>
+      <select class="fr-select" data-tok="${esc(t)}" aria-label="Colonne pour {{${esc(t)}}}">${opts(map[t])}</select>
+      ${map[t] && cfg.tpl.auto && cfg.tpl.auto[t] ? '<span class="fr-badge fr-badge--sm fr-badge--info fr-badge--no-icon">proposé — à vérifier</span>' : ''}</div>`).join('')}</div>`;
+}
+document.addEventListener('change', (e) => {
+  const sel = e.target.closest && e.target.closest('#tplMap select[data-tok]');
+  if (!sel || !cfg.tpl) return;
+  cfg.tpl.map[sel.dataset.tok] = sel.value;
+  if (cfg.tpl.auto) delete cfg.tpl.auto[sel.dataset.tok];
+  saveConfig(); renderTplMap();
+  if (isPreview) renderPreview();
+});
 
 /* ----- Liste des modèles ----- */
 async function loadTemplates(selectId) {
@@ -3986,12 +4265,13 @@ function renderTplState() {
   $('tplActive').innerHTML = `<div class="fr-callout fr-mb-2w"><p class="fr-callout__text fr-text--sm"><b>Modèle actif : ${esc(t.title)}</b> (${kind} — ${esc(t.fileName)})<br>${esc(state)}<br>
     Le PDF est toujours reconstruit à partir de l'éditeur (mise en forme approchée du Word).</p>
     <button type="button" class="fr-btn fr-btn--sm fr-btn--tertiary" id="tplDetach">Détacher le modèle (message libre)</button></div>`;
-  $('tplDetach').onclick = () => { cfg.tpl = null; tplRt = null; saveConfig(); renderTplState(); };
+  $('tplDetach').onclick = () => { cfg.tpl = null; tplRt = null; saveConfig(); renderTplState(); renderTplMap(); };
   $('tplBgOptions').style.display = t.kind === 'pdf' ? '' : 'none';
   $('tplBg').checked = !!t.bg;
   const m = t.margins || {};
   $('tplMt').value = m.mt; $('tplMb').value = m.mb; $('tplMl').value = m.ml; $('tplMr').value = m.mr;
   renderHF();
+  renderTplMap();
 }
 $('tplBg').onchange = async (e) => {
   if (!cfg.tpl) return;
@@ -4031,7 +4311,9 @@ $('tplOpen').onclick = async () => {
     editor.innerHTML = irToHTML(t.body, { editable: true }) || '<p><br></p>';
     syncEditorToCfg();
     const prev = cfg.tpl && cfg.tpl.rowId === row.id ? cfg.tpl : null;
+    const prevMap = cfg.tpl && cfg.tpl.map ? cfg.tpl.map : {};
     cfg.tpl = {
+      map: Object.assign({}, prevMap), auto: prev && prev.auto ? prev.auto : {},
       rowId: row.id, attId, fileName, kind: t.kind,
       title: (tplList.cols.title && row[tplList.cols.title.id]) || fileName,
       edited: false, bg: prev ? !!prev.bg : false,
@@ -4042,11 +4324,13 @@ $('tplOpen').onclick = async () => {
     saveConfig();
     setPreview(false);
     renderTplState();
-    const unknown = unknownTokens();
+    renderTplMap();
+    const unknown = unknownTokens({ withMapped: true });
     let msg = 'Modèle « ' + esc(cfg.tpl.title) + ' » ouvert (' + ({ docx: 'Word', odt: 'LibreOffice', pdf: 'PDF' })[t.kind] + ').';
     if (t.header.some(blockHasContent) || t.footer.some(blockHasContent)) msg += ' En-tête et pied de page conservés.';
     if (warn.length) msg += '<br>' + warn.map(esc).join('<br>');
-    if (unknown.length) msg += '<br>Champs non reconnus (vérifiez les noms de colonnes, onglet 1) : ' + unknown.map(u => '<code>{{' + esc(u) + '}}</code>').join(', ');
+    if (unknown.length) msg += '<br>' + unknown.length + ' champ(s) du modèle sans colonne associée : ' + unknown.map(u => '<code>{{' + esc(u) + '}}</code>').join(', ') + ' — choisissez la colonne correspondante ci-dessous.';
+    else if (Object.values(cfg.tpl.map || {}).some(Boolean)) msg += '<br>Certains champs du modèle ont été associés automatiquement à des colonnes : vérifiez la correspondance ci-dessous.';
     $('tplMsg').innerHTML = alertHTML(unknown.length || warn.some(w => !/converti/.test(w)) ? 'warn' : 'ok', msg);
   } catch (e) {
     $('tplMsg').innerHTML = alertHTML('err', esc(e.message || e));
@@ -4111,7 +4395,8 @@ $('tplSave').onclick = async () => {
     // Le modèle enregistré devient le modèle actif
     const buf = await blob.arrayBuffer();
     const parsed = await fileToTemplate(buf, fileName, []);
-    cfg.tpl = { rowId, attId, fileName, kind: 'docx', title, edited: false, bg: false, margins: (cfg.tpl && cfg.tpl.margins) || { mt: 4.5, mb: 3, ml: 2, mr: 2 } };
+    cfg.tpl = { rowId, attId, fileName, kind: 'docx', title, edited: false, bg: false, margins: (cfg.tpl && cfg.tpl.margins) || { mt: 4.5, mb: 3, ml: 2, mr: 2 },
+      map: (cfg.tpl && cfg.tpl.map) || {}, auto: (cfg.tpl && cfg.tpl.auto) || {} };
     tplRt = Object.assign({ attId, buf }, parsed);
     saveConfig();
     await loadTemplates(rowId);
@@ -4128,10 +4413,14 @@ $('tplSave').onclick = async () => {
  * Génération avec modèle
  * ====================================================================== */
 // Hauteur approximative (en points) d'un contenu, pour réserver la place de l'en-tête et du pied de page
-function estimateHeight(ir, maxW) {
+function estimateHeight(ir, maxW, part) {
   let h = 0;
   for (const b of ir || []) {
-    if (b.type === 'image') h += Math.min(b.w * 0.75, maxW) * (b.h / Math.max(1, b.w)) + 8;
+    if (b.type === 'image') {
+      const w = Math.min(b.w * 0.75, maxW), ih = w * (b.h / Math.max(1, b.w));
+      if (b.anchor && anchorAbsPt(b.anchor, w, ih, part)) continue;   // hors du flux du texte
+      h += ih + 8;
+    }
     else if (b.type === 'table') {
       for (const r of b.rows) h += Math.max(14, ...r.map(c => estimateHeight(c.blocks, maxW / Math.max(1, r.length))));
     } else if (b.type === 'p') {
@@ -4156,24 +4445,41 @@ async function pdfWithTemplate(rt, merged, row, index) {
   let mt = pt(page.mt), mb = pt(page.mb);
   const contentW = W - ml - mr;
   const bg = rt.kind === 'pdf' && cfg.tpl.bg;
-  const def = pdfDefinition(irToPdfContent(merged, contentW));
+  const hd = Math.max(12, pt(page.hd)), ft = Math.max(12, pt(page.ft));
+  pdfGeom = { W, H, ml, mr, mt, mb, hd, ft };
+  let header = null, footer = null;
   if (!bg) {
     const hdrIR = rt.header.some(blockHasContent) ? mergeAux(rt.header, row, index) : null;
     const ftrIR = rt.footer.some(blockHasContent) ? mergeAux(rt.footer, row, index) : null;
     if (hdrIR) {
-      const hd = Math.max(12, pt(page.hd));
-      const hh = estimateHeight(hdrIR, contentW);
-      mt = Math.max(mt, hd + hh + 8);
-      const content = irToPdfContent(hdrIR, contentW, true);
-      def.header = () => ({ stack: content, margin: [ml, hd, mr, 0] });
+      const hh = estimateHeight(hdrIR, contentW, 'header');
+      // Bas des images ancrées de l'en-tête (logo…) : le texte du courrier commence en dessous
+      let absBottom = 0;
+      for (const b of hdrIR) {
+        if (b.type !== 'image' || !b.anchor) continue;
+        const w = Math.min(b.w * 0.75, contentW), ih = w * b.h / Math.max(1, b.w);
+        const a = anchorAbsPt(b.anchor, w, ih, 'header');
+        if (a && a.y < H / 3) absBottom = Math.max(absBottom, a.y + ih);
+      }
+      mt = Math.max(mt, hd + hh + 8, absBottom ? absBottom + 8 : 0);
+      header = { ir: hdrIR };
     }
     if (ftrIR) {
-      const ft = Math.max(12, pt(page.ft));
-      const fh = estimateHeight(ftrIR, contentW);
+      const fh = estimateHeight(ftrIR, contentW, 'footer');
       mb = Math.max(mb, ft + fh + 8);
-      const content = irToPdfContent(ftrIR, contentW, true);
-      def.footer = () => ({ stack: content, margin: [ml, Math.max(4, mb - ft - fh), mr, 0] });
+      pdfGeom.ftTop = H - ft - fh;
+      footer = { ir: ftrIR, fh };
     }
+  }
+  pdfGeom.mt = mt; pdfGeom.mb = mb;
+  const def = pdfDefinition(irToPdfContent(merged, contentW, false, 'body'));
+  if (header) {
+    const content = irToPdfContent(header.ir, contentW, true, 'header');
+    def.header = () => ({ stack: content, margin: [ml, hd, mr, 0] });
+  }
+  if (footer) {
+    const content = irToPdfContent(footer.ir, contentW, true, 'footer');
+    def.footer = () => ({ stack: content, margin: [ml, Math.max(4, mb - ft - footer.fh), mr, 0] });
   }
   def.pageSize = { width: W, height: H };
   def.pageMargins = [ml, mt, mr, mb];
@@ -4226,6 +4532,7 @@ async function makeDocxFor(rt, ir, recs) {
 }
 // PDF : un ou plusieurs dossiers dans un même fichier
 async function makePdfFor(rt, ir, recs) {
+  pdfGeom = PDF_GEOM_DEFAULT;
   if (!rt) {
     const content = [];
     recs.forEach((x, k) => {
@@ -4482,6 +4789,7 @@ function renderAll() {
   renderColList();
   renderFields();
   if (data.tableId) renderSelControls();
+  if (cfg.tpl && $('tplMap')) renderTplMap();
   refreshSelection();
   if ($('tab-generer').classList.contains('fr-tabs__panel--selected')) renderRecList();
   if (isPreview) renderPreview();
