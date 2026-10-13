@@ -78,6 +78,7 @@
   .pp-cond { display: grid; grid-template-columns: minmax(160px, 1.2fr) minmax(150px, 1fr) minmax(160px, 1.4fr) auto; gap: .5rem; align-items: center; margin-bottom: .5rem; }
   .pp-cond .fr-select, .pp-cond .fr-input { margin: 0; }
   @media (max-width: 700px) { .pp-cond { grid-template-columns: 1fr 1fr; } }
+  .pp-ident { margin-left: .75rem; font-size: .75rem; color: var(--text-mention-grey); }
   .pp-code { font-family: var(--mono); font-size: .75rem; color: var(--text-mention-grey); }
   .pp-empty { padding: .75rem; color: var(--text-mention-grey); font-size: .875rem; }
 
@@ -194,6 +195,7 @@
   .fr-alert { margin-bottom: 1rem; }
   .pp-map { border: 1px solid var(--border-default-grey); background: var(--background-alt-blue-france, #f5f5fe); padding: .75rem 1rem; }
   .pp-map__row { display: grid; grid-template-columns: minmax(120px, max-content) auto minmax(200px, 1fr) auto; gap: .5rem; align-items: center; margin-bottom: .375rem; }
+  .pp-map__ex { font-size: .75rem; color: var(--text-mention-grey); display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
   .pp-map__row .fr-select { margin: 0; padding-top: .25rem; padding-bottom: .25rem; }
   .pp-certdl { display: grid; grid-template-columns: auto 1fr; gap: .25rem 1rem; margin: 0; }
   .pp-certdl dt { color: var(--text-mention-grey); }
@@ -271,6 +273,17 @@
           <span class="fr-hint-text">Sert à reconnaître chaque enregistrement dans l'aperçu et la liste de génération.</span>
         </label>
         <select class="fr-select" id="labelCol"></select>
+      </div>
+      <div class="fr-mt-3w">
+        <p class="fr-label fr-mb-1v">Identifiant du dossier
+          <span class="fr-hint-text">Jusqu'à 3 colonnes ajoutées au nom pour distinguer les dossiers homonymes (n° de dossier, commune, SIRET…). Champ de fusion <code>{{IDENTIFIANT}}</code>, utile dans le nom des fichiers.</span>
+        </p>
+        <div class="pp-inline" id="idColsBox">
+          <div class="fr-select-group"><select class="fr-select" id="idCol0" data-idcol="0" aria-label="Colonne d'identifiant 1"></select></div>
+          <div class="fr-select-group"><select class="fr-select" id="idCol1" data-idcol="1" aria-label="Colonne d'identifiant 2"></select></div>
+          <div class="fr-select-group"><select class="fr-select" id="idCol2" data-idcol="2" aria-label="Colonne d'identifiant 3"></select></div>
+        </div>
+        <p class="fr-text--xs fr-mt-1w fr-mb-0" id="idSample"></p>
       </div>
     </div>
   </div>
@@ -667,7 +680,7 @@
         <div class="pp-inline pp-mb">
           <div class="fr-input-group">
             <label class="fr-label fr-sr-only" for="recSearch">Filtrer les enregistrements</label>
-            <input class="fr-input" type="search" id="recSearch" placeholder="Filtrer…">
+            <input class="fr-input" type="search" id="recSearch" placeholder="Nom, n° de dossier, commune…">
           </div>
           <button type="button" class="fr-btn fr-btn--secondary fr-btn--sm" id="recAll">Tout</button>
           <button type="button" class="fr-btn fr-btn--tertiary fr-btn--sm" id="recNone">Aucun</button>
@@ -764,6 +777,7 @@ let cfg = {
   tableId: '',
   cols: [],
   labelCol: '',
+  idCols: null,  // colonnes qui complètent l'identification (null = choix automatique)
   html: DEFAULT_TEMPLATE,
   sig: {
     enabled: false, image: null, imgW: 0, imgH: 0, width: 180, align: 'right',
@@ -1044,7 +1058,7 @@ async function loadData() {
     rows = ids.map(id => rowsById.get(id));
   }
   const cols = (meta.tables[tableId] || []).filter(c => !c.hidden);
-  data = { tableId, cols, rows };
+  data = { tableId, cols, rows }; idColsCache.key = "";
 
   // Première utilisation de cette table : on coche quelques colonnes par défaut
   const valid = new Set(cols.map(c => c.id));
@@ -1100,6 +1114,7 @@ function renderColList() {
 
   $('labelCol').innerHTML = data.cols.map(c =>
     `<option value="${esc(c.id)}" ${c.id === cfg.labelCol ? 'selected' : ''}>${esc(c.label)}</option>`).join('');
+  renderIdCols();
 
   const attachable = data.cols.filter(c => c.baseType === 'Attachments' && (!c.isFormula || !c.formula));
   $('expAttach').innerHTML = '<option value="">— Ne pas joindre à Grist —</option>' +
@@ -1125,7 +1140,22 @@ $('colAll').onclick = () => {
   renderColList(); saveConfig();
 };
 $('colNone').onclick = () => { cfg.cols = []; renderColList(); saveConfig(); };
-$('labelCol').onchange = (e) => { cfg.labelCol = e.target.value; saveConfig(); };
+$('labelCol').onchange = (e) => { cfg.labelCol = e.target.value; renderIdCols(); saveConfig(); };
+function renderIdCols() {
+  const cur = idColumns().map(c => c.id);
+  const opts = data.cols.filter(c => c.id !== cfg.labelCol && c.baseType !== 'Attachments');
+  for (let i = 0; i < 3; i++) {
+    $('idCol' + i).innerHTML = '<option value="">— Aucune —</option>' + opts.map(c =>
+      `<option value="${esc(c.id)}" ${c.id === cur[i] ? 'selected' : ''}>${esc(c.label)}</option>`).join('');
+  }
+  const sample = data.rows.slice(0, 3).map(r => rowLabel(r) + (rowIdent(r) ? ' — ' + rowIdent(r) : ''));
+  $('idSample').textContent = sample.length ? 'Exemple : ' + sample.join(' ; ') : '';
+}
+$('idColsBox').addEventListener('change', () => {
+  cfg.idCols = [0, 1, 2].map(i => $('idCol' + i).value).filter(Boolean);
+  renderIdCols(); saveConfig();
+  if ($('tab-generer').classList.contains('fr-tabs__panel--selected')) renderRecList();
+});
 
 document.querySelectorAll('input[name=source]').forEach(r => r.addEventListener('change', () => {
   cfg.source = document.querySelector('input[name=source]:checked').value;
@@ -1133,7 +1163,7 @@ document.querySelectorAll('input[name=source]').forEach(r => r.addEventListener(
   excluded.clear(); resetTableSelection(); saveConfig(); loadData().catch(showError);
 }));
 $('tableSelect').onchange = (e) => {
-  cfg.tableId = e.target.value; cfg.cols = []; cfg.labelCol = ''; excluded.clear(); resetTableSelection();
+  cfg.tableId = e.target.value; cfg.cols = []; cfg.labelCol = ''; cfg.idCols = null; excluded.clear(); resetTableSelection();
   saveConfig(); loadData().catch(showError);
 };
 $('reloadBtn').onclick = () => { meta = null; loadData().catch(showError); };
@@ -1244,6 +1274,7 @@ const SPECIAL_FIELDS = [
   { id: 'DATE_JOUR', label: 'Date du jour (28/09/2026)' },
   { id: 'DATE_JOUR_LONGUE', label: 'Date du jour (28 septembre 2026)' },
   { id: 'NUMERO', label: 'N° d\'ordre dans le publipostage' },
+  { id: 'IDENTIFIANT', label: 'Identifiant du dossier (onglet 1)' },
   { id: 'SIGNATURE', label: 'Emplacement de la signature' }
 ];
 function renderFields() {
@@ -1305,6 +1336,7 @@ function htmlToIR(root) {
 
   function newPara(ctx) {
     cur = { type: 'p', style: ctx.style || 'normal', align: ctx.align || 'left', list: ctx.li || null, runs: [] };
+    if (ctx.sp) cur.sp = ctx.sp;
     blocks.push(cur);
     return cur;
   }
@@ -1416,6 +1448,7 @@ function htmlToIR(root) {
       else if (tag === 'H2') c2.style = 'h2';
       else if (/^H[3-6]$/.test(tag)) c2.style = 'h3';
       if (tag === 'LI' && ctx.listDef) c2.li = ctx.listDef;
+      c2.sp = parseSp(node.getAttribute('data-sp'));
       const before = blocks.length;
       newPara(c2);
       const created = cur;
@@ -1447,6 +1480,8 @@ function makeResolver(row, index) {
     if (key === 'DATE_JOUR') return { v: dateFR(now) };
     if (key === 'DATE_JOUR_LONGUE') return { v: dateLongueFR(now) };
     if (key === 'NUMERO') return { v: String(index + 1) };
+    if (key === 'PAGE' || key === 'NUMPAGES') return { v: '{{' + key + '}}' };
+    if (key === 'IDENTIFIANT') return { v: row ? rowIdent(row, ' - ') || 'L' + row.id : '' };
     if (key === 'id') return { v: String(row ? row.id : '') };
     const mapped = cfg.tpl && cfg.tpl.map && cfg.tpl.map[key];
     const col = (mapped && byId[mapped]) || byId[key] || byLabel[key.toLowerCase()] || byIdLower[key.toLowerCase()];
@@ -1584,6 +1619,20 @@ function runsToHTML(runs, editable) {
     return h;
   }).join('');
 }
+// Espacements de paragraphe du modèle : data-sp="avant,après,interligne[,pt]"
+function spAttr(sp) {
+  if (!sp) return '';
+  const lh = sp.lhPt ? sp.lhPt + 'pt' : (sp.lh || 1) * 1.2;
+  return ` data-sp="${sp.b || 0},${sp.a || 0},${sp.lhPt ? sp.lhPt + ',pt' : (sp.lh || 1)}" style="margin-top:${sp.b || 0}pt;margin-bottom:${sp.a || 0}pt;line-height:${lh};`;
+}
+function parseSp(v) {
+  if (!v) return undefined;
+  const p = String(v).split(',');
+  if (p.length < 3 || p.slice(0, 3).some(x => isNaN(parseFloat(x)))) return undefined;
+  const sp = { b: parseFloat(p[0]), a: parseFloat(p[1]) };
+  if (p[3] === 'pt') sp.lhPt = parseFloat(p[2]); else sp.lh = parseFloat(p[2]);
+  return sp;
+}
 function irToHTML(ir, opts) {
   opts = opts || {};
   const prefix = listPrefixer();
@@ -1619,7 +1668,9 @@ function irToHTML(ir, opts) {
     }
     const inner = runsToHTML(b.runs, opts.editable) || '<br>';
     const tag = b.style === 'normal' ? 'p' : b.style;
-    const al = b.align && b.align !== 'left' ? ` style="text-align:${b.align}"` : '';
+    const spa = b.list ? '' : spAttr(b.sp);
+    const al = spa ? spa + (b.align && b.align !== 'left' ? `text-align:${b.align}` : '') + '"'
+      : (b.align && b.align !== 'left' ? ` style="text-align:${b.align}"` : '');
     if (b.list && opts.editable) {
       if (!openList || openList.id !== b.list.id) { closeList(); openList = b.list; html += '<' + b.list.kind + '>'; }
       html += `<li${al}>${inner}</li>`;
@@ -1659,6 +1710,33 @@ function rowLabel(row) {
   const v = col ? formatValue(col, row) : '';
   return v || ('Ligne ' + row.id);
 }
+// Colonnes qui complètent le nom : choix de l'utilisateur, sinon devinées (n° de dossier, commune, SIRET…)
+let idColsCache = { key: '', cols: [] };
+function idColumns() {
+  const key = [data.tableId, data.rows.length, data.cols.length, cfg.labelCol, cfg.sel.numCol, JSON.stringify(cfg.idCols)].join('|');
+  if (idColsCache.key !== key) idColsCache = { key, cols: computeIdColumns() };
+  return idColsCache.cols;
+}
+function computeIdColumns() {
+  const byId = Object.fromEntries(data.cols.map(c => [c.id, c]));
+  if (Array.isArray(cfg.idCols)) return cfg.idCols.map(id => byId[id]).filter(c => c && c.id !== cfg.labelCol);
+  return guessIdCols();
+}
+function guessIdCols() {
+  const cols = data.cols.filter(c => c.id !== cfg.labelCol && c.baseType !== 'Attachments');
+  const filled = (c) => data.rows.slice(0, 200).some(r => formatValue(c, r) !== '');
+  const pick = [], take = (c) => { if (c && !pick.includes(c) && filled(c)) pick.push(c); };
+  take(cols.find(c => c.id === cfg.sel.numCol) || guessNumCol(cols));
+  if (pick[0] && pick[0].id === cfg.labelCol) pick.length = 0;
+  const all = (c) => (c.id + ' ' + c.label).toLowerCase();
+  take(cols.find(c => /commune|localit|ville|city/.test(all(c)) && !/code|insee/.test(all(c))));
+  if (pick.length < 2) take(cols.find(c => /^cp$|code_?postal|code postal/.test(all(c))));
+  take(cols.find(c => /siret|siren|pacage/.test(all(c))));
+  return pick.slice(0, 3);
+}
+function rowIdent(row, sep) {
+  return idColumns().map(c => formatValue(c, row)).filter(Boolean).join(sep || ' · ');
+}
 function renderPreview() {
   const rows = selectedRows();
   const ir = htmlToIR(editor);
@@ -1669,7 +1747,7 @@ function renderPreview() {
   }
   if (pvIndex >= rows.length) pvIndex = 0;
   const row = rows[pvIndex];
-  $('pvLabel').textContent = (pvIndex + 1) + ' / ' + rows.length + ' — ' + rowLabel(row);
+  $('pvLabel').textContent = (pvIndex + 1) + ' / ' + rows.length + ' — ' + rowLabel(row) + (rowIdent(row) ? ' (' + rowIdent(row) + ')' : '');
   $('preview').innerHTML = irToHTML(mergeRecord(ir, row, pvIndex));
   renderHF(row, pvIndex);
 }
@@ -1974,18 +2052,28 @@ function recMatches() {
   const q = $('recSearch').value.trim().toLowerCase();
   if (!q) return filteredRows;
   const byId = Object.fromEntries(data.cols.map(c => [c.id, c]));
-  const searchCols = [cfg.labelCol].concat(cfg.cols).map(id => byId[id]).filter(Boolean);
+  const searchCols = [...new Set([cfg.labelCol].concat(idColumns().map(c => c.id), cfg.cols))].map(id => byId[id]).filter(Boolean);
   return filteredRows.filter(r => searchCols.some(c => formatValue(c, r).toLowerCase().includes(q)));
 }
 function renderRecList() {
   const matches = recMatches();
   const html = [];
+  // Doublons : même nom et même identifiant parmi les dossiers retenus
+  const idCols = idColumns(), idTitle = idCols.map(c => c.label).join(' · ');
+  const keyOf = new Map(), groups = new Map();
+  for (const r of filteredRows) {
+    const k = (rowLabel(r) + '|' + rowIdent(r)).toLowerCase();
+    keyOf.set(r.id, k);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(r.id);
+  }
   for (const r of matches.slice(0, REC_LIST_MAX)) {
-    const done = doneInfo(r);
+    const done = doneInfo(r), ident = rowIdent(r);
+    const twins = groups.get(keyOf.get(r.id)).filter(id => id !== r.id);
     html.push(`<div class="pp-list__item"><div class="fr-checkbox-group fr-checkbox-group--sm">
       <input type="checkbox" id="rec-${r.id}" data-id="${r.id}" ${excluded.has(r.id) ? '' : 'checked'}>
-      <label class="fr-label" for="rec-${r.id}">${esc(rowLabel(r))}</label></div>
-      <span class="pp-list__meta">${done ? `<span class="fr-badge fr-badge--sm fr-badge--success">Généré ${esc(done)}</span>` : ''}<span class="pp-code">#${r.id}</span></span></div>`);
+      <label class="fr-label" for="rec-${r.id}">${esc(rowLabel(r))}${ident ? `<span class="pp-ident" title="${esc(idTitle)}">${esc(ident)}</span>` : ''}</label></div>
+      <span class="pp-list__meta">${twins.length ? `<span class="fr-badge fr-badge--sm fr-badge--warning" title="Même nom et même identifiant que ${twins.map(i => '#' + i).join(', ')}">Doublon</span>` : ''}${done ? `<span class="fr-badge fr-badge--sm fr-badge--success">Généré ${esc(done)}</span>` : ''}<span class="pp-code" title="N° de ligne Grist">#${r.id}</span></span></div>`);
   }
   if (matches.length > REC_LIST_MAX) html.push(`<div class="pp-empty">… et ${matches.length - REC_LIST_MAX} autre(s) dossier(s) non affiché(s). Ils sont pris en compte par « Tout », « Aucun » et la génération ; affinez la recherche pour les voir.</div>`);
   $('recList').innerHTML = html.join('') || '<div class="pp-empty">Aucun dossier ne correspond aux filtres.</div>';
@@ -2258,6 +2346,13 @@ class DocxBuilder {
     if (r.size) pr.push(`<w:sz w:val="${Math.round(r.size * 2)}"/><w:szCs w:val="${Math.round(r.size * 2)}"/>`);
     if (r.u) pr.push('<w:u w:val="single"/>');
     const rPr = pr.length ? '<w:rPr>' + pr.join('') + '</w:rPr>' : '';
+    // Numéro de page : champ Word recalculé à l'affichage
+    if (/\{\{(PAGE|NUMPAGES)\}\}/.test(r.text)) {
+      return r.text.split(/(\{\{(?:PAGE|NUMPAGES)\}\})/).map(t => {
+        const m = t.match(/^\{\{(PAGE|NUMPAGES)\}\}$/);
+        return m ? `<w:fldSimple w:instr=" ${m[1]} "><w:r>${rPr}<w:t>1</w:t></w:r></w:fldSimple>` : (t ? this.run(Object.assign({}, r, { text: t })) : '');
+      }).join('');
+    }
     return r.text.split('\n').map((t, k) =>
       `<w:r>${rPr}${k > 0 ? '<w:br/>' : ''}${t ? `<w:t xml:space="preserve">${xmlEsc(t)}</w:t>` : ''}</w:r>`).join('');
   }
@@ -2329,6 +2424,10 @@ class DocxBuilder {
     }
     if (b.list) ppr.push(`<w:numPr><w:ilvl w:val="${b.list.level}"/><w:numId w:val="${this.numId(b.list)}"/></w:numPr>`);
     if (b.list) ppr.push('<w:spacing w:after="40"/>');
+    else if (b.sp) {
+      const ln = b.sp.lhPt ? `w:line="${Math.round(b.sp.lhPt * 20)}" w:lineRule="exact"` : `w:line="${Math.round((b.sp.lh || 1) * 240)}" w:lineRule="auto"`;
+      ppr.push(`<w:spacing w:before="${Math.round((b.sp.b || 0) * 20)}" w:after="${Math.round((b.sp.a || 0) * 20)}" ${ln}/>`);
+    }
     else if (this.tpl && b.style !== 'normal') ppr.push('<w:spacing w:before="200" w:after="120"/>');
     ppr.push(`<w:jc w:val="${this.jc(b.align)}"/>`);
     return `<w:p><w:pPr>${ppr.join('')}</w:pPr>${preRuns || ''}${runs.map(r => this.run(r)).join('')}</w:p>`;
@@ -2471,7 +2570,7 @@ class DocxBuilder {
       `<w:style w:type="paragraph" w:styleId="Heading${n}"><w:name w:val="heading ${n}"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/>` +
       `<w:pPr><w:keepNext/><w:spacing w:before="240" w:after="120"/><w:outlineLvl w:val="${n - 1}"/></w:pPr><w:rPr><w:b/><w:bCs/><w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/></w:rPr></w:style>`;
     zip.file('word/styles.xml', `${XMLH}<w:styles ${W}>` +
-      `<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="${docFont()}" w:hAnsi="${docFont()}" w:eastAsia="${docFont()}" w:cs="${docFont()}"/>` + '<w:sz w:val="22"/><w:szCs w:val="22"/><w:lang w:val="fr-FR"/></w:rPr></w:rPrDefault>' +
+      `<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="${docFont()}" w:hAnsi="${docFont()}" w:eastAsia="${docFont()}" w:cs="${docFont()}"/>` + `<w:sz w:val="${Math.round((this.defSize || 11) * 2)}"/><w:szCs w:val="${Math.round((this.defSize || 11) * 2)}"/><w:lang w:val="fr-FR"/></w:rPr></w:rPrDefault>` +
       '<w:pPrDefault><w:pPr><w:spacing w:after="120" w:line="264" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>' +
       '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>' +
       heading(1, 36) + heading(2, 28) + heading(3, 24) +
@@ -2831,14 +2930,32 @@ function docxRunProps(rPr) {
   const v = kid(rPr, 'vanish'); if (v && onOff(v)) o.hidden = true;
   return o;
 }
+// Espacements d'un paragraphe Word (avant / après en pt, interligne) : seules les valeurs présentes sont renvoyées
+function docxSpacing(pPr) {
+  const sp = pPr && kid(pPr, 'spacing');
+  const o = {};
+  if (sp) {
+    const g = (n) => sp.getAttributeNS(W_NS, n);
+    if (g('before') && !onOff(g('beforeAutospacing'))) o.b = +g('before') / 20;
+    if (g('after') && !onOff(g('afterAutospacing'))) o.a = +g('after') / 20;
+    if (g('line')) {
+      const rule = g('lineRule') || 'auto';
+      if (rule === 'auto') o.lh = +g('line') / 240; else o.lhPt = +g('line') / 20;
+    }
+  }
+  if (pPr && kid(pPr, 'contextualSpacing') && onOff(kid(pPr, 'contextualSpacing'))) o.cs = true;
+  return o;
+}
 function parseDocxStyles(xml) {
   const map = new Map();
-  let defSize = 11, defPara = null;
+  let defSize = 11, defPara = null, defSp = {};
   if (xml) {
     const d = xmlDoc(xml);
     const dd = d.getElementsByTagNameNS(W_NS, 'docDefaults')[0];
     const dsz = dd && dd.getElementsByTagNameNS(W_NS, 'sz')[0];
     if (dsz && wv(dsz)) defSize = +wv(dsz) / 2;
+    const dpp = dd && dd.getElementsByTagNameNS(W_NS, 'pPrDefault')[0];
+    if (dpp) defSp = docxSpacing(kid(dpp, 'pPr'));
     for (const s of d.getElementsByTagNameNS(W_NS, 'style')) {
       const pPr = kid(s, 'pPr');
       const name = (wv(kid(s, 'name')) || '').toLowerCase();
@@ -2850,7 +2967,7 @@ function parseDocxStyles(xml) {
       else if (ol !== null && ol < 9) heading = ol + 1;
       const snum = pPr && kid(pPr, 'numPr');
       map.set(wv(s, 'styleId'), { basedOn: wv(kid(s, 'basedOn')), r: docxRunProps(kid(s, 'rPr')),
-        align: pPr && kid(pPr, 'jc') ? wv(kid(pPr, 'jc')) : null, heading,
+        align: pPr && kid(pPr, 'jc') ? wv(kid(pPr, 'jc')) : null, heading, sp: docxSpacing(pPr),
         num: snum ? { numId: wv(kid(snum, 'numId')), ilvl: wv(kid(snum, 'ilvl')) || '0' } : null });
       if (wv(s, 'type') === 'paragraph' && /^(1|true|on)$/.test(wv(s, 'default') || '')) defPara = wv(s, 'styleId');
     }
@@ -2862,11 +2979,15 @@ function parseDocxStyles(xml) {
     cache.set(id, null);   // garde contre les boucles basedOn
     const s = map.get(id);
     const p = get(s.basedOn) || { r: {}, align: null, heading: null };
-    const out = { r: Object.assign({}, p.r, s.r), align: s.align || p.align, heading: s.heading || p.heading, num: s.num || p.num || null };
+    const out = { r: Object.assign({}, p.r, s.r), align: s.align || p.align, heading: s.heading || p.heading, num: s.num || p.num || null,
+      sp: Object.assign({}, p.sp, s.sp) };
     cache.set(id, out);
     return out;
   }
-  return { get, defSize, defPara };
+  // Taille réelle du texte courant : celle du style par défaut (Normal), sinon celle du document
+  const dp = get(defPara);
+  const baseSize = (dp && dp.r.size) || defSize;
+  return { get, defSize: baseSize, defPara, defSp };
 }
 function parseDocxNumbering(xml) {
   const abs = {}, nums = {};
@@ -2933,11 +3054,20 @@ function docxPara(p, ctx, out) {
     }
   }
   if (pPr && kid(pPr, 'pageBreakBefore') && onOff(kid(pPr, 'pageBreakBefore'))) out.push({ type: 'pagebreak' });
-  const mk = () => ({ type: 'p', style, align, list, runs: [] });
+  const spAll = Object.assign({ b: 0, a: 0, lh: 1 }, ctx.styles.defSp, st.sp, docxSpacing(pPr));
+  const sp = { b: +(spAll.b || 0).toFixed(1), a: +(spAll.a || 0).toFixed(1) };
+  if (spAll.lhPt) sp.lhPt = +spAll.lhPt.toFixed(1); else sp.lh = +(spAll.lh || 1).toFixed(2);
+  if (spAll.cs && list) { sp.b = 0; sp.a = 0; }
+  const mk = () => ({ type: 'p', style, align, list, runs: [], sp });
   const s = { cur: mk(), out, mk, extra: [], start: out.length };
   out.push(s.cur);
   docxInline(p, Object.assign({}, st.r), ctx, s);
   impFinish(s);
+}
+// Numéro de page Word (PAGE, NUMPAGES / SECTIONPAGES) : recalculé à chaque page dans le PDF
+function pageFieldName(instr) {
+  const m = String(instr || '').trim().match(/^(PAGE|NUMPAGES|SECTIONPAGES)\b/i);
+  return m ? (m[1].toUpperCase() === 'PAGE' ? 'PAGE' : 'NUMPAGES') : null;
 }
 function fieldSkipping(ctx, upTo) {
   const fs = upTo === undefined ? ctx.fields : ctx.fields.slice(0, upTo);
@@ -2951,8 +3081,12 @@ function docxInline(el, fmt, ctx, s) {
         docxInline(n, fmt, ctx, s); break;
       case 'sdt': docxInline(kid(n, 'sdtContent') || n, fmt, ctx, s); break;
       case 'fldSimple': {
-        const name = mergeFieldName(wv(n, 'instr'));
+        const name = mergeFieldName(wv(n, 'instr')), pg = pageFieldName(wv(n, 'instr'));
         if (name) { if (!fieldSkipping(ctx)) { impAddText(s, ctx, '{{' + name + '}}', fmt); ctx.mergeFields++; } }
+        else if (pg) {
+          const ir = n.getElementsByTagNameNS(W_NS, 'r')[0];
+          if (!fieldSkipping(ctx)) impAddText(s, ctx, '{{' + pg + '}}', Object.assign({}, fmt, ir ? docxRunProps(kid(ir, 'rPr')) : {}));
+        }
         else docxInline(n, fmt, ctx, s);
         break;
       }
@@ -2974,9 +3108,12 @@ function docxRun(r, pfmt, ctx, s) {
           const f = ctx.fields[ctx.fields.length - 1];
           if (f) {
             f.phase = 'result';
-            const name = mergeFieldName(f.instr);
+            const name = mergeFieldName(f.instr), pg = pageFieldName(f.instr);
             if (name) {
               if (!fieldSkipping(ctx, ctx.fields.length - 1)) { impAddText(s, ctx, '{{' + name + '}}', fmt); ctx.mergeFields++; }
+              f.skip = true;
+            } else if (pg) {
+              if (!fieldSkipping(ctx, ctx.fields.length - 1)) impAddText(s, ctx, '{{' + pg + '}}', fmt);
               f.skip = true;
             }
           }
@@ -3082,7 +3219,7 @@ async function docxToTemplate(zip, warn) {
   const sect = kid(body, 'sectPr');
   base.page = sect ? docxPageFromSect(sect) : Object.assign({}, DEFAULT_PAGE);
   const ctx = Object.assign({}, base, { rels: await docxRels(zip, main), fields: [] });
-  const out = { body: docxConvert(body, ctx), header: [], footer: [], page: base.page };
+  const out = { body: docxConvert(body, ctx), header: [], footer: [], page: base.page, defSize: styles.defSize };
   base.mergeFields = ctx.mergeFields;
   if (sect) {
     const part = async (refName) => {
@@ -3327,6 +3464,7 @@ async function odtToTemplate(zip, warn) {
     p.hd = Math.min(567, p.mt); p.ft = Math.min(567, p.mb);
   }
   const ctx = { styles, media, warn: new Set(), listSeq: 0, defSize: styles.defSize, mergeFields: 0, page: out.page };
+  out.defSize = styles.defSize;
   const textEl = content.getElementsByTagNameNS(ODF.office, 'text')[0];
   if (textEl) odtBlocks(textEl, ctx, out.body, null);
   if (hEl) odtBlocks(hEl, ctx, out.header, null);
@@ -3542,17 +3680,24 @@ function irToPdfContent(ir, maxW, inCell, part) {
         columnGap: 2, margin: [18 * (b.list.level + 1) - 16, 0, 0, 2], style
       });
     } else {
-      content.push({ text: runsToPdf(b.runs, align === 'justify'), alignment: align, style, margin: [0, 0, 0, 6] });
+      const o = { text: runsToPdf(b.runs, align === 'justify'), alignment: align, style, margin: [0, 0, 0, 6] };
+      if (b.sp) {
+        o.margin = [0, b.sp.b || 0, 0, b.sp.a || 0];
+        const fs = Math.max(pdfBaseSize, ...b.runs.map(r => r.size || 0));
+        o.lineHeight = b.sp.lhPt ? Math.max(0.8, b.sp.lhPt / (fs * 1.2)) : (b.sp.lh || 1);
+      }
+      content.push(o);
     }
   }
   return content;
 }
+let pdfBaseSize = 11;   // taille du texte courant (celle du modèle s'il y en a un)
 function pdfDefinition(content) {
   return {
     pageSize: 'A4',
     pageMargins: [57, 57, 57, 57],
     content,
-    defaultStyle: { font: pdfFont, fontSize: 11, lineHeight: 1.15 },
+    defaultStyle: { font: pdfFont, fontSize: pdfBaseSize, lineHeight: 1.15 },
     styles: {
       h1: { fontSize: 18, bold: true, margin: [0, 6, 0, 8] },
       h2: { fontSize: 14, bold: true, margin: [0, 6, 0, 6] },
@@ -4105,7 +4250,7 @@ function unknownTokens(opts) {
   const text = editor.innerText + ' ' + (tplRt ? irToPlainText(tplRt.header) + ' ' + irToPlainText(tplRt.footer) : '');
   let m;
   while ((m = re.exec(text))) names.add(m[1].trim());
-  const known = new Set(['id'].concat(SPECIAL_FIELDS.map(f => f.id.toLowerCase()),
+  const known = new Set(['id', 'page', 'numpages'].concat(SPECIAL_FIELDS.map(f => f.id.toLowerCase()),
     data.cols.flatMap(c => [c.id.toLowerCase(), c.label.toLowerCase()])));
   if (opts && opts.withMapped && cfg.tpl && cfg.tpl.map) Object.keys(cfg.tpl.map).forEach(k => { if (cfg.tpl.map[k]) known.add(k.toLowerCase()); });
   return [...names].filter(n => !known.has(n.toLowerCase()));
@@ -4118,13 +4263,34 @@ const FIELD_SYNONYMS = {
   adresse: ['adresse', 'rue', 'voie'], enseigne: ['enseigne', 'raisonsociale', 'denomination', 'nom'],
   nom: ['nom', 'raisonsociale', 'denomination'], siret: ['siret']
 };
+// Valeurs renseignées d'une colonne (échantillon), pour vérifier qu'elle convient à un champ
+function colValues(c, n) {
+  const out = [];
+  for (const r of data.rows) { const v = formatValue(c, r).trim(); if (v) { out.push(v); if (out.length >= (n || 40)) break; } }
+  return out;
+}
+const isCpToken = (t) => ['cp', 'codepostal', 'postal'].includes(t);
+const ADDR_RE = /\d|\b(rue|route|avenue|av|bd|boulevard|chemin|place|impasse|all[ée]e|quai|za|zi|zac|lieu[- ]dit|lotissement|hameau|bp|cs)\b/i;
+const share = (vals, re) => vals.length ? vals.filter(v => re.test(v)).length / vals.length : 0;
+// La colonne peut-elle remplir ce champ ? (jamais une date pour un code postal, etc.)
+function colFits(token, c) {
+  if (!c) return false;
+  const t = normKey(token);
+  const dateTok = /date|le$|du$/.test(t);
+  if (['Date', 'DateTime'].includes(c.baseType) && !dateTok) return false;
+  if (c.baseType === 'Bool' && !/^(est|a)|oui|non/.test(t)) return false;
+  const vals = colValues(c);
+  if (isCpToken(t) && vals.length) return share(vals, /^\d{5}$/) >= 0.6;
+  if (t === 'adresse' && vals.length && share(vals, /^\d{2}\/\d{2}\/\d{4}$/) > 0.5) return false;
+  return true;
+}
 function guessColumn(token) {
   const t = normKey(token);
   if (!t) return null;
   const cands = FIELD_SYNONYMS[t] || [t];
   let best = null, bestScore = 0;
   for (const c of data.cols) {
-    if (c.baseType === 'Attachments') continue;
+    if (c.baseType === 'Attachments' || !colFits(token, c)) continue;
     const id = normKey(c.id), lb = normKey(c.label);
     let sc = 0;
     if (id === t || lb === t) sc = 5;
@@ -4133,6 +4299,10 @@ function guessColumn(token) {
       if (id === k || lb === k) sc = Math.max(sc, 4);
       else if (k.length >= 3 && (id.includes(k) || lb.includes(k))) sc = Math.max(sc, 3 - (id.length > k.length * 3 ? 1 : 0));
     }
+    // Départage par le contenu : vrai code postal, vraie adresse (n° de voie, « rue », « ZA »…)
+    if (sc && isCpToken(t)) sc += share(colValues(c), /^\d{5}$/);
+    if (sc && t === 'adresse') sc += share(colValues(c), ADDR_RE);
+    if (!sc && isCpToken(t) && share(colValues(c), /^\d{5}$/) >= 0.8) sc = 2;
     if (sc > bestScore) { best = c; bestScore = sc; }
   }
   return bestScore >= 2 ? best : null;
@@ -4148,7 +4318,10 @@ function renderTplMap() {
   const tokens = [...new Set(unknown.concat(Object.keys(map)))].filter(t => unknown.includes(t) || map[t]);
   if (!tokens.length) { box.innerHTML = ''; return; }
   let changed = false;
+  const byId = Object.fromEntries(data.cols.map(c => [c.id, c]));
   for (const t of unknown) {
+    // Proposition automatique qui ne convient pas (ex. une date pour {{CP}}) : on propose à nouveau
+    if (map[t] && cfg.tpl.auto && cfg.tpl.auto[t] && !colFits(t, byId[map[t]])) { delete map[t]; delete cfg.tpl.auto[t]; }
     if (map[t] === undefined) { const g = guessColumn(t); map[t] = g ? g.id : ''; if (g) { (cfg.tpl.auto = cfg.tpl.auto || {})[t] = true; } changed = true; }
   }
   if (changed) saveConfig();
@@ -4159,7 +4332,8 @@ function renderTplMap() {
     <p class="fr-hint-text fr-mb-1w">Le modèle utilise des noms de champs qui n'existent pas tels quels dans la table. Choisissez la colonne à utiliser pour chacun${missing ? ' — ' + missing + ' champ(s) encore sans colonne : ils resteront affichés tels quels' : ''}.</p>
     ${tokens.map(t => `<div class="pp-map__row"><code>{{${esc(t)}}}</code><span aria-hidden="true">→</span>
       <select class="fr-select" data-tok="${esc(t)}" aria-label="Colonne pour {{${esc(t)}}}">${opts(map[t])}</select>
-      ${map[t] && cfg.tpl.auto && cfg.tpl.auto[t] ? '<span class="fr-badge fr-badge--sm fr-badge--info fr-badge--no-icon">proposé — à vérifier</span>' : ''}</div>`).join('')}</div>`;
+      <span class="pp-map__ex">${map[t] && byId[map[t]] ? (() => { const v = colValues(byId[map[t]], 1)[0]; return v ? 'ex. : ' + esc(v.length > 40 ? v.slice(0, 40) + '…' : v) : 'colonne vide'; })() : ''}
+      ${map[t] && cfg.tpl.auto && cfg.tpl.auto[t] ? '<span class="fr-badge fr-badge--sm fr-badge--info fr-badge--no-icon">proposé — à vérifier</span>' : ''}</span></div>`).join('')}</div>`;
 }
 document.addEventListener('change', (e) => {
   const sel = e.target.closest && e.target.closest('#tplMap select[data-tok]');
@@ -4239,10 +4413,12 @@ function tplPage(rt) {
 function renderHF(row, index) {
   const t = cfg.tpl, rt = (t && tplRt && tplRt.attId === t.attId) ? tplRt : null;
   const set = (id, html, bg) => { const el = $(id); el.innerHTML = html || ''; el.classList.toggle('show', !!html); el.classList.toggle('bg', !!bg); };
-  if (!rt) { ['hfTop', 'hfBottom', 'pvTop', 'pvBottom'].forEach(id => set(id, '')); return; }
+  if (!rt) { ['hfTop', 'hfBottom', 'pvTop', 'pvBottom'].forEach(id => set(id, '')); ['editor', 'preview'].forEach(id => { $(id).style.fontSize = ''; }); return; }
   const merged = row !== undefined;
-  const h = rt.header.some(blockHasContent) ? irToHTML(merged ? mergeAux(rt.header, row, index) : rt.header, {}) : '';
-  const f = rt.footer.some(blockHasContent) ? irToHTML(merged ? mergeAux(rt.footer, row, index) : rt.footer, {}) : '';
+  const pg = (html) => html.replace(/\{\{PAGE\}\}/g, '1').replace(/\{\{NUMPAGES\}\}/g, '1');
+  const h = rt.header.some(blockHasContent) ? pg(irToHTML(merged ? mergeAux(rt.header, row, index) : rt.header, {})) : '';
+  const f = rt.footer.some(blockHasContent) ? pg(irToHTML(merged ? mergeAux(rt.footer, row, index) : rt.footer, {})) : '';
+  ['editor', 'preview'].forEach(id => { $(id).style.fontSize = rt.defSize ? rt.defSize + 'pt' : ''; });
   if (rt.kind === 'pdf' && t.bg) {
     const img = rt.bgPng ? `<p class="fr-text--xs fr-mb-1w">Fond de page : 1<sup>re</sup> page du PDF</p><img src="${rt.bgPng.src}" style="max-width:220px;border:1px solid #ddd">` : '';
     ['hfTop', 'pvTop'].forEach(id => set(id, img));
@@ -4370,6 +4546,7 @@ $('tplSave').onclick = async () => {
     else if (rt && rt.kind === 'docx') blob = await buildDocxFromTemplate(rt.buf, [{ ir }], true, { keepTokens: true });
     else {
       const d = new DocxBuilder({ page: tplPage(rt) });
+      d.defSize = (rt && rt.defSize) || 11;
       if (rt) {
         d.header = rt.header; d.footer = rt.footer;
         if (rt.kind === 'pdf' && cfg.tpl.bg) { d.bgImage = await ensureBgPng(); d.header = []; d.footer = []; }
@@ -4425,9 +4602,10 @@ function estimateHeight(ir, maxW, part) {
       for (const r of b.rows) h += Math.max(14, ...r.map(c => estimateHeight(c.blocks, maxW / Math.max(1, r.length))));
     } else if (b.type === 'p') {
       const txt = b.runs.map(r => r.text).join('');
-      const size = Math.max(11, ...b.runs.map(r => r.size || 0), b.style === 'h1' ? 18 : b.style === 'h2' ? 14 : 0);
+      const size = Math.max(pdfBaseSize, ...b.runs.map(r => r.size || 0), b.style === 'h1' ? 18 : b.style === 'h2' ? 14 : 0);
       const lines = txt.split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(l.length * size * 0.5 / Math.max(50, maxW))), 0);
-      h += lines * size * 1.35 + 8;
+      const sp = b.sp;
+      h += sp ? lines * (sp.lhPt || size * 1.25 * (sp.lh || 1)) + (sp.b || 0) + (sp.a || 0) : lines * size * 1.35 + 8;
     }
   }
   return h;
@@ -4436,6 +4614,12 @@ function pdfBlobDef(def) {
   return new Promise((res, rej) => {
     try { pdfMake.createPdf(def).getBlob(res); } catch (e) { rej(e); }
   });
+}
+// {{PAGE}} / {{NUMPAGES}} remplacés par le numéro de la page dans le courrier
+function withPageNumbers(content, cp, pc) {
+  const js = JSON.stringify(content);
+  if (!/\{\{(PAGE|NUMPAGES)\}\}/.test(js)) return content;
+  return JSON.parse(js.replace(/\{\{PAGE\}\}/g, String(cp)).replace(/\{\{NUMPAGES\}\}/g, String(pc)));
 }
 async function pdfWithTemplate(rt, merged, row, index) {
   const page = tplPage(rt);
@@ -4472,14 +4656,15 @@ async function pdfWithTemplate(rt, merged, row, index) {
     }
   }
   pdfGeom.mt = mt; pdfGeom.mb = mb;
+  pdfBaseSize = rt.defSize || 11;
   const def = pdfDefinition(irToPdfContent(merged, contentW, false, 'body'));
   if (header) {
     const content = irToPdfContent(header.ir, contentW, true, 'header');
-    def.header = () => ({ stack: content, margin: [ml, hd, mr, 0] });
+    def.header = (cp, pc) => ({ stack: withPageNumbers(content, cp, pc), margin: [ml, hd, mr, 0] });
   }
   if (footer) {
     const content = irToPdfContent(footer.ir, contentW, true, 'footer');
-    def.footer = () => ({ stack: content, margin: [ml, Math.max(4, mb - ft - footer.fh), mr, 0] });
+    def.footer = (cp, pc) => ({ stack: withPageNumbers(content, cp, pc), margin: [ml, Math.max(4, mb - ft - footer.fh), mr, 0] });
   }
   def.pageSize = { width: W, height: H };
   def.pageMargins = [ml, mt, mr, mb];
@@ -4519,6 +4704,7 @@ async function makeDocxFor(rt, ir, recs) {
     return buildDocxFromTemplate(rt.buf, recs.map(x => ({ row: x.row, index: x.index, ir: edited ? mergeRecord(ir, x.row, x.index) : null })), edited);
   }
   const d = new DocxBuilder({ page: tplPage(rt) });
+  d.defSize = (rt && rt.defSize) || 11;
   if (rt) {
     if (rt.kind === 'pdf' && cfg.tpl.bg) d.bgImage = await ensureBgPng();
     else { d.header = mergeAux(rt.header, recs[0].row, recs[0].index); d.footer = mergeAux(rt.footer, recs[0].row, recs[0].index); }
@@ -4532,7 +4718,7 @@ async function makeDocxFor(rt, ir, recs) {
 }
 // PDF : un ou plusieurs dossiers dans un même fichier
 async function makePdfFor(rt, ir, recs) {
-  pdfGeom = PDF_GEOM_DEFAULT;
+  pdfGeom = PDF_GEOM_DEFAULT; pdfBaseSize = (rt && rt.defSize) || 11;
   if (!rt) {
     const content = [];
     recs.forEach((x, k) => {
