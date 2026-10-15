@@ -93,5 +93,6 @@ Charte DSFR, police Marianne. Intègre une ou plusieurs restitutions Chorus (INF
 
 - **À l'ouverture du widget**, la table `DATA_INFBUD` est créée si elle n'existe pas, avec la structure standard INF-BUD-41 (référentiel de programmation et libellé, centre financier et libellé, consommation AE / CP en EUR) et les colonnes de traçabilité.
 - À l'import, les colonnes manquantes sont ajoutées (correspondance par libellé), les colonnes formule ne sont jamais écrites.
-- Si la table contient déjà des données : **remplacer les lignes issues des mêmes fichiers** (par défaut), ajouter à la suite, ou vider la table.
+- **Clé unique** (par défaut `Référentiel de programmation`) : une seule ligne par référentiel. Une valeur déjà présente met à jour sa ligne ; les doublons d'un même fichier sont fusionnés (montants additionnés) ; entre deux fichiers, le dernier déposé l'emporte ; les lignes en double ou sans clé déjà présentes dans la table sont supprimées.
+- Sans clé unique, si la table contient déjà des données : **remplacer les lignes issues des mêmes fichiers** (par défaut), ajouter à la suite, ou vider la table.
 - Hors Grist, le widget fonctionne en aperçu et permet de télécharger le résultat en CSV.

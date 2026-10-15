@@ -235,8 +235,14 @@
           <span class="hint" id="tableHint">Créée automatiquement à l'ouverture du widget si elle n'existe pas.</span>
         </div>
         <div class="field">
+          <label for="optKey">Clé unique (une seule ligne par valeur)</label>
+          <select class="input" id="optKey"></select>
+          <span class="hint">Une valeur déjà présente dans la table met à jour sa ligne au lieu d'en créer une nouvelle. Les doublons d'un même fichier sont fusionnés (montants additionnés).</span>
+        </div>
+        <div class="field">
           <label for="optMode">Si des données sont déjà présentes</label>
           <select class="input" id="optMode">
+            <option value="upsert">Mettre à jour les lignes existantes, ajouter les nouvelles</option>
             <option value="replace">Remplacer les lignes issues des mêmes fichiers</option>
             <option value="append">Ajouter à la suite</option>
             <option value="clear">Vider la table puis importer</option>
@@ -680,6 +686,52 @@ function valueFor(col, ds, row, i, now) {
   return v;
 }
 
+/* ---------------- Clé unique ---------------- */
+const DEFAULT_KEY = normKey('Référentiel de programmation');
+/** Forme comparable d'une valeur de clé (les zéros initiaux perdus par une colonne numérique sont ignorés). */
+const keyNorm = v => v == null ? '' : String(v).trim().replace(/^0+(?=\d)/, '');
+function keyCol(schema) {
+  const k = $('#optKey').value;
+  return k ? schema.find(c => c.key === k && !c.trace) || null : null;
+}
+function syncKeySelect(schema) {
+  const sel = $('#optKey');
+  const cands = schema.filter(c => !c.trace && c.type === 'Text');
+  if (!cands.some(c => c.key === DEFAULT_KEY)) cands.unshift({key: DEFAULT_KEY, label: 'Référentiel de programmation'});
+  const want = state.keyChoice === undefined ? DEFAULT_KEY : state.keyChoice;
+  sel.innerHTML = '<option value="">Aucune (doublons autorisés)</option>' + cands.map(c => `<option value="${esc(c.key)}">${esc(c.label)}</option>`).join('');
+  sel.value = cands.some(c => c.key === want) ? want : '';
+}
+/** Lignes à écrire, dédoublonnées sur la clé : fusion dans un même fichier, le dernier fichier l'emporte entre fichiers. */
+function buildRecords(schema, sets, now) {
+  const kc = keyCol(schema);
+  const recs = [], byKey = new Map();
+  const stats = {merged: 0, replaced: 0, noKey: 0};
+  for (const ds of sets) {
+    const local = new Map();
+    ds.res.rows.forEach((row, i) => {
+      const rec = {};
+      for (const c of schema) rec[c.id] = valueFor(c, ds, row, i, now);
+      if (!kc) { recs.push(rec); return; }
+      const k = keyNorm(rec[kc.id]);
+      if (!k) { stats.noKey++; return; }
+      const same = local.get(k);
+      if (same) {
+        for (const c of schema) {
+          const a = same[c.id], b = rec[c.id];
+          if (c.type === 'Numeric' && !c.trace) { if (b != null) same[c.id] = Math.round(((a || 0) + b) * 100) / 100; }
+          else if (a == null && b != null) same[c.id] = b;
+        }
+        stats.merged++;
+        return;
+      }
+      local.set(k, rec);
+      if (byKey.has(k)) { recs[byKey.get(k)] = rec; stats.replaced++; } else { byKey.set(k, recs.length); recs.push(rec); }
+    });
+  }
+  return {recs, stats, kc};
+}
+
 /* =====================================================================
    Rendu
    ===================================================================== */
@@ -760,16 +812,25 @@ function render() {
   const box = $('#files');
   box.innerHTML = state.datasets.length ? state.datasets.map(card).join('') : '<div class="empty">Aucun fichier déposé pour le moment.</div>';
   const act = active();
-  const nRows = act.reduce((s, d) => s + d.res.rows.length, 0);
   const nFiles = new Set(act.map(d => d.fileName)).size;
   const target = tableName();
+  const schema = buildSchema();
+  syncKeySelect(schema);
+  const {recs, stats, kc} = buildRecords(schema, act, 0);
+  const nRows = recs.length;
   $('#tagTable').textContent = target; $('#btnTable').textContent = target;
-  $('#sum').innerHTML = nRows ? `<strong>${plural(nRows, 'ligne')}</strong> prête${nRows > 1 ? 's' : ''} à importer depuis ${plural(nFiles, 'fichier')} · ${plural(buildSchema().length, 'colonne')}` : 'Aucune donnée à importer.';
+  const extra = [];
+  if (stats.merged) extra.push(plural(stats.merged, 'doublon fusionné', 'doublons fusionnés'));
+  if (stats.replaced) extra.push(plural(stats.replaced, 'ligne remplacée par un fichier plus récent', 'lignes remplacées par un fichier plus récent'));
+  if (stats.noKey) extra.push(plural(stats.noKey, 'ligne sans clé ignorée', 'lignes sans clé ignorées'));
+  $('#sum').innerHTML = nRows ? `<strong>${plural(nRows, kc ? 'ligne unique' : 'ligne', kc ? 'lignes uniques' : 'lignes')}</strong> prête${nRows > 1 ? 's' : ''} à importer depuis ${plural(nFiles, 'fichier')} · ${plural(schema.length, 'colonne')}${extra.length ? '<br><span class="muted" style="font-size:.85rem">' + extra.join(' · ') + '</span>' : ''}` : 'Aucune donnée à importer.';
   $('#btnImport').disabled = !nRows || !IN_GRIST || state.busy;
   $('#btnCsv').disabled = !nRows;
   $('#btnClear').disabled = !state.datasets.length;
-  $('#optMode').querySelector('[value=replace]').disabled = !opts().trace;
-  if (!opts().trace && $('#optMode').value === 'replace') $('#optMode').value = 'append';
+  const mode = $('#optMode');
+  const allowed = {upsert: !!kc, replace: !kc && opts().trace, append: !kc, clear: true};
+  mode.querySelectorAll('option').forEach(o => { o.disabled = !allowed[o.value]; o.hidden = !allowed[o.value]; });
+  if (!allowed[mode.value]) mode.value = kc ? 'upsert' : (opts().trace ? 'replace' : 'append');
 }
 
 function toast(msg, kind) {
@@ -784,16 +845,16 @@ function exportCsv() {
   const now = Math.floor(Date.now() / 1000);
   const q = v => { if (v == null) return ''; const s = String(v); return /[;"\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   const lines = [cols.map(c => q(c.label)).join(';')];
-  for (const ds of active()) ds.res.rows.forEach((row, i) => {
+  for (const rec of buildRecords(cols, active(), now).recs) {
     lines.push(cols.map(c => {
-      const v = valueFor(c, ds, row, i, now);
+      const v = rec[c.id];
       if (v == null) return '';
       if (c.type === 'Numeric') return String(v).replace('.', ',');
       if (c.type === 'Date') return fmtDate(v);
       if (c.trace === 'date') return new Date(v * 1000).toLocaleString('fr-FR');
       return q(v);
     }).join(';'));
-  });
+  }
   const blob = new Blob(['﻿' + lines.join('\r\n')], {type: 'text/csv;charset=utf-8'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob); a.download = tableName() + '.csv';
@@ -875,14 +936,17 @@ async function importToGrist() {
         if (C.parentId[i] !== tRef) return;
         const colId = C.colId[i];
         if (colId === 'manualSort' || colId.startsWith('gristHelper_')) return;
-        existing.push({colId, label: C.label[i] || colId, isFormula: C.isFormula[i] && !!C.formula[i]});
+        existing.push({colId, label: C.label[i] || colId, type: C.type[i], isFormula: C.isFormula[i] && !!C.formula[i]});
       });
       const toAdd = [];
       for (const c of schema) {
         const m = existing.find(e => normKey(e.label) === c.key) || existing.find(e => e.colId.toLowerCase() === c.id.toLowerCase());
         if (m) {
           if (m.isFormula) warn.push(`La colonne « ${m.label} » est une formule : elle n'est pas alimentée.`);
-          else colMap.set(c.id, m.colId);
+          else {
+            colMap.set(c.id, m.colId);
+            if (c.key === $('#optKey').value && m.type && m.type !== 'Text') warn.push(`La colonne clé « ${esc(m.label)} » est de type ${esc(m.type)} : passez-la en <strong>Texte</strong> pour conserver les zéros initiaux des codes.`);
+          }
         } else toAdd.push(c);
       }
       if (toAdd.length) {
@@ -893,9 +957,37 @@ async function importToGrist() {
     }
     setProgress(0.1);
 
+    const now = Math.floor(Date.now() / 1000);
+    const {recs, stats, kc} = buildRecords(schema, sets, now);
+    const writable = schema.filter(c => colMap.has(c.id));
+    const toGrist = recs2 => { const cols = {}; for (const c of writable) cols[colMap.get(c.id)] = recs2.map(r => r[c.id]); return cols; };
+    const CH = 500;
+    let removed = 0, updated = 0, cleaned = 0;
+    let toAdd = recs;
+
+    if (!created && mode === 'upsert' && kc && colMap.has(kc.id)) {
+      // Mise à jour sur la clé unique ; doublons et lignes sans clé déjà présents dans la table supprimés
+      const data = await grist.docApi.fetchTable(tableId);
+      const ids = data.id || [], vals = data[colMap.get(kc.id)] || [];
+      const known = new Map(), toRemove = [];
+      ids.forEach((id, i) => { const k = keyNorm(vals[i]); if (!k || known.has(k)) toRemove.push(id); else known.set(k, id); });
+      const upd = [];
+      toAdd = [];
+      for (const r of recs) { const id = known.get(keyNorm(r[kc.id])); if (id) upd.push([id, r]); else toAdd.push(r); }
+      for (let i = 0; i < toRemove.length; i += 2000) await grist.docApi.applyUserActions([['BulkRemoveRecord', tableId, toRemove.slice(i, i + 2000)]]);
+      cleaned = toRemove.length;
+      for (let i = 0; i < upd.length; i += CH) {
+        const chunk = upd.slice(i, i + CH);
+        await grist.docApi.applyUserActions([['BulkUpdateRecord', tableId, chunk.map(u => u[0]), toGrist(chunk.map(u => u[1]))]]);
+        setProgress(0.1 + 0.4 * Math.min(1, (i + CH) / upd.length));
+      }
+      updated = upd.length;
+    } else if (!created && mode === 'upsert') {
+      warn.push('La colonne clé ne peut pas être alimentée : les lignes ont été ajoutées sans contrôle de doublon.');
+    }
+
     // Suppression préalable selon le mode
-    let removed = 0;
-    if (!created && mode !== 'append') {
+    if (!created && (mode === 'replace' || mode === 'clear')) {
       const data = await grist.docApi.fetchTable(tableId);
       let ids = data.id || [];
       if (mode === 'replace') {
@@ -909,22 +1001,18 @@ async function importToGrist() {
     }
     setProgress(0.2);
 
-    // Ajout des lignes par paquets
-    const now = Math.floor(Date.now() / 1000);
-    const writable = schema.filter(c => colMap.has(c.id));
-    const all = [];
-    for (const ds of sets) ds.res.rows.forEach((row, i) => all.push([ds, row, i]));
-    const CH = 500;
-    for (let i = 0; i < all.length; i += CH) {
-      const chunk = all.slice(i, i + CH);
-      const cols = {};
-      for (const c of writable) cols[colMap.get(c.id)] = chunk.map(([ds, row, k]) => valueFor(c, ds, row, k, now));
-      await grist.docApi.applyUserActions([['BulkAddRecord', tableId, chunk.map(() => null), cols]]);
-      setProgress(0.2 + 0.8 * Math.min(1, (i + CH) / all.length));
+    // Ajout des nouvelles lignes par paquets
+    for (let i = 0; i < toAdd.length; i += CH) {
+      const chunk = toAdd.slice(i, i + CH);
+      await grist.docApi.applyUserActions([['BulkAddRecord', tableId, chunk.map(() => null), toGrist(chunk)]]);
+      setProgress(0.5 + 0.5 * Math.min(1, (i + CH) / toAdd.length));
     }
+    if (stats.merged) warn.push(`${plural(stats.merged, 'doublon fusionné', 'doublons fusionnés')} dans les fichiers (montants additionnés).`);
+    if (stats.noKey) warn.push(`${plural(stats.noKey, 'ligne sans', 'lignes sans')} « ${esc(kc.label)} » ignorée${stats.noKey > 1 ? 's' : ''}.`);
+    if (cleaned) warn.push(`${plural(cleaned, 'ligne en double ou sans clé supprimée', 'lignes en double ou sans clé supprimées')} de la table.`);
 
     $('#result').innerHTML = `<div class="alert success"><h3>Import terminé</h3>
-      <p>${plural(all.length, 'ligne importée', 'lignes importées')} dans <strong class="mono">${esc(tableId)}</strong>${created ? ' (table créée)' : ''}${removed ? ` · ${plural(removed, 'ancienne ligne remplacée', 'anciennes lignes remplacées')}` : ''}.</p>
+      <p>${plural(toAdd.length, 'ligne ajoutée', 'lignes ajoutées')}${updated ? ` et ${plural(updated, 'ligne mise à jour', 'lignes mises à jour')}` : ''} dans <strong class="mono">${esc(tableId)}</strong>${created ? ' (table créée)' : ''}${removed ? ` · ${plural(removed, 'ancienne ligne remplacée', 'anciennes lignes remplacées')}` : ''}.</p>
       ${warn.length ? '<ul>' + warn.map(w => `<li>${w}</li>`).join('') + '</ul>' : ''}</div>`;
     state.datasets = [];
   } catch (e) {
@@ -967,6 +1055,7 @@ $('#files').addEventListener('change', e => {
 });
 ['#optTotals', '#optFill'].forEach(s => $(s).addEventListener('change', () => { state.datasets.forEach(reanalyze); render(); }));
 $('#optTrace').addEventListener('change', render);
+$('#optKey').addEventListener('change', () => { state.keyChoice = $('#optKey').value; render(); });
 $('#optTable').addEventListener('input', render);
 $('#optTable').addEventListener('change', ensureTable);
 $('#btnCsv').addEventListener('click', exportCsv);
