@@ -738,6 +738,44 @@
       </div>
     </div>
 
+    <section class="fr-accordion pp-bloc pp-accbloc" id="mailBloc">
+      <h2 class="fr-accordion__title"><button type="button" class="fr-accordion__btn" aria-expanded="false" aria-controls="mailBox">Mailing par e-mail <span class="fr-hint-text fr-ml-1w" id="mailSummary"></span></button></h2>
+      <div class="fr-collapse" id="mailBox">
+        <p class="fr-text--sm">Prépare un envoi groupé : un e-mail par dossier, avec son courrier en PDF en pièce jointe. Le fichier produit s'utilise avec l'extension <b>Mail Merge de Thunderbird</b>, le publipostage <b>Word → Outlook</b>, ou s'ouvre directement en brouillons.</p>
+        <div class="pp-grid">
+          <div>
+            <div class="fr-select-group">
+              <label class="fr-label" for="mailCol">Colonne de l'adresse e-mail <span class="fr-hint-text">Plusieurs adresses possibles, séparées par « ; » ou « , ».</span></label>
+              <select class="fr-select" id="mailCol"></select>
+            </div>
+            <div class="fr-input-group">
+              <label class="fr-label" for="mailCc">Copie (Cc) <span class="fr-hint-text">Facultatif, champs de fusion acceptés.</span></label>
+              <input class="fr-input" type="text" id="mailCc" placeholder="ex : service@agriculture.gouv.fr">
+            </div>
+            <div class="fr-input-group">
+              <label class="fr-label" for="mailSubject">Objet</label>
+              <input class="fr-input" type="text" id="mailSubject">
+            </div>
+          </div>
+          <div>
+            <div class="fr-input-group">
+              <label class="fr-label" for="mailBody">Texte de l'e-mail <span class="fr-hint-text">Champs de fusion acceptés, ex : {{raison_sociale}}.</span></label>
+              <textarea class="fr-input" id="mailBody" rows="7"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="fr-checkbox-group fr-checkbox-group--sm">
+          <input type="checkbox" id="mailAttach" checked>
+          <label class="fr-label" for="mailAttach">Joindre le courrier de chaque dossier en PDF (signé si un certificat est actif)</label>
+        </div>
+        <div class="fr-checkbox-group fr-checkbox-group--sm">
+          <input type="checkbox" id="mailEml">
+          <label class="fr-label" for="mailEml">Ajouter un brouillon .eml par destinataire (s'ouvre dans Outlook ou Thunderbird, prêt à envoyer)</label>
+        </div>
+        <p class="fr-text--xs fr-mt-1w fr-mb-0" id="mailCheck"></p>
+      </div>
+    </section>
+
     <div class="pp-bloc">
       <h2>Générer</h2>
       <div class="pp-tiles">
@@ -761,6 +799,13 @@
             <p class="fr-tile__desc">Table de publipostage (source de données)</p>
           </div></div>
           <div class="fr-tile__header"><span class="pp-tile-icon fr-icon-table-line" aria-hidden="true"></span></div>
+        </div>
+        <div class="fr-tile fr-tile--sm fr-tile--horizontal fr-enlarge-button">
+          <div class="fr-tile__body"><div class="fr-tile__content">
+            <h3 class="fr-tile__title"><button type="button" id="genMail">Mailing (e-mail)</button></h3>
+            <p class="fr-tile__desc">Fichier d'envoi groupé + courriers PDF (Thunderbird, Outlook)</p>
+          </div></div>
+          <div class="fr-tile__header"><span class="pp-tile-icon fr-icon-mail-line" aria-hidden="true"></span></div>
         </div>
       </div>
       <div class="pp-progress" id="progress"><div></div></div>
@@ -790,6 +835,8 @@ let cfg = {
   cols: [],
   labelCol: '',
   idCols: null,  // colonnes qui complètent l'identification (null = choix automatique)
+  mail: { col: '', cc: '', subject: '{{IDENTIFIANT}} — votre dossier',
+    body: 'Madame, Monsieur,\n\nVeuillez trouver ci-joint le courrier concernant votre dossier.\n\nCordialement,', attach: true, eml: false },
   links: [],     // tables liées : [{ tableId, mainCol, linkCol, multi: 'first' | 'all' }]
   html: DEFAULT_TEMPLATE,
   sig: {
@@ -839,7 +886,7 @@ function showTab(name) {
     if (!tplList.loaded) loadTemplates().catch(e => { $('tplMsg').innerHTML = alertHTML('err', esc(e.message || e)); });
     if (cfg.tpl && !tplRt) restoreActiveTemplate();
   }
-  if (name === 'generer') { refreshSelection(); renderRecList(); }
+  if (name === 'generer') { refreshSelection(); renderRecList(); renderMail(); }
   if (name === 'signature') {
     resizeSigCanvas();
     if (!sigTbl.loaded) loadSigTable().catch(e => { $('sigTblMsg').innerHTML = alertHTML('err', esc(e.message || e)); });
@@ -872,6 +919,7 @@ function applyConfig(c) {
   cfg.history = c.history || {};
   cfg.models = c.models || {};
   cfg.links = Array.isArray(c.links) ? c.links : [];
+  cfg.mail = Object.assign({}, cfg.mail, c.mail || {});
 }
 
 /* ========================================================================
@@ -2298,6 +2346,7 @@ function renderRecList() {
   renderSelInfo();
 }
 function updateRecCount() {
+  if (data.tableId && $('mailCheck')) renderMailCheck();
   $('recCount').textContent = selectedRows().length + ' dossier(s) sélectionné(s) · ' + filteredRows.length +
     ' après filtres · ' + data.rows.length + ' dans la table';
 }
@@ -4262,7 +4311,7 @@ function progress(done, total, text) {
 const ALERT = { ok: 'success', warn: 'warning', err: 'error', info: 'info' };
 function alertHTML(kind, text) { return `<div class="fr-alert fr-alert--${ALERT[kind] || 'info'} fr-alert--sm"><p>${text}</p></div>`; }
 function genMsg(kind, text) { $('genStatus').innerHTML = alertHTML(kind, text); }
-function lockButtons(on) { ['genDocx', 'genPdf', 'genXlsx'].forEach(id => $(id).disabled = on); }
+function lockButtons(on) { ['genDocx', 'genPdf', 'genXlsx', 'genMail'].forEach(id => $(id).disabled = on); }
 const tick = () => new Promise(r => setTimeout(r, 0));
 
 async function uploadAttachment(blob, filename) {
@@ -4292,13 +4341,14 @@ async function generate(kind) {
     await normalizeIRImages(ir);
 
     if (kind === 'xlsx') { await exportXlsx(rows, ir); return; }
-    const fontWarn = kind === 'pdf' ? await preparePdfFont() : null;
+    const fontWarn = kind === 'pdf' || (kind === 'mail' && cfg.mail.attach) ? await preparePdfFont() : null;
     let rt = null;
     if (cfg.tpl) {
       progress(0, rows.length, 'Chargement du modèle « ' + esc(cfg.tpl.title) + ' »…');
       try { rt = await ensureTplRuntime(); } catch (e) { throw new Error('modèle « ' + cfg.tpl.title + ' » illisible (' + (e.message || e) + ')'); }
     }
 
+    if (kind === 'mail') { await exportMailing(rows, ir, rt); return; }
     const ext = kind === 'docx' ? '.docx' : '.pdf';
     const attachCol = cfg.exp.attachCol;
     const perRecord = cfg.exp.mode === 'multi' || !!attachCol;
@@ -4415,6 +4465,133 @@ async function exportXlsx(rows, ir) {
 $('genDocx').onclick = () => generate('docx');
 $('genPdf').onclick = () => generate('pdf');
 $('genXlsx').onclick = () => generate('xlsx');
+$('genMail').onclick = () => generate('mail');
+
+/* ----- Mailing ----- */
+const EMAIL_RE = /^[^\s@<>(),;:"]+@[^\s@<>(),;:"]+\.[a-z]{2,}$/i;
+function mailAddresses(text) { return String(text || '').split(/[;,\s]+/).map(x => x.trim().replace(/^mailto:/i, '')).filter(Boolean); }
+function guessMailCol() {
+  const cols = data.cols.filter(c => c.baseType !== 'Attachments');
+  const share = (c) => { let n = 0, ok = 0; for (const r of data.rows.slice(0, 200)) { const v = formatValue(c, r); if (v) { n++; if (mailAddresses(v).some(a => EMAIL_RE.test(a))) ok++; } } return n ? ok / n : 0; };
+  let best = null, bs = 0;
+  for (const c of cols) {
+    const named = /mail|courriel/i.test(c.id + ' ' + c.label) ? 0.5 : 0;
+    const sc = share(c) + named;
+    if (sc > bs) { best = c; bs = sc; }
+  }
+  return bs >= 0.5 ? best : null;
+}
+function renderMail() {
+  const m = cfg.mail;
+  if (!data.cols.find(c => c.id === m.col)) { const g = guessMailCol(); m.col = g ? g.id : ''; }
+  $('mailCol').innerHTML = '<option value="">— Choisir la colonne —</option>' + data.cols.filter(c => c.baseType !== 'Attachments')
+    .map(c => `<option value="${esc(c.id)}" ${c.id === m.col ? 'selected' : ''}>${esc(c.label)}</option>`).join('');
+  $('mailCc').value = m.cc || ''; $('mailSubject').value = m.subject || ''; $('mailBody').value = m.body || '';
+  $('mailAttach').checked = m.attach !== false; $('mailEml').checked = !!m.eml;
+  renderMailCheck();
+}
+function renderMailCheck() {
+  const col = data.cols.find(c => c.id === cfg.mail.col);
+  const rows = selectedRows();
+  if (!col) { $('mailCheck').textContent = 'Choisissez la colonne qui contient l\'adresse e-mail.'; $('mailSummary').textContent = ''; return; }
+  const ok = rows.filter(r => mailAddresses(formatValue(col, r)).some(a => EMAIL_RE.test(a))).length;
+  $('mailCheck').textContent = ok + ' dossier(s) sélectionné(s) sur ' + rows.length + ' ont une adresse e-mail valide' + (ok < rows.length ? ' : les autres seront listés dans le fichier LISEZMOI et ignorés.' : '.');
+  $('mailSummary').textContent = '— ' + col.label + ' · ' + ok + ' destinataire(s)';
+}
+$('mailCol').onchange = (e) => { cfg.mail.col = e.target.value; renderMailCheck(); saveConfig(); };
+[['mailCc', 'cc'], ['mailSubject', 'subject'], ['mailBody', 'body']].forEach(([id, k]) => $(id).addEventListener('input', (e) => { cfg.mail[k] = e.target.value; saveConfig(); }));
+$('mailAttach').onchange = (e) => { cfg.mail.attach = e.target.checked; saveConfig(); };
+$('mailEml').onchange = (e) => { cfg.mail.eml = e.target.checked; saveConfig(); };
+
+const csvCell = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+const b64utf8 = (t) => btoa(unescape(encodeURIComponent(t)));
+const mimeWord = (t) => /^[\x20-\x7e]*$/.test(t) ? t : '=?UTF-8?B?' + b64utf8(t) + '?=';
+const wrap76 = (b) => b.replace(/.{1,76}/g, '$&\r\n');
+async function blobToB64(blob) {
+  const buf = new Uint8Array(await blob.arrayBuffer());
+  let bin = ''; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+// Brouillon d'e-mail (.eml) : X-Unsent fait ouvrir le message en mode rédaction dans Outlook
+async function buildEml(to, cc, subject, body, att) {
+  const bd = 'pp' + Math.random().toString(36).slice(2);
+  let x = 'X-Unsent: 1\r\nTo: ' + to.join(', ') + '\r\n' + (cc.length ? 'Cc: ' + cc.join(', ') + '\r\n' : '') +
+    'Subject: ' + mimeWord(subject) + '\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary="' + bd + '"\r\n\r\n' +
+    '--' + bd + '\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n' + wrap76(b64utf8(body.replace(/\r?\n/g, '\r\n')));
+  if (att) {
+    const fn = encodeURIComponent(att.name);
+    x += '--' + bd + '\r\nContent-Type: application/pdf; name="' + mimeWord(att.name) + '"\r\nContent-Disposition: attachment; filename*=UTF-8\'\'' + fn +
+      '\r\nContent-Transfer-Encoding: base64\r\n\r\n' + wrap76(await blobToB64(att.blob));
+  }
+  return x + '--' + bd + '--\r\n';
+}
+async function exportMailing(rows, ir, rt) {
+  const m = cfg.mail;
+  const col = data.cols.find(c => c.id === m.col);
+  if (!col) { genMsg('warn', 'Choisissez la colonne de l\'adresse e-mail (bloc « Mailing par e-mail »).'); return; }
+  const byId = Object.fromEntries(data.cols.map(c => [c.id, c]));
+  const extra = cfg.cols.map(id => byId[id]).filter(c => c && c.id !== col.id && c.baseType !== 'Attachments');
+  const zip = new JSZip(), dir = zip.folder('pieces_jointes'), emlDir = m.eml ? zip.folder('brouillons_eml') : null;
+  const header = ['Email', 'Cc', 'Objet', 'Corps', 'Piece_jointe', 'Dossier'].concat(extra.map(c => c.id.replace(/[^A-Za-z0-9_]/g, '_')));
+  const lines = [header], sent = [], skipped = [], used = new Set();
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i], res = makeResolver(row, i);
+    const addrs = mailAddresses(formatValue(col, row));
+    const to = addrs.filter(a => EMAIL_RE.test(a));
+    if (!to.length) { skipped.push(rowLabel(row) + (rowIdent(row) ? ' (' + rowIdent(row) + ')' : '') + ' : ' + (addrs.join(' ') || 'adresse vide')); continue; }
+    progress(i, rows.length, `E-mail ${i + 1} / ${rows.length} : ${esc(rowLabel(row))}`); await tick();
+    const cc = mailAddresses(resolveText(m.cc || '', res)).filter(a => EMAIL_RE.test(a));
+    const subject = resolveText(m.subject || '', res).replace(/\s+/g, ' ').trim();
+    const body = resolveText(m.body || '', res);
+    let att = null;
+    if (m.attach) {
+      let blob = await makePdfFor(rt, ir, [{ row, index: i }]);
+      if (signingActive()) blob = await signPdfBlob(blob);
+      let name = fileNameFor(row, i), k = 2; const base = name;
+      while (used.has(name.toLowerCase())) name = base + '_' + (k++);
+      used.add(name.toLowerCase());
+      att = { name: name + '.pdf', blob };
+      dir.file(att.name, blob);
+    }
+    if (emlDir) emlDir.file(sanitizeFilename((att ? att.name.replace(/\.pdf$/, '') : fileNameFor(row, i))) + '.eml', await buildEml(to, cc, subject, body, att));
+    lines.push([to.join(', '), cc.join(', '), subject, body, att ? att.name : '', rowLabel(row) + (rowIdent(row) ? ' — ' + rowIdent(row) : '')].concat(extra.map(c => formatValue(c, row))));
+    sent.push(row);
+  }
+  if (!sent.length) { genMsg('warn', 'Aucun dossier sélectionné n\'a d\'adresse e-mail valide dans la colonne « ' + esc(col.label) + ' ».'); return; }
+  zip.file('mailing.csv', lines.map(l => l.map(csvCell).join(',')).join('\r\n') + '\r\n');
+  const ws = XLSX.utils.aoa_to_sheet(lines);
+  ws['!cols'] = header.map((h, k) => ({ wch: k === 3 ? 60 : Math.min(40, Math.max(10, h.length + 2)) }));
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Mailing');
+  zip.file('mailing.xlsx', XLSX.write(wb, { type: 'array', bookType: 'xlsx' }));
+  zip.file('LISEZMOI.txt', [
+    'MAILING — ' + sent.length + ' destinataire(s), préparé le ' + dateFR(new Date()),
+    '',
+    'Contenu :',
+    '  mailing.csv      fichier d\'envoi (UTF-8, séparateur virgule) : Email, Cc, Objet, Corps, Piece_jointe et les colonnes cochées',
+    '  mailing.xlsx     le même fichier pour Excel / Word',
+    m.attach ? '  pieces_jointes/  le courrier PDF de chaque destinataire' : '',
+    emlDir ? '  brouillons_eml/  un brouillon par destinataire : double-cliquez pour l\'ouvrir dans Outlook ou Thunderbird, puis « Envoyer »' : '',
+    '',
+    'A) Thunderbird + extension « Mail Merge » (Outils > Modules complémentaires)',
+    '  1. Décompressez ce dossier, par exemple dans C:\\Mailing',
+    '  2. Rédigez un nouveau message : À = {{Email}}   Cc = {{Cc}}   Objet = {{Objet}}   Texte = {{Corps}}',
+    m.attach ? '  3. Pièce jointe : dans la fenêtre Mail Merge, champ « Pièces jointes » = C:\\Mailing\\pieces_jointes\\{{Piece_jointe}}' : '  3. (pas de pièce jointe)',
+    '  4. Fichier > Mail Merge : Source = CSV, fichier mailing.csv, jeu de caractères UTF-8, séparateur « , »',
+    '  5. Faites d\'abord un essai avec « Envoyer plus tard » et vérifiez la boîte d\'envoi.',
+    '',
+    'B) Word + Outlook (sans pièce jointe : Word ne sait pas joindre un fichier différent par destinataire)',
+    '  Publipostage > Sélection des destinataires > mailing.xlsx, puis Terminer et fusionner > Envoyer des messages électroniques (colonne Email).',
+    '',
+    skipped.length ? 'Dossiers ignorés (adresse e-mail absente ou invalide) — ' + skipped.length + ' :\r\n  ' + skipped.join('\r\n  ') : 'Tous les dossiers sélectionnés ont une adresse e-mail valide.'
+  ].filter(l => l !== '').join('\r\n'));
+  progress(rows.length, rows.length, 'Compression de l\'archive…');
+  const name = 'Mailing_' + dateFR(new Date()).replace(/\//g, '-') + '.zip';
+  downloadBlob(await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' }), name);
+  progress(1, 1);
+  const markNote = await markGenerated(sent, 'Mailing');
+  genMsg(skipped.length ? 'warn' : 'ok', `${esc(name)} généré : ${sent.length} e-mail(s) prêt(s)${m.attach ? ' avec leur courrier PDF' : ''}${signingActive() && m.attach ? ' signé' : ''}${markNote}.` +
+    (skipped.length ? `<br>${skipped.length} dossier(s) ignoré(s), sans adresse e-mail valide (liste dans LISEZMOI.txt).` : ''));
+}
 
 /* ========================================================================
  * Tables Grist des modèles (Modele_publipostage) et des signatures (Signature_Num)
