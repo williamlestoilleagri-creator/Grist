@@ -225,6 +225,7 @@
         <legend>Nettoyage</legend>
         <label class="check"><input type="checkbox" id="optTotals" checked><span>Exclure les lignes de totaux<small>« Résultat », « Résultat global », « Total »… (évite les doubles comptes)</small></span></label>
         <label class="check"><input type="checkbox" id="optFill" checked><span>Répéter les libellés masqués<small>Chorus n'affiche une valeur d'axe qu'à son premier passage : elle est recopiée sur les lignes suivantes</small></span></label>
+        <label class="check"><input type="checkbox" id="optPrefix" checked><span>Retirer le préfixe de périmètre<small>« BG00/014922000201 » devient « 014922000201 », pour rapprocher les restitutions entre elles</small></span></label>
         <label class="check"><input type="checkbox" id="optTrace" checked><span>Ajouter les colonnes de traçabilité<small>Fichier source, onglet, titre du rapport, date d'import</small></span></label>
       </fieldset>
       <fieldset>
@@ -396,7 +397,13 @@ function analyzeSheet(ws, opts, override) {
     dataStart = Math.max(0, Math.min(nR - 1, override - range.s.r - 1));
   } else {
     const need = Math.max(Math.min(2, maxFill), Math.ceil(maxFill * 0.5));
-    for (let r = 0; r < nR; r++) if (info[r].filled >= need && info[r].num >= 1 && !(info[r].filled === info[r].num && maxFill > 2)) { dataStart = r; break; }
+    const headerLike = r => {
+      // ligne d'en-tête du type « Exercice comptable | 2026 | 2026 | 2026 » : valeurs identiques, au plus un libellé
+      const nums = [], txt = [];
+      for (let c = 0; c < W; c++) { const x = cell(r, c); if (!x) continue; (isNumCell(x) || isDateCell(x) ? nums : txt).push(x.t); }
+      return nums.length >= 2 && new Set(nums).size === 1 && txt.length <= 1;
+    };
+    for (let r = 0; r < nR; r++) if (info[r].filled >= need && info[r].num >= 1 && !(info[r].filled === info[r].num && maxFill > 2) && !headerLike(r)) { dataStart = r; break; }
     if (dataStart < 0) {
       // Aucune valeur numérique : la première ligne bien remplie sert d'en-tête
       const h = info.findIndex(i => i.filled >= need);
@@ -455,6 +462,9 @@ function analyzeSheet(ws, opts, override) {
     for (const r of kept) { const x = cell(r, c); if (!x) continue; ne++; if (isNumCell(x)) nn++; else if (isDateCell(x)) nd++; }
     types.push(ne && nd / ne >= 0.9 ? 'Date' : ne && nn / ne >= 0.9 ? 'Numeric' : 'Text');
   }
+  // Colonnes de mesures entièrement vides (ex. « Montant payé » pas encore alimenté) : numériques elles aussi
+  const fm0 = types.indexOf('Numeric');
+  if (fm0 >= 0) for (let c = fm0 + 1; c < W; c++) if (types[c] === 'Text' && !kept.some(r => cell(r, c))) types[c] = 'Numeric';
   const firstMeas = types.indexOf('Numeric');
 
   // Nommage des colonnes
@@ -465,12 +475,33 @@ function analyzeSheet(ws, opts, override) {
     return mc.length > 0 && tc.length === 1 && tc[0] === firstMeas - 1 &&
       H.some((o, j) => j !== k && o.some((v, c) => v != null && types[c] !== 'Numeric' && c !== firstMeas - 1));
   });
+  // Ligne d'en-tête dont toutes les mesures portent la même valeur (ex. « Exercice comptable : 2026 ») :
+  // c'est un attribut commun, transformé en colonne plutôt que collé au nom de chaque mesure.
+  const measCols = types.map((t, c) => t === 'Numeric' ? c : -1).filter(c => c >= 0);
+  const RX_PERIOD = /^(\d{4}|\d{1,2}[./]\d{4}|\d{3}\.\d{4}|[A-Za-zéû]+\.? \d{4})$/;
+  const constRows = new Map();
+  H.forEach((vals, k) => {
+    const mv = measCols.map(c => vals[c]);
+    if (measCols.length < 1 || mv.some(v => v == null) || new Set(mv).size !== 1 || RX_UNIT.test(mv[0])) return;
+    const label = firstMeas > 0 && vals[firstMeas - 1] != null ? vals[firstMeas - 1] : null;
+    const otherText = vals.some((v, c) => v != null && types[c] !== 'Numeric' && c !== firstMeas - 1);
+    if (ignoreForText[k] && measCols.length >= 2) constRows.set(k, {label, value: mv[0]});
+    else if (!otherText && RX_PERIOD.test(mv[0])) constRows.set(k, {label: label || 'Période', value: mv[0]});
+  });
+  // Unité indiquée sur une partie des mesures seulement (ex. « EUR » sur 2 colonnes sur 6) : étendue aux autres
+  const H2 = H.map((vals, k) => {
+    if (constRows.has(k)) return vals;
+    const mv = measCols.map(c => vals[c]).filter(v => v != null);
+    if (!mv.length || !mv.every(v => RX_UNIT.test(v)) || new Set(mv).size !== 1) return vals;
+    const out = vals.slice(); measCols.forEach(c => { if (out[c] == null) out[c] = mv[0]; });
+    return out;
+  });
   const names = [];
   for (let c = 0; c < W; c++) {
     const parts = [];
-    H.forEach((vals, k) => {
+    H2.forEach((vals, k) => {
       const v = vals[c];
-      if (v == null || (types[c] !== 'Numeric' && ignoreForText[k])) return;
+      if (v == null || constRows.has(k) || (types[c] !== 'Numeric' && ignoreForText[k])) return;
       if (parts[parts.length - 1] !== v) parts.push(v);
     });
     const units = parts.filter(p => RX_UNIT.test(p));
@@ -511,8 +542,26 @@ function analyzeSheet(ws, opts, override) {
     prev = out;
   }
 
+  // Préfixe de périmètre Chorus (« BG00/014922000201 » → « 014922000201 »)
+  let stripped = 0;
+  if (opts.stripPrefix) {
+    const RX_PFX = /^[A-Z0-9]{2,6}\/(?=\S)/;
+    textCols.forEach(c => {
+      const vals = rows.map(r => r[c]).filter(v => v != null);
+      if (!vals.length || vals.filter(v => RX_PFX.test(v)).length / vals.length < 0.8) return;
+      rows.forEach(r => { if (r[c] != null && RX_PFX.test(r[c])) { r[c] = r[c].replace(RX_PFX, ''); stripped++; } });
+    });
+  }
+  // Attributs communs (en-têtes constants) en première(s) colonne(s)
+  const consts = [...constRows.values()].filter(k => !names.includes(k.label));
+  if (consts.length) {
+    names.unshift(...consts.map(k => k.label));
+    types.unshift(...consts.map(() => 'Text'));
+    rows.forEach(r => r.unshift(...consts.map(k => k.value)));
+  }
+
   return {
-    title: meta[0] || '', meta, names, types, rows, dropped, counts, filledDown, badNum,
+    title: meta[0] || '', meta, names, types, rows, dropped, counts, filledDown, badNum, stripped, consts,
     dataStartXl: xlRow(dataStart), headerXl: hdr.map(xlRow), totalRows: nR,
   };
 }
@@ -521,7 +570,7 @@ function analyzeSheet(ws, opts, override) {
    Gestion des fichiers
    ===================================================================== */
 const state = {datasets: [], nextId: 1};
-const opts = () => ({excludeTotals: $('#optTotals').checked, fillDown: $('#optFill').checked, trace: $('#optTrace').checked});
+const opts = () => ({excludeTotals: $('#optTotals').checked, fillDown: $('#optFill').checked, trace: $('#optTrace').checked, stripPrefix: $('#optPrefix').checked});
 
 /* ---------- Exports « page web » (MHTML / HTML enregistrés en .xls par Chorus) ---------- */
 function decodeBytes(bytes, charset) {
@@ -562,6 +611,28 @@ function mhtmlParts(latin1) {
   }
   return out;
 }
+/** Tableau HTML → grille de textes, en respectant fusions de lignes et de colonnes. */
+function tableToAoa(table) {
+  const aoa = [], merges = [], occ = [];
+  Array.from(table.rows).forEach((tr, r) => {
+    aoa[r] = aoa[r] || []; occ[r] = occ[r] || [];
+    let c = 0;
+    for (const td of tr.cells) {
+      while (occ[r][c]) c++;
+      const cs = Math.max(1, Math.min(200, parseInt(td.getAttribute('colspan'), 10) || 1));
+      const rs = Math.max(1, Math.min(500, parseInt(td.getAttribute('rowspan'), 10) || 1));
+      td.querySelectorAll('br').forEach(b => b.replaceWith(' '));
+      const v = td.textContent.replace(SPACES, ' ').trim();
+      aoa[r][c] = v === '' ? null : v;
+      for (let rr = r; rr < r + rs; rr++) { occ[rr] = occ[rr] || []; aoa[rr] = aoa[rr] || []; for (let cc = c; cc < c + cs; cc++) occ[rr][cc] = true; }
+      if (cs > 1 || rs > 1) merges.push({s: {r, c}, e: {r: r + rs - 1, c: c + cs - 1}});
+      c += cs;
+    }
+  });
+  const w = Math.max(0, ...aoa.map(r => r.length));
+  return {aoa: aoa.map(r => Array.from({length: w}, (_, i) => r[i] == null ? null : r[i])), merges};
+}
+
 /** Classeur SheetJS à partir de pages HTML : le plus grand tableau de chaque page devient un onglet. */
 function htmlToWorkbook(pages) {
   const wb = XLSX.utils.book_new();
@@ -574,7 +645,16 @@ function htmlToWorkbook(pages) {
     if (!best || bestN < 2) return;
     // Les tableaux imbriqués sont aplatis en texte pour ne pas décaler les colonnes
     best.querySelectorAll('table').forEach(t => t.replaceWith(doc.createTextNode(t.textContent)));
-    const ws = XLSX.utils.table_to_sheet(best, {raw: true});
+    // Textes situés avant le tableau principal (titre du rapport, filtres) : repris en tête
+    const before = [];
+    doc.querySelectorAll('table').forEach(t => {
+      if (t === best || t.contains(best) || !(t.compareDocumentPosition(best) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
+      Array.from(t.rows).forEach(tr => { const x = tr.textContent.replace(SPACES, ' ').trim(); if (x) before.push([x]); });
+    });
+    const {aoa, merges} = tableToAoa(best);
+    const ws = XLSX.utils.aoa_to_sheet(before.length ? [...before, [], ...aoa] : aoa);
+    const off = before.length ? before.length + 1 : 0;
+    ws['!merges'] = merges.map(m => ({s: {r: m.s.r + off, c: m.s.c}, e: {r: m.e.r + off, c: m.e.c}}));
     let name = (pg.loc.split(/[\\/]/).pop() || '').replace(/\.[^.]*$/, '') || (doc.title || '').trim() || 'Feuille ' + (i + 1);
     name = name.replace(/[\[\]*?:\\/]/g, ' ').slice(0, 31) || 'Feuille ' + (i + 1);
     let n = name, k = 2; while (used.has(n)) n = name.slice(0, 28) + ' ' + k++;
@@ -702,32 +782,50 @@ function syncKeySelect(schema) {
   sel.innerHTML = '<option value="">Aucune (doublons autorisés)</option>' + cands.map(c => `<option value="${esc(c.key)}">${esc(c.label)}</option>`).join('');
   sel.value = cands.some(c => c.key === want) ? want : '';
 }
-/** Lignes à écrire, dédoublonnées sur la clé : fusion dans un même fichier, le dernier fichier l'emporte entre fichiers. */
+/** Lignes à écrire, dédoublonnées sur la clé.
+ *  Dans un même fichier : montants additionnés, textes différents regroupés, date la plus ancienne.
+ *  Entre fichiers : seules les colonnes présentes dans le fichier le plus récent sont remplacées. */
 function buildRecords(schema, sets, now) {
   const kc = keyCol(schema);
   const recs = [], byKey = new Map();
   const stats = {merged: 0, replaced: 0, noKey: 0};
   for (const ds of sets) {
     const local = new Map();
+    const present = schema.filter(c => c.trace || ds.res.names.some(n => normKey(n) === c.key));
     ds.res.rows.forEach((row, i) => {
-      const rec = {};
+      const rec = {__present: new Set(present.map(c => c.id))};
       for (const c of schema) rec[c.id] = valueFor(c, ds, row, i, now);
       if (!kc) { recs.push(rec); return; }
       const k = keyNorm(rec[kc.id]);
       if (!k) { stats.noKey++; return; }
       const same = local.get(k);
       if (same) {
-        for (const c of schema) {
+        for (const c of present) {
           const a = same[c.id], b = rec[c.id];
-          if (c.type === 'Numeric' && !c.trace) { if (b != null) same[c.id] = Math.round(((a || 0) + b) * 100) / 100; }
-          else if (a == null && b != null) same[c.id] = b;
+          if (c.trace || c === kc) continue;
+          if (c.type === 'Numeric') { if (b != null) same[c.id] = Math.round(((a || 0) + b) * 100) / 100; }
+          else if (c.type === 'Date') { if (b != null && (a == null || b < a)) same[c.id] = b; }
+          else if (b != null) { (same.__multi[c.id] = same.__multi[c.id] || new Set(a != null ? [a] : [])).add(b); if (a == null) same[c.id] = b; }
         }
         stats.merged++;
         return;
       }
+      rec.__multi = {};
       local.set(k, rec);
-      if (byKey.has(k)) { recs[byKey.get(k)] = rec; stats.replaced++; } else { byKey.set(k, recs.length); recs.push(rec); }
+      if (byKey.has(k)) {
+        const prev = recs[byKey.get(k)];
+        for (const id of rec.__present) prev[id] = rec[id];
+        rec.__present.forEach(id => prev.__present.add(id));
+        prev.__multi = rec.__multi;
+        local.set(k, prev);
+        stats.replaced++;
+      } else { byKey.set(k, recs.length); recs.push(rec); }
     });
+    // Textes différents au sein d'une même clé : « A | B | C », ou « Plusieurs (n) » au-delà de 3
+    for (const rec of local.values()) for (const id in rec.__multi) {
+      const vals = [...rec.__multi[id]];
+      if (vals.length > 1) rec[id] = vals.length <= 3 ? vals.join(' | ') : `Plusieurs (${vals.length})`;
+    }
   }
   return {recs, stats, kc};
 }
@@ -745,6 +843,8 @@ function statBadges(r) {
   if (r.counts.entete) b.push(`<span class="badge sm">${plural(r.counts.entete, 'en-tête répété', 'en-têtes répétés')}</span>`);
   if (r.counts.note) b.push(`<span class="badge sm">${plural(r.counts.note, 'commentaire retiré', 'commentaires retirés')}</span>`);
   if (r.filledDown) b.push(`<span class="badge info sm">${plural(r.filledDown, 'libellé recopié', 'libellés recopiés')}</span>`);
+  if (r.stripped) b.push(`<span class="badge info sm">${plural(r.stripped, 'préfixe retiré', 'préfixes retirés')}</span>`);
+  if (r.consts && r.consts.length) b.push(...r.consts.map(k => `<span class="badge info sm">${esc(k.label)} : ${esc(k.value)}</span>`));
   if (r.badNum) b.push(`<span class="badge error sm">${plural(r.badNum, 'montant illisible', 'montants illisibles')}</span>`);
   return b.join('');
 }
@@ -960,7 +1060,8 @@ async function importToGrist() {
     const now = Math.floor(Date.now() / 1000);
     const {recs, stats, kc} = buildRecords(schema, sets, now);
     const writable = schema.filter(c => colMap.has(c.id));
-    const toGrist = recs2 => { const cols = {}; for (const c of writable) cols[colMap.get(c.id)] = recs2.map(r => r[c.id]); return cols; };
+    const toGrist = (recs2, only) => { const cols = {}; for (const c of writable) if (!only || only.has(c.id)) cols[colMap.get(c.id)] = recs2.map(r => r[c.id]); return cols; };
+    const bySig = list => { const g = new Map(); for (const it of list) { const p = (it[1] || it).__present; const sig = [...p].sort().join('|'); if (!g.has(sig)) g.set(sig, {present: p, items: []}); g.get(sig).items.push(it); } return [...g.values()]; };
     const CH = 500;
     let removed = 0, updated = 0, cleaned = 0;
     let toAdd = recs;
@@ -976,10 +1077,12 @@ async function importToGrist() {
       for (const r of recs) { const id = known.get(keyNorm(r[kc.id])); if (id) upd.push([id, r]); else toAdd.push(r); }
       for (let i = 0; i < toRemove.length; i += 2000) await grist.docApi.applyUserActions([['BulkRemoveRecord', tableId, toRemove.slice(i, i + 2000)]]);
       cleaned = toRemove.length;
-      for (let i = 0; i < upd.length; i += CH) {
-        const chunk = upd.slice(i, i + CH);
-        await grist.docApi.applyUserActions([['BulkUpdateRecord', tableId, chunk.map(u => u[0]), toGrist(chunk.map(u => u[1]))]]);
-        setProgress(0.1 + 0.4 * Math.min(1, (i + CH) / upd.length));
+      let done = 0;
+      for (const grp of bySig(upd)) for (let i = 0; i < grp.items.length; i += CH) {
+        const chunk = grp.items.slice(i, i + CH);
+        await grist.docApi.applyUserActions([['BulkUpdateRecord', tableId, chunk.map(u => u[0]), toGrist(chunk.map(u => u[1]), grp.present)]]);
+        done += chunk.length;
+        setProgress(0.1 + 0.4 * done / upd.length);
       }
       updated = upd.length;
     } else if (!created && mode === 'upsert') {
@@ -1053,7 +1156,7 @@ $('#files').addEventListener('change', e => {
   if (el.dataset.act === 'start') { const v = parseInt(el.value, 10); ds.override = v > 0 ? v : null; reanalyze(ds); }
   render();
 });
-['#optTotals', '#optFill'].forEach(s => $(s).addEventListener('change', () => { state.datasets.forEach(reanalyze); render(); }));
+['#optTotals', '#optFill', '#optPrefix'].forEach(s => $(s).addEventListener('change', () => { state.datasets.forEach(reanalyze); render(); }));
 $('#optTrace').addEventListener('change', render);
 $('#optKey').addEventListener('change', () => { state.keyChoice = $('#optKey').value; render(); });
 $('#optTable').addEventListener('input', render);
