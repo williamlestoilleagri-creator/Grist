@@ -5,6 +5,7 @@
 | `erp-sap.html` | ERP intégré « façon SAP » (ventes, achats, stocks, comptabilité) |
 | `annuaire-adresses.html` | Annuaire d'adresses géocodées (BAN) |
 | `grist-assistant-claude.html` | Assistant Claude |
+| `import-infbud.html` | Import des extractions Chorus (INF-BUD) vers la table `DATA_INFBUD` |
 
 ## ERP « façon SAP » (`erp-sap.html`)
 
@@ -68,3 +69,27 @@ Structure (en-tête des documents, IBAN, mentions), devise, TVA et délai par d�
 - **Ventes** : devis → commande → livraison (sortie de stock au CMP) → facture (411 / 70x / 44571) → encaissement (512 / 411).
 - **Achats** : commande → réception (entrée de stock) → facture (60x / 44566 / 401) → paiement (401 / 512).
 - Proposition de réapprovisionnement depuis `MMBE`, impression des devis, confirmations et factures.
+
+## Import des extractions Chorus (`import-infbud.html`)
+
+Charte DSFR, police Marianne. Intègre une ou plusieurs restitutions Chorus (INF-BUD-41, INF-BUD-53…) dans la table Grist **`DATA_INFBUD`**, au format données (une ligne = un enregistrement).
+
+### Installation
+
+1. Ajoutez une vue **Widget personnalisé**, renseignez l'URL du fichier publié (ou collez son contenu dans le Custom Widget Builder).
+2. Réglez **Accès** sur **Accès complet au document**.
+3. Déposez un ou plusieurs fichiers (`.xls`, `.xlsx`, `.csv`, `.htm`…), contrôlez l'aperçu, puis cliquez sur **Importer**.
+
+### Mise en données automatique
+
+- Retrait du titre du rapport et des lignes de filtres, des **lignes et colonnes vides**, des en-têtes répétés et des commentaires.
+- En-têtes sur plusieurs lignes fusionnés en un seul nom : `Consommation AE` + `EUR` → **Consommation AE (EUR)** ; la paire code / libellé Chorus devient `Centre financier` et `Centre financier (libellé)`.
+- Montants au format Chorus convertis en nombres (`8 452 103`, `1 234,56`, `500-`) ; codes conservés en texte (zéros initiaux préservés) ; dates `jj.mm.aaaa` en dates Grist.
+- Options : exclure les lignes de totaux (« Résultat », « Total »…), recopier les libellés d'axe masqués par Chorus, colonnes de traçabilité (fichier source, onglet, rapport, date d'import).
+- La première ligne de données est détectée automatiquement et peut être corrigée fichier par fichier.
+
+### Écriture dans Grist
+
+- La table est créée si elle n'existe pas ; les colonnes manquantes sont ajoutées (correspondance par libellé), les colonnes formule ne sont jamais écrites.
+- Si la table contient déjà des données : **remplacer les lignes issues des mêmes fichiers** (par défaut), ajouter à la suite, ou vider la table.
+- Hors Grist, le widget fonctionne en aperçu et permet de télécharger le résultat en CSV.

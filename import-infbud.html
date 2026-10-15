@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Import INF-BUD Chorus</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<style>
+  /* ================= Police Marianne (DSFR) ================= */
+  @font-face{font-family:Marianne;font-style:normal;font-weight:300;font-display:swap;src:url(https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14.2/dist/fonts/Marianne-Light.woff2) format("woff2")}
+  @font-face{font-family:Marianne;font-style:normal;font-weight:400;font-display:swap;src:url(https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14.2/dist/fonts/Marianne-Regular.woff2) format("woff2")}
+  @font-face{font-family:Marianne;font-style:italic;font-weight:400;font-display:swap;src:url(https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14.2/dist/fonts/Marianne-Regular_Italic.woff2) format("woff2")}
+  @font-face{font-family:Marianne;font-style:normal;font-weight:500;font-display:swap;src:url(https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14.2/dist/fonts/Marianne-Medium.woff2) format("woff2")}
+  @font-face{font-family:Marianne;font-style:normal;font-weight:700;font-display:swap;src:url(https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14.2/dist/fonts/Marianne-Bold.woff2) format("woff2")}
+
+  /* ================= Jetons DSFR ================= */
+  :root{
+    --bf:#000091; --bf-hover:#1212ff; --bf-active:#2323ff;
+    --bf-975:#f5f5fe; --bf-950:#ececfe; --bf-925:#e3e3fd; --bf-850:#cacafb;
+    --title:#161616; --text:#3a3a3a; --mention:#666666; --disabled:#929292;
+    --border:#dddddd; --alt:#f6f6f6; --contrast:#eeeeee; --surface:#ffffff;
+    --success:#18753c; --success-bg:#b8fec9; --success-soft:#dffee6;
+    --error:#ce0500; --error-bg:#ffe9e9;
+    --warning:#b34000; --warning-bg:#ffe9e6;
+    --info:#0063cb; --info-bg:#e8edff;
+    --focus:#0a76f6;
+    --text-black-white-grey:#000;
+    --font:Marianne,arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{min-height:100%}
+  body{margin:0;background:var(--surface);color:var(--text);font-family:var(--font);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  button,input,select{font:inherit;color:inherit}
+  :focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+  .mono{font-family:var(--mono);font-size:.85em}
+  .muted{color:var(--mention)}
+  .sr{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  h2{margin:0 0 .25rem;font-size:1.25rem;line-height:1.4;font-weight:700;color:var(--title)}
+  h3{margin:0;font-size:1rem;font-weight:700;color:var(--title)}
+  p{margin:0}
+
+  /* ================= En-tête ================= */
+  .hdr{background:var(--surface);box-shadow:0 2px 6px rgba(0,0,18,.12);position:relative;z-index:2}
+  .hdr-in{display:flex;align-items:center;gap:16px;padding:10px 24px;min-height:72px}
+  .hdr .fr-logo{margin:0;flex:0 0 auto}
+  .svc{border-left:1px solid var(--border);padding-left:16px;min-width:0}
+  .svc-title{margin:0;font-weight:700;font-size:1.05rem;color:var(--title);line-height:1.3}
+  .svc-tag{margin:0;font-size:.8rem;color:var(--mention)}
+  .hdr-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+  @media (max-width:640px){.svc-tag{display:none}.hdr-in{padding:8px 16px}}
+
+  main{max-width:1100px;margin:0 auto;padding:24px 24px 96px;display:flex;flex-direction:column;gap:24px}
+  @media (max-width:640px){main{padding:16px 16px 40px}}
+  .section{display:flex;flex-direction:column;gap:12px}
+  .section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .step{font-size:.8rem;font-weight:700;color:var(--bf);text-transform:uppercase;letter-spacing:.02em}
+
+  /* ================= Badges ================= */
+  .badge{display:inline-flex;align-items:center;gap:4px;font-size:.75rem;font-weight:700;text-transform:uppercase;line-height:1.5rem;padding:0 .5rem;border-radius:.25rem;background:var(--contrast);color:var(--text);white-space:nowrap}
+  .badge.info{background:var(--info-bg);color:var(--info)}
+  .badge.success{background:var(--success-bg);color:var(--success)}
+  .badge.warning{background:var(--warning-bg);color:var(--warning)}
+  .badge.error{background:var(--error-bg);color:var(--error)}
+  .badge.sm{font-size:.7rem;line-height:1.25rem}
+
+  /* ================= Boutons ================= */
+  .btn{display:inline-flex;align-items:center;gap:.5rem;min-height:2.5rem;padding:.5rem 1rem;border:0;border-radius:0;background:transparent;color:var(--bf);font-weight:500;font-size:.95rem;line-height:1.5rem;cursor:pointer;white-space:nowrap;text-decoration:none}
+  .btn.pri{background:var(--bf);color:#fff}
+  .btn.pri:hover{background:var(--bf-hover)}
+  .btn.pri:active{background:var(--bf-active)}
+  .btn.sec{box-shadow:inset 0 0 0 1px var(--bf)}
+  .btn.sec:hover,.btn.ter:hover{background:var(--alt)}
+  .btn.ter{box-shadow:inset 0 0 0 1px var(--border)}
+  .btn.danger{color:var(--error)}
+  .btn.danger:hover{background:var(--error-bg)}
+  .btn.sm{min-height:2rem;padding:.25rem .75rem;font-size:.85rem}
+  .btn.lg{min-height:3rem;padding:.75rem 1.5rem;font-size:1.05rem}
+  .btn:disabled,.btn.pri:disabled{background:var(--contrast);color:var(--disabled);box-shadow:none;cursor:not-allowed}
+  .btn.sec:disabled,.btn.ter:disabled{background:transparent;box-shadow:inset 0 0 0 1px var(--border)}
+  .btn svg{width:1rem;height:1rem;flex:0 0 auto;fill:currentColor}
+  .btns{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+  /* ================= Zone de dépôt (fr-upload) ================= */
+  .drop{border:1px dashed var(--bf);background:var(--bf-975);padding:28px 20px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;cursor:pointer;transition:background .15s}
+  .drop:hover,.drop.over{background:var(--bf-950)}
+  .drop.over{border-style:solid;box-shadow:inset 0 0 0 1px var(--bf)}
+  .drop svg{width:40px;height:40px;fill:var(--bf)}
+  .drop .hint{font-size:.8rem;color:var(--mention)}
+  .drop strong{color:var(--title)}
+
+  /* ================= Alertes (fr-alert) ================= */
+  .alert{position:relative;border:1px solid var(--info);border-left-width:0;padding:.75rem 1rem .75rem 3.5rem;background:var(--surface)}
+  .alert::before{content:"";position:absolute;left:0;top:-1px;bottom:-1px;width:2.5rem;background:var(--info) no-repeat center 0.8rem;background-size:1.25rem}
+  .alert.info::before{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23fff'%3E%3Cpath d='M19.5 2.5h-15a2 2 0 0 0-2 2v15a2 2 0 0 0 2 2h15a2 2 0 0 0 2-2v-15a2 2 0 0 0-2-2ZM13 17h-2v-6h2Zm0-8h-2V7h2Z'/%3E%3C/svg%3E")}
+  .alert.success{border-color:var(--success)}
+  .alert.success::before{background-color:var(--success);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23fff'%3E%3Cpath d='M12 22a10 10 0 1 1 0-20 10 10 0 0 1 0 20Zm-1-6 7.1-7.1-1.4-1.4-5.7 5.6-2.8-2.8-1.4 1.4L11 16Z'/%3E%3C/svg%3E")}
+  .alert.error{border-color:var(--error)}
+  .alert.error::before{background-color:var(--error);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23fff'%3E%3Cpath d='M12 22a10 10 0 1 1 0-20 10 10 0 0 1 0 20Zm-1-7v2h2v-2h-2Zm0-8v6h2V7h-2Z'/%3E%3C/svg%3E")}
+  .alert.warning{border-color:var(--warning)}
+  .alert.warning::before{background-color:var(--warning);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23fff'%3E%3Cpath d='m12.9 3 9.5 16.5a1 1 0 0 1-.9 1.5H2.5a1 1 0 0 1-.9-1.5L11.1 3a1 1 0 0 1 1.8 0ZM11 16v2h2v-2h-2Zm0-7v5h2V9h-2Z'/%3E%3C/svg%3E")}
+  .alert h3{font-size:1rem;margin-bottom:2px}
+  .alert p{font-size:.9rem}
+  .alert ul{margin:.25rem 0 0;padding-left:1.1rem;font-size:.9rem}
+
+  /* ================= Cartes fichiers ================= */
+  .files{display:flex;flex-direction:column;gap:12px}
+  .card{border:1px solid var(--border);border-bottom:3px solid var(--bf);background:var(--surface)}
+  .card.err{border-bottom-color:var(--error)}
+  .card-top{display:flex;gap:14px;align-items:flex-start;padding:14px 16px}
+  .card-ic{flex:0 0 auto;width:40px;height:40px;background:var(--bf-950);display:flex;align-items:center;justify-content:center}
+  .card-ic svg{width:22px;height:22px;fill:var(--bf)}
+  .card.err .card-ic{background:var(--error-bg)}
+  .card.err .card-ic svg{fill:var(--error)}
+  .card-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+  .card-title{font-weight:700;color:var(--title);word-break:break-all}
+  .card-sub{font-size:.85rem;color:var(--mention)}
+  .stats{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+  .card-actions{display:flex;gap:4px;flex:0 0 auto;align-items:center}
+  .card-body{border-top:1px solid var(--border);padding:12px 16px 16px;display:flex;flex-direction:column;gap:12px;background:var(--alt)}
+  .card-body[hidden]{display:none}
+  .adj{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end}
+  @media (max-width:640px){.card-top{flex-wrap:wrap}.card-actions{width:100%;justify-content:flex-end}}
+
+  /* ================= Champs (fr-input / fr-select) ================= */
+  .field{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .field label{font-size:.9rem;color:var(--title)}
+  .field .hint{font-size:.75rem;color:var(--mention)}
+  .input{border:0;border-radius:.25rem .25rem 0 0;background:var(--contrast);box-shadow:inset 0 -2px 0 var(--title);padding:.5rem .75rem;min-height:2.5rem;width:100%}
+  .input:focus{outline:2px solid var(--focus);outline-offset:2px}
+  .input.narrow{width:8rem}
+  select.input{appearance:none;padding-right:2.25rem;background:var(--contrast) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23161616' d='m12 13.1 5-4.9 1.4 1.4-6.4 6.3-6.4-6.4L7 8.1l5 5Z'/%3E%3C/svg%3E") no-repeat right .5rem center/1.25rem}
+
+  /* ================= Options ================= */
+  .opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px 32px;border:1px solid var(--border);padding:16px 20px}
+  fieldset{border:0;margin:0;padding:0;min-width:0;display:flex;flex-direction:column;gap:10px}
+  legend{font-weight:700;color:var(--title);padding:0;margin-bottom:6px;font-size:.95rem}
+  .check{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
+  .check input{width:1.25rem;height:1.25rem;margin:.1rem 0 0;accent-color:var(--bf);flex:0 0 auto;cursor:pointer}
+  .check span{font-size:.9rem;color:var(--title)}
+  .check small{display:block;font-size:.75rem;color:var(--mention)}
+
+  /* ================= Tableau (fr-table) ================= */
+  .tbl-wrap{overflow:auto;max-height:360px;border:1px solid var(--border);background:var(--surface)}
+  table{border-collapse:collapse;width:100%;font-size:.82rem}
+  th,td{padding:.4rem .6rem;text-align:left;vertical-align:top;border-bottom:1px solid var(--border);white-space:nowrap}
+  thead th{position:sticky;top:0;background:var(--contrast);color:var(--title);font-weight:700;z-index:1;box-shadow:inset 0 -2px 0 var(--title)}
+  thead th .ty{display:block;font-weight:400;font-size:.7rem;color:var(--mention);font-family:var(--mono)}
+  tbody tr:nth-child(even) td{background:var(--alt)}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  td.null{color:var(--disabled)}
+  th.num{text-align:right}
+
+  /* ================= Barre d'action ================= */
+  .actionbar{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--border);box-shadow:0 -2px 6px rgba(0,0,18,.08);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;z-index:3}
+  .actionbar .sum{font-size:.9rem;color:var(--title)}
+  .progress{height:6px;background:var(--bf-925);width:100%;overflow:hidden}
+  .progress > div{height:100%;background:var(--bf);width:0;transition:width .2s}
+  .empty{padding:20px;text-align:center;color:var(--mention);border:1px solid var(--border);font-size:.9rem}
+
+  /* ================= Bloc-marque (fr-logo) ================= */
+.fr-logo{--text-spacing:0;--underline-img:none;color:var(--text-black-white-grey);display:inline-block;font-size:1.05rem;font-weight:700;letter-spacing:-.01em;line-height:1.0317460317em;text-indent:-.1em;text-transform:uppercase;vertical-align:middle}
+.fr-logo:before{background-image:url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 44 18'%3E%3Cpath fill='%23fff' d='M11.3 10.2c-.9.6-1.7 1.3-2.3 2.1v-.1c.4-.5.7-1 1-1.5.4-.2.7-.5 1-.8.5-.5 1-1 1.7-1.3.3-.1.5-.1.8 0-.1.1-.2.1-.4.2H13v-.1c-.3.3-.7.5-1 .9-.1.2-.2.6-.7.6 0 .1.1 0 0 0zm1.6 4.6c0-.1-.1 0-.2 0l-.1.1-.1.1-.2.2s.1.1.2 0l.1-.1c.1 0 .2-.1.2-.2.1 0 .1 0 .1-.1 0 .1 0 0 0 0zm-1.6-4.3c.1 0 .2 0 .2-.1s.1-.1.1-.1v-.1c-.2.1-.3.2-.3.3zm2.4 1.9s0-.1 0 0c.1-.1.2-.1.3-.1.7-.1 1.4-.3 2.1-.6-.8-.5-1.7-.9-2.6-1h.1c-.1-.1-.3-.1-.5-.2h.1c-.2-.1-.5-.1-.7-.2.1 0 .2-.2.2-.3h-.1c-.4.2-.6.5-.8.9.2.1.5 0 .7.1h-.3c-.1 0-.2.1-.2.2h.1c-.1 0-.1.1-.2.1.1.1.2 0 .4 0 0 .1.1.1.1.1-.1 0-.2.1-.3.3-.1.2-.2.2-.3.3v.1c-.3.2-.6.5-.9.8v.1c-.1.1-.2.1-.2.2v.1c.4-.1.6-.4 1-.5l.6-.3c.2 0 .3-.1.5-.1v.1h.2c0 .1-.2 0-.1.1s.3.1.4 0c.2-.2.3-.2.4-.2zM12.4 14c-.4.2-.9.2-1.2.4 0 0 0 .1-.1.1 0 0-.1 0-.1.1-.1 0-.1.1-.2.2l-.1.1s0 .1.1 0l.1-.1s-.1.1-.1.2V15.3l-.1.1s0 .1-.1.1l-.1.1.2-.2.1-.1h.2s0-.1.1-.1c.1-.1.2-.2.3-.2h.1c.1-.1.3-.1.4-.2.1-.1.2-.2.3-.2.2-.2.5-.3.8-.5-.1 0-.2-.1-.3-.1 0 .1-.2 0-.3 0zM30 9.7c-.1.2-.4.2-.6.3-.2.2 0 .4.1.5.1.3-.2.5-.4.5.1.1.2.1.2.1 0 .2.2.2.1.4s-.5.3-.3.5c.1.2.1.5 0 .7-.1.2-.3.4-.5.5-.2.1-.4.1-.6 0-.1 0-.1-.1-.2-.1-.5-.1-1-.2-1.5-.2-.1 0-.3.1-.4.1-.1.1-.3.2-.4.3l-.1.1c-.1.1-.2.2-.2.3-.1.2-.2.4-.2.6-.2.5-.2 1 0 1.4 0 0 1 .3 1.7.6.2.1.5.2.7.4l1.7 1H13.2l1.6-1c.6-.4 1.3-.7 2-1 .5-.2 1.1-.5 1.5-.9.2-.2.3-.4.5-.5.3-.4.6-.7 1-1l.3-.3s0-.1.1-.1c-.2.1-.2.2-.4.2 0 0-.1 0 0-.1s.2-.2.3-.2v-.1c-.4 0-.7.2-1 .5h-.2c-.5.2-.8.5-1.2.7v-.1c-.2.1-.4.2-.5.2-.2 0-.5.1-.8 0-.4 0-.7.1-1.1.2-.2.1-.4.1-.6.2v.1l-.2.2c-.2.1-.3.2-.5.4l-.5.5h-.1l.1-.1.1-.1c0-.1.1-.1.1-.2.2-.1.3-.3.5-.4 0 0-.1 0 0 0 0 0 0-.1.1-.1l-.1.1c-.1.1-.1.2-.2.2v-.1-.1l.2-.2c.1-.1.2-.1.3-.2h.1c-.2.1-.3.1-.5.2H14h-.1c0-.1.1-.1.2-.2h.1c1-.8 2.3-.6 3.4-1 .1-.1.2-.1.3-.2.1-.1.3-.2.5-.3.2-.2.4-.4.5-.7v-.1c-.4.4-.8.7-1.3 1-.6.2-1.3.4-2 .4 0-.1.1-.1.1-.1 0-.1.1-.1.1-.2h.1s0-.1.1-.1h.1c-.1-.1-.3.1-.4 0 .1-.1 0-.2.1-.2h.1s0-.1.1-.1c.5-.3.9-.5 1.3-.7-.1 0-.1.1-.2 0 .1 0 0-.1.1-.1.3-.1.6-.3.9-.4-.1 0-.2.1-.3 0 .1 0 .1-.1.2-.1v-.1h0c0-.1.1 0 .2-.1h-.1c.1-.1.2-.2.4-.2 0-.1-.1 0-.1-.1h.1-.5c-.1 0 0-.1 0-.1.1-.2.2-.5.3-.7h-.1c-.3.3-.8.5-1.2.6h-.2c-.2.1-.4.1-.5 0-.1-.1-.2-.2-.3-.2-.2-.1-.5-.3-.8-.4-.7-.2-1.5-.4-2.3-.3.3-.1.7-.2 1.1-.3.5-.2 1-.3 1.5-.3h-.3c-.4 0-.9.1-1.3.2-.3.1-.6.2-.9.2-.2.1-.3.2-.5.2v-.1c.3-.4.7-.7 1.1-.8.5-.1 1.1 0 1.6.1.4 0 .8.1 1.1.2.1 0 .2.2.3.3.2.1.4 0 .5.1v-.2c.1-.1.3 0 .4 0 .2-.2-.2-.4-.3-.6v-.1c.2.2.5.4.7.6.1.1.5.2.5 0-.2-.3-.4-.6-.7-.9v-.2c-.1 0-.1 0-.1-.1-.1-.1-.1-.2-.1-.3-.1-.2 0-.4-.1-.5-.1-.2-.1-.3-.1-.5-.1-.5-.2-1-.3-1.4-.1-.6.3-1 .6-1.5.2-.4.5-.7.8-1 .1-.4.3-.7.6-1 .3-.3.6-.5.9-.6.3-.1.5-.2.8-.3l2.5-.4H25l1.8.3c.1 0 .2 0 .2.1.1.1.3.2.4.2.2.1.4.3.6.5.1.1.2.3.1.4-.1.1-.1.4-.2.4-.2.1-.4.1-.6.1-.1 0-.2 0-.4-.1.5.2.9.4 1.2.8 0 .1.2.1.3.1v.1c-.1.1-.1.1-.1.2h.1c.1-.1.1-.4.3-.3.2.1.2.3.1.4-.1.1-.2.2-.4.3v.2c.1.1.1.2.2.4s.1.5.2.7c.1.5.2.9.2 1.4 0 .2-.1.5 0 .7l.3.6c.1.2.2.3.3.5.2.3.6.6.4 1zm-15.6 5.2c-.1 0-.1.1-.1.1s.1 0 .1-.1zm5.8-1.8c-.1.1 0 0 0 0zm-6.7-.2c0 .1.1 0 .1 0 .2-.1.5 0 .6-.2-.1-.1-.2 0-.2-.1-.1 0-.2 0-.2.1-.1.1-.3.1-.3.2z'/%3E%3Cpath fill='gray' d='M27.9 6.8c.1 0 .3 0 .3.1-.1.2-.4.3-.6.5h-.1c-.1.1-.1.2-.1.2h-.3c.1.1.3.2.5.2l.1.1h.2V8c-.1.1-.2.1-.4.1.2.1.5.1.7 0 .2-.1 0-.4.1-.5-.1 0 0-.1-.1-.1.1-.1.1-.2.2-.2s.1 0 .2-.1c0-.1-.1-.1-.1-.2.2-.1.3-.3.3-.5 0-.1-.3-.1-.4-.2h-.5c-.2 0-.3.1-.5.1l-.6.3c.2-.1.4-.1.7-.2 0 .3.2.3.4.3'/%3E%3C/svg%3E"),linear-gradient(90deg,#000091,#000091 50%,#e1000f 0,#e1000f),linear-gradient(90deg,#000,#000);background-position:0 -.0625rem,0 0,0 0;background-repeat:no-repeat,no-repeat,no-repeat;background-size:2.75rem 1.125rem,2.75rem 1rem,0;content:"";display:block;forced-color-adjust:none;height:1rem;margin-bottom:.3333333333rem;width:2.75rem}
+.fr-logo:after{background-image:url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 252 180'%3E%3Cdefs%3E%3Csymbol id='a' viewBox='0 0 11 15.5'%3E%3Cpath d='M10.4 5.3C11.9 1.5 10.1 0 7.9 0 4.2 0 0 6.5 0 11.7c0 2.5 1.2 3.8 3 3.8 2.1 0 4.3-2 6.2-5.5h-1c-1.2 1.5-2.6 2.6-3.9 2.6-1.3 0-2-.8-2-2.6a10.7 10.7 0 01.3-2.2zm-4-3.1c1.1 0 2 .8 1.5 2.6L3.1 6.1c.8-2.2 2.2-4 3.4-4z'/%3E%3C/symbol%3E%3Csymbol id='b' viewBox='0 0 12.4 21.8'%3E%3Cuse width='11' height='15.5' y='6.4' href='%23a'/%3E%3Cpath d='M7.9 4.7L12.4.6V0h-3L6.7 4.7H8z'/%3E%3C/symbol%3E%3Csymbol id='c' viewBox='0 0 11.5 19'%3E%3Cpath d='M1.7 5.7h2.6L.1 17.1a1.3 1.3 0 001.2 2c3 0 6.4-2.6 7.8-6.2h-.7a9.4 9.4 0 01-5.1 3.5L7 5.7H11l.5-1.6H7.7L9 0H7.6L4.9 4.1l-3.2.4v1.2z'/%3E%3C/symbol%3E%3Csymbol id='d' viewBox='0 0 9.8 21.9'%3E%3Cpath d='M7.6 8c.3-1-.4-1.6-1-1.6-2.2 0-5 2.1-6 5h.7A5.6 5.6 0 014.4 9L.1 20.3a1.1 1.1 0 001 1.6c2.2 0 4.7-2 5.8-5H6A5.6 5.6 0 013 19.5zM8 3.7a1.8 1.8 0 001.8-1.8A1.8 1.8 0 008 0a1.8 1.8 0 00-1.8 1.8A1.8 1.8 0 008 3.6'/%3E%3C/symbol%3E%3Csymbol id='e' viewBox='0 0 14.8 15.5'%3E%3Cpath d='M3.3 3.1c.7 0 1 1 0 3.4l-3 6.8c-.7 1.3 0 2.2 1.2 2.2a1.3 1.3 0 001.5-1l3-8C7.4 4.8 10 3 11 3s.8.6.3 1.6l-4.6 9a1.3 1.3 0 001.1 1.9c2.3 0 5-2 6-5h-.6A5.6 5.6 0 0110 13l4-8a6.1 6.1 0 00.8-2.8A2 2 0 0012.6 0c-2 0-3.6 2.2-6 5V2.8C6.6 1.4 6.1 0 4.8 0 3.2 0 1.8 2.5.7 4.9h.7c.7-1.1 1.3-1.8 2-1.8'/%3E%3C/symbol%3E%3Csymbol id='f' viewBox='0 0 12 15.5'%3E%3Cpath d='M11.8 3.5c.5-1.9.2-3.5-1.2-3.5-1.8 0-2.3 1.2-4 5V2.8C6.5 1.3 6 0 4.6 0 3.1 0 1.7 2.5.5 5h.8C2 3.7 2.8 3 3.3 3c.7 0 1 1 0 3.4l-3 6.8c-.7 1.3 0 2.1 1.2 2.1a1.3 1.3 0 001.5-1l3-8a50.3 50.3 0 012.6-3h3.2z'/%3E%3C/symbol%3E%3Csymbol id='g' viewBox='0 0 14.7 16.2'%3E%3Cpath d='M10.5 13.1c-.6 0-1-1 0-3.4L14.6.1 13.4 0l-1.3 1.3h-.3C6.1 1.3 0 8.6 0 14.2a2 2 0 002.1 2.1c1.7 0 3.3-2.4 5.2-5l-.1 1c-.3 2.6.6 4 2 4 1.5 0 3-2.4 4-4.9h-.7c-.7 1.1-1.5 1.8-2 1.8zM7.9 9.8c-1.3 1.6-3.4 3.5-4.3 3.5-.5 0-.9-.5-.9-1.6 0-3.5 4-8.2 6-8.2a4.2 4.2 0 011.4.2z'/%3E%3C/symbol%3E%3Csymbol id='h' viewBox='0 0 21.9 19.8'%3E%3Cpath d='M11.2 19.8l.3-.9c-3.8-.7-4.3-.7-2.7-4.8l1.4-3.9h3c1.9 0 1.9.9 1.6 3h1l2.6-6.9h-1c-1 1.6-1.8 2.9-3.8 2.9h-3l2-5.6c.8-2 1.1-2.4 3.7-2.4h.7c2.6 0 3 .7 3 3.5h1l.9-4.7H7.3L7 .9c3 .6 3.3.9 2 4.8L5.7 14c-1.5 3.9-2 4.2-5.5 4.8l-.3.9z'/%3E%3C/symbol%3E%3Csymbol id='i' viewBox='0 0 10.1 21.9'%3E%3Cpath d='M2.9 19.4L10.1.3 9.8 0l-5 .6v.6l1 .7c.9.7.6 1.3-.2 3.4L.2 19.9a1.3 1.3 0 001.1 2c2.3 0 4.7-2.1 5.8-5h-.7a6.5 6.5 0 01-3.5 2.5'/%3E%3C/symbol%3E%3Csymbol id='j' viewBox='0 0 18 22'%3E%3Cpath d='M18 .6h-4.3a3.8 3.8 0 00-2.1-.6A6.6 6.6 0 005 6.5a3.3 3.3 0 003 3.6c-1.9.8-3 1.8-3 2.9a1.7 1.7 0 00.9 1.5c-4.3 1.3-6 2.8-6 4.7 0 2 2.6 2.8 5.6 2.8 5.3 0 9.6-2.7 9.6-5.1 0-1.8-1.6-2.5-4.3-3.3-2.2-.7-3.2-.8-3.2-1.6A2.4 2.4 0 019 10.2a6.6 6.6 0 006.1-6.5 4.5 4.5 0 00-.2-1.5h2.5zM9.8 16.2c2.1.7 3 1 3 1.6 0 1.4-2 2.5-5.6 2.5-2.7 0-4-.6-4-2 0-1.5 1.4-2.5 3.5-3.3a21.5 21.5 0 003 1.2zM9 9c-1 0-1.3-.8-1.3-1.7 0-2.8 1.4-6.2 3.5-6.2 1 0 1.3.8 1.3 1.6 0 2.9-1.4 6.3-3.5 6.3z'/%3E%3C/symbol%3E%3Csymbol id='k' viewBox='0 0 23 25.1'%3E%3Cpath d='M14.3 15.6c1.9 0 2 .8 1.6 2.8H17l2.5-6.8h-1c-1 1.6-1.7 2.9-3.8 2.9h-4.1l2-5.6c.7-2 1-2.4 3.7-2.4H18c2.6 0 3 .7 3 3.5h1l.9-4.7H7.3l-.3.9c3 .6 3.3.9 2 4.8l-3.2 8.4c-1.5 3.9-2 4.2-5.6 4.8l-.2 1h17.4l3.2-5h-1.2c-2 2-4 3.8-8 3.8-4.7 0-4.3-.3-2.7-4.6l1.4-3.8h4.2zm2.3-11.8L21 .6V0h-3l-2.6 3.9h1.2v-.1z'/%3E%3C/symbol%3E%3Csymbol id='l' viewBox='0 0 13.6 21.8'%3E%3Cpath d='M11.4 6.4c-2 0-4 2.2-5.8 4.8L9.6.3 9.4 0l-5 .6V1l1 .8c.9.7.6 1.3-.2 3.4L.8 16.8A13.9 13.9 0 000 19c0 1.4 1.8 2.7 3.5 2.7 3.8 0 10-6.9 10-12.2 0-2.3-.5-3.2-2.1-3.2zM4.8 19.5c-.8 0-1.9-.7-1.9-1.3a15.5 15.5 0 01.8-2.2L5 12.7C6.3 11 8.4 9.3 9.6 9.3c.7 0 1.2.4 1.2 1.5 0 3.1-2.9 8.7-6 8.7z'/%3E%3C/symbol%3E%3Csymbol id='m' viewBox='0 0 19.2 19.9'%3E%3Cpath d='M17.6 0H7.3L7 .9c3 .6 3.3.9 2 4.8l-3.2 8.5c-1.5 3.9-2 4.2-5.5 4.8L0 20h15.7l3.5-6H18c-2 2-4.2 4.8-7.7 4.8-2.7 0-3-.5-1.6-4.5l3.1-8.5c1.4-3.9 2-4.2 5.5-4.8z'/%3E%3C/symbol%3E%3Csymbol id='n' viewBox='0 0 126 90'%3E%3Cuse width='12.4' height='21.8' x='112.7' y='66.1' href='%23b'/%3E%3Cuse width='11.5' height='19' x='102.2' y='69' href='%23c'/%3E%3Cuse width='9.8' height='21.9' x='93.6' y='66.1' href='%23d'/%3E%3Cuse width='14.8' height='15.5' x='77.2' y='72.5' href='%23e'/%3E%3Cuse width='12' height='15.5' x='65.7' y='72.5' href='%23f'/%3E%3Cuse width='11' height='15.5' x='54.3' y='72.5' href='%23a'/%3E%3Cuse width='11.5' height='19' x='43.7' y='69' href='%23c'/%3E%3Cuse width='14.7' height='16.2' x='28.9' y='71.8' href='%23g'/%3E%3Cuse width='12' height='15.5' x='19.6' y='72.5' href='%23f'/%3E%3Cuse width='21.9' height='19.8' y='67.6' href='%23h'/%3E%3Cuse width='12.4' height='21.8' x='77.3' y='33.1' href='%23b'/%3E%3Cuse width='11.5' height='19' x='66.8' y='36' href='%23c'/%3E%3Cuse width='9.8' height='21.9' x='58.2' y='33' href='%23d'/%3E%3Cuse width='10.1' height='21.9' x='49.4' y='33.1' href='%23i'/%3E%3Cuse width='14.7' height='16.2' x='34.9' y='38.8' href='%23g'/%3E%3Cuse width='18' height='22' x='18.6' y='39.4' href='%23j'/%3E%3Cuse width='23' height='25.1' y='29.3' href='%23k'/%3E%3Cuse width='12.4' height='21.8' x='76.8' y='.1' href='%23b'/%3E%3Cuse width='11.5' height='19' x='66.2' y='2.9' href='%23c'/%3E%3Cuse width='12' height='15.5' x='54.8' y='6.5' href='%23f'/%3E%3Cuse width='11' height='15.5' x='43.4' y='6.4' href='%23a'/%3E%3Cuse width='13.6' height='21.8' x='29.4' y='.1' href='%23l'/%3E%3Cuse width='9.8' height='21.9' x='20.6' href='%23d'/%3E%3Cuse width='19.2' height='19.9' y='1.4' href='%23m'/%3E%3C/symbol%3E%3C/defs%3E%3Cuse fill='%23000' width='126' height='90' x='0' y='0' href='%23n'/%3E%3Cuse fill='%23fff' width='126' height='90' x='126' y='90' href='%23n'/%3E%3C/svg%3E");background-position:0 calc(100% + 1.875rem);background-repeat:no-repeat;background-size:5.25rem 3.75rem;content:"";display:block;min-width:2.625rem;padding-top:2.2083333333rem}
+.fr-logo--sm{font-size:.7875rem}
+.fr-logo--sm:before{background-position:0 -.046875rem,0 0,0 0;background-size:2.0625rem .84375rem,2.0625rem .75rem,0;height:.75rem;margin-bottom:.25rem;width:2.0625rem}
+.fr-logo--sm:after{background-position:0 calc(100% + 1.40625rem);background-size:3.9375rem 2.8125rem;min-width:1.96875rem;padding-top:1.65625rem}
+</style>
+</head>
+<body>
+<header class="hdr" role="banner">
+  <div class="hdr-in">
+    <p class="fr-logo fr-logo--sm">République<br>Française</p>
+    <div class="svc">
+      <p class="svc-title">Import des extractions Chorus</p>
+      <p class="svc-tag">Restitutions INF-BUD → table <span class="mono" id="tagTable">DATA_INFBUD</span></p>
+    </div>
+    <div class="hdr-right"><span class="badge" id="envBadge">Connexion…</span></div>
+  </div>
+</header>
+
+<main id="main">
+  <div id="envAlert"></div>
+
+  <section class="section" aria-labelledby="t1">
+    <div>
+      <p class="step">Étape 1 sur 3</p>
+      <h2 id="t1">Déposer les extractions</h2>
+      <p class="muted">Un ou plusieurs fichiers à la fois : <span class="mono">.xls</span>, <span class="mono">.xlsx</span>, <span class="mono">.csv</span>, <span class="mono">.htm</span> exportés depuis Chorus (INF-BUD-41, INF-BUD-53…).</p>
+    </div>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-describedby="dropHint">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 14.5a6.5 6.5 0 0 1 3.2-5.6 8 8 0 0 1 15.6 0A6.5 6.5 0 0 1 16.5 21h-9A6.5 6.5 0 0 1 1 14.5Zm12 .5h3l-4-5-4 5h3v4h2v-4Z"/></svg>
+      <p><strong>Glissez-déposez vos fichiers ici</strong> ou <span style="color:var(--bf);text-decoration:underline">parcourez votre poste</span></p>
+      <p class="hint" id="dropHint">Taille conseillée : moins de 20 Mo par fichier. Plusieurs fichiers acceptés.</p>
+      <input type="file" id="fileInput" class="sr" multiple accept=".xls,.xlsx,.xlsm,.xlsb,.ods,.csv,.txt,.htm,.html,.mht,.mhtml" aria-label="Choisir des fichiers">
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="t2">
+    <div class="section-head">
+      <div>
+        <p class="step">Étape 2 sur 3</p>
+        <h2 id="t2">Contrôler la mise en données</h2>
+        <p class="muted">Titres, lignes vides, totaux et en-têtes sur plusieurs lignes sont retirés ; chaque ligne conservée est un enregistrement.</p>
+      </div>
+      <div class="btns">
+        <button class="btn ter sm" id="btnCsv" disabled>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 10h5l-6 6-6-6h5V3h2v7Zm-9 9h16v-7h2v8a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-8h2v7Z"/></svg>Télécharger en CSV
+        </button>
+        <button class="btn ter sm danger" id="btnClear" disabled>Tout retirer</button>
+      </div>
+    </div>
+    <div class="files" id="files"><div class="empty">Aucun fichier déposé pour le moment.</div></div>
+  </section>
+
+  <section class="section" aria-labelledby="t3">
+    <div>
+      <p class="step">Étape 3 sur 3</p>
+      <h2 id="t3">Paramètres d'intégration</h2>
+    </div>
+    <div class="opts">
+      <fieldset>
+        <legend>Nettoyage</legend>
+        <label class="check"><input type="checkbox" id="optTotals" checked><span>Exclure les lignes de totaux<small>« Résultat », « Résultat global », « Total »… (évite les doubles comptes)</small></span></label>
+        <label class="check"><input type="checkbox" id="optFill" checked><span>Répéter les libellés masqués<small>Chorus n'affiche une valeur d'axe qu'à son premier passage : elle est recopiée sur les lignes suivantes</small></span></label>
+        <label class="check"><input type="checkbox" id="optTrace" checked><span>Ajouter les colonnes de traçabilité<small>Fichier source, onglet, titre du rapport, date d'import</small></span></label>
+      </fieldset>
+      <fieldset>
+        <legend>Table de destination</legend>
+        <div class="field">
+          <label for="optTable">Nom de la table Grist</label>
+          <input class="input" id="optTable" value="DATA_INFBUD" spellcheck="false" autocomplete="off">
+          <span class="hint" id="tableHint">Créée automatiquement si elle n'existe pas.</span>
+        </div>
+        <div class="field">
+          <label for="optMode">Si des données sont déjà présentes</label>
+          <select class="input" id="optMode">
+            <option value="replace">Remplacer les lignes issues des mêmes fichiers</option>
+            <option value="append">Ajouter à la suite</option>
+            <option value="clear">Vider la table puis importer</option>
+          </select>
+        </div>
+      </fieldset>
+    </div>
+  </section>
+  <div id="result" aria-live="polite"></div>
+</main>
+
+<div class="actionbar">
+  <div style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:6px">
+    <span class="sum" id="sum">Aucune donnée à importer.</span>
+    <div class="progress" id="progress" hidden><div></div></div>
+  </div>
+  <button class="btn pri lg" id="btnImport" disabled>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19h18v2H3v-2Zm10-5.8 6.1-6 1.4 1.4-8.5 8.5-8.5-8.5 1.4-1.4 6.1 6V2h2v11.2Z"/></svg>Importer dans <span id="btnTable">DATA_INFBUD</span>
+  </button>
+</div>
+
+<script>
+'use strict';
+/* =====================================================================
+   Import des extractions Chorus (INF-BUD) vers une table Grist.
+   Lecture : SheetJS. Écriture : grist.docApi.applyUserActions.
+   ===================================================================== */
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const fmtInt = n => Number(n).toLocaleString('fr-FR');
+const fmtNum = n => Number(n).toLocaleString('fr-FR', {maximumFractionDigits: 2});
+const plural = (n, s, p) => fmtInt(n) + ' ' + (n > 1 ? (p || s + 's') : s);
+
+const IC = {
+  file: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8v13a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h11l6 6Zm-2 1h-5V4H5v16h14V9ZM8 7h3v2H8V7Zm0 4h8v2H8v-2Zm0 4h8v2H8v-2Z"/></svg>',
+  err: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a10 10 0 1 1 0-20 10 10 0 0 1 0 20Zm-1-7v2h2v-2h-2Zm0-8v6h2V7h-2Z"/></svg>',
+  eye: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c5.4 0 9.9 3.9 10.8 9-1 5.1-5.4 9-10.8 9S2.1 17.1 1.2 12C2.1 6.9 6.6 3 12 3Zm0 16a9 9 0 0 0 8.8-7 9 9 0 0 0-17.6 0 9 9 0 0 0 8.8 7Zm0-2.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Z"/></svg>',
+  del: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 6h5v2h-2v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V8H2V6h5V3a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v3Zm1 2H6v12h12V8ZM9 4v2h6V4H9Zm0 7h2v6H9v-6Zm4 0h2v6h-2v-6Z"/></svg>',
+};
+
+/* ---------------- Environnement Grist ---------------- */
+const IN_GRIST = window.parent !== window && typeof grist !== 'undefined';
+if (IN_GRIST) grist.ready({requiredAccess: 'full', allowSelectBy: false});
+
+function setEnv() {
+  const b = $('#envBadge');
+  if (IN_GRIST) { b.className = 'badge success'; b.textContent = 'Grist connecté'; return; }
+  b.className = 'badge warning'; b.textContent = 'Hors Grist';
+  $('#envAlert').innerHTML = `<div class="alert warning"><h3>Mode aperçu</h3><p>Le widget n'est pas ouvert dans Grist : vous pouvez contrôler la mise en données et télécharger le CSV, mais pas écrire dans une table. Dans Grist, réglez l'accès du widget sur <strong>Accès complet au document</strong>.</p></div>`;
+}
+
+/* ---------------- Conversion des valeurs ---------------- */
+const SPACES = /[\s  ]+/g;
+const clean = v => typeof v === 'string' ? v.replace(SPACES, ' ').trim() : v;
+
+/** Nombre au format Chorus (« 8 452 103 », « 1 234,56 », « 12- », « (45) ») ; null sinon. */
+function parseNum(v) {
+  if (typeof v === 'number') return isFinite(v) ? v : null;
+  if (typeof v !== 'string') return null;
+  let s = v.trim();
+  if (!s) return null;
+  let neg = false;
+  if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1).trim(); }
+  s = s.replace(/\s*(€|EUR|%)$/i, '');
+  if (/-$/.test(s)) { neg = !neg; s = s.slice(0, -1); }
+  const hadSep = /[\s  ]/.test(s);
+  s = s.replace(SPACES, '');
+  // Suite de chiffres sans séparateur longue ou avec zéro initial : c'est un code (programme, CF, EJ…)
+  if (/^\d+$/.test(s) && !hadSep && (s.length >= 6 || /^0\d/.test(s))) return null;
+  if (/^[+-]?\d{1,3}(\.\d{3})+,\d+$/.test(s) || /^[+-]?\d{1,3}(\.\d{3}){2,}$/.test(s)) s = s.replace(/\./g, '');
+  s = s.replace(',', '.');
+  if (!/^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(s)) return null;
+  const n = parseFloat(s);
+  return neg ? -n : n;
+}
+
+/** Date (objet Excel ou texte jj.mm.aaaa / jj/mm/aaaa / aaaa-mm-jj) → secondes UTC à minuit ; null sinon. */
+function parseDate(v) {
+  if (v instanceof Date && !isNaN(v)) return Date.UTC(v.getFullYear(), v.getMonth(), v.getDate()) / 1000;
+  if (typeof v !== 'string') return null;
+  let m = v.trim().match(/^(\d{1,2})[./](\d{1,2})[./](\d{4})$/);
+  if (m) return Date.UTC(+m[3], +m[2] - 1, +m[1]) / 1000;
+  m = v.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return Date.UTC(+m[1], +m[2] - 1, +m[3]) / 1000;
+  return null;
+}
+const fmtDate = s => { const d = new Date(s * 1000); return String(d.getUTCDate()).padStart(2, '0') + '/' + String(d.getUTCMonth() + 1).padStart(2, '0') + '/' + d.getUTCFullYear(); };
+
+const RX_TOTAL = /^(r[ée]sultat|total|sous[- ]total|somme|cumul)\b/i;
+const RX_UNIT = /^(EUR|€|K€|KEUR|M€|MEUR|%|ETP|ETPT|nombre|nb|unités?|devise)$/i;
+const colLetter = i => { let s = ''; i++; while (i > 0) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
+
+/** Identifiant de colonne Grist à partir d'un libellé. */
+function toColId(label) {
+  let s = String(label).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').replace(/_+/g, '_');
+  if (!s) s = 'Colonne';
+  if (/^\d/.test(s)) s = 'c' + s;
+  if (/^(id|manualSort)$/i.test(s) || /^gristHelper_/.test(s)) s += '_';
+  return s;
+}
+const normKey = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+/* =====================================================================
+   Analyse d'un onglet : détection du titre, des en-têtes et des données
+   ===================================================================== */
+function analyzeSheet(ws, opts, override) {
+  const ref = ws['!ref'];
+  if (!ref) return null;
+  const range = XLSX.utils.decode_range(ref);
+  const raw = XLSX.utils.sheet_to_json(ws, {header: 1, raw: true, defval: null, blankrows: true});
+  const txt = XLSX.utils.sheet_to_json(ws, {header: 1, raw: false, defval: null, blankrows: true, dateNF: 'dd/mm/yyyy'});
+  const nR = raw.length;
+  let nC = 0;
+  raw.forEach(r => { nC = Math.max(nC, r.length); });
+  const G = [];
+  for (let r = 0; r < nR; r++) {
+    const row = [];
+    for (let c = 0; c < nC; c++) {
+      let rv = raw[r][c], tv = txt[r] ? txt[r][c] : null;
+      rv = clean(rv); tv = clean(tv);
+      if (rv === '' || rv === undefined) rv = null;
+      if (tv === '' || tv === undefined) tv = null;
+      if (rv == null && tv == null) { row.push(null); continue; }
+      row.push({r: rv, t: tv != null ? String(tv) : String(rv)});
+    }
+    G.push(row);
+  }
+  // Cellules fusionnées : la valeur est recopiée sur la plage (utile pour les en-têtes)
+  const merges = (ws['!merges'] || []).map(m => ({s: {r: m.s.r - range.s.r, c: m.s.c - range.s.c}, e: {r: m.e.r - range.s.r, c: m.e.c - range.s.c}}));
+
+  // Colonnes totalement vides supprimées
+  const keep = [];
+  for (let c = 0; c < nC; c++) if (G.some(row => row[c] != null)) keep.push(c);
+  if (!keep.length) return null;
+  const cell = (r, c) => G[r][keep[c]];
+  const W = keep.length;
+  const isNumCell = x => x != null && parseNum(typeof x.r === 'number' ? x.r : x.t) != null;
+  const isDateCell = x => x != null && (x.r instanceof Date || parseDate(x.t) != null);
+  const info = G.map((_, r) => {
+    let f = 0, n = 0, first = -1;
+    for (let c = 0; c < W; c++) { const x = cell(r, c); if (x) { f++; if (first < 0) first = c; if (isNumCell(x) || isDateCell(x)) n++; } }
+    return {filled: f, num: n, first};
+  });
+  const maxFill = Math.max(...info.map(i => i.filled));
+  const xlRow = r => r + range.s.r + 1;
+
+  // Première ligne de données
+  let dataStart = -1;
+  if (override != null) {
+    dataStart = Math.max(0, Math.min(nR - 1, override - range.s.r - 1));
+  } else {
+    const need = Math.max(Math.min(2, maxFill), Math.ceil(maxFill * 0.5));
+    for (let r = 0; r < nR; r++) if (info[r].filled >= need && info[r].num >= 1 && !(info[r].filled === info[r].num && maxFill > 2)) { dataStart = r; break; }
+    if (dataStart < 0) {
+      // Aucune valeur numérique : la première ligne bien remplie sert d'en-tête
+      const h = info.findIndex(i => i.filled >= need);
+      dataStart = h + 1;
+      while (dataStart < nR && info[dataStart].filled === 0) dataStart++;
+    }
+  }
+
+  // Bloc d'en-tête : lignes non vides contiguës juste au-dessus des données
+  const hdr = [];
+  for (let r = dataStart - 1; r >= 0 && hdr.length < 5; r--) {
+    if (info[r].filled === 0) break;
+    if (info[r].filled === 1 && info[r].first === 0 && maxFill > 2) break;
+    hdr.unshift(r);
+  }
+  const meta = [];
+  for (let r = 0; r < (hdr.length ? hdr[0] : dataStart); r++) {
+    if (!info[r].filled) continue;
+    const parts = []; for (let c = 0; c < W; c++) { const x = cell(r, c); if (x) parts.push(x.t); }
+    meta.push(parts.join(' '));
+  }
+  // Valeurs d'en-tête, fusions comprises
+  const H = hdr.map(r => {
+    const vals = [];
+    for (let c = 0; c < W; c++) { const x = cell(r, c); vals.push(x ? x.t : null); }
+    for (const m of merges) {
+      if (r < m.s.r || r > m.e.r) continue;
+      const src = G[m.s.r][m.s.c]; if (!src) continue;
+      for (let cc = m.s.c; cc <= m.e.c; cc++) { const k = keep.indexOf(cc); if (k >= 0 && vals[k] == null) vals[k] = src.t; }
+    }
+    return vals;
+  });
+  const hdrSig = H.map(v => v.map(x => x || '').join('\u0001'));
+
+  // Tri des lignes : données conservées / lignes retirées (avec motif)
+  const kept = [], dropped = [];
+  const counts = {vide: 0, total: 0, entete: 0, note: 0};
+  for (let r = dataStart; r < nR; r++) {
+    const i = info[r];
+    if (!i.filled) { counts.vide++; continue; }
+    const vals = []; for (let c = 0; c < W; c++) { const x = cell(r, c); vals.push(x ? x.t : null); }
+    const sig = vals.map(x => x || '').join('\u0001');
+    let why = null;
+    if (hdrSig.includes(sig)) why = 'entete';
+    else if (opts.excludeTotals && vals.some(v => v != null && RX_TOTAL.test(v))) why = 'total';
+    else if (i.filled === 1 && i.num === 0 && maxFill > 2) why = 'note';
+    if (why) { counts[why]++; dropped.push({row: xlRow(r), why, text: vals.filter(v => v != null).join(' · ')}); continue; }
+    kept.push(r);
+  }
+  for (let r = 0; r < dataStart; r++) if (!info[r].filled) counts.vide++;
+
+  // Type de chaque colonne d'après les données conservées
+  const types = [];
+  for (let c = 0; c < W; c++) {
+    let ne = 0, nn = 0, nd = 0;
+    for (const r of kept) { const x = cell(r, c); if (!x) continue; ne++; if (isNumCell(x)) nn++; else if (isDateCell(x)) nd++; }
+    types.push(ne && nd / ne >= 0.9 ? 'Date' : ne && nn / ne >= 0.9 ? 'Numeric' : 'Text');
+  }
+  const firstMeas = types.indexOf('Numeric');
+
+  // Nommage des colonnes
+  // Ligne « structure » (ex. « Ratios ») : libellé posé au-dessus de la dernière colonne d'axe → ignoré pour les axes
+  const ignoreForText = H.map((vals, k) => {
+    const tc = [], mc = [];
+    vals.forEach((v, c) => { if (v == null) return; (types[c] === 'Numeric' ? mc : tc).push(c); });
+    return mc.length > 0 && tc.length === 1 && tc[0] === firstMeas - 1 &&
+      H.some((o, j) => j !== k && o.some((v, c) => v != null && types[c] !== 'Numeric' && c !== firstMeas - 1));
+  });
+  const names = [];
+  for (let c = 0; c < W; c++) {
+    const parts = [];
+    H.forEach((vals, k) => {
+      const v = vals[c];
+      if (v == null || (types[c] !== 'Numeric' && ignoreForText[k])) return;
+      if (parts[parts.length - 1] !== v) parts.push(v);
+    });
+    const units = parts.filter(p => RX_UNIT.test(p));
+    const words = parts.filter(p => !RX_UNIT.test(p));
+    let name = words.join(' - ');
+    if (units.length) name = (name ? name + ' ' : '') + '(' + units.join(', ') + ')';
+    if (!name && c > 0 && types[c] !== 'Numeric' && types[c - 1] !== 'Numeric' && names[c - 1]) name = names[c - 1] + ' (libellé)';
+    if (!name) name = 'Colonne ' + colLetter(keep[c] + range.s.c);
+    if (names.includes(name)) {
+      if (names[c - 1] === name && types[c] !== 'Numeric' && !names.includes(name + ' (libellé)')) name = name + ' (libellé)';
+      else { let k = 2; while (names.includes(name + ' (' + k + ')')) k++; name = name + ' (' + k + ')'; }
+    }
+    names.push(name);
+  }
+
+  // Valeurs typées + recopie des libellés masqués
+  const textCols = types.map((t, c) => t === 'Text' ? c : -1).filter(c => c >= 0);
+  const rows = [];
+  let prev = null, filledDown = 0, badNum = 0;
+  for (const r of kept) {
+    const out = [];
+    for (let c = 0; c < W; c++) {
+      const x = cell(r, c);
+      if (!x) { out.push(null); continue; }
+      if (types[c] === 'Numeric') { const n = parseNum(typeof x.r === 'number' ? x.r : x.t); if (n == null) badNum++; out.push(n); }
+      else if (types[c] === 'Date') out.push(parseDate(x.r instanceof Date ? x.r : x.t));
+      else out.push(x.t);
+    }
+    if (opts.fillDown && prev) {
+      for (let k = 0; k < textCols.length; k++) {
+        const c = textCols[k];
+        if (out[c] != null || prev[c] == null) continue;
+        // seulement si un axe situé plus à droite est renseigné (structure hiérarchique Chorus)
+        if (textCols.slice(k + 1).some(cc => out[cc] != null)) { out[c] = prev[c]; filledDown++; }
+      }
+    }
+    rows.push(out);
+    prev = out;
+  }
+
+  return {
+    title: meta[0] || '', meta, names, types, rows, dropped, counts, filledDown, badNum,
+    dataStartXl: xlRow(dataStart), headerXl: hdr.map(xlRow), totalRows: nR,
+  };
+}
+
+/* =====================================================================
+   Gestion des fichiers
+   ===================================================================== */
+const state = {datasets: [], nextId: 1};
+const opts = () => ({excludeTotals: $('#optTotals').checked, fillDown: $('#optFill').checked, trace: $('#optTrace').checked});
+
+async function readWorkbook(file) {
+  const buf = await file.arrayBuffer();
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  if (ext === 'csv' || ext === 'txt') {
+    let text;
+    try { text = new TextDecoder('utf-8', {fatal: true}).decode(buf); } catch (e) { text = new TextDecoder('windows-1252').decode(buf); }
+    text = text.replace(/^﻿/, '');
+    const first = text.split(/\r?\n/, 1)[0] || '';
+    const FS = (first.match(/;/g) || []).length >= (first.match(/,/g) || []).length ? ';' : ',';
+    return XLSX.read(text, {type: 'string', FS, raw: true, cellDates: false});
+  }
+  return XLSX.read(buf, {type: 'array', cellDates: true, codepage: 1252});
+}
+
+async function addFiles(list) {
+  const files = Array.from(list || []);
+  for (const file of files) {
+    if (state.datasets.some(d => d.fileName === file.name && d.size === file.size)) { toast(`« ${file.name} » est déjà dans la liste.`, 'warning'); continue; }
+    try {
+      const wb = await readWorkbook(file);
+      let n = 0;
+      for (const sheetName of wb.SheetNames) {
+        const ws = wb.Sheets[sheetName];
+        const ds = {id: state.nextId++, fileName: file.name, size: file.size, sheetName, ws, override: null, skip: false, open: false, res: null, error: null};
+        ds.res = analyzeSheet(ws, opts(), null);
+        if (!ds.res || !ds.res.rows.length) { if (wb.SheetNames.length > 1) continue; ds.error = 'Aucune donnée exploitable dans ce fichier.'; }
+        state.datasets.push(ds); n++;
+      }
+      if (!n) state.datasets.push({id: state.nextId++, fileName: file.name, size: file.size, sheetName: '', error: 'Aucun onglet ne contient de données.'});
+    } catch (e) {
+      console.error(e);
+      state.datasets.push({id: state.nextId++, fileName: file.name, size: file.size, sheetName: '', error: 'Lecture impossible : ' + (e.message || e)});
+    }
+  }
+  render();
+}
+
+function reanalyze(ds) {
+  if (!ds.ws) return;
+  ds.res = analyzeSheet(ds.ws, opts(), ds.override);
+  ds.error = !ds.res || !ds.res.rows.length ? 'Aucune donnée exploitable avec ces réglages.' : null;
+}
+
+const active = () => state.datasets.filter(d => !d.error && !d.skip && d.res);
+
+/* ---------------- Schéma cible (union des colonnes) ---------------- */
+const TRACE_COLS = [
+  {label: 'Fichier source', id: 'Fichier_source', type: 'Text', trace: 'file'},
+  {label: 'Onglet', id: 'Onglet', type: 'Text', trace: 'sheet'},
+  {label: 'Rapport', id: 'Rapport', type: 'Text', trace: 'title'},
+  {label: "Date d'import", id: 'Date_import', type: 'DateTime:Europe/Paris', trace: 'date'},
+];
+function buildSchema() {
+  const cols = [], byKey = new Map();
+  for (const ds of active()) {
+    ds.res.names.forEach((name, i) => {
+      const key = normKey(name);
+      const t = ds.res.types[i];
+      if (byKey.has(key)) { const c = byKey.get(key); if (c.type !== t) c.type = 'Text'; return; }
+      const c = {label: name, type: t};
+      byKey.set(key, c); cols.push(c);
+    });
+  }
+  if (opts().trace) TRACE_COLS.forEach(t => { if (!byKey.has(normKey(t.label))) cols.push({...t}); });
+  const used = new Set();
+  cols.forEach(c => { let id = c.id || toColId(c.label), b = id, k = 2; while (used.has(id.toLowerCase())) id = b + '_' + k++; used.add(id.toLowerCase()); c.id = id; c.key = normKey(c.label); });
+  return cols;
+}
+/** Valeur d'une colonne cible pour une ligne d'un jeu de données. */
+function valueFor(col, ds, row, i, now) {
+  if (col.trace === 'file') return ds.fileName;
+  if (col.trace === 'sheet') return ds.sheetName;
+  if (col.trace === 'title') return ds.res.title || null;
+  if (col.trace === 'date') return now;
+  const idx = ds.res.names.findIndex(n => normKey(n) === col.key);
+  if (idx < 0) return null;
+  const v = row[idx];
+  if (v != null && col.type === 'Text' && ds.res.types[idx] !== 'Text') return ds.res.types[idx] === 'Date' ? fmtDate(v) : String(v);
+  return v;
+}
+
+/* =====================================================================
+   Rendu
+   ===================================================================== */
+function statBadges(r) {
+  const b = [`<span class="badge success sm">${plural(r.rows.length, 'ligne retenue', 'lignes retenues')}</span>`,
+    `<span class="badge info sm">${plural(r.names.length, 'colonne')}</span>`];
+  if (r.counts.vide) b.push(`<span class="badge sm">${plural(r.counts.vide, 'ligne vide retirée', 'lignes vides retirées')}</span>`);
+  if (r.meta.length) b.push(`<span class="badge sm">${plural(r.meta.length, 'ligne de titre', 'lignes de titre')}</span>`);
+  if (r.headerXl.length) b.push(`<span class="badge sm">En-tête sur ${plural(r.headerXl.length, 'ligne')}</span>`);
+  if (r.counts.total) b.push(`<span class="badge warning sm">${plural(r.counts.total, 'total exclu', 'totaux exclus')}</span>`);
+  if (r.counts.entete) b.push(`<span class="badge sm">${plural(r.counts.entete, 'en-tête répété', 'en-têtes répétés')}</span>`);
+  if (r.counts.note) b.push(`<span class="badge sm">${plural(r.counts.note, 'commentaire retiré', 'commentaires retirés')}</span>`);
+  if (r.filledDown) b.push(`<span class="badge info sm">${plural(r.filledDown, 'libellé recopié', 'libellés recopiés')}</span>`);
+  if (r.badNum) b.push(`<span class="badge error sm">${plural(r.badNum, 'montant illisible', 'montants illisibles')}</span>`);
+  return b.join('');
+}
+
+function previewTable(r) {
+  const typeLbl = {Text: 'Texte', Numeric: 'Numérique', Date: 'Date'};
+  const head = r.names.map((n, i) => `<th scope="col" class="${r.types[i] === 'Numeric' ? 'num' : ''}">${esc(n)}<span class="ty">${typeLbl[r.types[i]]}</span></th>`).join('');
+  const body = r.rows.slice(0, 50).map(row => '<tr>' + row.map((v, i) => {
+    if (v == null) return '<td class="null">—</td>';
+    if (r.types[i] === 'Numeric') return `<td class="num">${fmtNum(v)}</td>`;
+    if (r.types[i] === 'Date') return `<td>${fmtDate(v)}</td>`;
+    return `<td>${esc(v)}</td>`;
+  }).join('') + '</tr>').join('');
+  const more = r.rows.length > 50 ? `<p class="muted" style="font-size:.8rem">Aperçu des 50 premières lignes sur ${fmtInt(r.rows.length)}.</p>` : '';
+  return `<div class="tbl-wrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>${more}`;
+}
+
+function droppedList(r) {
+  if (!r.dropped.length) return '';
+  const why = {total: 'Total', entete: 'En-tête répété', note: 'Commentaire'};
+  return `<details><summary style="cursor:pointer;font-size:.85rem;color:var(--bf)">Voir les ${plural(r.dropped.length, 'ligne retirée', 'lignes retirées')} (hors lignes vides)</summary>
+    <div class="tbl-wrap" style="margin-top:8px;max-height:200px"><table><thead><tr><th>Ligne Excel</th><th>Motif</th><th>Contenu</th></tr></thead><tbody>
+    ${r.dropped.slice(0, 100).map(d => `<tr><td class="num">${d.row}</td><td>${why[d.why]}</td><td style="white-space:normal">${esc(d.text)}</td></tr>`).join('')}
+    </tbody></table></div></details>`;
+}
+
+function card(ds) {
+  const multi = state.datasets.filter(d => d.fileName === ds.fileName && d.size === ds.size).length > 1;
+  if (ds.error && !ds.ws) {
+    return `<article class="card err"><div class="card-top"><div class="card-ic">${IC.err}</div><div class="card-main"><p class="card-title">${esc(ds.fileName)}</p><p class="card-sub" style="color:var(--error)">${esc(ds.error)}</p></div>
+      <div class="card-actions"><button class="btn ter sm danger" data-act="remove" data-id="${ds.id}" title="Retirer">${IC.del}<span class="sr">Retirer</span></button></div></div></article>`;
+  }
+  const r = ds.res;
+  const sub = [ds.sheetName ? 'Onglet ' + esc(ds.sheetName) : '', r && r.title ? esc(r.title) : ''].filter(Boolean).join(' · ');
+  return `<article class="card${ds.error ? ' err' : ''}" style="${ds.skip ? 'opacity:.6' : ''}">
+    <div class="card-top">
+      <div class="card-ic">${ds.error ? IC.err : IC.file}</div>
+      <div class="card-main">
+        <p class="card-title">${esc(ds.fileName)}${multi ? ` <span class="badge sm">${esc(ds.sheetName)}</span>` : ''}</p>
+        <p class="card-sub">${sub || '&nbsp;'}</p>
+        ${ds.error ? `<p class="card-sub" style="color:var(--error)">${esc(ds.error)}</p>` : `<div class="stats">${statBadges(r)}</div>`}
+      </div>
+      <div class="card-actions">
+        ${multi ? `<label class="check" style="margin-right:8px"><input type="checkbox" data-act="skip" data-id="${ds.id}" ${ds.skip ? '' : 'checked'}><span>Importer</span></label>` : ''}
+        <button class="btn ter sm" data-act="toggle" data-id="${ds.id}" aria-expanded="${ds.open}">${IC.eye}${ds.open ? 'Masquer' : 'Aperçu'}</button>
+        <button class="btn ter sm danger" data-act="remove" data-id="${ds.id}" title="Retirer">${IC.del}<span class="sr">Retirer ${esc(ds.fileName)}</span></button>
+      </div>
+    </div>
+    <div class="card-body" ${ds.open ? '' : 'hidden'}>
+      <div class="adj">
+        <div class="field"><label for="ds${ds.id}">Première ligne de données</label>
+          <input class="input narrow" type="number" min="1" id="ds${ds.id}" data-act="start" data-id="${ds.id}" value="${r ? r.dataStartXl : ''}">
+          <span class="hint">N° de ligne Excel${ds.override == null ? ' — détecté automatiquement' : ''}</span></div>
+        ${ds.override != null ? `<button class="btn ter sm" data-act="auto" data-id="${ds.id}">Revenir à la détection automatique</button>` : ''}
+        ${r && r.headerXl.length ? `<p class="muted" style="font-size:.85rem;padding-bottom:6px">En-têtes lus ligne${r.headerXl.length > 1 ? 's' : ''} ${r.headerXl.join(', ')}.</p>` : ''}
+      </div>
+      ${r && r.meta.length ? `<p style="font-size:.85rem"><strong>Titre et filtres retirés :</strong> ${r.meta.map(esc).join(' — ')}</p>` : ''}
+      ${r && r.rows.length ? previewTable(r) : ''}
+      ${r ? droppedList(r) : ''}
+    </div>
+  </article>`;
+}
+
+function render() {
+  const box = $('#files');
+  box.innerHTML = state.datasets.length ? state.datasets.map(card).join('') : '<div class="empty">Aucun fichier déposé pour le moment.</div>';
+  const act = active();
+  const nRows = act.reduce((s, d) => s + d.res.rows.length, 0);
+  const nFiles = new Set(act.map(d => d.fileName)).size;
+  const target = tableName();
+  $('#tagTable').textContent = target; $('#btnTable').textContent = target;
+  $('#sum').innerHTML = nRows ? `<strong>${plural(nRows, 'ligne')}</strong> prête${nRows > 1 ? 's' : ''} à importer depuis ${plural(nFiles, 'fichier')} · ${plural(buildSchema().length, 'colonne')}` : 'Aucune donnée à importer.';
+  $('#btnImport').disabled = !nRows || !IN_GRIST || state.busy;
+  $('#btnCsv').disabled = !nRows;
+  $('#btnClear').disabled = !state.datasets.length;
+  $('#optMode').querySelector('[value=replace]').disabled = !opts().trace;
+  if (!opts().trace && $('#optMode').value === 'replace') $('#optMode').value = 'append';
+}
+
+function toast(msg, kind) {
+  $('#result').innerHTML = `<div class="alert ${kind || 'info'}"><p>${msg}</p></div>`;
+}
+
+/* =====================================================================
+   Export CSV (séparateur « ; », décimales à la virgule)
+   ===================================================================== */
+function exportCsv() {
+  const cols = buildSchema();
+  const now = Math.floor(Date.now() / 1000);
+  const q = v => { if (v == null) return ''; const s = String(v); return /[;"\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  const lines = [cols.map(c => q(c.label)).join(';')];
+  for (const ds of active()) ds.res.rows.forEach((row, i) => {
+    lines.push(cols.map(c => {
+      const v = valueFor(c, ds, row, i, now);
+      if (v == null) return '';
+      if (c.type === 'Numeric') return String(v).replace('.', ',');
+      if (c.type === 'Date') return fmtDate(v);
+      if (c.trace === 'date') return new Date(v * 1000).toLocaleString('fr-FR');
+      return q(v);
+    }).join(';'));
+  });
+  const blob = new Blob(['﻿' + lines.join('\r\n')], {type: 'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = tableName() + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+/* =====================================================================
+   Écriture dans Grist
+   ===================================================================== */
+function tableName() {
+  let t = toColId($('#optTable').value.trim() || 'DATA_INFBUD');
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+function setProgress(p) {
+  const el = $('#progress');
+  el.hidden = p == null;
+  el.firstElementChild.style.width = Math.round((p || 0) * 100) + '%';
+}
+
+async function importToGrist() {
+  const sets = active();
+  if (!sets.length || !IN_GRIST) return;
+  const target = tableName();
+  const mode = $('#optMode').value;
+  const schema = buildSchema();
+  state.busy = true; render(); setProgress(0.02);
+  $('#result').innerHTML = '';
+  const warn = [];
+  try {
+    const T = await grist.docApi.fetchTable('_grist_Tables');
+    const tIdx = T.tableId.findIndex(t => t.toLowerCase() === target.toLowerCase());
+    let tableId, created = false;
+    const colMap = new Map(); // schema id → colId Grist
+    const numOpts = JSON.stringify({numMode: 'decimal', maxDecimals: 2});
+
+    if (tIdx < 0) {
+      const res = await grist.docApi.applyUserActions([['AddTable', target, schema.map(c => ({
+        id: c.id, label: c.label, type: c.type, isFormula: false,
+        widgetOptions: c.type === 'Numeric' ? numOpts : c.type === 'Date' ? JSON.stringify({dateFormat: 'DD/MM/YYYY'}) : c.trace === 'date' ? JSON.stringify({dateFormat: 'DD/MM/YYYY', timeFormat: 'HH:mm'}) : '',
+      }))]]);
+      const ret = res.retValues[0];
+      tableId = ret.table_id;
+      schema.forEach((c, i) => colMap.set(c.id, ret.columns[i] || c.id));
+      created = true;
+    } else {
+      tableId = T.tableId[tIdx];
+      const tRef = T.id[tIdx];
+      const C = await grist.docApi.fetchTable('_grist_Tables_column');
+      const existing = [];
+      C.id.forEach((_, i) => {
+        if (C.parentId[i] !== tRef) return;
+        const colId = C.colId[i];
+        if (colId === 'manualSort' || colId.startsWith('gristHelper_')) return;
+        existing.push({colId, label: C.label[i] || colId, isFormula: C.isFormula[i] && !!C.formula[i]});
+      });
+      const toAdd = [];
+      for (const c of schema) {
+        const m = existing.find(e => normKey(e.label) === c.key) || existing.find(e => e.colId.toLowerCase() === c.id.toLowerCase());
+        if (m) {
+          if (m.isFormula) warn.push(`La colonne « ${m.label} » est une formule : elle n'est pas alimentée.`);
+          else colMap.set(c.id, m.colId);
+        } else toAdd.push(c);
+      }
+      if (toAdd.length) {
+        const res = await grist.docApi.applyUserActions(toAdd.map(c => ['AddColumn', tableId, c.id, {
+          label: c.label, type: c.type, isFormula: false,
+          widgetOptions: c.type === 'Numeric' ? numOpts : c.type === 'Date' ? JSON.stringify({dateFormat: 'DD/MM/YYYY'}) : '',
+        }]));
+        toAdd.forEach((c, i) => { const r = res.retValues[i]; colMap.set(c.id, (r && r.colId) || c.id); });
+        warn.push(`${plural(toAdd.length, 'colonne ajoutée', 'colonnes ajoutées')} à la table : ${toAdd.map(c => '« ' + esc(c.label) + ' »').join(', ')}.`);
+      }
+    }
+    setProgress(0.1);
+
+    // Suppression préalable selon le mode
+    let removed = 0;
+    if (!created && mode !== 'append') {
+      const data = await grist.docApi.fetchTable(tableId);
+      let ids = data.id || [];
+      if (mode === 'replace') {
+        const fileCol = schema.find(c => c.trace === 'file');
+        const fCol = fileCol && colMap.get(fileCol.id);
+        const names = new Set(sets.map(d => d.fileName));
+        ids = fCol && data[fCol] ? ids.filter((_, i) => names.has(data[fCol][i])) : [];
+      }
+      for (let i = 0; i < ids.length; i += 2000) await grist.docApi.applyUserActions([['BulkRemoveRecord', tableId, ids.slice(i, i + 2000)]]);
+      removed = ids.length;
+    }
+    setProgress(0.2);
+
+    // Ajout des lignes par paquets
+    const now = Math.floor(Date.now() / 1000);
+    const writable = schema.filter(c => colMap.has(c.id));
+    const all = [];
+    for (const ds of sets) ds.res.rows.forEach((row, i) => all.push([ds, row, i]));
+    const CH = 500;
+    for (let i = 0; i < all.length; i += CH) {
+      const chunk = all.slice(i, i + CH);
+      const cols = {};
+      for (const c of writable) cols[colMap.get(c.id)] = chunk.map(([ds, row, k]) => valueFor(c, ds, row, k, now));
+      await grist.docApi.applyUserActions([['BulkAddRecord', tableId, chunk.map(() => null), cols]]);
+      setProgress(0.2 + 0.8 * Math.min(1, (i + CH) / all.length));
+    }
+
+    $('#result').innerHTML = `<div class="alert success"><h3>Import terminé</h3>
+      <p>${plural(all.length, 'ligne importée', 'lignes importées')} dans <strong class="mono">${esc(tableId)}</strong>${created ? ' (table créée)' : ''}${removed ? ` · ${plural(removed, 'ancienne ligne remplacée', 'anciennes lignes remplacées')}` : ''}.</p>
+      ${warn.length ? '<ul>' + warn.map(w => `<li>${w}</li>`).join('') + '</ul>' : ''}</div>`;
+    state.datasets = [];
+  } catch (e) {
+    console.error(e);
+    $('#result').innerHTML = `<div class="alert error"><h3>L'import a échoué</h3><p>${esc(e.message || e)}</p><p>Vérifiez que le widget dispose de l'<strong>accès complet au document</strong>.</p></div>`;
+  } finally {
+    state.busy = false; setProgress(null); render();
+    $('#result').scrollIntoView({behavior: 'smooth', block: 'nearest'});
+  }
+}
+
+/* =====================================================================
+   Événements
+   ===================================================================== */
+const drop = $('#drop'), input = $('#fileInput');
+drop.addEventListener('click', () => input.click());
+drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
+input.addEventListener('change', () => { addFiles(input.files); input.value = ''; });
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => addFiles(e.dataTransfer.files));
+// Évite que le navigateur ouvre un fichier lâché à côté de la zone
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => e.preventDefault());
+
+$('#files').addEventListener('click', e => {
+  const b = e.target.closest('button[data-act]'); if (!b) return;
+  const ds = state.datasets.find(d => d.id === +b.dataset.id); if (!ds) return;
+  if (b.dataset.act === 'remove') state.datasets = state.datasets.filter(d => d !== ds);
+  if (b.dataset.act === 'toggle') ds.open = !ds.open;
+  if (b.dataset.act === 'auto') { ds.override = null; reanalyze(ds); }
+  render();
+});
+$('#files').addEventListener('change', e => {
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  const ds = state.datasets.find(d => d.id === +el.dataset.id); if (!ds) return;
+  if (el.dataset.act === 'skip') ds.skip = !el.checked;
+  if (el.dataset.act === 'start') { const v = parseInt(el.value, 10); ds.override = v > 0 ? v : null; reanalyze(ds); }
+  render();
+});
+['#optTotals', '#optFill'].forEach(s => $(s).addEventListener('change', () => { state.datasets.forEach(reanalyze); render(); }));
+$('#optTrace').addEventListener('change', render);
+$('#optTable').addEventListener('input', render);
+$('#btnCsv').addEventListener('click', exportCsv);
+$('#btnClear').addEventListener('click', () => { state.datasets = []; $('#result').innerHTML = ''; render(); });
+$('#btnImport').addEventListener('click', importToGrist);
+
+setEnv();
+render();
+</script>
+</body>
+</html>
