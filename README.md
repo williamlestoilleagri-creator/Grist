@@ -91,8 +91,16 @@ Charte DSFR, police Marianne. Intègre une ou plusieurs restitutions Chorus (INF
 
 ### Écriture dans Grist
 
-- **À l'ouverture du widget**, la table `DATA_INFBUD` est créée si elle n'existe pas, avec la structure standard INF-BUD-41 (référentiel de programmation et libellé, centre financier et libellé, consommation AE / CP en EUR) et les colonnes de traçabilité.
-- À l'import, les colonnes manquantes sont ajoutées (correspondance par libellé), les colonnes formule ne sont jamais écrites.
-- **Clé unique** (par défaut `Référentiel de programmation`) : une seule ligne par référentiel. Une valeur déjà présente met à jour sa ligne ; les doublons d'un même fichier sont fusionnés (montants additionnés) ; entre deux fichiers, le dernier déposé l'emporte ; les lignes en double ou sans clé déjà présentes dans la table sont supprimées.
-- Sans clé unique, si la table contient déjà des données : **remplacer les lignes issues des mêmes fichiers** (par défaut), ajouter à la suite, ou vider la table.
+- Chaque fichier est aiguillé selon le numéro du rapport lu dans son titre :
+
+  | Rapport | Table | Clé unique par défaut |
+  |---|---|---|
+  | INF-BUD-41 | `DATA_INFBUD41` | Référentiel de programmation (une ligne par référentiel) |
+  | INF-BUD-53 | `INFBUD53` | Toutes les colonnes d'axe (une ligne par EJ / fournisseur / référentiel…) |
+  | Autre INF-BUD-xx | `DATA_INFBUDxx` | Référentiel de programmation |
+
+  Le nom de table et la clé sont modifiables dans « Tables de destination ».
+- **À l'ouverture du widget**, `DATA_INFBUD41` et `INFBUD53` sont créées si elles n'existent pas, avec leur structure standard et les colonnes de traçabilité.
+- **À l'import**, chaque table est mise à jour : une ligne dont la clé existe déjà est mise à jour, les autres sont ajoutées ; les colonnes manquantes sont ajoutées (correspondance par libellé), les colonnes formule ne sont jamais écrites ; les lignes en double ou sans clé déjà présentes sont supprimées. Les doublons d'un même fichier sont fusionnés (montants additionnés).
+- Sans clé unique, les lignes issues des mêmes fichiers sont remplacées. Option : vider les tables concernées puis importer.
 - Hors Grist, le widget fonctionne en aperçu et permet de télécharger le résultat en CSV.
