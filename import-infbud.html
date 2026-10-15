@@ -517,9 +517,82 @@ function analyzeSheet(ws, opts, override) {
 const state = {datasets: [], nextId: 1};
 const opts = () => ({excludeTotals: $('#optTotals').checked, fillDown: $('#optFill').checked, trace: $('#optTrace').checked});
 
+/* ---------- Exports « page web » (MHTML / HTML enregistrés en .xls par Chorus) ---------- */
+function decodeBytes(bytes, charset) {
+  const cs = (charset || '').toLowerCase().replace(/["']/g, '');
+  if (cs) { try { return new TextDecoder(cs).decode(bytes); } catch (e) { /* charset inconnu */ } }
+  try { return new TextDecoder('utf-8', {fatal: true}).decode(bytes); } catch (e) { return new TextDecoder('windows-1252').decode(bytes); }
+}
+function qpToBytes(str) {
+  str = str.replace(/=\r?\n/g, '');
+  const out = [];
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (ch === '=' && /^[0-9A-Fa-f]{2}$/.test(str.substr(i + 1, 2))) { out.push(parseInt(str.substr(i + 1, 2), 16)); i += 2; }
+    else out.push(str.charCodeAt(i) & 0xff);
+  }
+  return new Uint8Array(out);
+}
+/** Découpe une archive MHTML en parties HTML décodées. */
+function mhtmlParts(latin1) {
+  const m = latin1.match(/boundary\s*=\s*"?([^"\r\n;]+)"?/i);
+  if (!m) return [];
+  const parts = latin1.split('--' + m[1]).slice(1);
+  const out = [];
+  for (const part of parts) {
+    const sep = part.search(/\r?\n\r?\n/);
+    if (sep < 0) continue;
+    const head = part.slice(0, sep), body = part.slice(sep).replace(/^\r?\n\r?\n/, '');
+    const type = (head.match(/content-type:\s*([^;\r\n]+)/i) || [])[1] || '';
+    if (!/html/i.test(type)) continue;
+    const charset = (head.match(/charset\s*=\s*"?([^";\r\n]+)/i) || [])[1];
+    const enc = ((head.match(/content-transfer-encoding:\s*([^\r\n]+)/i) || [])[1] || '').trim().toLowerCase();
+    const loc = ((head.match(/content-location:\s*([^\r\n]+)/i) || [])[1] || '').trim();
+    let bytes;
+    if (enc === 'base64') { const b = atob(body.replace(/[^A-Za-z0-9+/=]/g, '')); bytes = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) bytes[i] = b.charCodeAt(i); }
+    else if (enc === 'quoted-printable') bytes = qpToBytes(body);
+    else { bytes = new Uint8Array(body.length); for (let i = 0; i < body.length; i++) bytes[i] = body.charCodeAt(i) & 0xff; }
+    out.push({html: decodeBytes(bytes, charset), loc});
+  }
+  return out;
+}
+/** Classeur SheetJS à partir de pages HTML : le plus grand tableau de chaque page devient un onglet. */
+function htmlToWorkbook(pages) {
+  const wb = XLSX.utils.book_new();
+  const used = new Set();
+  pages.forEach((pg, i) => {
+    if (/tabstrip/i.test(pg.loc) || /<frameset/i.test(pg.html)) return;
+    const doc = new DOMParser().parseFromString(pg.html, 'text/html');
+    let best = null, bestN = 0;
+    doc.querySelectorAll('table').forEach(t => { const n = t.querySelectorAll('td,th').length; if (n > bestN) { best = t; bestN = n; } });
+    if (!best || bestN < 2) return;
+    // Les tableaux imbriqués sont aplatis en texte pour ne pas décaler les colonnes
+    best.querySelectorAll('table').forEach(t => t.replaceWith(doc.createTextNode(t.textContent)));
+    const ws = XLSX.utils.table_to_sheet(best, {raw: true});
+    let name = (pg.loc.split(/[\\/]/).pop() || '').replace(/\.[^.]*$/, '') || (doc.title || '').trim() || 'Feuille ' + (i + 1);
+    name = name.replace(/[\[\]*?:\\/]/g, ' ').slice(0, 31) || 'Feuille ' + (i + 1);
+    let n = name, k = 2; while (used.has(n)) n = name.slice(0, 28) + ' ' + k++;
+    used.add(n);
+    XLSX.utils.book_append_sheet(wb, ws, n);
+  });
+  if (!wb.SheetNames.length) throw new Error('aucun tableau trouvé dans la page web exportée.');
+  return wb;
+}
+
 async function readWorkbook(file) {
   const buf = await file.arrayBuffer();
   const ext = (file.name.split('.').pop() || '').toLowerCase();
+  const bytes = new Uint8Array(buf);
+  const sniff = new TextDecoder('windows-1252').decode(bytes.subarray(0, 4096));
+  if (/^\s*(MIME-Version|Content-Type:\s*multipart)/i.test(sniff) || /^(From|Date|Subject):/m.test(sniff.slice(0, 300)) && /multipart\/related/i.test(sniff)) {
+    const parts = mhtmlParts(new TextDecoder('windows-1252').decode(bytes));
+    if (!parts.length) throw new Error('archive web (MHTML) illisible.');
+    return htmlToWorkbook(parts);
+  }
+  if (/^\s*(<\?xml[^>]*>\s*)?(<!doctype html|<html|<table|<head|<meta)/i.test(sniff) && !/<\?mso-application progid="Excel.Sheet"/i.test(sniff)) {
+    const cs = (sniff.match(/charset\s*=\s*["']?([\w-]+)/i) || [])[1];
+    return htmlToWorkbook([{html: decodeBytes(bytes, cs), loc: ''}]);
+  }
   if (ext === 'csv' || ext === 'txt') {
     let text;
     try { text = new TextDecoder('utf-8', {fatal: true}).decode(buf); } catch (e) { text = new TextDecoder('windows-1252').decode(buf); }

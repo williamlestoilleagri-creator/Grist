@@ -84,6 +84,7 @@ Charte DSFR, police Marianne. Intègre une ou plusieurs restitutions Chorus (INF
 
 - Retrait du titre du rapport et des lignes de filtres, des **lignes et colonnes vides**, des en-têtes répétés et des commentaires.
 - En-têtes sur plusieurs lignes fusionnés en un seul nom : `Consommation AE` + `EUR` → **Consommation AE (EUR)** ; la paire code / libellé Chorus devient `Centre financier` et `Centre financier (libellé)`.
+- Lecture des exports Chorus « page web » enregistrés en `.xls` (MHTML / HTML), en plus des vrais fichiers Excel.
 - Montants au format Chorus convertis en nombres (`8 452 103`, `1 234,56`, `500-`) ; codes conservés en texte (zéros initiaux préservés) ; dates `jj.mm.aaaa` en dates Grist.
 - Options : exclure les lignes de totaux (« Résultat », « Total »…), recopier les libellés d'axe masqués par Chorus, colonnes de traçabilité (fichier source, onglet, rapport, date d'import).
 - La première ligne de données est détectée automatiquement et peut être corrigée fichier par fichier.
