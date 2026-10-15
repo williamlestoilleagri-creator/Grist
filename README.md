@@ -5,6 +5,7 @@
 | `erp-sap.html` | ERP intégré « façon SAP » (ventes, achats, stocks, comptabilité) |
 | `annuaire-adresses.html` | Annuaire d'adresses géocodées (BAN) |
 | `grist-assistant-claude.html` | Assistant Claude |
+| `duo.html` | **Duo** — interprète à deux écouteurs (ex. japonais ⇄ allemand) |
 
 ## ERP « façon SAP » (`erp-sap.html`)
 
@@ -68,3 +69,35 @@ Structure (en-tête des documents, IBAN, mentions), devise, TVA et délai par d�
 - **Ventes** : devis → commande → livraison (sortie de stock au CMP) → facture (411 / 70x / 44571) → encaissement (512 / 411).
 - **Achats** : commande → réception (entrée de stock) → facture (60x / 44566 / 401) → paiement (401 / 512).
 - Proposition de réapprovisionnement depuis `MMBE`, impression des devis, confirmations et factures.
+
+## Duo — interprète à deux écouteurs (`duo.html`)
+
+Deux personnes, deux langues, une paire d'écouteurs sans fil : chacune porte un écouteur.
+
+- **Écouteur gauche** (par défaut 🇯🇵 japonais) : entend en japonais la traduction de ce que dit l'allemand.
+- **Écouteur droit** (par défaut 🇩🇪 allemand) : entend en allemand la traduction de ce que dit le japonais.
+
+### Utilisation
+
+1. Ouvrez `duo.html` sur le téléphone (Chrome sur Android, Safari sur iPhone) — via GitHub Pages ou tout hébergement HTTPS (le micro exige HTTPS).
+2. Dans **Réglages**, renseignez une **clé API Google Cloud** (APIs *Text-to-Speech* et, si voulu, *Cloud Translation* activées) : c'est elle qui permet d'envoyer la voix dans **un seul écouteur**. Testez avec « Tester gauche / droite ».
+3. Chacun appuie sur son gros bouton (« 話す » / « Sprechen »), parle, et la traduction part dans l'oreille de l'autre. Un clavier est aussi disponible.
+4. « Face à face » retourne le panneau de gauche pour poser le téléphone entre les deux personnes.
+
+### Moteurs
+
+| Rôle | Options |
+|---|---|
+| Reconnaissance vocale | Web Speech API du navigateur |
+| Traduction | MyMemory (gratuit, sans clé) · Google Cloud Translation · Claude (clé Anthropic, tient compte du contexte) |
+| Voix | Google Text-to-Speech (routage gauche/droite) · voix du navigateur (gratuit, deux oreilles) |
+
+Langues proposées : japonais, allemand, français, anglais, espagnol, italien, portugais, chinois, coréen.
+
+### Historique et registre
+
+- Chaque échange est enregistré (heure, locuteur, original, traduction) dans le navigateur.
+- **Registre** : liste des conversations, recherche plein texte dans tous les échanges, réécoute, reprise d'une conversation, renommage, suppression.
+- Export par conversation en **TXT**, **CSV** (Excel) ou **JSON** ; export / import global en JSON pour sauvegarder ou changer d'appareil.
+
+> Astuce : gardez le micro du téléphone actif. Si le système bascule sur le micro des écouteurs Bluetooth, certains appareils passent en mode « appel » mono et la séparation gauche/droite est perdue.
