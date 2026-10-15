@@ -182,6 +182,7 @@
 
 <main id="main">
   <div id="envAlert"></div>
+  <div id="tableStatus" aria-live="polite"></div>
 
   <section class="section" aria-labelledby="t1">
     <div>
@@ -231,7 +232,7 @@
         <div class="field">
           <label for="optTable">Nom de la table Grist</label>
           <input class="input" id="optTable" value="DATA_INFBUD" spellcheck="false" autocomplete="off">
-          <span class="hint" id="tableHint">Créée automatiquement si elle n'existe pas.</span>
+          <span class="hint" id="tableHint">Créée automatiquement à l'ouverture du widget si elle n'existe pas.</span>
         </div>
         <div class="field">
           <label for="optMode">Si des données sont déjà présentes</label>
@@ -568,6 +569,15 @@ const TRACE_COLS = [
   {label: 'Rapport', id: 'Rapport', type: 'Text', trace: 'title'},
   {label: "Date d'import", id: 'Date_import', type: 'DateTime:Europe/Paris', trace: 'date'},
 ];
+/** Colonnes créées à l'ouverture du widget (restitution INF-BUD-41) ; les autres s'ajoutent à l'import. */
+const BASE_COLS = [
+  {label: 'Référentiel de programmation', id: 'Referentiel_de_programmation', type: 'Text'},
+  {label: 'Référentiel de programmation (libellé)', id: 'Referentiel_de_programmation_libelle', type: 'Text'},
+  {label: 'Centre financier', id: 'Centre_financier', type: 'Text'},
+  {label: 'Centre financier (libellé)', id: 'Centre_financier_libelle', type: 'Text'},
+  {label: 'Consommation AE (EUR)', id: 'Consommation_AE_EUR', type: 'Numeric'},
+  {label: 'Consommation CP (EUR)', id: 'Consommation_CP_EUR', type: 'Numeric'},
+];
 function buildSchema() {
   const cols = [], byKey = new Map();
   for (const ds of active()) {
@@ -731,6 +741,37 @@ function setProgress(p) {
   el.firstElementChild.style.width = Math.round((p || 0) * 100) + '%';
 }
 
+const NUM_OPTS = JSON.stringify({numMode: 'decimal', maxDecimals: 2});
+function colInfo(c) {
+  return {
+    id: c.id, label: c.label, type: c.type, isFormula: false,
+    widgetOptions: c.type === 'Numeric' ? NUM_OPTS : c.type === 'Date' ? JSON.stringify({dateFormat: 'DD/MM/YYYY'}) : c.type.startsWith('DateTime') ? JSON.stringify({dateFormat: 'DD/MM/YYYY', timeFormat: 'HH:mm'}) : '',
+  };
+}
+
+/** Crée la table cible avec sa structure standard si elle n'existe pas encore. */
+async function ensureTable() {
+  if (!IN_GRIST) return;
+  const target = tableName();
+  const hint = $('#tableHint');
+  const box = $('#tableStatus');
+  try {
+    const T = await grist.docApi.fetchTable('_grist_Tables');
+    if (T.tableId.some(t => t.toLowerCase() === target.toLowerCase())) {
+      hint.textContent = 'La table existe : les nouvelles colonnes éventuelles seront ajoutées à l\'import.';
+      box.innerHTML = '';
+      return;
+    }
+    await grist.docApi.applyUserActions([['AddTable', target, [...BASE_COLS, ...TRACE_COLS].map(colInfo)]]);
+    hint.textContent = 'La table existe : les nouvelles colonnes éventuelles seront ajoutées à l\'import.';
+    box.innerHTML = `<div class="alert success"><h3>Table ${esc(target)} créée</h3><p>Structure standard INF-BUD (${BASE_COLS.length + TRACE_COLS.length} colonnes) : référentiel de programmation, centre financier, consommations AE / CP et colonnes de traçabilité. Les colonnes propres à d'autres restitutions seront ajoutées automatiquement à l'import.</p></div>`;
+  } catch (e) {
+    console.error(e);
+    box.innerHTML = `<div class="alert warning"><h3>La table ${esc(target)} n'a pas pu être créée</h3><p>Le widget doit disposer de l'<strong>accès complet au document</strong> (panneau de droite → Accès). ${esc(e.message || '')}</p><div class="btns" style="margin-top:8px"><button class="btn sec sm" id="btnRetry">Réessayer</button></div></div>`;
+    $('#btnRetry').addEventListener('click', ensureTable);
+  }
+}
+
 async function importToGrist() {
   const sets = active();
   if (!sets.length || !IN_GRIST) return;
@@ -745,13 +786,9 @@ async function importToGrist() {
     const tIdx = T.tableId.findIndex(t => t.toLowerCase() === target.toLowerCase());
     let tableId, created = false;
     const colMap = new Map(); // schema id → colId Grist
-    const numOpts = JSON.stringify({numMode: 'decimal', maxDecimals: 2});
 
     if (tIdx < 0) {
-      const res = await grist.docApi.applyUserActions([['AddTable', target, schema.map(c => ({
-        id: c.id, label: c.label, type: c.type, isFormula: false,
-        widgetOptions: c.type === 'Numeric' ? numOpts : c.type === 'Date' ? JSON.stringify({dateFormat: 'DD/MM/YYYY'}) : c.trace === 'date' ? JSON.stringify({dateFormat: 'DD/MM/YYYY', timeFormat: 'HH:mm'}) : '',
-      }))]]);
+      const res = await grist.docApi.applyUserActions([['AddTable', target, schema.map(colInfo)]]);
       const ret = res.retValues[0];
       tableId = ret.table_id;
       schema.forEach((c, i) => colMap.set(c.id, ret.columns[i] || c.id));
@@ -776,10 +813,7 @@ async function importToGrist() {
         } else toAdd.push(c);
       }
       if (toAdd.length) {
-        const res = await grist.docApi.applyUserActions(toAdd.map(c => ['AddColumn', tableId, c.id, {
-          label: c.label, type: c.type, isFormula: false,
-          widgetOptions: c.type === 'Numeric' ? numOpts : c.type === 'Date' ? JSON.stringify({dateFormat: 'DD/MM/YYYY'}) : '',
-        }]));
+        const res = await grist.docApi.applyUserActions(toAdd.map(c => { const {id, ...info} = colInfo(c); return ['AddColumn', tableId, id, info]; }));
         toAdd.forEach((c, i) => { const r = res.retValues[i]; colMap.set(c.id, (r && r.colId) || c.id); });
         warn.push(`${plural(toAdd.length, 'colonne ajoutée', 'colonnes ajoutées')} à la table : ${toAdd.map(c => '« ' + esc(c.label) + ' »').join(', ')}.`);
       }
@@ -861,12 +895,14 @@ $('#files').addEventListener('change', e => {
 ['#optTotals', '#optFill'].forEach(s => $(s).addEventListener('change', () => { state.datasets.forEach(reanalyze); render(); }));
 $('#optTrace').addEventListener('change', render);
 $('#optTable').addEventListener('input', render);
+$('#optTable').addEventListener('change', ensureTable);
 $('#btnCsv').addEventListener('click', exportCsv);
 $('#btnClear').addEventListener('click', () => { state.datasets = []; $('#result').innerHTML = ''; render(); });
 $('#btnImport').addEventListener('click', importToGrist);
 
 setEnv();
 render();
+ensureTable();
 </script>
 </body>
 </html>
