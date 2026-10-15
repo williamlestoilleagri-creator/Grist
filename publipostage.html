@@ -458,6 +458,42 @@
         <div class="pp-fields" id="fieldsBox"></div>
       </div>
     </div>
+    <section class="fr-accordion pp-bloc pp-accbloc fr-mt-3w" id="mailBloc">
+      <h2 class="fr-accordion__title"><button type="button" class="fr-accordion__btn" aria-expanded="false" aria-controls="mailBox">E-mail d'accompagnement (mailing) <span class="fr-hint-text fr-ml-1w" id="mailSummary"></span></button></h2>
+      <div class="fr-collapse" id="mailBox">
+        <p class="fr-text--sm">Texte de l'e-mail envoyé à chaque dossier, avec le courrier ci-dessus en PDF en pièce jointe. L'envoi se prépare ensuite dans l'onglet 4 (tuile « Mailing »), pour Thunderbird (Mail Merge) ou Outlook.</p>
+        <div class="pp-grid">
+          <div>
+            <div class="fr-select-group">
+              <label class="fr-label" for="mailCol">Colonne de l'adresse e-mail <span class="fr-hint-text">Plusieurs adresses possibles, séparées par « ; » ou « , ».</span></label>
+              <select class="fr-select" id="mailCol"></select>
+            </div>
+            <div class="fr-input-group">
+              <label class="fr-label" for="mailCc">Copie (Cc) <span class="fr-hint-text">Facultatif, champs de fusion acceptés.</span></label>
+              <input class="fr-input" type="text" id="mailCc" placeholder="ex : service@agriculture.gouv.fr">
+            </div>
+            <div class="fr-input-group">
+              <label class="fr-label" for="mailSubject">Objet</label>
+              <input class="fr-input" type="text" id="mailSubject">
+            </div>
+          </div>
+          <div>
+            <div class="fr-input-group">
+              <label class="fr-label" for="mailBody">Texte de l'e-mail <span class="fr-hint-text">Placez le curseur ici puis cliquez sur un champ de fusion pour l'insérer.</span></label>
+              <textarea class="fr-input" id="mailBody" rows="7"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="fr-checkbox-group fr-checkbox-group--sm">
+          <input type="checkbox" id="mailAttach" checked>
+          <label class="fr-label" for="mailAttach">Joindre le courrier de chaque dossier en PDF (signé si un certificat est actif)</label>
+        </div>
+        <div class="fr-checkbox-group fr-checkbox-group--sm">
+          <input type="checkbox" id="mailEml">
+          <label class="fr-label" for="mailEml">Ajouter un brouillon .eml par destinataire (s'ouvre dans Outlook ou Thunderbird, prêt à envoyer)</label>
+        </div>
+      </div>
+    </section>
   </div>
 
   <!-- =============================== 3. SIGNATURE =============================== -->
@@ -738,43 +774,6 @@
       </div>
     </div>
 
-    <section class="fr-accordion pp-bloc pp-accbloc" id="mailBloc">
-      <h2 class="fr-accordion__title"><button type="button" class="fr-accordion__btn" aria-expanded="false" aria-controls="mailBox">Mailing par e-mail <span class="fr-hint-text fr-ml-1w" id="mailSummary"></span></button></h2>
-      <div class="fr-collapse" id="mailBox">
-        <p class="fr-text--sm">Prépare un envoi groupé : un e-mail par dossier, avec son courrier en PDF en pièce jointe. Le fichier produit s'utilise avec l'extension <b>Mail Merge de Thunderbird</b>, le publipostage <b>Word → Outlook</b>, ou s'ouvre directement en brouillons.</p>
-        <div class="pp-grid">
-          <div>
-            <div class="fr-select-group">
-              <label class="fr-label" for="mailCol">Colonne de l'adresse e-mail <span class="fr-hint-text">Plusieurs adresses possibles, séparées par « ; » ou « , ».</span></label>
-              <select class="fr-select" id="mailCol"></select>
-            </div>
-            <div class="fr-input-group">
-              <label class="fr-label" for="mailCc">Copie (Cc) <span class="fr-hint-text">Facultatif, champs de fusion acceptés.</span></label>
-              <input class="fr-input" type="text" id="mailCc" placeholder="ex : service@agriculture.gouv.fr">
-            </div>
-            <div class="fr-input-group">
-              <label class="fr-label" for="mailSubject">Objet</label>
-              <input class="fr-input" type="text" id="mailSubject">
-            </div>
-          </div>
-          <div>
-            <div class="fr-input-group">
-              <label class="fr-label" for="mailBody">Texte de l'e-mail <span class="fr-hint-text">Champs de fusion acceptés, ex : {{raison_sociale}}.</span></label>
-              <textarea class="fr-input" id="mailBody" rows="7"></textarea>
-            </div>
-          </div>
-        </div>
-        <div class="fr-checkbox-group fr-checkbox-group--sm">
-          <input type="checkbox" id="mailAttach" checked>
-          <label class="fr-label" for="mailAttach">Joindre le courrier de chaque dossier en PDF (signé si un certificat est actif)</label>
-        </div>
-        <div class="fr-checkbox-group fr-checkbox-group--sm">
-          <input type="checkbox" id="mailEml">
-          <label class="fr-label" for="mailEml">Ajouter un brouillon .eml par destinataire (s'ouvre dans Outlook ou Thunderbird, prêt à envoyer)</label>
-        </div>
-        <p class="fr-text--xs fr-mt-1w fr-mb-0" id="mailCheck"></p>
-      </div>
-    </section>
 
     <div class="pp-bloc">
       <h2>Générer</h2>
@@ -808,6 +807,7 @@
           <div class="fr-tile__header"><span class="pp-tile-icon fr-icon-mail-line" aria-hidden="true"></span></div>
         </div>
       </div>
+      <p class="fr-text--xs fr-mt-1w fr-mb-0" id="mailCheck"></p>
       <div class="pp-progress" id="progress"><div></div></div>
       <div id="genStatus" aria-live="polite"></div>
     </div>
@@ -885,6 +885,7 @@ function showTab(name) {
     renderFields(); if (isPreview) renderPreview();
     if (!tplList.loaded) loadTemplates().catch(e => { $('tplMsg').innerHTML = alertHTML('err', esc(e.message || e)); });
     if (cfg.tpl && !tplRt) restoreActiveTemplate();
+    if (data.tableId) renderMail();
   }
   if (name === 'generer') { refreshSelection(); renderRecList(); renderMail(); }
   if (name === 'signature') {
@@ -1541,6 +1542,13 @@ $('fieldSearch').addEventListener('input', renderFields);
 $('fieldsBox').addEventListener('mousedown', (e) => { if (e.target.closest('.chip')) e.preventDefault(); });
 $('fieldsBox').addEventListener('click', (e) => {
   const c = e.target.closest('.chip'); if (!c) return;
+  // Curseur dans l'objet ou le texte de l'e-mail : le champ y est inséré
+  const f = document.activeElement;
+  if (f && ['mailSubject', 'mailBody', 'mailCc'].includes(f.id)) {
+    f.setRangeText('{{' + c.dataset.tok + '}}', f.selectionStart, f.selectionEnd, 'end');
+    f.dispatchEvent(new Event('input'));
+    return;
+  }
   if (isPreview) setPreview(false);
   insertToken(c.dataset.tok);
 });
@@ -4493,9 +4501,9 @@ function renderMail() {
 function renderMailCheck() {
   const col = data.cols.find(c => c.id === cfg.mail.col);
   const rows = selectedRows();
-  if (!col) { $('mailCheck').textContent = 'Choisissez la colonne qui contient l\'adresse e-mail.'; $('mailSummary').textContent = ''; return; }
+  if (!col) { $('mailCheck').textContent = 'Mailing : choisissez d\'abord la colonne de l\'adresse e-mail (onglet 2, « E-mail d\'accompagnement »).'; $('mailSummary').textContent = ''; return; }
   const ok = rows.filter(r => mailAddresses(formatValue(col, r)).some(a => EMAIL_RE.test(a))).length;
-  $('mailCheck').textContent = ok + ' dossier(s) sélectionné(s) sur ' + rows.length + ' ont une adresse e-mail valide' + (ok < rows.length ? ' : les autres seront listés dans le fichier LISEZMOI et ignorés.' : '.');
+  $('mailCheck').textContent = 'Mailing : ' + ok + ' dossier(s) sélectionné(s) sur ' + rows.length + ' ont une adresse e-mail valide' + (ok < rows.length ? ' ; les autres seront ignorés et listés dans LISEZMOI.txt.' : '.');
   $('mailSummary').textContent = '— ' + col.label + ' · ' + ok + ' destinataire(s)';
 }
 $('mailCol').onchange = (e) => { cfg.mail.col = e.target.value; renderMailCheck(); saveConfig(); };
@@ -4528,7 +4536,7 @@ async function buildEml(to, cc, subject, body, att) {
 async function exportMailing(rows, ir, rt) {
   const m = cfg.mail;
   const col = data.cols.find(c => c.id === m.col);
-  if (!col) { genMsg('warn', 'Choisissez la colonne de l\'adresse e-mail (bloc « Mailing par e-mail »).'); return; }
+  if (!col) { genMsg('warn', 'Choisissez la colonne de l\'adresse e-mail (onglet 2, « E-mail d\'accompagnement »).'); return; }
   const byId = Object.fromEntries(data.cols.map(c => [c.id, c]));
   const extra = cfg.cols.map(id => byId[id]).filter(c => c && c.id !== col.id && c.baseType !== 'Attachments');
   const zip = new JSZip(), dir = zip.folder('pieces_jointes'), emlDir = m.eml ? zip.folder('brouillons_eml') : null;
