@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-scheme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prise de rendez-vous</title>
+
+<!-- Système de Design de l'État (DSFR) : composants + police Marianne + icônes -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.15.3/dist/dsfr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.15.3/dist/utility/icons/icons.min.css">
+
+<style>
+  [hidden]{ display:none !important; }
+  body{ background:var(--background-alt-grey); }
+
+  /* ---------- layout ---------- */
+  .app-body{
+    display:grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr);
+    gap:1.5rem; align-items:start;
+  }
+  @media (max-width: 47.99em){
+    .app-body{ grid-template-columns: 1fr; gap:1rem; }
+  }
+  .panel{
+    background:var(--background-default-grey); border:1px solid var(--border-default-grey);
+    padding:1.5rem;
+  }
+  @media (max-width: 47.99em){ .panel{ padding:1rem; } }
+  .panel-narrow{ max-width:48rem; margin:0 auto; }
+
+  /* ---------- calendrier ---------- */
+  .cal-nav{ display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; }
+  .cal-nav .month{ margin:0; text-transform:capitalize; }
+
+  .cal-grid{ display:grid; grid-template-columns:repeat(7, 1fr); gap:.25rem; }
+  .cal-dow{
+    text-align:center; font-size:.75rem; font-weight:700; text-transform:uppercase;
+    color:var(--text-mention-grey); padding:.25rem 0;
+  }
+  .day{
+    position:relative; aspect-ratio:1 / 1; min-height:2.5rem; padding:0;
+    border:1px solid var(--border-default-grey); background:var(--background-default-grey);
+    color:var(--text-title-grey); font-weight:500; font-size:1rem;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+  }
+  .day:hover:not(:disabled){ background:var(--background-action-low-blue-france); border-color:var(--border-action-high-blue-france); }
+  .day.empty{ visibility:hidden; }
+  .day:disabled{
+    background:var(--background-disabled-grey); color:var(--text-disabled-grey);
+    border-color:var(--border-disabled-grey); cursor:not-allowed;
+  }
+  .day.today{ box-shadow:inset 0 -3px 0 var(--border-plain-blue-france); }
+  .day.selected, .day.selected:hover:not(:disabled){
+    background:var(--background-action-high-blue-france); border-color:var(--background-action-high-blue-france);
+    color:var(--text-inverted-blue-france);
+  }
+  .day .rank{ position:absolute; top:2px; left:4px; font-size:.7rem; font-weight:700; }
+
+  .legend{ display:flex; flex-wrap:wrap; gap:1rem; margin-top:1rem; font-size:.875rem; color:var(--text-mention-grey); }
+  .legend span{ display:inline-flex; align-items:center; gap:.5rem; }
+  .legend i{ display:inline-block; width:.875rem; height:.875rem; border:1px solid var(--border-default-grey); }
+
+  /* ---------- choix ---------- */
+  .choices{ list-style:none; margin:0 0 1.5rem; padding:0; display:flex; flex-direction:column; gap:.5rem; }
+  .choices li{ padding:0; }
+  .choice{
+    display:flex; align-items:center; gap:.75rem; padding:.375rem .5rem .375rem .75rem;
+    border:1px solid var(--border-default-grey); min-height:3rem; background:var(--background-default-grey);
+  }
+  .choice .num{
+    flex:0 0 auto; width:1.75rem; height:1.75rem; display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:.875rem;
+    background:var(--background-action-low-blue-france); color:var(--text-action-high-blue-france);
+  }
+  .choice .val{ flex:1 1 auto; text-transform:capitalize; }
+  .choice.empty .val{ color:var(--text-mention-grey); text-transform:none; font-style:italic; }
+  .choice.next{ border-color:var(--border-action-high-blue-france); border-style:dashed; }
+  .choice .actions{ display:flex; }
+  .choice .mini-btn:disabled{ opacity:.35; }
+
+  /* ---------- panneau lien ---------- */
+  .row{ display:flex; gap:.5rem; flex-wrap:wrap; align-items:flex-end; }
+  .row .fr-input-group{ flex:1 1 16rem; margin:0; }
+  .share-link{
+    font-family:ui-monospace, Menlo, monospace; font-size:.8rem; word-break:break-all;
+    background:var(--background-alt-grey); border:1px solid var(--border-default-grey);
+    padding:.75rem 1rem; margin:.5rem 0 1rem;
+  }
+  .done{ text-align:center; max-width:40rem; margin:0 auto; }
+</style>
+</head>
+<body>
+
+<header role="banner" class="fr-header">
+  <div class="fr-header__body">
+    <div class="fr-container">
+      <div class="fr-header__body-row">
+        <div class="fr-header__brand fr-enlarge-link">
+          <div class="fr-header__brand-top">
+            <div class="fr-header__logo">
+              <p class="fr-logo">République<br>Française</p>
+            </div>
+          </div>
+          <div class="fr-header__service">
+            <p class="fr-header__service-title">Prise de rendez-vous</p>
+            <p class="fr-header__service-tagline">Choisissez jusqu'à 4 dates, par ordre de préférence</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="fr-container fr-my-4w fr-my-md-6w">
+
+<section class="panel panel-narrow" id="setup" hidden>
+  <h1 class="fr-h4" id="setup-title">Configurer le formulaire public</h1>
+  <div id="auto-msg" role="status" hidden></div>
+  <ol id="setup-steps">
+    <li>Dans Grist, créez une page <strong>Formulaire</strong> sur la table PRISE_RDV avec les champs Nom, Prénom, Choix 1 à 4.</li>
+    <li>Cliquez sur <strong>« Publier »</strong>.</li>
+    <li>Revenez sur ce widget : le lien à envoyer apparaît ici automatiquement.</li>
+  </ol>
+  <div class="row fr-mb-2w" id="manual-row">
+    <div class="fr-input-group">
+      <label class="fr-label" for="setup-url" id="manual-hint">Ou collez le lien du formulaire Grist publié
+        <span class="fr-hint-text">Exemple : https://docs.getgrist.com/forms/XXXXXXXX/12</span>
+      </label>
+      <input class="fr-input" id="setup-url" type="url">
+    </div>
+    <button class="fr-btn" id="setup-go" type="button">Générer le lien</button>
+  </div>
+  <div id="setup-msg" role="status" hidden></div>
+  <div id="setup-result" class="fr-mt-2w" hidden>
+    <p class="fr-mb-0">Lien à envoyer aux personnes (elles n'ont pas besoin de compte Grist) :</p>
+    <div class="share-link" id="share-link"></div>
+    <ul class="fr-btns-group fr-btns-group--inline-sm fr-btns-group--icon-left">
+      <li><button class="fr-btn fr-icon-clipboard-line" id="copy" type="button">Copier le lien</button></li>
+      <li><a class="fr-btn fr-btn--secondary" id="open" target="_blank" rel="noopener">Ouvrir</a></li>
+    </ul>
+  </div>
+</section>
+
+<main class="app-body" id="app" role="main">
+  <section class="panel" aria-label="Calendrier">
+    <div class="cal-nav">
+      <button class="fr-btn fr-btn--tertiary fr-btn--sm fr-icon-arrow-left-s-line" id="prev" type="button" title="Mois précédent">Mois précédent</button>
+      <h2 class="fr-h5 month" id="month-label"></h2>
+      <button class="fr-btn fr-btn--tertiary fr-btn--sm fr-icon-arrow-right-s-line" id="next" type="button" title="Mois suivant">Mois suivant</button>
+    </div>
+    <div class="cal-grid" id="cal-grid"></div>
+    <div class="legend">
+      <span><i style="background:var(--background-action-high-blue-france);border-color:var(--background-action-high-blue-france)"></i>Votre choix</span>
+      <span><i style="background:var(--background-disabled-grey)"></i>Indisponible</span>
+    </div>
+  </section>
+
+  <section class="panel" aria-label="Formulaire">
+    <h2 class="fr-h5">Vos informations</h2>
+    <div class="fr-input-group">
+      <label class="fr-label" for="nom">Nom</label>
+      <input class="fr-input" id="nom" type="text" autocomplete="family-name" required>
+    </div>
+    <div class="fr-input-group">
+      <label class="fr-label" for="prenom">Prénom</label>
+      <input class="fr-input" id="prenom" type="text" autocomplete="given-name" required>
+    </div>
+
+    <h2 class="fr-h5 fr-mt-4w">Vos choix de dates</h2>
+    <p class="fr-text--sm fr-hint-text">Cliquez sur une date du calendrier : elle remplit le prochain choix libre. Recliquez pour la retirer.</p>
+    <ol class="choices" id="choices"></ol>
+
+    <div id="msg" role="status" hidden></div>
+    <ul class="fr-btns-group">
+      <li><button class="fr-btn" id="submit" type="button" disabled>Enregistrer ma demande</button></li>
+      <li><button class="fr-btn fr-btn--secondary" id="reset" type="button">Tout effacer</button></li>
+    </ul>
+  </section>
+</main>
+
+<section class="panel done" id="done" hidden>
+  <span class="fr-icon-success-line fr-icon--lg" aria-hidden="true" style="color:var(--text-default-success)"></span>
+  <h1 class="fr-h3 fr-mt-2w">Merci, votre demande est enregistrée</h1>
+  <p id="done-text"></p>
+  <ul class="fr-btns-group fr-btns-group--center fr-btns-group--inline-sm">
+    <li><button class="fr-btn fr-btn--secondary" id="again" type="button">Faire une autre demande</button></li>
+  </ul>
+</section>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ============================================================
+  // Configuration
+  // ============================================================
+  var CONFIG = {
+    // Lien du formulaire Grist publié sur la table prise_RDV (bouton « Publier » du formulaire).
+    // Formulaire par défaut : le lien à envoyer est alors simplement l'adresse de cette page.
+    formUrl: 'https://grist.dataregion.fr/o/docs/forms/1gxjjFowEESTzJtpTvosPE/5',
+    // Serveur Grist par défaut : un autre formulaire de ce serveur donne un lien court (.../#<clé>-<n°>)
+    gristHome: 'https://grist.dataregion.fr/o/docs',
+    table: 'prise_RDV',
+    columns: {
+      nom: 'Nom',
+      prenom: 'Prenom',
+      choix: ['Choix_1', 'Choix_2', 'Choix_3', 'Choix_4']
+    },
+    maxChoices: 4,
+    disablePast: true,          // empêche de choisir une date passée
+    disabledWeekdays: [0, 6]    // 0 = dimanche, 6 = samedi ; [] pour tout autoriser
+  };
+
+  var MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet',
+                'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  var DOW = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'];
+
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  var state = {
+    viewYear: today.getFullYear(),
+    viewMonth: today.getMonth(),
+    choices: [null, null, null, null],   // clés 'YYYY-MM-DD'
+    tableId: null,                       // id réel de la table dans Grist
+    cols: null,                          // { nom, prenom, choix: [..] } : colIds réels
+    api: null,                           // { base, shareKey, vsId }
+    ready: false,
+    saving: false
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ============================================================
+  // Dates
+  // ============================================================
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function keyOf(y, m, d) { return y + '-' + pad(m + 1) + '-' + pad(d); }
+  function parseKey(k) {
+    var p = k.split('-');
+    return { y: +p[0], m: +p[1] - 1, d: +p[2] };
+  }
+  function labelOf(k) {
+    var p = parseKey(k);
+    return new Date(p.y, p.m, p.d).toLocaleDateString('fr-FR', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+    });
+  }
+  function isDisabled(y, m, d) {
+    var dt = new Date(y, m, d);
+    if (CONFIG.disablePast && dt < today) return true;
+    if (CONFIG.disabledWeekdays.indexOf(dt.getDay()) !== -1) return true;
+    return false;
+  }
+
+  // ============================================================
+  // Rendu
+  // ============================================================
+  function renderCalendar() {
+    var y = state.viewYear, m = state.viewMonth;
+    $('month-label').textContent = MONTHS[m] + ' ' + y;
+
+    var grid = $('cal-grid');
+    grid.innerHTML = '';
+    DOW.forEach(function (d) {
+      var el = document.createElement('div');
+      el.className = 'cal-dow';
+      el.textContent = d;
+      grid.appendChild(el);
+    });
+
+    var first = new Date(y, m, 1).getDay();      // 0 = dimanche
+    var offset = (first + 6) % 7;                // semaine commençant le lundi
+    var nDays = new Date(y, m + 1, 0).getDate();
+
+    for (var i = 0; i < offset; i++) {
+      var e = document.createElement('div');
+      e.className = 'day empty';
+      grid.appendChild(e);
+    }
+
+    for (var d = 1; d <= nDays; d++) {
+      var k = keyOf(y, m, d);
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'day';
+      btn.textContent = d;
+      btn.dataset.key = k;
+
+      var rank = state.choices.indexOf(k);
+      if (rank !== -1) {
+        btn.classList.add('selected');
+        var r = document.createElement('span');
+        r.className = 'rank';
+        r.textContent = '#' + (rank + 1);
+        btn.appendChild(r);
+      }
+      if (y === today.getFullYear() && m === today.getMonth() && d === today.getDate()) {
+        btn.classList.add('today');
+      }
+      btn.disabled = isDisabled(y, m, d);
+      btn.setAttribute('aria-label', labelOf(k) + (rank !== -1 ? ', choix n°' + (rank + 1) : ''));
+      grid.appendChild(btn);
+    }
+
+    var prevDisabled = CONFIG.disablePast &&
+      (y < today.getFullYear() || (y === today.getFullYear() && m <= today.getMonth()));
+    $('prev').disabled = prevDisabled;
+  }
+
+  function renderChoices() {
+    var ol = $('choices');
+    ol.innerHTML = '';
+    var nextFree = state.choices.indexOf(null);
+    state.choices.forEach(function (k, i) {
+      var li = document.createElement('li');
+      li.className = 'choice' + (k ? '' : ' empty') + (i === nextFree ? ' next' : '');
+      li.innerHTML =
+        '<span class="num">' + (i + 1) + '</span>' +
+        '<span class="val"></span>' +
+        '<span class="actions">' +
+          '<button class="mini-btn fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-icon-arrow-up-line" data-act="up" title="Monter" type="button">Monter</button>' +
+          '<button class="mini-btn fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-icon-arrow-down-line" data-act="down" title="Descendre" type="button">Descendre</button>' +
+          '<button class="mini-btn fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-icon-close-line" data-act="del" title="Retirer" type="button">Retirer</button>' +
+        '</span>';
+      li.querySelector('.val').textContent = k ? labelOf(k) : (i === 0 ? 'Choix n°1 (obligatoire)' : 'Choix n°' + (i + 1) + ' (facultatif)');
+      li.querySelector('[data-act="up"]').disabled = !k || i === 0;
+      li.querySelector('[data-act="down"]').disabled = !k || i === CONFIG.maxChoices - 1 || !state.choices[i + 1];
+      li.querySelector('[data-act="del"]').disabled = !k;
+      li.dataset.index = i;
+      ol.appendChild(li);
+    });
+    updateSubmit();
+  }
+
+  function render() {
+    renderCalendar();
+    renderChoices();
+  }
+
+  function updateSubmit() {
+    var ok = state.ready && !state.saving &&
+      $('nom').value.trim() !== '' && $('prenom').value.trim() !== '' && !!state.choices[0];
+    $('submit').disabled = !ok;
+  }
+
+  // Alerte DSFR (kind : ok | err | warn)
+  function alertBox(el, kind, text, isHtml) {
+    var type = { ok: 'success', err: 'error', warn: 'warning' }[kind] || 'info';
+    el.className = 'fr-alert fr-alert--sm fr-mb-3w fr-alert--' + type;
+    var pEl = document.createElement('p');
+    if (isHtml) pEl.innerHTML = text; else pEl.textContent = text;
+    el.innerHTML = '';
+    el.appendChild(pEl);
+    el.hidden = false;
+  }
+
+  function showMsg(kind, text) { alertBox($('msg'), kind, text); }
+  function hideMsg() { $('msg').hidden = true; }
+
+  // ============================================================
+  // Interactions
+  // ============================================================
+  // Retire les trous : les choix restent contigus (1, 2, 3…)
+  function compact() {
+    var filled = state.choices.filter(Boolean);
+    while (filled.length < CONFIG.maxChoices) filled.push(null);
+    state.choices = filled;
+  }
+
+  $('cal-grid').addEventListener('click', function (ev) {
+    var btn = ev.target.closest('.day');
+    if (!btn || btn.disabled || !btn.dataset.key) return;
+    var k = btn.dataset.key;
+    var idx = state.choices.indexOf(k);
+    hideMsg();
+    if (idx !== -1) {
+      state.choices[idx] = null;
+      compact();
+    } else {
+      var free = state.choices.indexOf(null);
+      if (free === -1) {
+        showMsg('warn', 'Vous avez déjà ' + CONFIG.maxChoices + ' choix. Retirez-en un pour en sélectionner un autre.');
+        return;
+      }
+      state.choices[free] = k;
+    }
+    render();
+  });
+
+  $('choices').addEventListener('click', function (ev) {
+    var b = ev.target.closest('.mini-btn');
+    if (!b || b.disabled) return;
+    var i = +b.closest('.choice').dataset.index;
+    var c = state.choices;
+    if (b.dataset.act === 'del') { c[i] = null; compact(); }
+    else if (b.dataset.act === 'up') { var t = c[i - 1]; c[i - 1] = c[i]; c[i] = t; }
+    else if (b.dataset.act === 'down') { var u = c[i + 1]; c[i + 1] = c[i]; c[i] = u; }
+    render();
+  });
+
+  $('prev').addEventListener('click', function () {
+    state.viewMonth--;
+    if (state.viewMonth < 0) { state.viewMonth = 11; state.viewYear--; }
+    renderCalendar();
+  });
+  $('next').addEventListener('click', function () {
+    state.viewMonth++;
+    if (state.viewMonth > 11) { state.viewMonth = 0; state.viewYear++; }
+    renderCalendar();
+  });
+
+  $('nom').addEventListener('input', updateSubmit);
+  $('prenom').addEventListener('input', updateSubmit);
+
+  function resetForm() {
+    $('nom').value = '';
+    $('prenom').value = '';
+    state.choices = [null, null, null, null];
+    render();
+  }
+  $('reset').addEventListener('click', function () { hideMsg(); resetForm(); });
+
+  $('submit').addEventListener('click', function () {
+    if ($('submit').disabled) return;
+    var cols = state.cols;
+    var fields = {};
+    fields[cols.nom] = $('nom').value.trim();
+    fields[cols.prenom] = $('prenom').value.trim();
+    cols.choix.forEach(function (colId, i) {
+      fields[colId] = state.choices[i] || null;   // 'YYYY-MM-DD', converti par Grist
+    });
+
+    state.saving = true;
+    updateSubmit();
+    postRecord(fields)
+      .then(function () {
+        var recap = state.choices.filter(Boolean).map(function (k, i) { return (i + 1) + '. ' + labelOf(k); });
+        $('done-text').textContent = fields[cols.prenom] + ' ' + fields[cols.nom] + ' — ' + recap.join(' · ');
+        $('app').hidden = true;
+        $('done').hidden = false;
+        hideMsg();
+        resetForm();
+      })
+      .catch(function (err) {
+        console.error(err);
+        showMsg('err', "Échec de l'enregistrement : " + (err && err.message ? err.message : err));
+      })
+      .then(function () {
+        state.saving = false;
+        updateSubmit();
+      });
+  });
+
+  // ============================================================
+  // Grist (formulaire publié : aucun compte nécessaire)
+  // ============================================================
+  $('again').addEventListener('click', function () {
+    $('done').hidden = true;
+    $('app').hidden = false;
+  });
+
+  // Normalise un nom : minuscules, sans accents ni ponctuation ("Prénom" -> "prenom", "Choix N°1" -> "choixn1")
+  function norm(x) {
+    return String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  // "https://docs.getgrist.com/forms/<shareKey>/<vsId>" -> { base, shareKey, vsId }
+  function parseFormUrl(u) {
+    var m = String(u || '').trim().match(/^(https?:\/\/.+?)\/forms\/([^\/?#]+)\/(\d+)/);
+    if (!m) return null;
+    return { base: m[1], shareKey: m[2], vsId: m[3] };
+  }
+
+  function request(path, opts) {
+    var url = state.api.base + '/api/s/' + state.api.shareKey + path;
+    return fetch(url, opts).then(function (resp) {
+      return resp.json().catch(function () { return {}; }).then(function (body) {
+        if (!resp.ok) throw new Error(body.error || ('Erreur ' + resp.status));
+        return body;
+      });
+    });
+  }
+
+  // Lit la description du formulaire : table cible et colonnes présentes
+  function loadForm() {
+    return request('/forms/' + state.api.vsId, { method: 'GET' }).then(function (form) {
+      state.tableId = form.formTableId;
+      var list = Object.keys(form.formFieldsById || {}).map(function (id) { return form.formFieldsById[id]; });
+      function find(wanted, test) {
+        var w = norm(wanted), hit = null;
+        list.forEach(function (c) {
+          if (hit) return;
+          if (norm(c.colId) === w || norm(c.question) === w || (test && (test(norm(c.colId)) || test(norm(c.question))))) hit = c.colId;
+        });
+        return hit;
+      }
+      var resolved = {
+        nom: find(CONFIG.columns.nom),
+        prenom: find(CONFIG.columns.prenom),
+        choix: CONFIG.columns.choix.map(function (wanted, i) {
+          var re = new RegExp('^choix(n|no)?' + (i + 1) + '$');
+          return find(wanted, function (n) { return re.test(n); });
+        })
+      };
+      var missing = [];
+      if (!resolved.nom) missing.push(CONFIG.columns.nom);
+      if (!resolved.prenom) missing.push(CONFIG.columns.prenom);
+      resolved.choix.forEach(function (c, i) { if (!c) missing.push(CONFIG.columns.choix[i]); });
+      if (missing.length) {
+        throw new Error('Le formulaire Grist doit contenir ces champs : ' + missing.join(', ') +
+          '. Champs trouvés : ' + list.map(function (c) { return c.colId; }).join(', '));
+      }
+      state.cols = resolved;
+    });
+  }
+
+  function postRecord(fields) {
+    return request('/tables/' + encodeURIComponent(state.tableId) + '/records', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ records: [{ fields: fields }] })
+    });
+  }
+
+  function setupMsg(kind, text) { alertBox($('setup-msg'), kind, text); }
+
+  // Lien le plus court possible vers cette page pour un formulaire donné
+  function shareLinkFor(formUrl) {
+    var page = location.origin + location.pathname;
+    var api = parseFormUrl(formUrl), def = parseFormUrl(CONFIG.formUrl);
+    if (def && api.base === def.base && api.shareKey === def.shareKey && api.vsId === def.vsId) return page;
+    if (api.base === CONFIG.gristHome) return page + '#' + api.shareKey + '-' + api.vsId;
+    return page + '?form=' + encodeURIComponent(formUrl);
+  }
+
+  function showLink(formUrl) {
+    var link = shareLinkFor(formUrl);
+    $('share-link').textContent = link;
+    $('open').href = link;
+    $('copy').textContent = 'Copier le lien';
+    $('setup-result').hidden = false;
+    if (!/^https?:$/.test(location.protocol)) {
+      setupMsg('warn', 'Attention : cette page est ouverte depuis votre ordinateur, ' +
+        'le lien ne fonctionnera pour les autres qu\'une fois la page mise en ligne.');
+    }
+  }
+
+  // Panneau « lien à envoyer » : affiché dans Grist (widget) ou quand aucun formulaire n'est fourni
+  function showSetup() {
+    $('app').hidden = true;
+    $('setup').hidden = false;
+    $('setup-go').addEventListener('click', function () {
+      var raw = $('setup-url').value.trim();
+      var api = parseFormUrl(raw);
+      $('setup-result').hidden = true;
+      if (!api) {
+        setupMsg('err', 'Lien non reconnu. Il doit ressembler à https://docs.getgrist.com/forms/XXXXXXXX/12');
+        return;
+      }
+      state.api = api;
+      setupMsg('warn', 'Vérification du formulaire…');
+      loadForm().then(function () {
+        setupMsg('ok', 'Formulaire valide (table ' + state.tableId + ').');
+        showLink(raw);
+      }).catch(function (err) {
+        var text = err && err.message ? err.message : String(err);
+        if (/not found/i.test(text)) text = 'Formulaire introuvable : vérifiez qu\'il est bien publié dans Grist.';
+        setupMsg('err', text);
+      });
+    });
+    $('copy').addEventListener('click', function () {
+      var link = $('share-link').textContent;
+      (navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject())
+        .then(function () { $('copy').textContent = 'Copié ✓'; })
+        .catch(function () {
+          var r = document.createRange();
+          r.selectNodeContents($('share-link'));
+          var sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+          $('copy').textContent = 'Faites Ctrl+C';
+        });
+    });
+  }
+
+  function autoMsg(kind, html) { alertBox($('auto-msg'), kind, html, true); }
+
+  function safeJson(x) { try { return JSON.parse(x || '{}') || {}; } catch (e) { return {}; } }
+
+  // Dans Grist : retrouve le formulaire publié sur la table cible et construit son lien public
+  function findPublishedForm() {
+    var api = grist.docApi;
+    return Promise.all([
+      api.fetchTable('_grist_Tables'),
+      api.fetchTable('_grist_Views_section'),
+      api.fetchTable('_grist_Pages'),
+      api.fetchTable('_grist_Shares'),
+      api.getAccessToken({ readOnly: true })
+    ]).then(function (r) {
+      var tables = r[0], sections = r[1], pages = r[2], shares = r[3], token = r[4];
+      // ".../o/docs/api/docs/<docId>" -> ".../o/docs"
+      var home = String(token.baseUrl).replace(/\/api\/docs\/.*$/, '');
+      var tableRefs = {};
+      tables.id.forEach(function (id, i) { tableRefs[id] = tables.tableId[i]; });
+      var found = [];
+      sections.id.forEach(function (secId, i) {
+        if (sections.parentKey[i] !== 'form') return;
+        var tableId = tableRefs[sections.tableRef[i]];
+        var pIdx = pages.viewRef.indexOf(sections.parentId[i]);
+        var shareRef = pIdx === -1 ? 0 : pages.shareRef[pIdx];
+        var sIdx = shares.id.indexOf(shareRef);
+        var published = sIdx !== -1 && safeJson(shares.options[sIdx]).publish &&
+          safeJson(sections.shareOptions[i]).publish;
+        found.push({
+          tableId: tableId,
+          onTarget: norm(tableId) === norm(CONFIG.table),
+          title: sections.title[i] || tableId,
+          published: !!published,
+          url: published ? home + '/forms/' + shares.linkId[sIdx] + '/' + secId : null
+        });
+      });
+      return found;
+    });
+  }
+
+  function initInGrist() {
+    $('setup-title').textContent = 'Lien du formulaire à envoyer';
+    showSetup();
+    grist.ready({ requiredAccess: 'full' });
+    findPublishedForm().then(function (forms) {
+      // priorité aux formulaires de la table cible, sinon n'importe quel formulaire publié
+      var pub = forms.filter(function (f) { return f.published && f.onTarget; });
+      if (!pub.length) pub = forms.filter(function (f) { return f.published; });
+      if (pub.length) {
+        $('setup-steps').hidden = true;
+        $('manual-hint').hidden = true;
+        $('manual-row').hidden = true;
+        autoMsg('ok', 'Formulaire publié trouvé sur la table ' + pub[0].tableId.replace(/</g, '&lt;') + '.');
+        state.api = parseFormUrl(pub[0].url);
+        showLink(pub[0].url);
+        // vérifie que le formulaire contient bien les champs attendus
+        loadForm().catch(function (err) { setupMsg('err', err && err.message ? err.message : String(err)); });
+      } else if (forms.length) {
+        autoMsg('warn', 'Un formulaire existe (table ' + forms[0].tableId.replace(/</g, '&lt;') + ') mais il n\'est pas publié : ouvrez-le et cliquez sur « Publier », puis rechargez ce widget.');
+      } else {
+        autoMsg('warn', 'Aucun formulaire trouvé dans ce document. Suivez les étapes ci-dessous puis rechargez ce widget.');
+      }
+    }).catch(function (err) {
+      console.error(err);
+      var text = err && err.message ? err.message : String(err);
+      if (/access|permission|granted|denied/i.test(text)) {
+        autoMsg('err', 'Donnez au widget l\'<b>accès complet</b> (panneau de droite → Accès) pour détecter le lien automatiquement.');
+      } else {
+        autoMsg('err', 'Détection automatique impossible : ' + text.replace(/</g, '&lt;'));
+      }
+    });
+  }
+
+  function initPublic() {
+    var fromQuery = new URLSearchParams(location.search).get('form');
+    var fromHash = location.hash.match(/^#(.+)-(\d+)$/);
+    var formUrl = fromQuery ||
+      (fromHash ? CONFIG.gristHome + '/forms/' + fromHash[1] + '/' + fromHash[2] : CONFIG.formUrl);
+    state.api = parseFormUrl(formUrl);
+    if (!state.api) {
+      showSetup();
+      return;
+    }
+    loadForm()
+      .then(function () {
+        state.ready = true;
+        updateSubmit();
+      })
+      .catch(function (err) {
+        console.error(err);
+        var text = err && err.message ? err.message : String(err);
+        if (/not found|introuvable/i.test(text)) text = 'Formulaire introuvable : vérifiez qu\'il est bien publié dans Grist.';
+        else if (/failed to fetch|networkerror/i.test(text)) text = 'Impossible de joindre Grist. Vérifiez votre connexion.';
+        showMsg('err', text);
+      });
+  }
+
+  // Ouverte dans un widget Grist (iframe) : panneau de lien. Sinon : formulaire public.
+  var inIframe = window.parent !== window;
+  if (inIframe && !new URLSearchParams(location.search).get('form')) {
+    var sc = document.createElement('script');
+    sc.src = 'https://docs.getgrist.com/grist-plugin-api.js';
+    sc.onload = initInGrist;
+    sc.onerror = initPublic;
+    document.head.appendChild(sc);
+  } else {
+    initPublic();
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
