@@ -6,7 +6,7 @@
 | `annuaire-adresses.html` | Annuaire d'adresses géocodées (BAN) |
 | `grist-assistant-claude.html` | Assistant Claude |
 | `prise-rdv-calendrier.html` | Prise de rendez-vous (calendrier) |
-| `calendrier-prelevements.html` | **Calendrier des prélèvements** : crée la table `RDV_Prelevements` au format du fichier Excel quotidien (préleveurs, inspecteurs FranceAgriMer) |
+| `calendrier-prelevements.html` | **Calendrier des prélèvements** : fiches rendez-vous par exploitation, préleveurs et inspecteurs FranceAgriMer |
 | `rdv/index.html` | Formulaire public de prise de rendez-vous |
 | `duo.html` | **Duo** — interprète à deux écouteurs (ex. japonais ⇄ allemand) |
 
@@ -75,36 +75,30 @@ Structure (en-tête des documents, IBAN, mentions), devise, TVA et délai par d�
 
 ## Calendrier des prélèvements (`calendrier-prelevements.html`)
 
-Charte DSFR (police Marianne, bleu France, bloc-marque). Le widget crée la table **`RDV_Prelevements`** au format du fichier Excel reçu chaque jour, puis affiche et gère les rendez-vous de cette table.
+Charte DSFR (police Marianne, bleu France, bloc-marque). Gère une **fiche « Rendez-vous prélèvement » par exploitation**, enregistrée dans `RDV_Prelevements` à raison d'**une ligne par parcelle** (clé unique PACAGE-îlot-parcelle).
 
-### Table `RDV_Prelevements`
+### Tables
 
-Une ligne par parcelle, colonnes identiques au fichier Excel (mêmes intitulés, même ordre) :
+| Table | Rôle |
+|---|---|
+| `DATA_RELIQUATCLEAN` (source, lecture) | Parcelles à prélever : clé `CLELAB`, n° dossier DN, PACAGE, exploitation, téléphone, e-mail, adresse, réponses de l'agriculteur (zones à éviter, fertilisation, prairie…) |
+| `DATA_Parcelles_DEF` (source, lecture, facultatif) | Îlot, parcelle, surface, cultures 2024-2025, bassin, raison de la sélection, latitude / longitude (clé `CLE`) |
+| `RDV_Prelevements` | `Cle_parcelle`*, `N_dossier_DN`, `Date_heure_appel_1/2/3`, `Statut` (Rdv pris, Injoignable, Refus, Faux numéro), `Presence_souhaitee_agriculteur`, `Culture_en_place`, `Absence_fertilisation_recente`, `Preleveur` (réf. `DATA_Preleveur`), `Date_RDV`, `Etiquette_prelevement`, `Commentaire`, `Inspecteur` (réf. `DATA_Inspecteur`), `Duree_min` ; formules `PACAGE`, `Code_dpt`, `Nom_exploitation` ; `Cree_le`, `Cree_par`, `Modifie_le` |
+| `DATA_Preleveur`, `DATA_Inspecteur` | Nom, prénom, organisme / service, téléphone, e-mail, départements, actif |
 
-`N° dossier` · `Raison Sociale` · `ilot` · `Surface` · `N° prélèv.` · `Type` · `Culture` · `Adresse` · `Code Postal` · `Commune` · `Téléphone` · `Portable` · `Bassin versant` · `Observations` · `Préleveur` · `Prélèvement prévu le` (date) · `Heure` · `Remarques RDV`
+### Mise en place
 
-plus deux colonnes remplies depuis le calendrier : `Statut_RDV` (Prévu, À confirmer, Réalisé, Reporté, Annulé, Non retenu) et `Inspecteur_FAM` (référence vers `Inspecteurs_FAM`). Le widget crée aussi `Preleveurs` et `Inspecteurs_FAM` (`Nom`, `Prenom`, `Nom_complet` = « NOM Prénom », `Organisme` / `Service`, `Telephone`, `Email`, `Departements`, `Actif`).
+Widget personnalisé, accès **Accès complet au document**, lié à `RDV_Prelevements`. L'écran **Mise en place** liste les modifications avant de les appliquer :
+- renomme `Preleveurs` → `DATA_Preleveur` et `Inspecteurs_FAM` → `DATA_Inspecteur` (données et références conservées), ou les crée ;
+- crée `RDV_Prelevements`, ou ajoute les colonnes manquantes à la table existante (aucune colonne supprimée ni renommée), remplace les choix de `Statut` et calcule `Code_dpt` à partir de la clé parcelle (règles d'accès par département).
 
-### Installation
+### Fonctions
 
-1. Ajoutez un **Widget personnalisé** (URL du fichier publié ou Custom Widget Builder), accès **Accès complet au document**.
-2. À l'écran **Configuration**, laissez « + Créer RDV_Prelevements » et cliquez sur **Enregistrer et ouvrir le calendrier**.
-3. Liez ensuite le widget à la table `RDV_Prelevements` (« Sélectionner les données ») pour qu'il se rafraîchisse après chaque import.
-
-### Import quotidien du fichier Excel
-
-Dans Grist : **Ajouter des données → Importer depuis un fichier**, choisissez le fichier, destination **`RDV_Prelevements`**, cochez **Mettre à jour les enregistrements existants** avec le champ de fusion **N° dossier**. Les nouvelles parcelles sont ajoutées, les existantes mises à jour ; `Statut_RDV` et `Inspecteur_FAM` ne sont pas touchées.
-
-> Les colonnes présentes dans le fichier (`Préleveur`, `Prélèvement prévu le`, `Heure`, `Remarques RDV`) sont remplacées par les valeurs du fichier lors de l'import.
-
-### Fonctions du calendrier
-
-- Vues mois / semaine / liste ; un rendez-vous = les parcelles d'une même exploitation prévues le même jour à la même heure ; plusieurs rendez-vous par jour.
-- Filtres préleveur, inspecteur, statut, bassin versant, type (RDD, RPA, RPR…), recherche (exploitation, commune, n° dossier).
-- Prise de rendez-vous : exploitation, parcelles à cocher, date, heure, préleveur, inspecteur, statut, remarques ; alerte de chevauchement ; « Déplanifier ».
-- Onglet **Exploitations** (parcelles planifiées / total, prochain rendez-vous), **fiche exploitation** (coordonnées, observations, parcelles), onglets **Préleveurs** et **Inspecteurs FranceAgriMer**.
-- Facultatif : fiche de prélèvement détaillée reliée par le n° de dossier à une autre table (ex. `DATA_Lab`).
-- Paramètres : autre table au même format, correspondance des colonnes, horaires, durée d'un rendez-vous.
+- **Calendrier** mois / semaine / jour / liste ; couleur par préleveur ; plusieurs rendez-vous par jour.
+- **Barre de gauche** : recherche d'une exploitation (nom, PACAGE, n° dossier, commune, clé) qui ouvre son rendez-vous ; liste des **préleveurs** (clic = uniquement ses rendez-vous) ; **planning des inspecteurs** FranceAgriMer ; **feuille de route** imprimable du préleveur ou de l'inspecteur sélectionné sur la période affichée.
+- **Fiche Rendez-vous prélèvement** : contact, 3 appels (bouton « maintenant »), statut, présence souhaitée, préleveur, date/heure du RDV, durée, inspecteur ; par parcelle : culture en place (préremplie avec la culture 2026), absence de fertilisation récente, étiquette, commentaire, et **infos préleveur** (surface, cultures, zones à éviter, fertilisation, prairie, liens Géoportail / itinéraire). Alerte de chevauchement d'horaires.
+- **Exploitations** : statut d'appel, nombre d'appels, rendez-vous ; filtres statut (dont « À appeler ») et département.
+- **Préleveurs** / **Inspecteurs FranceAgriMer** : ajout, modification, désactivation, accès au planning.
 
 Ouvert hors de Grist, le widget s'affiche en mode démonstration avec des données fictives.
 

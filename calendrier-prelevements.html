@@ -257,6 +257,57 @@
   /* ================= Panneau jour ================= */
   .daylist{display:flex;flex-direction:column;gap:6px}
 
+
+  /* ================= Statuts d'appel ================= */
+  .badge.st-pris{background:var(--success-bg);color:var(--success)}
+  .badge.st-injoignable{background:var(--new-bg);color:var(--new)}
+  .badge.st-refus{background:var(--error-bg);color:var(--error)}
+  .badge.st-faux{background:var(--grey-bg);color:var(--text)}
+  .badge.st-none{background:var(--info-bg);color:var(--info)}
+  .ic-print{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M6 19H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h3V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v4h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-3v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-2Zm0-2v-1a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1h2V9H4v8h2ZM8 4v3h8V4H8Zm0 13v3h8v-3H8Zm-3-7h3v2H5v-2Z'/></svg>")}
+
+  /* ================= Calendrier + barre latérale ================= */
+  .cal-layout{display:grid;grid-template-columns:270px minmax(0,1fr);gap:22px;align-items:start}
+  .side{position:sticky;top:10px;max-height:calc(100vh - 20px);overflow-y:auto;border-right:1px solid var(--border);padding-right:14px}
+  .side-search{margin-bottom:14px}
+  .side-search .input{min-height:2.3rem}
+  #qres{display:flex;flex-direction:column;gap:2px;margin-top:6px}
+  .qhit{display:flex;flex-direction:column;align-items:flex-start;width:100%;text-align:left;border:0;background:var(--alt);padding:.4rem .6rem;cursor:pointer;font-size:.85rem;color:var(--title)}
+  .qhit:hover{background:var(--bf-950)}
+  .side-sec{margin-bottom:16px}
+  .side-sec h3{font-size:.85rem;text-transform:uppercase;letter-spacing:.02em;color:var(--mention);display:flex;gap:6px;align-items:center;margin:0 0 6px}
+  .side-item{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;text-align:left;padding:.4rem .5rem;cursor:pointer;font-size:.88rem;color:var(--title);position:relative}
+  .side-item:hover{background:var(--alt)}
+  .side-item.on{background:var(--bf-950);color:var(--bf);font-weight:700}
+  .side-item.on::before{content:"";position:absolute;left:0;top:.35rem;bottom:.35rem;width:3px;background:var(--bf)}
+  .side-item .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .side-item .n{font-size:.75rem;color:var(--mention);background:var(--contrast);border-radius:99px;padding:0 7px}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;flex:0 0 auto;vertical-align:middle}
+  .selbar{display:flex;align-items:center;gap:10px;background:var(--bf-975);padding:.4rem .75rem;margin-bottom:10px}
+  .select.mini{width:auto;min-height:2rem;padding:.25rem 2rem .25rem .6rem;font-size:.85rem}
+  .ev .ic,.wev .ic{--ic:.75rem}
+  .inline{display:flex;gap:4px}
+  .inline .input{flex:1;min-width:0}
+  .parcel{border:1px solid var(--border);border-left:3px solid var(--bf);padding:.75rem 1rem .25rem;margin-bottom:12px}
+  .parcel-head{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:.6rem}
+  .parcel-head .btn{margin-left:auto}
+  .pinfo{background:var(--alt);padding:.75rem 1rem;margin-bottom:.75rem}
+  .pinfo h4,.road-p h4{font-size:.85rem;color:var(--bf);margin:.75rem 0 .4rem}
+  .pinfo h4.warn{color:var(--warning)}
+  .road-day{margin-bottom:1.25rem}
+  .road-day>h3{font-size:1.05rem;border-bottom:2px solid var(--bf);padding-bottom:.3rem;margin-bottom:.6rem}
+  .road{border:1px solid var(--border);padding:.75rem 1rem;margin-bottom:.75rem;break-inside:avoid}
+  .road-h{display:flex;gap:12px;flex-wrap:wrap;align-items:baseline;margin-bottom:.5rem}
+  .road-p{border-top:1px dashed var(--border);margin-top:.6rem;padding-top:.2rem}
+  @media (max-width:900px){.cal-layout{grid-template-columns:1fr}.side{position:static;max-height:none;border-right:0;padding-right:0}}
+  @media print{
+    body.printing>*:not(#modalRoot){display:none!important}
+    body.printing .overlay{position:static;background:none;padding:0;display:block}
+    body.printing .modal{box-shadow:none;width:100%}
+    body.printing .modal-close,body.printing .modal-foot,body.printing [data-toggle]{display:none!important}
+    body.printing .pinfo[hidden]{display:block!important}
+  }
+
   /* ================= Toast / chargement ================= */
   #toastRoot{position:fixed;right:16px;bottom:16px;z-index:200;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
   .toast{background:var(--title);color:#fff;padding:.7rem 1rem;font-size:.875rem;box-shadow:var(--shadow-lg);display:flex;gap:8px;align-items:center;max-width:min(420px,90vw)}
@@ -291,7 +342,7 @@
     <p class="fr-logo fr-logo--sm">République<br>Française</p>
     <div class="svc">
       <p class="svc-title">Calendrier des prélèvements</p>
-      <p class="svc-tag">Campagne reliquats azotés · préleveurs &amp; inspecteurs FranceAgriMer</p>
+      <p class="svc-tag">Campagne reliquats azotés · rendez-vous préleveurs &amp; inspecteurs FranceAgriMer</p>
     </div>
     <div class="hdr-tools">
       <button class="btn ghost icon" id="refreshBtn" type="button" title="Actualiser les données"><span class="ic ic-refresh" aria-hidden="true"></span><span class="sr">Actualiser</span></button>
@@ -317,75 +368,68 @@
 /* ============================================================
    CONFIGURATION
    ============================================================ */
-const T_RDV = 'RDV_Prelevements', T_PREL = 'Preleveurs', T_INSP = 'Inspecteurs_FAM';
-// Structure du fichier Excel reçu chaque jour : identifiants = ceux que Grist génère à partir des en-têtes,
-// pour que l'import du fichier dans la table associe les colonnes automatiquement.
-const RDV_SCHEMA = [
-  ['N_dossier', 'N° dossier', 'Numeric'], ['Raison_Sociale', 'Raison Sociale', 'Text'], ['ilot', 'ilot', 'Text'], ['Surface', 'Surface', 'Text'],
-  ['N_prelev_', 'N° prélèv.', 'Text'], ['Type', 'Type', 'Text'], ['Culture', 'Culture', 'Text'], ['Adresse', 'Adresse', 'Text'],
-  ['Code_Postal', 'Code Postal', 'Text'], ['Commune', 'Commune', 'Text'], ['Telephone', 'Téléphone', 'Text'], ['Portable', 'Portable', 'Text'],
-  ['Bassin_versant', 'Bassin versant', 'Text'], ['Observations', 'Observations', 'Text'], ['Preleveur', 'Préleveur', 'Text'],
-  ['Prelevement_prevu_le', 'Prélèvement prévu le', 'Date'], ['Heure', 'Heure', 'Text'], ['Remarques_RDV', 'Remarques RDV', 'Text']
-].map(([id, label, type]) => ({id, label, type}));
-const STATUTS = ['Prévu', 'À confirmer', 'Réalisé', 'Reporté', 'Annulé', 'Non retenu'];
-const STATUT_COLORS = {'Prévu': ['#e8edff', '#0063cb'], 'À confirmer': ['#feebd0', '#695240'], 'Réalisé': ['#b8fec9', '#18753c'],
-  'Reporté': ['#e3e3fd', '#000091'], 'Annulé': ['#ffe9e9', '#ce0500'], 'Non retenu': ['#ffe9e9', '#ce0500']};
+const T_RDV = 'RDV_Prelevements', T_PREL = 'DATA_Preleveur', T_INSP = 'DATA_Inspecteur';
+const OLD_NAMES = {[T_PREL]: 'Preleveurs', [T_INSP]: 'Inspecteurs_FAM'};
+const STATUTS = ['Rdv pris', 'Injoignable', 'Refus', 'Faux numéro'];
+const STATUT_STYLE = {'Rdv pris': ['#b8fec9', '#18753c'], 'Injoignable': ['#feebd0', '#695240'], 'Refus': ['#ffe9e9', '#ce0500'], 'Faux numéro': ['#eeeeee', '#3a3a3a']};
+const OUI_NON = ['Oui', 'Non'];
 const DUREES = [15, 30, 45, 60, 90, 120, 180];
-const DEFAULT_CFG = {rdvTable: '', map: null, ficheTable: '', ficheKey: '', hourStart: 8, hourEnd: 19, duree: 45};
+const DEFAULT_CFG = {parcTable: 'DATA_RELIQUATCLEAN', parcKey: 'CLELAB', defTable: 'DATA_Parcelles_DEF', defKey: 'CLE', hourStart: 8, hourEnd: 19, duree: 45};
+const PALETTE = ['#000091', '#18753c', '#b34000', '#a94645', '#6a6af4', '#009081', '#c3992a', '#7d4e5b', '#3558a2', '#e4794a', '#66673d', '#ce614a'];
+const TZ = 'Europe/Paris';
 
-// Champs logiques de la table des prélèvements (une ligne = une parcelle à prélever).
-// syn : intitulés reconnus automatiquement (comparés sans accents ni ponctuation).
-const STATUT_CHOICE_OPTS = {}; STATUTS.forEach(s => { STATUT_CHOICE_OPTS[s] = {fillColor: STATUT_COLORS[s][0], textColor: STATUT_COLORS[s][1]}; });
-const FIELDS = [
-  {k: 'exploitation', label: 'Exploitation (raison sociale)', req: true, syn: ['raison sociale', 'nom ou raison sociale', 'nom raison sociale', 'exploitation', 'nom']},
-  {k: 'date', label: 'Date du prélèvement', req: true, syn: ['prelevement prevu le', 'date prelevement', 'date rdv', 'date heure rdv', 'date']},
-  {k: 'heure', label: 'Heure', syn: ['heure', 'horaire', 'heure rdv']},
-  {k: 'preleveur', label: 'Préleveur', syn: ['preleveur', 'nom du preleveur', 'nom prenom du preleveur']},
-  {k: 'inspecteur', label: 'Inspecteur FranceAgriMer', syn: ['inspecteur fam', 'inspecteur', 'inspecteur franceagrimer'],
-    create: {id: 'Inspecteur_FAM', type: 'Ref:' + T_INSP}},
-  {k: 'statut', label: 'Statut du rendez-vous', syn: ['statut rdv', 'statut du rdv', 'statut'],
-    create: {id: 'Statut_RDV', type: 'Choice', widgetOptions: JSON.stringify({choices: STATUTS, choiceOptions: STATUT_CHOICE_OPTS})}},
-  {k: 'remarques', label: 'Remarques RDV', syn: ['remarques rdv', 'remarques', 'commentaire rdv']},
-  {k: 'duree', label: 'Durée (min)', syn: ['duree', 'duree min']},
-  {k: 'dossier', label: 'N° dossier', syn: ['n dossier', 'no dossier', 'numero dossier', 'dossier', 'dossier number']},
-  {k: 'parcelle', label: 'Îlot-parcelle', syn: ['ilot', 'ilot parcelle', 'parcelle']},
-  {k: 'surface', label: 'Surface', syn: ['surface']},
-  {k: 'numPrelev', label: 'N° prélèvement', syn: ['n prelev', 'no prelev', 'n prelevement', 'numero de prelevement']},
-  {k: 'type', label: 'Type', syn: ['type']},
-  {k: 'culture', label: 'Culture', syn: ['culture', 'culture en place']},
-  {k: 'adresse', label: 'Adresse', syn: ['adresse', 'adresse complete']},
-  {k: 'cp', label: 'Code postal', syn: ['code postal', 'cp']},
-  {k: 'commune', label: 'Commune', syn: ['commune', 'ville']},
-  {k: 'tel', label: 'Téléphone', syn: ['telephone', 'telephone fixe', 'tel']},
-  {k: 'portable', label: 'Portable', syn: ['portable', 'mobile', 'telephone portable']},
-  {k: 'bassin', label: 'Bassin versant', syn: ['bassin versant', 'bassin']},
-  {k: 'observations', label: 'Observations', syn: ['observations', 'observation']}
-];
-const FIELD = Object.fromEntries(FIELDS.map(f => [f.k, f]));
+const choiceOpts = list => { const o = {}; list.forEach(s => { if (STATUT_STYLE[s]) o[s] = {fillColor: STATUT_STYLE[s][0], textColor: STATUT_STYLE[s][1]}; }); return o; };
+// Table RDV_Prelevements : une ligne par parcelle (clé PACAGE-îlot-parcelle)
+function rdvSchema() {
+  const p = S.cfg.parcTable, pc = (S.meta[p] || {cols: {}}).cols, k = S.cfg.parcKey;
+  const nameCol = ['Nom_exploitation', 'Raison_sociale', 'Nom_ou_Raison_sociale'].filter(c => pc[c]);
+  return [
+    {id: 'Cle_parcelle', label: 'Clé parcelle (PACAGE-îlot-parcelle)', type: 'Text'},
+    {id: 'N_dossier_DN', label: 'N° dossier démarche numérique', type: 'Numeric'},
+    {id: 'Date_heure_appel_1', label: 'Date/heure appel 1', type: 'DateTime:' + TZ},
+    {id: 'Date_heure_appel_2', label: 'Date/heure appel 2', type: 'DateTime:' + TZ},
+    {id: 'Date_heure_appel_3', label: 'Date/heure appel 3', type: 'DateTime:' + TZ},
+    {id: 'Statut', label: 'Statut', type: 'Choice', widgetOptions: JSON.stringify({choices: STATUTS, choiceOptions: choiceOpts(STATUTS)})},
+    {id: 'Presence_souhaitee_agriculteur', label: 'Présence souhaitée de l\'agriculteur', type: 'Choice', widgetOptions: JSON.stringify({choices: OUI_NON})},
+    {id: 'Culture_en_place', label: 'Culture en place', type: 'Text'},
+    {id: 'Absence_fertilisation_recente', label: 'Absence de fertilisation récente', type: 'Choice', widgetOptions: JSON.stringify({choices: OUI_NON})},
+    {id: 'Preleveur', label: 'Nom prénom du préleveur', type: 'Ref:' + T_PREL},
+    {id: 'Date_RDV', label: 'Date/heure du RDV', type: 'DateTime:' + TZ},
+    {id: 'Etiquette_prelevement', label: 'Étiquette prélèvement', type: 'Text'},
+    {id: 'Commentaire', label: 'Commentaire', type: 'Text'},
+    {id: 'Inspecteur', label: 'Inspecteur FranceAgriMer', type: 'Ref:' + T_INSP},
+    {id: 'Duree_min', label: 'Durée (min)', type: 'Numeric'},
+    {id: 'PACAGE', type: 'Text', isFormula: true, formula: '$Cle_parcelle.split("-")[0] if $Cle_parcelle else None'},
+    {id: 'Code_dpt', type: 'Text', isFormula: true, formula: '$Cle_parcelle[:3] if $Cle_parcelle else None'},
+    nameCol.length && S.meta[p] && pc[k] ? {id: 'Nom_exploitation', type: 'Text', isFormula: true,
+      formula: `r = ${p}.lookupOne(${k}=$Cle_parcelle)\nreturn (${nameCol.map(c => 'r.' + c).join(' or ')}) if r else None`} : null,
+    {id: 'Cree_le', type: 'DateTime:' + TZ, formula: 'NOW()'},
+    {id: 'Cree_par', type: 'Text', formula: 'user.Name'},
+    {id: 'Modifie_le', type: 'DateTime:' + TZ}
+  ].filter(Boolean);
+}
+const PEOPLE_SCHEMA = extra => [{id: 'Nom', type: 'Text'}, {id: 'Prenom', type: 'Text'},
+  {id: 'Nom_complet', type: 'Text', isFormula: true, formula: '" ".join(x for x in [$Prenom, $Nom] if x)'},
+  extra, {id: 'Telephone', type: 'Text'}, {id: 'Email', type: 'Text'}, {id: 'Departements', type: 'Text'}, {id: 'Actif', type: 'Bool', formula: 'True'}];
+const PEOPLE_TABLES = {[T_PREL]: PEOPLE_SCHEMA({id: 'Organisme', type: 'Text'}), [T_INSP]: PEOPLE_SCHEMA({id: 'Service', type: 'Text'})};
 
-// Fiche de prélèvement détaillée (table DATA_Lab, facultative), libellés repris de l'export CSV
-const FICHE_SECTIONS = [
-  {title: 'Exploitation', icon: 'plant', fields: [
-    ['Pacage', 'Pacage'], ['Nom_ou_Raison_sociale', 'Nom ou raison sociale'], ['dossier_number', 'N° de dossier (DN)'],
-    ['Adresse_complete', 'Adresse complète', true], ['Departement', 'Département'], ['Code_departement', 'Code département']]},
-  {title: 'Prise de contact', icon: 'time', fields: [
-    ['Date_heure_appel_1', 'Date/heure appel 1'], ['Date_heure_appel_2', 'Date/heure appel 2'], ['Date_heure_appel_3', 'Date/heure appel 3'],
-    ['Statut', 'Statut'], ['Presence_souhaitee_de_l_agriculteur', 'Présence souhaitée de l\'agriculteur'], ['Date_Heure_RDV', 'Date/heure RDV']]},
-  {title: 'Prélèvement', icon: 'user', fields: [
-    ['Nom_prenom_du_preleveur', 'Nom prénom du préleveur'], ['Nom_du_preleveur', 'Nom du préleveur'],
-    ['Date_et_heure_de_prelevement', 'Date et heure de prélèvement'], ['Lieu_du_depot_des_echantillons', 'Lieu du dépôt des échantillons'],
-    ['Culture_en_place', 'Culture en place'], ['Nature_du_couvert_en_place', 'Nature du couvert en place'],
-    ['Developpement_vegetatif_de_la_culture_en_placeDeveloppement_vegetatif_de_la_culture_en_place', 'Développement végétatif de la culture en place'],
-    ['Absence_de_fertilisation_recente', 'Absence de fertilisation récente']]},
-  {title: 'Sol et horizons', icon: 'plant', fields: [
-    ['Profondeur_du_sol_preleve_en_cm_', 'Profondeur du sol prélevé (cm)'], ['Type_de_sol', 'Type de sol'], ['Nombre_d_horizons_preleves', 'Nombre d\'horizons prélevés'],
-    ['Estimation_pierrosite_de_l_horizon_1', 'Pierrosité horizon 1'], ['Estimation_pierrosite_de_l_horizon_2', 'Pierrosité horizon 2'], ['Estimation_pierrosite_de_l_horizon_3', 'Pierrosité horizon 3']]},
-  {title: 'Géolocalisation (Lambert 93)', icon: 'pin', fields: [
-    ['GPS_LAMBERT_93_X_1_', 'X (1)'], ['GPS_LAMBERT_93_Y_1_', 'Y (1)'], ['GPS_LAMBERT_93_X_2_', 'X (2)'], ['GPS_LAMBERT_93_Y_2_', 'Y (2)']]},
-  {title: 'Suivi', icon: 'info', fields: [
-    ['Commentaire', 'Commentaire', true], ['Motif_Prelevement_non_retenu', 'Motif prélèvement non retenu', true], ['Etiquette_prelevement', 'Étiquette prélèvement']]}
+// Informations utiles au préleveur : [colonne, libellé] (table des parcelles puis DATA_Parcelles_DEF)
+const INFO_PARC = [
+  {title: 'Parcelle', fields: [['Parcelle_Labo', 'Îlot-parcelle'], ['Type_parcelle', 'Type de parcelle'], ['Culture_2026', 'Culture 2026 (déclarée)'],
+    ['quelle_est_la_prochaine_culture_prevue_sur_cette_parcelle', 'Prochaine culture prévue'], ['quel_type_de_rotation_pratiquez_vous_sur_la_parcelle', 'Rotation'],
+    ['cette_parcelle_a_t_elle_subie_un_incident', 'Incident sur la parcelle'], ['precisez_la_nature_de_l_incident_rencontre', 'Nature de l\'incident']]},
+  {title: 'Accès et zones à éviter', warn: true, fields: [['la_parcelle_comporte_t_elle_une_ou_plusieurs_zones_a_eviter_pour_le_prelevement', 'Zones à éviter'],
+    ['quelles_zones_sont_a_eviter', 'Lesquelles'], ['decrivez_au_preleveur_l_emplacement_des_zones_a_eviter', 'Emplacement (pour le préleveur)', true], ['preciser_la_zone_autre_a_eviter', 'Autre zone']]},
+  {title: 'Fertilisation', fields: [['epandez_vous_habituellement_des_fertilisants_organiques_sur_cette_parcelle', 'Épandage organique habituel'], ['indiquez_les_types_d_effluents_epandus', 'Effluents épandus'],
+    ['cette_parcelle_a_t_elle_recu_un_apport_organique_ou_ete_paturee_au_cours_des_4_dernieres_semaines', 'Apport organique / pâturage < 4 semaines'],
+    ['la_parcelle_a_t_elle_recu_des_produits_de_chaulage_depuis_moins_de_2_ans', 'Chaulage < 2 ans'], ['precisez_la_date_du_dernier_chaulage', 'Date du dernier chaulage']]},
+  {title: 'Prairie et couvert', fields: [['la_parcelle_est_elle_en_prairie_actuellement', 'En prairie actuellement'], ['quel_est_l_age_de_la_prairie', 'Âge de la prairie'],
+    ['quelle_est_la_proportion_estimee_de_trefle', 'Proportion de trèfle'], ['comment_valorisez_vous_cette_prairie', 'Valorisation de la prairie'],
+    ['cette_parcelle_etait_elle_en_prairie_avant_sa_mise_en_culture_actuelle', 'Prairie avant la culture actuelle'], ['quelle_etait_l_age_de_la_prairie_au_moment_de_son_retournement', 'Âge au retournement'],
+    ['un_couvert_vegetal_a_t_il_ete_implante_entre_la_culture_precedente_et_la_culture_actuelle', 'Couvert végétal implanté'], ['le_couvert_vegetal_a_ete', 'Devenir du couvert']]}
 ];
-const FICHE_HIDDEN = new Set(['manualSort', 'A', 'N_PACAGE_de_l_exploitant_Nom_Raison_sociale', 'Code_dpt']);
+const INFO_DEF = [['NUM_ILOT', 'N° îlot'], ['NUM_PARCEL', 'N° parcelle'], ['SURF_CALC', 'Surface (ha)'], ['Numero_de_prelevement', 'N° de prélèvement'],
+  ['CULT_2025', 'Culture 2025'], ['CULT_2024', 'Culture 2024'], ['LB_BAV', 'Bassin algues vertes'], ['LB_BVAV', 'Bassin versant'], ['Raison_de_la_selection', 'Raison de la sélection']];
 
 /* ============================================================
    OUTILS
@@ -402,25 +446,15 @@ function withTimeout(p, ms, msg) { return Promise.race([p, new Promise((_, rej) 
 const dkey = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
 const hm = d => pad(d.getHours()) + 'h' + pad(d.getMinutes());
 const fullDate = d => DAYS[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear();
-const shortDate = d => d.toLocaleDateString('fr-FR');
+const shortDate = d => pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear();
 const startOfWeek = d => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - (x.getDay() + 6) % 7); return x; };
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
-const epoch = d => Math.round(d.getTime() / 1000);
 const isErr = v => Array.isArray(v) && v[0] === 'E';
 const clean = v => (v === null || v === undefined || isErr(v)) ? '' : String(v).trim();
 function norm(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
-const normKey = s => norm(s).replace(/[^a-z0-9]+/g, ' ').trim();
 function initials(name) { return String(name || '').split(/[\s-]+/).filter(Boolean).map(w => w[0].toUpperCase()).slice(0, 3).join(''); }
-function stClass(s) {
-  const v = norm(s);
-  if (!v) return 'st-none';
-  if (v.includes('annul') || v.includes('non retenu') || v.includes('refus')) return 'st-annule';
-  if (v.includes('realis') || v.includes('effectu') || v.includes('preleve')) return 'st-fait';
-  if (v.includes('report')) return 'st-report';
-  if (v.includes('confirm') || v.includes('attente')) return 'st-confirm';
-  return 'st-prevu';
-}
-const isCancelled = s => stClass(s) === 'st-annule';
+function stClass(s) { return {'Rdv pris': 'st-pris', 'Injoignable': 'st-injoignable', 'Refus': 'st-refus', 'Faux numéro': 'st-faux'}[s] || (s ? 'st-autre' : 'st-none'); }
+const stLabel = s => s || 'À appeler';
 function toast(msg, err) {
   const el = document.createElement('div');
   el.className = 'toast' + (err ? ' err' : '');
@@ -429,12 +463,11 @@ function toast(msg, err) {
   setTimeout(() => el.remove(), err ? 6000 : 2800);
 }
 function optList(arr, sel, empty) { return (empty === null ? '' : `<option value="">${empty}</option>`) + arr.map(([v, l]) => `<option value="${esc(v)}" ${String(v) === String(sel) ? 'selected' : ''}>${esc(l)}</option>`).join(''); }
-function toInputDate(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
-function toInputTime(d) { return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+const toInputDate = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+const toInputTime = d => pad(d.getHours()) + ':' + pad(d.getMinutes());
 
-/* ---------- Dates et heures Grist ---------- */
-// Grist stocke Date en secondes UTC (minuit) et DateTime en secondes UTC, affichées dans le fuseau de la colonne.
-const tzOf = type => (/^DateTime:(.+)$/.exec(type || '') || [])[1] || 'Europe/Paris';
+/* ---------- Dates Grist (secondes UTC, colonnes DateTime:Europe/Paris) ---------- */
+const tzOf = type => (/^DateTime:(.+)$/.exec(type || '') || [])[1] || TZ;
 function partsInTz(sec, tz) {
   const o = {}; new Intl.DateTimeFormat('en-GB', {timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'})
     .formatToParts(new Date(sec * 1000)).forEach(p => { o[p.type] = Number(p.value); });
@@ -445,29 +478,22 @@ function wallToEpoch(y, m, d, h, mi, tz) {
   for (let i = 0; i < 2; i++) { const p = partsInTz(guess, tz); guess -= (Date.UTC(p.y, p.m - 1, p.d, p.h, p.mi) / 1000 - Date.UTC(y, m - 1, d, h, mi) / 1000); }
   return guess;
 }
-function readDate(v, type) {
-  if (v === null || v === undefined || v === '' || isErr(v)) return null;
-  if (typeof v === 'number') {
-    if (String(type).startsWith('DateTime')) { const p = partsInTz(v, tzOf(type)); return {y: p.y, m: p.m, d: p.d, h: p.h, mi: p.mi}; }
-    const x = new Date(v * 1000); return {y: x.getUTCFullYear(), m: x.getUTCMonth() + 1, d: x.getUTCDate(), h: null, mi: null};
-  }
-  const s = String(v).trim();
-  let r = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?/.exec(s);
-  if (r) return {y: +r[1], m: +r[2], d: +r[3], h: r[4] ? +r[4] : null, mi: r[5] ? +r[5] : null};
-  r = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2})[:h](\d{2}))?/.exec(s);
-  if (r) return {y: r[3].length === 2 ? 2000 + +r[3] : +r[3], m: +r[2], d: +r[1], h: r[4] ? +r[4] : null, mi: r[5] ? +r[5] : null};
-  return null;
+// Date JS « murale » (heure de Paris) à partir d'une valeur Grist
+function toWall(v, type) {
+  if (typeof v !== 'number') return null;
+  if (type === 'Date') { const x = new Date(v * 1000); return new Date(x.getUTCFullYear(), x.getUTCMonth(), x.getUTCDate()); }
+  const p = partsInTz(v, tzOf(type)); return new Date(p.y, p.m - 1, p.d, p.h, p.mi);
 }
-function readTime(v, type) {
-  if (v === null || v === undefined || v === '' || isErr(v)) return null;
-  if (typeof v === 'number') {
-    if (String(type).startsWith('DateTime')) { const p = partsInTz(v, tzOf(type)); return {h: p.h, mi: p.mi}; }
-    if (v >= 0 && v < 1) { const t = Math.round(v * 1440); return {h: Math.floor(t / 60), mi: t % 60}; }
-    if (v >= 0 && v < 86400 && type !== 'Date') { const x = new Date(v * 1000); return {h: x.getUTCHours(), mi: x.getUTCMinutes()}; }
-    const x = new Date(v * 1000); return {h: x.getUTCHours(), mi: x.getUTCMinutes()};
-  }
-  const r = /(\d{1,2})\s*[:hH]\s*(\d{2})?/.exec(String(v));
-  return r ? {h: +r[1] % 24, mi: r[2] ? +r[2] : 0} : null;
+const fromWall = (d, type) => type === 'Date' ? Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 1000 : wallToEpoch(d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes(), tzOf(type));
+const dtInput = d => d ? toInputDate(d) + 'T' + toInputTime(d) : '';
+function parseDtInput(s) { if (!s) return null; const [a, b] = s.split('T'); const [y, m, d] = a.split('-').map(Number), [h, mi] = (b || '0:0').split(':').map(Number); return new Date(y, m - 1, d, h, mi); }
+function fmtAny(v, type) {
+  if (v === null || v === undefined || v === '' || isErr(v)) return '';
+  if (typeof v === 'boolean' || type === 'Bool') return v ? 'Oui' : 'Non';
+  if (typeof v === 'number' && (type === 'Date' || String(type).startsWith('DateTime'))) { const d = toWall(v, type); return type === 'Date' ? shortDate(d) : shortDate(d) + ' ' + hm(d); }
+  if (Array.isArray(v)) return v[0] === 'L' ? v.slice(1).join(', ') : '';
+  if (typeof v === 'number') return v.toLocaleString('fr-FR', {maximumFractionDigits: 4, useGrouping: false});
+  return String(v);
 }
 
 /* ============================================================
@@ -477,74 +503,67 @@ function parseMeta(T, C) {
   const tables = {}, byRow = {};
   T.id.forEach((rid, i) => {
     const tid = T.tableId[i]; if (!tid || tid.startsWith('_grist')) return;
-    byRow[rid] = tid; tables[tid] = {rowId: rid, cols: {}, order: [], summary: !!(T.summarySourceTable && T.summarySourceTable[i])};
+    byRow[rid] = tid; tables[tid] = {rowId: rid, cols: {}, summary: !!(T.summarySourceTable && T.summarySourceTable[i])};
   });
-  const idx = C.id.map((_, i) => i).sort((a, b) => ((C.parentPos || [])[a] ?? 0) - ((C.parentPos || [])[b] ?? 0));
-  for (const i of idx) {
-    const tid = byRow[C.parentId[i]]; if (!tid) continue;
-    const colId = C.colId[i];
-    if (colId === 'manualSort' || colId.startsWith('gristHelper_')) continue;
+  C.id.forEach((_, i) => {
+    const tid = byRow[C.parentId[i]]; if (!tid) return;
+    const colId = C.colId[i]; if (colId === 'manualSort' || colId.startsWith('gristHelper_')) return;
     let wo = {}; try { wo = JSON.parse((C.widgetOptions || [])[i] || '{}') || {}; } catch (e) { wo = {}; }
-    tables[tid].cols[colId] = {rowId: C.id[i], colId, label: (C.label || [])[i] || colId, type: C.type[i] || 'Any',
-      isFormula: !!(C.isFormula || [])[i], formula: (C.formula || [])[i] || '', visibleCol: (C.visibleCol || [])[i] || 0, choices: wo.choices || []};
-    tables[tid].order.push(colId);
-  }
+    tables[tid].cols[colId] = {rowId: C.id[i], colId, label: (C.label || [])[i] || colId, type: C.type[i] || 'Any', isFormula: !!(C.isFormula || [])[i],
+      formula: (C.formula || [])[i] || '', visibleCol: (C.visibleCol || [])[i] || 0, choices: wo.choices || [], widgetOptions: wo};
+  });
   return tables;
 }
-function toRows(d) {
-  const keys = Object.keys(d);
-  return (d.id || []).map((_, i) => { const r = {}; keys.forEach(k => { r[k] = d[k][i]; }); return r; });
-}
+function toRows(d) { const keys = Object.keys(d); return (d.id || []).map((_, i) => { const r = {}; keys.forEach(k => { r[k] = d[k][i]; }); return r; }); }
 
 const GristBackend = {
   mode: 'grist',
   async meta() {
     const T = await withTimeout(grist.docApi.fetchTable('_grist_Tables'), 15000, 'Pas de réponse de Grist');
-    const C = await grist.docApi.fetchTable('_grist_Tables_column');
-    return parseMeta(T, C);
+    return parseMeta(T, await grist.docApi.fetchTable('_grist_Tables_column'));
   },
   async fetch(t) { return toRows(await grist.docApi.fetchTable(t)); },
-  async apply(actions) { const r = await grist.docApi.applyUserActions(actions); return r.retValues; },
+  async apply(actions) { return (await grist.docApi.applyUserActions(actions)).retValues; },
   async getConfig() { try { return await withTimeout(grist.getOption('config'), 5000); } catch (e) { return null; } },
   async setConfig(cfg) { try { await withTimeout(grist.setOption('config', cfg), 8000); return true; } catch (e) { console.warn(e); return false; } }
 };
-
-// Mini-moteur en mémoire pour l'aperçu hors Grist
 const LocalBackend = {
   mode: 'local', db: {}, cfg: null,
   async meta() {
-    const T = {id: [], tableId: [], summarySourceTable: []}, C = {id: [], parentId: [], parentPos: [], colId: [], label: [], type: [], isFormula: [], formula: [], visibleCol: [], widgetOptions: []};
+    const T = {id: [], tableId: [], summarySourceTable: []}, C = {id: [], parentId: [], colId: [], label: [], type: [], isFormula: [], formula: [], visibleCol: [], widgetOptions: []};
     let tr = 0, cr = 0;
     for (const [tid, t] of Object.entries(this.db)) {
       tr++; T.id.push(tr); T.tableId.push(tid); T.summarySourceTable.push(0);
-      t.cols.forEach((c, i) => { cr++; C.id.push(cr); C.parentId.push(tr); C.parentPos.push(i); C.colId.push(c.id); C.label.push(c.label || c.id); C.type.push(c.type || 'Any');
+      t.cols.forEach(c => { cr++; C.id.push(cr); C.parentId.push(tr); C.colId.push(c.id); C.label.push(c.label || c.id); C.type.push(c.type || 'Any');
         C.isFormula.push(!!c.isFormula); C.formula.push(c.formula || ''); C.visibleCol.push(0); C.widgetOptions.push(c.widgetOptions || ''); });
     }
     return parseMeta(T, C);
   },
-  calc(t, r) {
-    const out = Object.assign({}, r);
-    for (const c of t.cols) {
-      if (c.id === 'Nom_complet') out[c.id] = [String(r.Nom || '').toUpperCase(), r.Prenom].filter(Boolean).join(' ');
-      else if (!(c.id in out)) out[c.id] = c.type === 'Bool' ? false : (c.type.startsWith('Ref:') ? 0 : null);
-    }
-    return out;
-  },
   async fetch(tid) {
     const t = this.db[tid]; if (!t) throw new Error('Table inconnue : ' + tid);
-    return t.rows.map(r => this.calc(t, r));
+    return t.rows.map(r => {
+      const o = Object.assign({}, r);
+      t.cols.forEach(c => {
+        if (c.id === 'Nom_complet') o[c.id] = [r.Prenom, r.Nom].filter(Boolean).join(' ');
+        else if (c.id === 'PACAGE' && c.isFormula) o[c.id] = r.Cle_parcelle ? r.Cle_parcelle.split('-')[0] : null;
+        else if (c.id === 'Code_dpt' && c.isFormula) o[c.id] = r.Cle_parcelle ? r.Cle_parcelle.slice(0, 3) : null;
+        else if (!(c.id in o)) o[c.id] = c.type === 'Bool' ? false : (c.type.startsWith('Ref:') ? 0 : null);
+      });
+      return o;
+    });
   },
   async apply(actions) {
     const ret = [];
     for (const a of actions) {
       const [op, tid] = a, t = this.db[tid];
-      if (op === 'AddTable') { this.db[tid] = {next: 1, rows: [], cols: a[2].map(c => Object.assign({}, c))}; ret.push({table_id: tid}); continue; }
-      if (op === 'AddColumn') { t.cols.push(Object.assign({id: a[2]}, a[3])); ret.push({colId: a[2]}); continue; }
-      if (op === 'ModifyColumn') { Object.assign(t.cols.find(c => c.id === a[2]), a[3]); ret.push(null); continue; }
-      if (op === 'AddRecord') { const id = t.next++; const r = {id}; t.cols.forEach(c => { if (!c.isFormula && c.formula === 'True') r[c.id] = true; }); t.rows.push(Object.assign(r, a[3])); ret.push(id); continue; }
-      if (op === 'UpdateRecord') { if (!t) { ret.push(null); continue; } const r = t.rows.find(x => x.id === a[2]); if (r) Object.assign(r, a[3]); ret.push(null); continue; }
-      if (op === 'RemoveRecord') { t.rows = t.rows.filter(x => x.id !== a[2]); ret.push(null); continue; }
-      ret.push(null);
+      if (op === 'AddTable') { this.db[tid] = {next: 1, rows: [], cols: a[2].map(c => Object.assign({}, c))}; ret.push({table_id: tid}); }
+      else if (op === 'RenameTable') { this.db[a[2]] = t; delete this.db[tid]; Object.values(this.db).forEach(x => x.cols.forEach(c => { if (c.type === 'Ref:' + tid) c.type = 'Ref:' + a[2]; })); ret.push(null); }
+      else if (op === 'AddColumn') { t.cols.push(Object.assign({id: a[2]}, a[3])); ret.push({colId: a[2]}); }
+      else if (op === 'ModifyColumn') { Object.assign(t.cols.find(c => c.id === a[2]), a[3]); ret.push(null); }
+      else if (op === 'AddRecord') { const id = t.next++; const r = {id}; t.cols.forEach(c => { if (!c.isFormula && c.formula === 'True') r[c.id] = true; }); t.rows.push(Object.assign(r, a[3])); ret.push(id); }
+      else if (op === 'UpdateRecord') { const r = t && t.rows.find(x => x.id === a[2]); if (r) Object.assign(r, a[3]); ret.push(null); }
+      else if (op === 'RemoveRecord') { t.rows = t.rows.filter(x => x.id !== a[2]); ret.push(null); }
+      else ret.push(null);
     }
     return ret;
   },
@@ -558,257 +577,157 @@ const LocalBackend = {
 let B = null;
 const S = {
   meta: {}, cfg: Object.assign({}, DEFAULT_CFG),
-  rows: [], prel: [], insp: [], fiche: new Map(),
-  prelById: new Map(), inspById: new Map(),
-  farms: new Map(), visits: [], visitByKey: new Map(),
+  parc: [], def: new Map(), rdv: [], prel: [], insp: [],
+  prelById: new Map(), inspById: new Map(), rdvByKey: new Map(),
+  farms: new Map(), visits: [], visitByKey: new Map(), orphans: 0,
   tab: 'cal', view: 'month', cursor: new Date(),
-  f: {prel: '', insp: '', statut: '', bassin: '', type: '', q: ''},
-  expQ: '', expFilter: '', expBassin: ''
+  sel: {kind: '', id: 0}, q: '', statut: '', dpt: '',
+  expQ: '', expStatut: '', expDpt: ''
 };
-const rdvCols = () => (S.meta[S.cfg.rdvTable] || {cols: {}}).cols;
-const M = k => (S.cfg.map && S.cfg.map[k] && rdvCols()[S.cfg.map[k]]) ? S.cfg.map[k] : null;
-const colType = k => { const c = M(k); return c ? rdvCols()[c].type : ''; };
-const val = (r, k) => { const c = M(k); return c ? clean(r[c]) : ''; };
-const writable = k => { const c = M(k); if (!c) return false; const m = rdvCols()[c]; return !m.isFormula || !m.formula.trim(); };
-function personName(p) { if (!p) return ''; return clean(p.Nom_complet) || [String(p.Nom || '').toUpperCase(), p.Prenom].filter(Boolean).join(' '); }
+const cols = t => (S.meta[t] || {cols: {}}).cols;
+const typeOf = (t, c) => (cols(t)[c] || {}).type || '';
+function personName(p) { return p ? (clean(p.Nom_complet) || [p.Prenom, p.Nom].filter(Boolean).join(' ')) : ''; }
+const prelColor = id => { const i = S.prel.findIndex(p => p.id === id); return i < 0 ? '#929292' : PALETTE[i % PALETTE.length]; };
 
-// Préleveur / inspecteur : colonne Référence (vers les tables du widget) ou texte libre
-function personOf(r, k) {
-  const c = M(k); if (!c) return null;
-  const v = r[c], type = colType(k);
-  if (type.startsWith('Ref:')) {
-    if (!v) return null;
-    const p = (k === 'preleveur' ? S.prelById : S.inspById).get(v);
-    return {key: '#' + v, name: p ? personName(p) : 'n° ' + v, value: v};
-  }
-  const s = clean(v);
-  if (!s || /^<?\s*aucun\s*>?$/i.test(s)) return null;
-  return {key: normKey(s), name: s, value: s};
-}
-function personChoices(k, current) {
-  const list = k === 'preleveur' ? S.prel : S.insp, isRef = colType(k).startsWith('Ref:'), out = new Map();
-  list.slice().sort((a, b) => personName(a).localeCompare(personName(b))).forEach(p => {
-    if (p.Actif === false && !(current && (isRef ? current.value === p.id : current.key === normKey(personName(p))))) return;
-    const name = personName(p); if (!name) return;
-    out.set(isRef ? '#' + p.id : normKey(name), {value: isRef ? p.id : name, label: name + (p.Actif === false ? ' (inactif)' : '')});
-  });
-  if (!isRef) S.rows.forEach(r => { const pp = personOf(r, k); if (pp && !out.has(pp.key)) out.set(pp.key, {value: pp.value, label: pp.name}); });
-  if (current && !out.has(current.key)) out.set(current.key, {value: current.value, label: current.name});
-  return Array.from(out.entries()).map(([key, o]) => Object.assign({key}, o)).sort((a, b) => a.label.localeCompare(b.label));
-}
-
-function farmKeyOf(r) { return normKey(val(r, 'exploitation')) + '|' + normKey(val(r, 'cp') || val(r, 'commune')); }
-function rowStart(r) {
-  const d = readDate(r[M('date')], colType('date')); if (!d) return null;
-  let t = M('heure') ? readTime(r[M('heure')], colType('heure')) : null;
-  if (!t && d.h !== null && d.h !== undefined && (d.h || d.mi)) t = {h: d.h, mi: d.mi};
-  return {date: new Date(d.y, d.m - 1, d.d, t ? t.h : 0, t ? t.mi : 0), hasTime: !!t};
-}
-function parcelLabel(r) {
-  const bits = [];
-  if (val(r, 'parcelle')) bits.push('Îlot ' + val(r, 'parcelle'));
-  if (val(r, 'surface')) bits.push(val(r, 'surface') + ' ha');
-  if (val(r, 'type')) bits.push(val(r, 'type'));
-  if (val(r, 'culture')) bits.push(val(r, 'culture'));
-  return bits.join(' · ') || ('Ligne ' + r.id);
-}
+function farmKeyOfParc(r) { return clean(r.PACAGE) || clean(r[S.cfg.parcKey]).split('-')[0] || 'dossier ' + clean(r.dossier_number); }
+function farmName(r) { return clean(r.Nom_exploitation) || clean(r.Raison_sociale) || clean(r.Nom_ou_Raison_sociale) || ''; }
 
 function buildModel() {
-  S.farms = new Map(); S.visits = []; S.visitByKey = new Map();
-  for (const r of S.rows) {
-    if (!val(r, 'exploitation')) continue;
-    const fk = farmKeyOf(r);
-    let f = S.farms.get(fk);
-    if (!f) { f = {key: fk, name: val(r, 'exploitation'), rows: [], visits: []}; S.farms.set(fk, f); }
-    f.rows.push(r);
-    for (const k of ['adresse', 'cp', 'commune', 'tel', 'portable', 'bassin']) if (!f[k] && val(r, k)) f[k] = val(r, k);
-    const st = rowStart(r); if (!st) continue;
-    const vk = fk + '@' + dkey(st.date) + (st.hasTime ? 'T' + toInputTime(st.date) : '');
-    let v = S.visitByKey.get(vk);
-    if (!v) { v = {key: vk, farm: f, start: st.date, hasTime: st.hasTime, rows: []}; S.visitByKey.set(vk, v); S.visits.push(v); f.visits.push(v); }
-    v.rows.push(r);
+  S.farms = new Map(); S.visits = []; S.visitByKey = new Map(); S.rdvByKey = new Map(); S.orphans = 0;
+  // une ligne RDV par clé parcelle (si doublon : la plus récente)
+  for (const r of S.rdv) { const k = clean(r.Cle_parcelle); if (!k) { S.orphans++; continue; } const ex = S.rdvByKey.get(k); if (!ex || r.id > ex.id) S.rdvByKey.set(k, r); }
+  const farmOf = (fk, name) => { let f = S.farms.get(fk); if (!f) { f = {key: fk, pacage: fk, name: '', parcels: []}; S.farms.set(fk, f); } if (!f.name && name) f.name = name; return f; };
+  const seen = new Set();
+  for (const p of S.parc) {
+    const key = clean(p[S.cfg.parcKey]); if (!key || seen.has(key)) continue; seen.add(key);
+    const f = farmOf(farmKeyOfParc(p), farmName(p));
+    for (const k of ['dossier_number', 'Telephone_portable', 'Mail', 'Adresse_complete', 'Departement', 'Code_departement', 'Code_postal', 'Ville']) if (!f[k] && clean(p[k])) f[k] = clean(p[k]);
+    f.parcels.push({key, src: p, def: S.def.get(key) || null, rdv: S.rdvByKey.get(key) || null});
   }
-  for (const v of S.visits) {
-    const first = k => { for (const r of v.rows) { const x = k === 'preleveur' || k === 'inspecteur' ? personOf(r, k) : val(r, k); if (x) return x; } return k === 'preleveur' || k === 'inspecteur' ? null : ''; };
-    v.prel = first('preleveur'); v.insp = first('inspecteur'); v.statut = first('statut'); v.remarques = first('remarques');
-    const dur = Number(first('duree')) || S.cfg.duree;
-    v.end = new Date(v.start.getTime() + dur * 60000); v.duree = dur;
+  // rendez-vous dont la clé n'est pas (ou plus) dans la table des parcelles
+  for (const [k, r] of S.rdvByKey) if (!seen.has(k)) { const f = farmOf(k.split('-')[0], clean(r.Nom_exploitation)); f.parcels.push({key: k, src: null, def: S.def.get(k) || null, rdv: r}); }
+  for (const f of S.farms.values()) {
+    if (!f.name) f.name = 'PACAGE ' + f.pacage;
+    f.dpt = clean(f.Code_departement) || f.pacage.slice(0, 3);
+    const rows = f.parcels.map(x => x.rdv).filter(Boolean);
+    const first = k => { for (const r of rows) { const v = r[k]; if (v !== null && v !== undefined && v !== '' && v !== 0 && !isErr(v)) return v; } return null; };
+    f.statut = clean(first('Statut')); f.nbAppels = ['Date_heure_appel_1', 'Date_heure_appel_2', 'Date_heure_appel_3'].filter(k => first(k)).length;
+    f.preleveur = first('Preleveur') || 0; f.inspecteur = first('Inspecteur') || 0;
+    // rendez-vous = parcelles de l'exploitation ayant la même date/heure
+    const byTime = new Map();
+    for (const x of f.parcels) { const r = x.rdv; if (!r || typeof r.Date_RDV !== 'number') continue; (byTime.get(r.Date_RDV) || byTime.set(r.Date_RDV, []).get(r.Date_RDV)).push(x); }
+    f.visits = [];
+    for (const [t, ps] of byTime) {
+      const r0 = ps[0].rdv, start = toWall(t, typeOf(T_RDV, 'Date_RDV')), dur = Number(r0.Duree_min) || S.cfg.duree;
+      const v = {key: f.key + '@' + t, farm: f, parcels: ps, start, end: new Date(start.getTime() + dur * 60000), duree: dur,
+        prel: ps.map(x => x.rdv.Preleveur).find(Boolean) || 0, insp: ps.map(x => x.rdv.Inspecteur).find(Boolean) || 0, statut: clean(r0.Statut)};
+      f.visits.push(v); S.visits.push(v); S.visitByKey.set(v.key, v);
+    }
+    f.visits.sort((a, b) => a.start - b.start);
   }
   S.visits.sort((a, b) => a.start - b.start);
-  S.farms.forEach(f => f.visits.sort((a, b) => a.start - b.start));
 }
 
 async function loadData() {
   S.meta = await B.meta();
-  const ficheOk = S.cfg.ficheTable && S.meta[S.cfg.ficheTable] && S.meta[S.cfg.ficheTable].cols[S.cfg.ficheKey] && M('dossier');
-  const [rows, p, i, fiche] = await Promise.all([B.fetch(S.cfg.rdvTable), B.fetch(T_PREL), B.fetch(T_INSP), ficheOk ? B.fetch(S.cfg.ficheTable) : Promise.resolve([])]);
-  S.rows = rows; S.prel = p; S.insp = i;
-  S.prelById = new Map(p.map(x => [x.id, x]));
-  S.inspById = new Map(i.map(x => [x.id, x]));
-  S.fiche = new Map(); fiche.forEach(x => { const k = clean(x[S.cfg.ficheKey]); if (k && !S.fiche.has(k)) S.fiche.set(k, x); });
+  const defOk = S.cfg.defTable && S.meta[S.cfg.defTable] && cols(S.cfg.defTable)[S.cfg.defKey];
+  const [parc, def, rdv, p, i] = await Promise.all([B.fetch(S.cfg.parcTable), defOk ? B.fetch(S.cfg.defTable) : [], B.fetch(T_RDV), B.fetch(T_PREL), B.fetch(T_INSP)]);
+  S.parc = parc; S.rdv = rdv; S.prel = p; S.insp = i;
+  S.def = new Map(); def.forEach(x => { const k = clean(x[S.cfg.defKey]); if (k && !S.def.has(k)) S.def.set(k, x); });
+  S.prelById = new Map(p.map(x => [x.id, x])); S.inspById = new Map(i.map(x => [x.id, x]));
   buildModel();
   $('#cntExp').textContent = S.farms.size;
   $('#cntPrel').textContent = S.prel.filter(x => x.Actif !== false).length;
   $('#cntInsp').textContent = S.insp.filter(x => x.Actif !== false).length;
 }
-const ficheRow = r => { const k = val(r, 'dossier'); return k ? S.fiche.get(k) || S.fiche.get(String(Number(k))) || null : null; };
 
 /* ============================================================
-   CONFIGURATION ET INSTALLATION
+   INSTALLATION / MISE À NIVEAU DES TABLES
    ============================================================ */
-function peopleSchema(extra) {
-  return [{id: 'Nom', type: 'Text'}, {id: 'Prenom', type: 'Text'},
-    {id: 'Nom_complet', type: 'Text', isFormula: true, formula: '" ".join(x for x in [($Nom or "").upper(), $Prenom] if x)'},
-    extra, {id: 'Telephone', type: 'Text'}, {id: 'Email', type: 'Text'},
-    {id: 'Departements', type: 'Text'}, {id: 'Actif', type: 'Bool', formula: 'True'}];
+const colInfo = c => Object.assign({type: c.type, isFormula: !!c.isFormula, formula: c.formula || '', widgetOptions: c.widgetOptions || ''},
+  c.label ? {label: c.label, untieColIdFromLabel: true} : {});
+// Liste des opérations nécessaires, sans rien modifier
+function plan() {
+  const ops = [];
+  for (const t of [T_PREL, T_INSP]) {
+    if (S.meta[t]) { const miss = PEOPLE_TABLES[t].filter(c => !S.meta[t].cols[c.id]); if (miss.length) ops.push({text: `Ajouter à <code>${t}</code> : ${miss.map(c => c.id).join(', ')}`, run: () => B.apply(miss.map(c => ['AddColumn', t, c.id, colInfo(c)]))}); }
+    else if (S.meta[OLD_NAMES[t]]) ops.push({text: `Renommer <code>${OLD_NAMES[t]}</code> en <code>${t}</code> (données conservées)`, run: () => B.apply([['RenameTable', OLD_NAMES[t], t]])});
+    else ops.push({text: `Créer la table <code>${t}</code>`, run: () => B.apply([['AddTable', t, PEOPLE_TABLES[t].map(c => Object.assign({id: c.id}, colInfo(c)))]])});
+  }
+  const sc = rdvSchema(), ex = S.meta[T_RDV];
+  if (!ex) ops.push({text: `Créer la table <code>${T_RDV}</code> (${sc.filter(c => !c.isFormula && !c.formula).length} champs de saisie)`, run: () => B.apply([['AddTable', T_RDV, sc.map(c => Object.assign({id: c.id}, colInfo(c)))]])});
+  else {
+    const miss = sc.filter(c => !ex.cols[c.id]);
+    if (miss.length) ops.push({text: `Ajouter à <code>${T_RDV}</code> : ${miss.map(c => c.label || c.id).join(', ')}`, run: () => B.apply(miss.map(c => ['AddColumn', T_RDV, c.id, colInfo(c)]))});
+    const st = ex.cols.Statut;
+    if (st && st.type === 'Choice' && STATUTS.some(s => !st.choices.includes(s))) {
+      const wo = Object.assign({}, st.widgetOptions, {choices: STATUTS, choiceOptions: choiceOpts(STATUTS)});
+      ops.push({text: `Statuts de <code>${T_RDV}.Statut</code> : ${STATUTS.join(', ')}`, run: () => B.apply([['ModifyColumn', T_RDV, 'Statut', {widgetOptions: JSON.stringify(wo)}]])});
+    }
+    const cd = ex.cols.Code_dpt, want = sc.find(c => c.id === 'Code_dpt').formula;
+    if (cd && cd.isFormula && cd.formula !== want && /\$Exploitation/.test(cd.formula)) ops.push({text: `<code>Code_dpt</code> calculé à partir de la clé parcelle (règles d'accès par département)`, run: () => B.apply([['ModifyColumn', T_RDV, 'Code_dpt', {formula: want}]])});
+  }
+  return ops;
 }
-const PEOPLE_SCHEMA = {[T_PREL]: peopleSchema({id: 'Organisme', type: 'Text'}), [T_INSP]: peopleSchema({id: 'Service', type: 'Text'})};
-const colInfo = c => Object.assign({type: c.type, isFormula: !!c.isFormula, formula: c.formula || '', widgetOptions: c.widgetOptions || ''}, c.label ? {label: c.label} : {});
-const userTables = () => Object.keys(S.meta).filter(t => !S.meta[t].summary && t !== T_PREL && t !== T_INSP).sort((a, b) => (b === T_RDV) - (a === T_RDV) || a.localeCompare(b));
-
-function guessMap(table) {
-  const cols = (S.meta[table] || {cols: {}}).cols, ids = Object.keys(cols), used = new Set(), map = {};
-  const names = id => [normKey(cols[id].label), normKey(id.replace(/_/g, ' '))];
-  for (const pass of [0, 1]) {
-    for (const f of FIELDS) {
-      if (map[f.k]) continue;
-      for (const s of f.syn) {
-        const hit = ids.find(id => !used.has(id) && names(id).some(n => pass ? n.startsWith(s + ' ') : n === s));
-        if (hit) { map[f.k] = hit; used.add(hit); break; }
-      }
+async function fixRefs() {
+  S.meta = await B.meta();
+  const acts = [];
+  for (const [c, t] of [['Preleveur', T_PREL], ['Inspecteur', T_INSP]]) {
+    const cm = cols(T_RDV)[c], show = cols(t).Nom_complet;
+    if (cm && show && cm.type === 'Ref:' + t && cm.visibleCol !== show.rowId) {
+      acts.push(['UpdateRecord', '_grist_Tables_column', cm.rowId, {visibleCol: show.rowId}], ['SetDisplayFormula', T_RDV, null, cm.rowId, `$${c}.Nom_complet`]);
     }
   }
-  for (const f of FIELDS) if (!map[f.k]) map[f.k] = f.create ? '__new__' : '';
-  return map;
+  if (acts.length && B.mode === 'grist') { try { await B.apply(acts); } catch (e) { console.warn('Affichage des références non configuré', e); } }
 }
-function guessRdvTable() {
-  if (S.meta[T_RDV]) return T_RDV;
-  let best = '', score = 0;
-  for (const t of userTables()) {
-    const m = guessMap(t), s = (m.date && m.date !== '__new__' ? 3 : 0) + (m.exploitation ? 2 : 0) + (m.heure ? 1 : 0) + (m.preleveur && m.preleveur !== '__new__' ? 1 : 0) + (/table3/i.test(t) ? 1 : 0);
-    if (s > score) { score = s; best = t; }
-  }
-  return score >= 5 ? best : '';
-}
-function configReady() {
-  const c = S.cfg;
-  return c.rdvTable && S.meta[c.rdvTable] && c.map && FIELDS.filter(f => f.req).every(f => M(f.k)) && S.meta[T_PREL] && S.meta[T_INSP] &&
-    !FIELDS.some(f => c.map[f.k] === '__new__');
-}
+const ready = () => S.meta[S.cfg.parcTable] && cols(S.cfg.parcTable)[S.cfg.parcKey] && !plan().length;
 
-async function install(draft, seedPeople) {
-  // table RDV_Prelevements au format du fichier Excel
-  if (draft.rdvTable === '__create__') {
-    if (!S.meta[T_RDV]) await B.apply([['AddTable', T_RDV, RDV_SCHEMA.map(c => Object.assign({id: c.id}, colInfo(c)))]]);
-    S.meta = await B.meta();
-    draft.rdvTable = T_RDV; draft.map = guessMap(T_RDV);
-  }
-  // tables des préleveurs et des inspecteurs
-  for (const t of [T_PREL, T_INSP]) {
-    const ex = S.meta[t], cols = PEOPLE_SCHEMA[t];
-    if (!ex) await B.apply([['AddTable', t, cols.map(c => Object.assign({id: c.id}, colInfo(c)))]]);
-    else { const miss = cols.filter(c => !ex.cols[c.id]); if (miss.length) await B.apply(miss.map(c => ['AddColumn', t, c.id, colInfo(c)])); }
-  }
-  // colonnes à créer dans la table des prélèvements
-  const cols = (S.meta[draft.rdvTable] || {cols: {}}).cols;
-  for (const f of FIELDS) {
-    if (draft.map[f.k] !== '__new__' || !f.create) continue;
-    if (cols[f.create.id]) { draft.map[f.k] = f.create.id; continue; }
-    const ret = await B.apply([['AddColumn', draft.rdvTable, f.create.id, colInfo(f.create)]]);
-    draft.map[f.k] = (ret[0] && ret[0].colId) || f.create.id;
-  }
-  S.meta = await B.meta();
-  // affichage lisible de la référence vers les inspecteurs
-  const refCol = S.meta[draft.rdvTable].cols[draft.map.inspecteur], show = S.meta[T_INSP] && S.meta[T_INSP].cols.Nom_complet;
-  if (refCol && show && refCol.type === 'Ref:' + T_INSP && !refCol.visibleCol) {
-    try { await B.apply([['UpdateRecord', '_grist_Tables_column', refCol.rowId, {visibleCol: show.rowId}], ['SetDisplayFormula', draft.rdvTable, null, refCol.rowId, `$${refCol.colId}.Nom_complet`]]); }
-    catch (e) { console.warn('Affichage de la référence non configuré', e); }
-  }
-  // import des préleveurs déjà saisis en texte (ex. « KERMAREC Olivier »)
-  if (seedPeople && draft.map.preleveur) {
-    const existing = new Set((await B.fetch(T_PREL)).map(p => normKey(personName(p))));
-    const rows = await B.fetch(draft.rdvTable), names = new Map();
-    rows.forEach(r => { const s = clean(r[draft.map.preleveur]); if (s && !/^<?\s*aucun\s*>?$/i.test(s) && !existing.has(normKey(s))) names.set(normKey(s), s); });
-    const acts = Array.from(names.values()).map(s => {
-      const w = s.split(/\s+/), up = w.filter(x => x === x.toUpperCase() && /[A-Z]/.test(x)), rest = w.filter(x => !up.includes(x));
-      return ['AddRecord', T_PREL, null, up.length && rest.length ? {Nom: up.join(' '), Prenom: rest.join(' '), Actif: true} : {Nom: s, Actif: true}];
-    });
-    if (acts.length) await B.apply(acts);
-  }
-  S.cfg = draft;
-  await B.setConfig(S.cfg);
-}
-
-function renderConfig(errMsg) {
+function renderSetup(errMsg) {
   $('#tabs').hidden = true;
-  const draft = JSON.parse(JSON.stringify(S.cfg));
-  if (!draft.rdvTable || !S.meta[draft.rdvTable]) draft.rdvTable = S.meta[T_RDV] ? T_RDV : '__create__';
-  if (draft.rdvTable !== '__create__' && (!draft.map || renderConfig.lastTable !== draft.rdvTable && !S.cfg.map)) draft.map = guessMap(draft.rdvTable);
-  if (!draft.ficheTable && S.meta.DATA_Lab) { draft.ficheTable = 'DATA_Lab'; draft.ficheKey = 'dossier_number'; }
-  renderConfig.lastTable = draft.rdvTable;
-  const draw = () => {
-    const cols = (S.meta[draft.rdvTable] || {cols: {}}).cols, ids = Object.keys(cols);
-    const ficheCols = draft.ficheTable && S.meta[draft.ficheTable] ? Object.keys(S.meta[draft.ficheTable].cols) : [];
-    const needPeople = [T_PREL, T_INSP].filter(t => !S.meta[t]);
-    $('#main').innerHTML = `<div class="setup" style="max-width:900px">
-      <h2>Configuration du calendrier</h2>
-      <p class="muted">Le calendrier lit les rendez-vous dans votre table de prélèvements (une ligne par parcelle). Les parcelles d'une même exploitation prévues le même jour à la même heure forment un seul rendez-vous.</p>
-      ${errMsg ? `<div class="alert err"><h3>Une erreur est survenue</h3><p>${esc(errMsg)}</p></div>` : ''}
-      <div class="row">
-        <div class="grp"><label class="lbl" for="cTable">Table des prélèvements<span class="hint">Au format du fichier Excel reçu chaque jour</span></label>
-          <select class="select" id="cTable">${S.meta[T_RDV] ? '' : `<option value="__create__" ${draft.rdvTable === '__create__' ? 'selected' : ''}>+ Créer ${T_RDV}</option>`}${optList(userTables().map(t => [t, t]), draft.rdvTable, null)}</select></div>
-        <div class="grp"><label class="lbl" for="cH0">Début de journée</label><input class="input" id="cH0" type="number" min="0" max="23" value="${draft.hourStart}"></div>
-        <div class="grp"><label class="lbl" for="cH1">Fin de journée</label><input class="input" id="cH1" type="number" min="1" max="24" value="${draft.hourEnd}"></div>
-        <div class="grp"><label class="lbl" for="cDur">Durée d'un RDV (min)</label><select class="select" id="cDur">${optList(DUREES.map(m => [m, m]), draft.duree, null)}</select></div>
-      </div>
-      ${draft.rdvTable === '__create__' ? `<div class="alert"><h3>Création de la table ${T_RDV}</h3>
-        <p>Colonnes reprises du fichier Excel, dans le même ordre : ${RDV_SCHEMA.map(c => `<code>${esc(c.label)}</code>`).join(', ')}.</p>
-        <p>S'y ajoutent <code>Statut_RDV</code> et <code>Inspecteur_FAM</code>, remplies depuis le calendrier.</p>
-        <p>Chaque jour : dans Grist, <b>Ajouter des données → Importer depuis un fichier</b>, destination <b>${T_RDV}</b>, cochez <b>Mettre à jour les enregistrements existants</b> avec le champ <b>N° dossier</b>.</p></div>`
-      : draft.rdvTable ? `<h3 style="margin:1rem 0 .5rem">Correspondance des colonnes</h3>
-      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Information</th><th>Colonne de <code>${esc(draft.rdvTable)}</code></th></tr></thead><tbody>
-      ${FIELDS.map(f => `<tr><td class="strong">${esc(f.label)}${f.req ? ' <span style="color:var(--error)">*</span>' : ''}</td><td>
-        <select class="select" data-map="${f.k}" style="min-height:2.1rem;padding:.3rem .7rem">
-          ${f.req ? '' : '<option value="">— Non utilisée —</option>'}
-          ${f.create && !cols[f.create.id] ? `<option value="__new__" ${draft.map[f.k] === '__new__' ? 'selected' : ''}>+ Créer la colonne ${f.create.id}</option>` : ''}
-          ${ids.map(id => `<option value="${esc(id)}" ${draft.map[f.k] === id ? 'selected' : ''}>${esc(cols[id].label !== id ? cols[id].label + ' (' + id + ')' : id)}</option>`).join('')}
-        </select></td></tr>`).join('')}
-      </tbody></table></div>` : ''}
-      <h3 style="margin:1.5rem 0 .5rem">Fiche de prélèvement détaillée (facultatif)</h3>
-      <p class="sub">Relie chaque parcelle à une ligne d'une autre table (ex. <code>DATA_Lab</code>) par le n° de dossier, pour afficher et compléter la fiche (sol, horizons, Lambert 93…).</p>
-      <div class="row">
-        <div class="grp"><label class="lbl" for="cFt">Table des fiches</label><select class="select" id="cFt">${optList(userTables().filter(t => t !== draft.rdvTable).map(t => [t, t]), draft.ficheTable, '— Aucune —')}</select></div>
-        <div class="grp"><label class="lbl" for="cFk">Colonne du n° de dossier</label><select class="select" id="cFk" ${draft.ficheTable ? '' : 'disabled'}>${optList(ficheCols.map(c => [c, c]), draft.ficheKey, '—')}</select></div>
-      </div>
-      ${needPeople.length ? `<div class="alert"><p>Tables qui seront créées : ${needPeople.map(t => `<code>${t}</code>`).join(', ')} (nom, prénom, ${needPeople.includes(T_PREL) ? 'organisme' : 'service'}, téléphone, e-mail, départements, actif).</p></div>` : ''}
-      <label class="chk grp"><input type="checkbox" id="cSeed" ${!S.prel.length ? 'checked' : ''}> Ajouter à la table <code>${T_PREL}</code> les préleveurs déjà saisis dans la colonne « Préleveur »</label>
-      <div class="alert"><p>Le widget doit disposer de l'<b>accès complet au document</b>. Liez-le à la table des prélèvements (« Sélectionner les données ») pour qu'il se mette à jour à chaque modification faite dans Grist.</p></div>
-      <p style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn lg" id="cSave" ${draft.rdvTable ? '' : 'disabled'}>${ic('check')}Enregistrer et ouvrir le calendrier</button>
-      ${configReady() ? '<button class="btn lg ter" id="cCancel">Annuler</button>' : ''}</p>
-    </div>`;
-    $('#cTable').onchange = e => { draft.rdvTable = e.target.value; draft.map = draft.rdvTable === '__create__' ? null : guessMap(draft.rdvTable); draw(); };
-    $('#cFt').onchange = e => { draft.ficheTable = e.target.value; const c = draft.ficheTable && S.meta[draft.ficheTable] ? S.meta[draft.ficheTable].cols : {}; draft.ficheKey = c.dossier_number ? 'dossier_number' : ''; draw(); };
-    $('#cFk').onchange = e => { draft.ficheKey = e.target.value; };
-    $$('[data-map]').forEach(s => { s.onchange = () => { draft.map[s.dataset.map] = s.value; }; });
-    if ($('#cCancel')) $('#cCancel').onclick = () => { $('#tabs').hidden = false; render(); };
-    $('#cSave').onclick = async () => {
-      draft.hourStart = Math.max(0, Math.min(23, Number($('#cH0').value) || 0));
-      draft.hourEnd = Math.max(draft.hourStart + 1, Math.min(24, Number($('#cH1').value) || 24));
-      draft.duree = Number($('#cDur').value) || 45;
-      const missing = draft.rdvTable === '__create__' ? [] : FIELDS.filter(f => f.req && !draft.map[f.k]);
-      if (missing.length) { toast('Colonne obligatoire : ' + missing.map(f => f.label).join(', '), true); return; }
-      const dup = Object.values(draft.map || {}).filter(v => v && v !== '__new__'), dupSet = new Set(dup);
-      if (dupSet.size !== dup.length) { toast('Une même colonne est associée à deux informations.', true); return; }
-      $('#cSave').disabled = true;
-      try { await install(draft, $('#cSeed').checked); await boot(); toast('Configuration enregistrée'); }
-      catch (e) { console.error(e); renderConfig(e.message || String(e)); }
-    };
+  const ops = plan(), tables = Object.keys(S.meta).filter(t => !S.meta[t].summary).sort();
+  const parcCols = Object.keys(cols(S.cfg.parcTable)), defCols = Object.keys(cols(S.cfg.defTable));
+  $('#main').innerHTML = `<div class="setup" style="max-width:860px">
+    <h2>Mise en place du calendrier</h2>
+    <p class="muted">Le calendrier gère une fiche « Rendez-vous prélèvement » par exploitation, enregistrée dans <code>${T_RDV}</code> à raison d'une ligne par parcelle (clé PACAGE-îlot-parcelle).</p>
+    ${errMsg ? `<div class="alert err"><h3>Une erreur est survenue</h3><p>${esc(errMsg)}</p></div>` : ''}
+    <h3 style="margin:1rem 0 .5rem">Sources</h3>
+    <div class="row">
+      <div class="grp"><label class="lbl" for="sParc">Table des parcelles à prélever</label><select class="select" id="sParc">${optList(tables.map(t => [t, t]), S.cfg.parcTable, '—')}</select></div>
+      <div class="grp"><label class="lbl" for="sKey">Clé PACAGE-îlot-parcelle</label><select class="select" id="sKey">${optList(parcCols.map(c => [c, c]), S.cfg.parcKey, '—')}</select></div>
+    </div>
+    <div class="row">
+      <div class="grp"><label class="lbl" for="sDef">Table complémentaire (surface, cultures, GPS)<span class="hint">Facultatif</span></label><select class="select" id="sDef">${optList(tables.map(t => [t, t]), S.cfg.defTable, '— Aucune —')}</select></div>
+      <div class="grp"><label class="lbl" for="sDefKey">Clé de cette table</label><select class="select" id="sDefKey" ${S.cfg.defTable ? '' : 'disabled'}>${optList(defCols.map(c => [c, c]), S.cfg.defKey, '—')}</select></div>
+    </div>
+    <div class="row">
+      <div class="grp"><label class="lbl" for="sH0">Début de journée</label><input class="input" id="sH0" type="number" min="0" max="23" value="${S.cfg.hourStart}"></div>
+      <div class="grp"><label class="lbl" for="sH1">Fin de journée</label><input class="input" id="sH1" type="number" min="1" max="24" value="${S.cfg.hourEnd}"></div>
+      <div class="grp"><label class="lbl" for="sDur">Durée d'un RDV (min)</label><select class="select" id="sDur">${optList(DUREES.map(m => [m, m]), S.cfg.duree, null)}</select></div>
+    </div>
+    <h3 style="margin:1rem 0 .5rem">Modifications du document</h3>
+    ${ops.length ? `<ul>${ops.map(o => `<li>${o.text}</li>`).join('')}</ul>` : '<p class="muted">Aucune : les tables sont à jour.</p>'}
+    ${S.meta[T_RDV] ? `<p class="sub">Les colonnes existantes de <code>${T_RDV}</code> (et leurs données) ne sont ni supprimées ni renommées.</p>` : ''}
+    <div class="alert"><p>Le widget doit disposer de l'<b>accès complet au document</b>. Liez-le à <code>${T_RDV}</code> (« Sélectionner les données ») pour qu'il se mette à jour à chaque modification faite dans Grist.</p></div>
+    <p style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn lg" id="sGo">${ic('check')}${ops.length ? 'Appliquer et ouvrir le calendrier' : 'Enregistrer'}</button>
+    ${ready() && !$('#tabs').dataset.first ? '<button class="btn lg ter" id="sCancel">Annuler</button>' : ''}</p>
+  </div>`;
+  const keep = () => { S.cfg.hourStart = Math.max(0, Math.min(23, Number($('#sH0').value) || 0)); S.cfg.hourEnd = Math.max(S.cfg.hourStart + 1, Math.min(24, Number($('#sH1').value) || 24)); S.cfg.duree = Number($('#sDur').value) || 45; };
+  $('#sParc').onchange = e => { keep(); S.cfg.parcTable = e.target.value; const c = cols(S.cfg.parcTable); S.cfg.parcKey = ['CLELAB', 'CLE', 'Cle', 'Cle_parcelle'].find(k => c[k]) || ''; renderSetup(); };
+  $('#sKey').onchange = e => { keep(); S.cfg.parcKey = e.target.value; renderSetup(); };
+  $('#sDef').onchange = e => { keep(); S.cfg.defTable = e.target.value; const c = cols(S.cfg.defTable); S.cfg.defKey = ['CLE', 'CLELAB'].find(k => c[k]) || ''; renderSetup(); };
+  $('#sDefKey').onchange = e => { S.cfg.defKey = e.target.value; };
+  if ($('#sCancel')) $('#sCancel').onclick = () => { $('#tabs').hidden = false; render(); };
+  $('#sGo').onclick = async () => {
+    keep();
+    if (!S.meta[S.cfg.parcTable] || !cols(S.cfg.parcTable)[S.cfg.parcKey]) { toast('Choisissez la table des parcelles et sa clé.', true); return; }
+    $('#sGo').disabled = true;
+    try { for (const o of plan()) { await o.run(); S.meta = await B.meta(); } await fixRefs(); await B.setConfig(S.cfg); await boot(); toast('Calendrier prêt'); }
+    catch (e) { console.error(e); renderSetup(e.message || String(e)); }
   };
-  draw();
 }
 
 /* ============================================================
-   RENDU
+   RENDU PRINCIPAL
    ============================================================ */
 function render() {
   $$('.tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === S.tab)));
@@ -817,94 +736,110 @@ function render() {
   else renderPeople(S.tab === 'prel' ? T_PREL : T_INSP);
 }
 
-/* ---------- Calendrier ---------- */
 function filteredVisits() {
-  const f = S.f, q = norm(f.q);
   return S.visits.filter(v => {
-    if (f.prel && (f.prel === '__none' ? v.prel : (!v.prel || v.prel.key !== f.prel))) return false;
-    if (f.insp && (!v.insp || v.insp.key !== f.insp)) return false;
-    if (f.statut === '__none' ? v.statut : (f.statut && v.statut !== f.statut)) return false;
-    if (f.bassin && v.farm.bassin !== f.bassin) return false;
-    if (f.type && !v.rows.some(r => val(r, 'type') === f.type)) return false;
-    if (q && !norm([v.farm.name, v.farm.commune, v.farm.cp, v.farm.adresse].concat(v.rows.map(r => val(r, 'dossier') + ' ' + val(r, 'parcelle'))).join(' ')).includes(q)) return false;
+    if (S.sel.kind === 'prel' && (S.sel.id === -1 ? v.prel : v.prel !== S.sel.id)) return false;
+    if (S.sel.kind === 'insp' && (S.sel.id === -1 ? !v.insp : v.insp !== S.sel.id)) return false;
+    if (S.statut && v.statut !== S.statut) return false;
+    if (S.dpt && v.farm.dpt !== S.dpt) return false;
     return true;
   });
 }
-function byDay(list) { const m = {}; list.forEach(v => { const k = dkey(v.start); (m[k] = m[k] || []).push(v); }); return m; }
-const distinct = k => Array.from(new Set(S.rows.map(r => val(r, k)).filter(Boolean))).sort((a, b) => a.localeCompare(b));
-
+const byDay = list => { const m = {}; list.forEach(v => { (m[dkey(v.start)] = m[dkey(v.start)] || []).push(v); }); return m; };
+const dptList = () => Array.from(new Set(Array.from(S.farms.values()).map(f => f.dpt).filter(Boolean))).sort();
 function periodLabel() {
   const c = S.cursor;
-  if (S.view === 'week') {
-    const a = startOfWeek(c), b = addDays(a, 6);
-    return a.getMonth() === b.getMonth() ? `${a.getDate()} – ${b.getDate()} ${MONTHS[b.getMonth()]} ${b.getFullYear()}` : `${a.getDate()} ${MONTHS[a.getMonth()].slice(0, 4)}. – ${b.getDate()} ${MONTHS[b.getMonth()].slice(0, 4)}. ${b.getFullYear()}`;
-  }
+  if (S.view === 'week') { const a = startOfWeek(c), b = addDays(a, 6); return a.getMonth() === b.getMonth() ? `${a.getDate()} – ${b.getDate()} ${MONTHS[b.getMonth()]} ${b.getFullYear()}` : `${a.getDate()} ${MONTHS[a.getMonth()].slice(0, 4)}. – ${b.getDate()} ${MONTHS[b.getMonth()].slice(0, 4)}. ${b.getFullYear()}`; }
+  if (S.view === 'day') return fullDate(c);
   return MONTHS[c.getMonth()] + ' ' + c.getFullYear();
 }
+function periodRange() {
+  const c = S.cursor;
+  if (S.view === 'week') { const a = startOfWeek(c); return [a, addDays(a, 7)]; }
+  if (S.view === 'day') { const a = new Date(c.getFullYear(), c.getMonth(), c.getDate()); return [a, addDays(a, 1)]; }
+  return [new Date(c.getFullYear(), c.getMonth(), 1), new Date(c.getFullYear(), c.getMonth() + 1, 1)];
+}
+
+/* ---------- Barre latérale : recherche, préleveurs, inspecteurs ---------- */
+function sidebar() {
+  const [a, b] = periodRange(), inPeriod = v => v.start >= a && v.start < b;
+  const count = (k, id) => S.visits.filter(v => inPeriod(v) && (id === -1 ? (k === 'prel' ? !v.prel : !!v.insp) : v[k] === id)).length;
+  const item = (k, id, label, color, n) => `<button class="side-item${S.sel.kind === k && S.sel.id === id ? ' on' : ''}" data-sel="${k}:${id}">
+    ${color ? `<span class="dot" style="background:${color}"></span>` : ''}<span class="nm">${esc(label)}</span><span class="n">${n}</span></button>`;
+  const people = (list, k) => list.filter(p => p.Actif !== false || S.visits.some(v => v[k] === p.id)).sort((x, y) => personName(x).localeCompare(personName(y)));
+  return `<aside class="side">
+    <div class="side-search"><label class="lbl" for="q">Rechercher une exploitation</label>
+      <input class="input" id="q" type="search" placeholder="Nom, PACAGE, n° dossier, commune…" value="${esc(S.q)}" autocomplete="off"><div id="qres"></div></div>
+    <div class="side-sec"><h3>${ic('user')}Préleveurs</h3>
+      ${item('', 0, 'Tous les rendez-vous', '', S.visits.filter(inPeriod).length)}
+      ${people(S.prel, 'prel').map(p => item('prel', p.id, personName(p), prelColor(p.id), count('prel', p.id))).join('')}
+      ${item('prel', -1, 'Sans préleveur', '#929292', count('prel', -1))}</div>
+    <div class="side-sec"><h3>${ic('shield')}Planning des inspecteurs</h3>
+      ${people(S.insp, 'insp').map(p => item('insp', p.id, personName(p), '', count('insp', p.id))).join('') || '<p class="sub">Aucun inspecteur.</p>'}
+      ${S.insp.length ? item('insp', -1, 'Tous les contrôles', '', count('insp', -1)) : ''}</div>
+    ${S.sel.kind && S.sel.id > 0 ? `<p><button class="btn sec" id="roadBtn" style="width:100%;justify-content:center">${ic('print')}Feuille de route</button></p>` : ''}
+  </aside>`;
+}
+function searchResults() {
+  const q = norm(S.q.trim()); if (q.length < 2) return '';
+  const hits = Array.from(S.farms.values()).filter(f => norm([f.name, f.pacage, f.dossier_number, f.Ville, f.Adresse_complete].concat(f.parcels.map(x => x.key)).join(' ')).includes(q)).slice(0, 15);
+  if (!hits.length) return '<p class="sub">Aucune exploitation trouvée.</p>';
+  const now = Date.now();
+  return hits.map(f => { const v = f.visits.find(x => x.start.getTime() >= now) || f.visits[f.visits.length - 1];
+    return `<button class="qhit" data-qfarm="${esc(f.key)}"><b>${esc(f.name)}</b><span class="sub">${esc(f.pacage)} · ${v ? 'RDV ' + shortDate(v.start) + ' ' + hm(v.start) : esc(stLabel(f.statut))}</span></button>`; }).join('');
+}
+
+/* ---------- Calendrier ---------- */
 function renderCalendar() {
-  const f = S.f, narrow = window.innerWidth <= 720;
+  const narrow = window.innerWidth <= 900;
   const view = narrow && S.view === 'month' ? 'list' : S.view;
-  const pOpts = personChoices('preleveur').map(o => [o.key, o.label]).concat([['__none', 'Non désigné']]);
-  $('#main').innerHTML = `
+  const selName = S.sel.kind === 'prel' ? (S.sel.id === -1 ? 'Sans préleveur' : personName(S.prelById.get(S.sel.id))) : S.sel.kind === 'insp' ? (S.sel.id === -1 ? 'Contrôles inspecteurs' : 'Inspecteur : ' + personName(S.inspById.get(S.sel.id))) : '';
+  $('#main').innerHTML = `<div class="cal-layout">${sidebar()}<section class="cal-main">
     <div class="toolbar">
-      <div class="btn-group">
-        <button class="btn icon" data-nav="-1" title="Période précédente">${ic('left')}<span class="sr">Précédent</span></button>
-        <button class="btn icon" data-nav="1" title="Période suivante">${ic('right')}<span class="sr">Suivant</span></button>
-      </div>
+      <div class="btn-group"><button class="btn icon" data-nav="-1" title="Période précédente">${ic('left')}<span class="sr">Précédent</span></button>
+        <button class="btn icon" data-nav="1" title="Période suivante">${ic('right')}<span class="sr">Suivant</span></button></div>
       <button class="btn ter" data-nav="0">Aujourd'hui</button>
       <div class="period">${esc(periodLabel())}</div>
-      <div class="btn-group" role="group" aria-label="Vue">
-        ${[['month', 'Mois'], ['week', 'Semaine'], ['list', 'Liste']].map(([v, l]) => `<button class="btn" data-view="${v}" aria-pressed="${S.view === v}">${l}</button>`).join('')}
-      </div>
+      <div class="btn-group" role="group" aria-label="Vue">${[['month', 'Mois'], ['week', 'Semaine'], ['day', 'Jour'], ['list', 'Liste']].map(([v, l]) => `<button class="btn" data-view="${v}" aria-pressed="${S.view === v}">${l}</button>`).join('')}</div>
       <span class="spacer"></span>
-      <button class="btn" id="newRdvBtn">${ic('add')}Nouveau rendez-vous</button>
+      <select class="select mini" id="fdpt" aria-label="Département">${optList(dptList().map(d => [d, 'Dpt ' + d]), S.dpt, 'Tous départements')}</select>
     </div>
-    <div class="filters">
-      <div><label class="lbl" for="fq">Recherche</label><input class="input" id="fq" type="search" placeholder="Exploitation, commune, n° dossier…" value="${esc(f.q)}"></div>
-      ${M('preleveur') ? `<div><label class="lbl" for="fprel">Préleveur</label><select class="select" id="fprel">${optList(pOpts, f.prel, 'Tous')}</select></div>` : ''}
-      ${M('inspecteur') ? `<div><label class="lbl" for="finsp">Inspecteur FAM</label><select class="select" id="finsp">${optList(personChoices('inspecteur').map(o => [o.key, o.label]), f.insp, 'Tous')}</select></div>` : ''}
-      ${M('statut') ? `<div><label class="lbl" for="fst">Statut</label><select class="select" id="fst">${optList(STATUTS.map(s => [s, s]).concat([['__none', 'Non renseigné']]), f.statut, 'Tous')}</select></div>` : ''}
-      ${M('bassin') ? `<div><label class="lbl" for="fbv">Bassin versant</label><select class="select" id="fbv">${optList(distinct('bassin').map(d => [d, d]), f.bassin, 'Tous')}</select></div>` : ''}
-      ${M('type') ? `<div><label class="lbl" for="fty">Type</label><select class="select" id="fty">${optList(distinct('type').map(d => [d, d]), f.type, 'Tous')}</select></div>` : ''}
-    </div>
-    <div id="calBody"></div>
-    <div class="legend" style="margin-top:12px">${STATUTS.slice(0, 5).map(s => `<span class="badge ${stClass(s)}">${s}</span>`).join('')}<span class="badge st-none">Sans statut</span></div>`;
+    ${selName ? `<div class="selbar">${S.sel.kind === 'prel' && S.sel.id > 0 ? `<span class="dot" style="background:${prelColor(S.sel.id)}"></span>` : ''}<b>${esc(selName)}</b><button class="btn ghost" data-sel=":0">${ic('close')}Tout afficher</button></div>` : ''}
+    <div id="calBody"></div></section></div>`;
   const list = filteredVisits();
-  if (view === 'month') renderMonth(list); else if (view === 'week') renderWeek(list); else renderList(list);
-
+  if (view === 'month') renderMonth(list); else if (view === 'week') renderWeek(list, 7); else if (view === 'day') renderWeek(list, 1); else renderList(list);
+  $('#qres').innerHTML = searchResults();
+  $('#q').addEventListener('input', e => { S.q = e.target.value; $('#qres').innerHTML = searchResults(); });
   $$('[data-nav]').forEach(b => b.onclick = () => navigate(Number(b.dataset.nav)));
   $$('[data-view]').forEach(b => b.onclick = () => { S.view = b.dataset.view; renderCalendar(); });
-  $('#newRdvBtn').onclick = () => openVisitForm(null, {date: S.view === 'week' ? startOfWeek(S.cursor) : new Date()});
-  const bindF = (id, key, ev = 'change') => { const el = $(id); if (!el) return; el.addEventListener(ev, e => { S.f[key] = e.target.value; if (key === 'q') { clearTimeout(bindF.t); bindF.t = setTimeout(() => { renderCalendar(); const i = $('#fq'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); } else renderCalendar(); }); };
-  bindF('#fq', 'q', 'input'); bindF('#fprel', 'prel'); bindF('#finsp', 'insp'); bindF('#fst', 'statut'); bindF('#fbv', 'bassin'); bindF('#fty', 'type');
+  $('#fdpt').onchange = e => { S.dpt = e.target.value; renderCalendar(); };
+  if ($('#roadBtn')) $('#roadBtn').onclick = openRoadmap;
 }
 function navigate(n) {
   const c = S.cursor;
   if (n === 0) S.cursor = new Date();
   else if (S.view === 'week') S.cursor = addDays(c, 7 * n);
+  else if (S.view === 'day') S.cursor = addDays(c, n);
   else S.cursor = new Date(c.getFullYear(), c.getMonth() + n, 1);
   renderCalendar();
 }
-const timeLabel = v => v.hasTime ? hm(v.start) : '––h––';
+function evStyle(v) { const c = prelColor(v.prel); return `border-left-color:${c};background:${c}1a`; }
 function evTitle(v) {
-  return `${timeLabel(v)} · ${v.farm.name}${v.farm.commune ? ' (' + v.farm.commune + ')' : ''} · ${v.rows.length} parcelle(s)${v.prel ? ' · Préleveur : ' + v.prel.name : ''}${v.insp ? ' · Inspecteur : ' + v.insp.name : ''}${v.statut ? ' · ' + v.statut : ''}`;
+  return `${hm(v.start)}–${hm(v.end)} · ${v.farm.name} (${v.farm.pacage}) · ${v.parcels.length} parcelle(s)${v.prel ? ' · Préleveur : ' + personName(S.prelById.get(v.prel)) : ''}${v.insp ? ' · Inspecteur : ' + personName(S.inspById.get(v.insp)) : ''}`;
 }
 function renderMonth(list) {
   const c = S.cursor, y = c.getFullYear(), m = c.getMonth();
-  const first = new Date(y, m, 1), off = (first.getDay() + 6) % 7, dim = new Date(y, m + 1, 0).getDate();
+  const off = (new Date(y, m, 1).getDay() + 6) % 7, dim = new Date(y, m + 1, 0).getDate();
   const total = Math.ceil((off + dim) / 7) * 7, map = byDay(list), today = dkey(new Date());
   let html = '<div class="wd-row">' + WD.map(w => `<div>${w}</div>`).join('') + '</div><div class="month">';
   for (let i = 0; i < total; i++) {
-    const d = new Date(y, m, i - off + 1), k = dkey(d), evs = map[k] || [];
-    const out = d.getMonth() !== m, we = d.getDay() === 0 || d.getDay() === 6, shown = evs.slice(0, 4);
-    html += `<div class="cell${out ? ' out' : ''}${we ? ' we' : ''}${k === today ? ' today' : ''}" data-day="${k}">
+    const d = new Date(y, m, i - off + 1), k = dkey(d), evs = map[k] || [], shown = evs.slice(0, 4);
+    html += `<div class="cell${d.getMonth() !== m ? ' out' : ''}${d.getDay() % 6 === 0 ? ' we' : ''}${k === today ? ' today' : ''}" data-day="${k}">
       <div class="cell-top"><span class="nb">${evs.length ? evs.length + ' RDV' : ''}</span><span class="dnum">${d.getDate()}</span></div>
-      ${shown.map(v => `<button class="ev ${stClass(v.statut)}" data-visit="${esc(v.key)}" title="${esc(evTitle(v))}"><b>${timeLabel(v)}</b>${esc(v.farm.name)}${v.rows.length > 1 ? ` <span class="who">×${v.rows.length}</span>` : ''}${v.prel ? ` <span class="who">· ${esc(initials(v.prel.name))}</span>` : ''}</button>`).join('')}
-      ${evs.length > shown.length ? `<button class="more" data-day-more="${k}">+ ${evs.length - shown.length} autre(s)</button>` : ''}
-    </div>`;
+      ${shown.map(v => `<button class="ev" style="${evStyle(v)}" data-visit="${esc(v.key)}" title="${esc(evTitle(v))}"><b>${hm(v.start)}</b>${esc(v.farm.name)}${v.insp ? ' ' + ic('shield') : ''}</button>`).join('')}
+      ${evs.length > shown.length ? `<button class="more" data-day-more="${k}">+ ${evs.length - shown.length} autre(s)</button>` : ''}</div>`;
   }
-  $('#calBody').innerHTML = html + '</div>';
-  if (!list.some(v => v.start.getFullYear() === y && v.start.getMonth() === m)) $('#calBody').insertAdjacentHTML('beforeend', `<p class="empty">Aucun rendez-vous ce mois-ci${nearestHint(list)}.</p>`);
+  $('#calBody').innerHTML = html + '</div>' + (list.some(v => v.start.getFullYear() === y && v.start.getMonth() === m) ? '' : `<p class="empty">Aucun rendez-vous ce mois-ci${nearestHint(list)}.</p>`);
 }
 function nearestHint(list) {
   if (!list.length) return '';
@@ -917,147 +852,259 @@ function layoutDay(evs) {
   const flush = () => { const n = Math.max(1, ...cluster.map(x => x.lane + 1)); cluster.forEach(x => { x.lanes = n; }); cluster = []; };
   for (const it of items) {
     if (it.s >= end && cluster.length) flush();
-    const used = new Set(cluster.filter(x => x.e > it.s).map(x => x.lane));
-    let l = 0; while (used.has(l)) l++;
+    const used = new Set(cluster.filter(x => x.e > it.s).map(x => x.lane)); let l = 0; while (used.has(l)) l++;
     it.lane = l; cluster.push(it); end = Math.max(end, it.e);
   }
   if (cluster.length) flush();
   return items;
 }
 const hourPx = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue('--hour'), 10) || 44;
-function renderWeek(list) {
-  const a = startOfWeek(S.cursor), map = byDay(list), today = dkey(new Date());
+function renderWeek(list, ndays) {
+  const a = ndays === 7 ? startOfWeek(S.cursor) : new Date(S.cursor.getFullYear(), S.cursor.getMonth(), S.cursor.getDate()), map = byDay(list), today = dkey(new Date());
   let h0 = S.cfg.hourStart, h1 = S.cfg.hourEnd;
-  for (let i = 0; i < 7; i++) (map[dkey(addDays(a, i))] || []).filter(v => v.hasTime).forEach(v => { h0 = Math.min(h0, v.start.getHours()); h1 = Math.max(h1, v.end.getHours() + (v.end.getMinutes() ? 1 : 0)); });
+  for (let i = 0; i < ndays; i++) (map[dkey(addDays(a, i))] || []).forEach(v => { h0 = Math.min(h0, v.start.getHours()); h1 = Math.max(h1, v.end.getHours() + (v.end.getMinutes() ? 1 : 0)); });
   h1 = Math.min(24, h1);
-  const H = hourPx(), ppm = H / 60, height = (h1 - h0) * H;
-  let head = '<div class="week-head"><div></div>', body = `<div class="week" style="height:${height}px"><div class="hours">`;
+  const H = hourPx(), ppm = H / 60, height = (h1 - h0) * H, grid = `52px repeat(${ndays},minmax(0,1fr))`;
+  let head = `<div class="week-head" style="grid-template-columns:${grid}"><div></div>`, body = `<div class="week" style="height:${height}px;grid-template-columns:${grid}"><div class="hours">`;
   for (let h = h0 + 1; h < h1; h++) body += `<span style="top:${(h - h0) * H}px">${pad(h)}h</span>`;
   body += '</div>';
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < ndays; i++) {
     const d = addDays(a, i), k = dkey(d), evs = map[k] || [];
     head += `<div class="${k === today ? 'today' : ''}">${DAYS[d.getDay()].slice(0, 3)}. <b>${d.getDate()}</b><span class="sub">${evs.length ? evs.length + ' RDV' : ''}</span></div>`;
     body += `<div class="wcol${k === today ? ' today' : ''}" data-wday="${k}" data-h0="${h0}">`;
-    const untimed = evs.filter(v => !v.hasTime);
-    layoutDay(evs.filter(v => v.hasTime)).forEach(it => {
-      const v = it.v, top = ((v.start.getHours() - h0) * 60 + v.start.getMinutes()) * ppm;
-      const hgt = Math.max(20, (it.e - it.s) / 60000 * ppm - 2), w = 100 / it.lanes;
-      body += `<div class="wev ${stClass(v.statut)}" role="button" tabindex="0" data-visit="${esc(v.key)}" title="${esc(evTitle(v))}" style="top:${top}px;height:${hgt}px;left:calc(${it.lane * w}% + 1px);width:calc(${w}% - 3px)"><b>${hm(v.start)} ${esc(v.farm.name)}</b><span class="who">${v.rows.length} parc.${v.prel ? ' · ' + esc(initials(v.prel.name)) : ''}</span></div>`;
+    layoutDay(evs).forEach(it => {
+      const v = it.v, top = ((v.start.getHours() - h0) * 60 + v.start.getMinutes()) * ppm, hgt = Math.max(20, (it.e - it.s) / 60000 * ppm - 2), w = 100 / it.lanes;
+      const p = S.prelById.get(v.prel);
+      body += `<div class="wev" role="button" tabindex="0" data-visit="${esc(v.key)}" title="${esc(evTitle(v))}" style="${evStyle(v)};top:${top}px;height:${hgt}px;left:calc(${it.lane * w}% + 1px);width:calc(${w}% - 3px)">
+        <b>${hm(v.start)} ${esc(v.farm.name)}</b><span class="who">${v.parcels.length} parc.${ndays === 1 ? ' · ' + esc(v.farm.Ville || v.farm.Adresse_complete || '') : ''}${p ? ' · ' + esc(ndays === 1 ? personName(p) : initials(personName(p))) : ''}${v.insp ? ' · ' + ic('shield') : ''}</span></div>`;
     });
-    untimed.forEach((v, j) => { body += `<div class="wev ${stClass(v.statut)}" role="button" tabindex="0" data-visit="${esc(v.key)}" title="${esc(evTitle(v))}" style="top:${j * 22}px;height:20px;left:1px;width:calc(100% - 3px);opacity:.85"><b>Heure ? ${esc(v.farm.name)}</b></div>`; });
-    if (k === today) { const n = new Date(); const t = ((n.getHours() - h0) * 60 + n.getMinutes()) * ppm; if (t >= 0 && t <= height) body += `<div class="nowline" style="top:${t}px"></div>`; }
+    if (k === today) { const n = new Date(), t = ((n.getHours() - h0) * 60 + n.getMinutes()) * ppm; if (t >= 0 && t <= height) body += `<div class="nowline" style="top:${t}px"></div>`; }
     body += '</div>';
   }
-  $('#calBody').innerHTML = head + '</div>' + body + '</div><p class="sub" style="margin-top:6px">Cliquez sur une plage libre pour créer un rendez-vous à cette heure.</p>';
+  $('#calBody').innerHTML = head + '</div>' + body + '</div><p class="sub" style="margin-top:6px">Cliquez sur une plage libre pour planifier un rendez-vous à cette heure.</p>';
 }
 function renderList(list) {
-  const c = S.cursor, y = c.getFullYear(), m = c.getMonth();
-  const inMonth = list.filter(v => v.start.getFullYear() === y && v.start.getMonth() === m);
-  const map = byDay(inMonth), keys = Object.keys(map).sort();
-  if (!keys.length) { $('#calBody').innerHTML = `<p class="empty">Aucun rendez-vous ce mois-ci${nearestHint(list)}.</p>`; return; }
-  $('#calBody').innerHTML = keys.map(k => `<section class="agenda-day"><h3><span style="text-transform:capitalize">${esc(fullDate(map[k][0].start))}</span><span class="sub">${map[k].length} rendez-vous${countByPrel(map[k])}</span></h3>
-    ${map[k].map(visitRow).join('')}</section>`).join('');
+  const [a, b] = S.view === 'list' ? [new Date(S.cursor.getFullYear(), S.cursor.getMonth(), 1), new Date(S.cursor.getFullYear(), S.cursor.getMonth() + 1, 1)] : periodRange();
+  const map = byDay(list.filter(v => v.start >= a && v.start < b)), keys = Object.keys(map).sort();
+  if (!keys.length) { $('#calBody').innerHTML = `<p class="empty">Aucun rendez-vous sur la période${nearestHint(list)}.</p>`; return; }
+  $('#calBody').innerHTML = keys.map(k => `<section class="agenda-day"><h3><span style="text-transform:capitalize">${esc(fullDate(map[k][0].start))}</span><span class="sub">${map[k].length} rendez-vous</span></h3>${map[k].map(visitRow).join('')}</section>`).join('');
 }
 function visitRow(v) {
-  const f = v.farm;
-  return `<button class="agenda-item ${stClass(v.statut)}" data-visit="${esc(v.key)}">
-    <span class="h">${timeLabel(v)}${v.hasTime ? `<br><span class="sub">→ ${hm(v.end)}</span>` : ''}</span>
-    <span><span class="n">${esc(f.name)}</span>
-      <span class="s">${f.commune ? `<span>${ic('pin')} ${esc(f.commune)}</span>` : ''}<span>${v.rows.length} parcelle(s) : ${esc(v.rows.map(r => val(r, 'parcelle') || '#' + r.id).join(', '))}</span>
-      ${v.prel ? `<span>${ic('user')} ${esc(v.prel.name)}</span>` : (M('preleveur') ? '<span>Préleveur à désigner</span>' : '')}${v.insp ? `<span>${ic('shield')} ${esc(v.insp.name)}</span>` : ''}</span>
-      ${v.remarques ? `<span class="s">${esc(v.remarques)}</span>` : ''}</span>
-    <span class="badge ${stClass(v.statut)}">${esc(v.statut || 'Sans statut')}</span></button>`;
-}
-function countByPrel(evs) {
-  if (!M('preleveur')) return '';
-  const m = {}; evs.forEach(v => { const n = v.prel ? v.prel.name : 'non désigné'; m[n] = (m[n] || 0) + 1; });
-  return ' · ' + esc(Object.entries(m).map(([n, c]) => `${n} : ${c}`).join(' · '));
+  const f = v.farm, p = S.prelById.get(v.prel), i = S.inspById.get(v.insp);
+  return `<button class="agenda-item" style="border-left-color:${prelColor(v.prel)}" data-visit="${esc(v.key)}">
+    <span class="h">${hm(v.start)}<br><span class="sub">→ ${hm(v.end)}</span></span>
+    <span><span class="n">${esc(f.name)}</span> <span class="sub">PACAGE ${esc(f.pacage)}</span>
+      <span class="s">${f.Adresse_complete ? `<span>${ic('pin')} ${esc(f.Adresse_complete)}</span>` : ''}${f.Telephone_portable ? `<span>${esc(f.Telephone_portable)}</span>` : ''}
+      <span>${v.parcels.length} parcelle(s) : ${esc(v.parcels.map(x => x.key.split('-').slice(1).join('-')).join(', '))}</span>
+      ${p ? `<span>${ic('user')} ${esc(personName(p))}</span>` : '<span>Préleveur à désigner</span>'}${i ? `<span>${ic('shield')} ${esc(personName(i))}</span>` : ''}</span></span>
+    <span class="badge ${stClass(v.statut)}">${esc(stLabel(v.statut))}</span></button>`;
 }
 function openDay(k) {
-  const evs = filteredVisits().filter(v => dkey(v.start) === k);
-  const [y, m, d] = k.split('-').map(Number), date = new Date(y, m - 1, d);
+  const evs = filteredVisits().filter(v => dkey(v.start) === k), [y, m, d] = k.split('-').map(Number), date = new Date(y, m - 1, d);
   openModal(`<h2>${ic('calendar')}<span style="text-transform:capitalize">${esc(fullDate(date))}</span></h2>
-    <p class="lead">${evs.length ? evs.length + ' rendez-vous' + countByPrel(evs) : 'Aucun rendez-vous ce jour'}</p>
-    <div class="daylist">${evs.map(visitRow).join('')}</div>`,
-  {foot: `<button class="btn" id="dayNew">${ic('add')}Ajouter un rendez-vous ce jour</button>`, wide: true});
-  $('#dayNew').onclick = () => openVisitForm(null, {date: nextFreeSlot(date, evs)});
+    <p class="lead">${evs.length ? evs.length + ' rendez-vous' : 'Aucun rendez-vous ce jour'}</p><div class="daylist">${evs.map(visitRow).join('')}</div>`,
+  {foot: `<button class="btn ter" id="dayView">${ic('calendar')}Vue jour</button><button class="btn" id="dayNew">${ic('add')}Planifier une exploitation ce jour</button>`, wide: true});
+  $('#dayView').onclick = () => { closeModal(); S.cursor = date; S.view = 'day'; renderCalendar(); };
+  $('#dayNew').onclick = () => openPicker(new Date(y, m - 1, d, Math.max(8, S.cfg.hourStart), 0));
 }
-function nextFreeSlot(date, evs) {
-  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate(), Math.max(8, S.cfg.hourStart), 0);
-  const active = evs.filter(v => !isCancelled(v.statut) && v.hasTime);
-  if (active.length) { const last = Math.max(...active.map(v => v.end.getTime())); if (last > d.getTime()) d.setTime(Math.ceil(last / 900000) * 900000); }
-  return d;
+// Choix d'une exploitation à planifier (depuis un jour ou une plage horaire)
+function openPicker(date) {
+  openModal(`<h2>${ic('add')}Planifier un rendez-vous</h2><p class="lead">${esc(fullDate(date))} à ${hm(date)}</p>
+    <div class="grp"><label class="lbl" for="pq">Exploitation</label><input class="input" id="pq" type="search" placeholder="Nom, PACAGE, n° dossier…" autocomplete="off"></div>
+    <div id="pres"></div>`, {wide: true});
+  const draw = () => {
+    const q = norm($('#pq').value.trim());
+    const list = Array.from(S.farms.values()).filter(f => !q || norm([f.name, f.pacage, f.dossier_number, f.Ville].join(' ')).includes(q))
+      .sort((a, b) => (!!a.visits.length - !!b.visits.length) || a.name.localeCompare(b.name)).slice(0, 25);
+    $('#pres').innerHTML = list.map(f => `<button class="qhit" data-pick="${esc(f.key)}"><b>${esc(f.name)}</b><span class="sub">${esc(f.pacage)} · ${f.parcels.length} parcelle(s) · ${esc(stLabel(f.statut))}${f.visits.length ? ' · RDV ' + shortDate(f.visits[0].start) : ''}</span></button>`).join('') || '<p class="sub">Aucune exploitation.</p>';
+    $$('[data-pick]').forEach(b => b.onclick = () => openFiche(b.dataset.pick, {date}));
+  };
+  $('#pq').addEventListener('input', draw); draw();
 }
 
 /* ---------- Exploitations ---------- */
 function renderFarms() {
-  const q = norm(S.expQ), now = Date.now();
-  const all = Array.from(S.farms.values());
-  const rows = all.map(f => {
-    const planned = f.rows.filter(r => rowStart(r)).length, active = f.visits.filter(v => !isCancelled(v.statut));
-    return {f, planned, next: active.find(v => v.start.getTime() >= now) || null, last: active[active.length - 1] || null};
-  }).filter(x => (!q || norm([x.f.name, x.f.commune, x.f.cp, x.f.adresse].concat(x.f.rows.map(r => val(r, 'dossier'))).join(' ')).includes(q))
-    && (!S.expBassin || x.f.bassin === S.expBassin)
-    && (S.expFilter !== 'todo' || x.planned < x.f.rows.length) && (S.expFilter !== 'none' || !x.planned))
-    .sort((a, b) => a.f.name.localeCompare(b.f.name));
-  const fullyPlanned = all.filter(f => f.rows.every(r => rowStart(r))).length;
-  const shown = rows.slice(0, 300);
+  const q = norm(S.expQ), all = Array.from(S.farms.values()), now = Date.now();
+  const rows = all.filter(f => (!q || norm([f.name, f.pacage, f.dossier_number, f.Ville, f.Adresse_complete].concat(f.parcels.map(x => x.key)).join(' ')).includes(q))
+    && (!S.expDpt || f.dpt === S.expDpt) && (!S.expStatut || (S.expStatut === '__none' ? !f.statut : f.statut === S.expStatut))).sort((a, b) => a.name.localeCompare(b.name));
+  const shown = rows.slice(0, 300), cnt = s => all.filter(f => (s ? f.statut === s : !f.statut)).length;
   $('#main').innerHTML = `<div class="section-head"><h2>Exploitations</h2>
-      <span class="muted">${fullyPlanned} / ${all.length} entièrement planifiées · ${S.rows.length} parcelles · table <code>${esc(S.cfg.rdvTable)}</code></span></div>
+      <span class="muted">${all.length} exploitations · ${S.parc.length} parcelles · ${STATUTS.map(s => `${s} : ${cnt(s)}`).join(' · ')} · À appeler : ${cnt('')}</span></div>
+    ${S.orphans ? `<div class="alert warn"><p>${S.orphans} ligne(s) de <code>${T_RDV}</code> n'ont pas de clé parcelle et sont ignorées.</p></div>` : ''}
     <div class="filters">
-      <div><label class="lbl" for="eq">Recherche</label><input class="input" id="eq" type="search" placeholder="Nom, commune, n° dossier…" value="${esc(S.expQ)}"></div>
-      ${M('bassin') ? `<div><label class="lbl" for="ebv">Bassin versant</label><select class="select" id="ebv">${optList(distinct('bassin').map(d => [d, d]), S.expBassin, 'Tous')}</select></div>` : ''}
-      <div><label class="lbl" for="ef">Planification</label><select class="select" id="ef">${optList([['todo', 'Parcelles restant à planifier'], ['none', 'Aucun rendez-vous']], S.expFilter, 'Toutes')}</select></div>
+      <div><label class="lbl" for="eq">Recherche</label><input class="input" id="eq" type="search" placeholder="Nom, PACAGE, n° dossier, commune, clé…" value="${esc(S.expQ)}"></div>
+      <div><label class="lbl" for="est">Statut</label><select class="select" id="est">${optList(STATUTS.map(s => [s, s]).concat([['__none', 'À appeler']]), S.expStatut, 'Tous')}</select></div>
+      <div><label class="lbl" for="edpt">Département</label><select class="select" id="edpt">${optList(dptList().map(d => [d, d]), S.expDpt, 'Tous')}</select></div>
     </div>
-    ${rows.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Exploitation</th><th>Commune</th>${M('bassin') ? '<th>Bassin versant</th>' : ''}<th>Parcelles</th><th>Prochain / dernier RDV</th><th></th></tr></thead><tbody>
-    ${shown.map(x => { const v = x.next || x.last;
-      return `<tr class="click" data-farm="${esc(x.f.key)}"><td><span class="strong">${esc(x.f.name)}</span>${x.f.portable || x.f.tel ? `<div class="sub">${esc(x.f.portable || x.f.tel)}</div>` : ''}</td>
-      <td>${esc([x.f.cp, x.f.commune].filter(Boolean).join(' '))}</td>${M('bassin') ? `<td>${esc(x.f.bassin)}</td>` : ''}
-      <td><span class="tag">${x.planned} / ${x.f.rows.length} planifiée(s)</span></td>
-      <td>${v ? `${esc(shortDate(v.start))}${v.hasTime ? ' à ' + hm(v.start) : ''} <span class="badge ${stClass(v.statut)}">${esc(v.statut || 'Sans statut')}</span>${v.prel ? `<div class="sub">${esc(v.prel.name)}</div>` : ''}` : '<span class="sub">—</span>'}</td>
-      <td class="act"><button class="btn sec" data-plan="${esc(x.f.key)}">${ic('add')}Planifier</button></td></tr>`; }).join('')}
-    </tbody></table></div>${rows.length > shown.length ? `<p class="sub">${rows.length - shown.length} exploitation(s) supplémentaire(s) : affinez la recherche.</p>` : ''}` : '<p class="empty">Aucune exploitation ne correspond.</p>'}`;
+    ${rows.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Exploitation</th><th>Contact</th><th>Parcelles</th><th>Appels</th><th>Statut</th><th>Rendez-vous</th><th></th></tr></thead><tbody>
+    ${shown.map(f => { const v = f.visits.find(x => x.start.getTime() >= now) || f.visits[f.visits.length - 1], p = S.prelById.get(v ? v.prel : f.preleveur);
+      return `<tr class="click" data-fiche="${esc(f.key)}"><td><span class="strong">${esc(f.name)}</span><div class="sub">PACAGE ${esc(f.pacage)}${f.dossier_number ? ' · DN ' + esc(f.dossier_number) : ''}</div></td>
+      <td>${esc(f.Telephone_portable || '')}<div class="sub">${esc(f.Ville || f.Departement || '')}</div></td><td>${f.parcels.length}</td><td>${f.nbAppels} / 3</td>
+      <td><span class="badge ${stClass(f.statut)}">${esc(stLabel(f.statut))}</span></td>
+      <td>${v ? `${esc(shortDate(v.start))} ${hm(v.start)}${p ? `<div class="sub">${esc(personName(p))}</div>` : ''}` : '<span class="sub">—</span>'}</td>
+      <td class="act"><button class="btn sec" data-fiche="${esc(f.key)}">${ic('edit')}Fiche RDV</button></td></tr>`; }).join('')}
+    </tbody></table></div>${rows.length > shown.length ? `<p class="sub">${rows.length - shown.length} exploitation(s) de plus : affinez la recherche.</p>` : ''}` : '<p class="empty">Aucune exploitation ne correspond.</p>'}`;
   $('#eq').addEventListener('input', e => { S.expQ = e.target.value; clearTimeout(renderFarms.t); renderFarms.t = setTimeout(() => { renderFarms(); const i = $('#eq'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); });
-  if ($('#ebv')) $('#ebv').onchange = e => { S.expBassin = e.target.value; renderFarms(); };
-  $('#ef').onchange = e => { S.expFilter = e.target.value; renderFarms(); };
+  $('#est').onchange = e => { S.expStatut = e.target.value; renderFarms(); };
+  $('#edpt').onchange = e => { S.expDpt = e.target.value; renderFarms(); };
 }
+
+/* ============================================================
+   FICHE « RENDEZ-VOUS PRÉLÈVEMENT » (par exploitation)
+   ============================================================ */
+function infoField(label, v, type, full) {
+  const s = fmtAny(v, type); if (!s) return '';
+  return `<div class="fld${full ? ' full' : ''}"><div class="k">${esc(label)}</div><div class="v">${esc(s)}</div></div>`;
+}
+function parcelInfo(x) {
+  const pc = cols(S.cfg.parcTable), dc = cols(S.cfg.defTable);
+  let html = '';
+  if (x.def) {
+    const g = INFO_DEF.map(([k, l]) => dc[k] ? infoField(l, x.def[k], dc[k].type) : '').join('');
+    const lat = Number(x.def.latitude), lon = Number(x.def.longitude);
+    const map = lat && lon ? `<div class="fld"><div class="k">Localisation</div><div class="v"><a href="https://www.geoportail.gouv.fr/carte?c=${lon},${lat}&z=17&l0=ORTHOIMAGERY.ORTHOPHOTOS::GEOPORTAIL:OGC:WMTS(1)&l1=CADASTRALPARCELS.PARCELLAIRE_EXPRESS::GEOPORTAIL:OGC:WMTS(1)&permalink=yes" target="_blank" rel="noopener">Géoportail</a> · <a href="https://www.google.com/maps/search/?api=1&query=${lat},${lon}" target="_blank" rel="noopener">Itinéraire</a></div></div>` : '';
+    if (g || map) html += `<div class="fgrid">${g}${map}</div>`;
+  }
+  if (x.src) for (const sec of INFO_PARC) {
+    const g = sec.fields.map(([k, l, full]) => pc[k] ? infoField(l, x.src[k], pc[k].type, full) : '').join('');
+    if (g) html += `<h4 class="${sec.warn && x.src.la_parcelle_comporte_t_elle_une_ou_plusieurs_zones_a_eviter_pour_le_prelevement ? 'warn' : ''}">${esc(sec.title)}</h4><div class="fgrid">${g}</div>`;
+  }
+  return html || '<p class="sub">Aucune information complémentaire.</p>';
+}
+const sharedOf = (f, k) => { for (const x of f.parcels) { const v = x.rdv && x.rdv[k]; if (v !== null && v !== undefined && v !== '' && v !== 0 && !isErr(v)) return v; } return null; };
+
+function openFiche(farmKey, opts = {}) {
+  const f = S.farms.get(farmKey); if (!f) return;
+  const rt = c => typeOf(T_RDV, c);
+  const wallOf = c => { const v = sharedOf(f, c); return typeof v === 'number' ? toWall(v, rt(c)) : null; };
+  const rdvDate = opts.date || wallOf('Date_RDV');
+  const dur = Number(sharedOf(f, 'Duree_min')) || S.cfg.duree;
+  const prelId = opts.date && S.sel.kind === 'prel' && S.sel.id > 0 ? S.sel.id : (sharedOf(f, 'Preleveur') || 0);
+  const people = (list, cur) => list.filter(p => p.Actif !== false || p.id === cur).sort((a, b) => personName(a).localeCompare(personName(b))).map(p => [p.id, personName(p) + (p.Actif === false ? ' (inactif)' : '')]);
+  const st = clean(sharedOf(f, 'Statut')) || (opts.date ? 'Rdv pris' : '');
+  const callField = n => { const d = wallOf('Date_heure_appel_' + n); return `<div class="grp"><label class="lbl" for="a${n}">Date/heure appel ${n}</label>
+    <div class="inline"><input class="input" type="datetime-local" id="a${n}" value="${dtInput(d)}"><button type="button" class="btn ter icon" data-now="a${n}" title="Maintenant">${ic('time')}<span class="sr">Maintenant</span></button></div></div>`; };
+  const yn = (id, v) => `<select class="select" id="${id}">${optList(OUI_NON.map(x => [x, x]), clean(v), '—')}</select>`;
+  openModal(`<h2>${ic('calendar')}Rendez-vous prélèvement</h2>
+    <div class="fiche-head"><span class="strong" style="font-size:1.15rem">${esc(f.name)}</span><span class="tag">PACAGE ${esc(f.pacage)}</span>${f.dossier_number ? `<span class="tag">DN ${esc(f.dossier_number)}</span>` : ''}<span class="badge ${stClass(clean(sharedOf(f, 'Statut')))}">${esc(stLabel(clean(sharedOf(f, 'Statut'))))}</span></div>
+    <section class="fsec"><h3>${ic('pin')}Contact</h3><div class="fgrid">
+      ${f.Telephone_portable ? `<div class="fld"><div class="k">Téléphone (RDV préleveur)</div><div class="v"><a href="tel:${esc(f.Telephone_portable)}">${esc(f.Telephone_portable)}</a></div></div>` : ''}
+      ${f.Mail ? `<div class="fld"><div class="k">E-mail</div><div class="v"><a href="mailto:${esc(f.Mail)}">${esc(f.Mail)}</a></div></div>` : ''}
+      ${infoField('Adresse', f.Adresse_complete, 'Text', true)}${infoField('Département', f.Departement, 'Text')}</div></section>
+    <form id="ficheForm" autocomplete="off">
+    <section class="fsec"><h3>${ic('time')}Appels et rendez-vous</h3>
+      <div class="row">${callField(1)}${callField(2)}${callField(3)}</div>
+      <div class="row">
+        <div class="grp"><label class="lbl" for="fSt">Statut</label><select class="select" id="fSt">${optList(STATUTS.concat(st && !STATUTS.includes(st) ? [st] : []).map(x => [x, x]), st, '— À appeler —')}</select></div>
+        <div class="grp"><label class="lbl" for="fPres">Présence souhaitée de l'agriculteur</label>${yn('fPres', sharedOf(f, 'Presence_souhaitee_agriculteur'))}</div>
+      </div>
+      <div class="row">
+        <div class="grp"><label class="lbl" for="fPrel">Nom prénom du préleveur</label><select class="select" id="fPrel">${optList(people(S.prel, prelId), prelId, '— À désigner —')}</select></div>
+        <div class="grp"><label class="lbl" for="fDate">Date/heure du RDV</label><input class="input" type="datetime-local" id="fDate" step="300" value="${dtInput(rdvDate)}"></div>
+        <div class="grp"><label class="lbl" for="fDur">Durée</label><select class="select" id="fDur">${optList(DUREES.concat(DUREES.includes(dur) ? [] : [dur]).map(m => [m, m < 60 ? m + ' min' : m / 60 + ' h']), dur, null)}</select></div>
+        <div class="grp"><label class="lbl" for="fInsp">Inspecteur FranceAgriMer<span class="hint">Facultatif (contrôle)</span></label><select class="select" id="fInsp">${optList(people(S.insp, sharedOf(f, 'Inspecteur')), sharedOf(f, 'Inspecteur') || '', '— Aucun —')}</select></div>
+      </div>
+      <div id="conflicts"></div>
+    </section>
+    <section class="fsec"><h3>${ic('plant')}Parcelles (${f.parcels.length})</h3>
+      ${f.parcels.map((x, i) => { const r = x.rdv || {}, cult = clean(r.Culture_en_place) || clean(x.src && x.src.Culture_2026);
+        return `<div class="parcel" data-i="${i}">
+        <div class="parcel-head"><b>${esc(x.key)}</b>${x.def && x.def.SURF_CALC ? `<span class="sub">${esc(fmtAny(x.def.SURF_CALC))} ha</span>` : ''}${x.src ? '' : '<span class="badge st-refus">absente de la table des parcelles</span>'}
+          <button type="button" class="btn ghost" data-toggle="pi${i}">${ic('info')}Infos préleveur</button></div>
+        <div class="row">
+          <div class="grp"><label class="lbl" for="c${i}">Culture en place</label><input class="input" id="c${i}" value="${esc(cult)}"></div>
+          <div class="grp"><label class="lbl" for="af${i}">Absence de fertilisation récente</label>${yn('af' + i, r.Absence_fertilisation_recente)}</div>
+          <div class="grp"><label class="lbl" for="et${i}">Étiquette prélèvement</label><input class="input" id="et${i}" value="${esc(clean(r.Etiquette_prelevement))}"></div>
+        </div>
+        <div class="grp"><label class="lbl" for="co${i}">Commentaire</label><textarea class="input" id="co${i}" rows="2" style="min-height:2.6rem">${esc(clean(r.Commentaire))}</textarea></div>
+        <div class="pinfo" id="pi${i}" hidden>${parcelInfo(x)}</div></div>`; }).join('')}
+    </section></form>`, {wide: true, foot: `<div class="left">${f.visits.length ? `<button class="btn danger" id="fUnplan">${ic('delete')}Annuler le RDV</button>` : ''}<button class="btn ter" id="fPrint">${ic('print')}Imprimer</button></div>
+      <button class="btn ter" data-close>Fermer</button><button class="btn" id="fSave">${ic('check')}Enregistrer</button>`});
+
+  $$('[data-now]').forEach(b => b.onclick = () => { $('#' + b.dataset.now).value = dtInput(new Date()); });
+  $$('[data-toggle]').forEach(b => b.onclick = () => { const el = $('#' + b.dataset.toggle); el.hidden = !el.hidden; });
+  const checkConflicts = () => {
+    const d = parseDtInput($('#fDate').value); if (!d) { $('#conflicts').innerHTML = ''; return; }
+    const s0 = d.getTime(), s1 = s0 + Number($('#fDur').value) * 60000, pr = Number($('#fPrel').value), ins = Number($('#fInsp').value);
+    const clash = S.visits.filter(v => v.farm !== f && ((pr && v.prel === pr) || (ins && v.insp === ins)) && v.start.getTime() < s1 && v.end.getTime() > s0);
+    $('#conflicts').innerHTML = clash.length ? `<div class="alert warn"><h3>Chevauchement d'horaires</h3>${clash.map(v => `<p>${hm(v.start)}–${hm(v.end)} : ${esc(v.farm.name)} (${esc(pr && v.prel === pr ? personName(S.prelById.get(pr)) : personName(S.inspById.get(ins)))})</p>`).join('')}<p class="sub">Vous pouvez enregistrer quand même.</p></div>` : '';
+  };
+  ['#fDate', '#fDur', '#fPrel', '#fInsp'].forEach(s => $(s).addEventListener('change', checkConflicts)); checkConflicts();
+  $('#fPrint').onclick = () => printModal();
+  const save = async unplan => {
+    const date = unplan ? null : parseDtInput($('#fDate').value), statut = $('#fSt').value || null;
+    if (!unplan && date && statut && statut !== 'Rdv pris') { toast('Un rendez-vous daté doit avoir le statut « Rdv pris ».', true); return; }
+    const call = n => { const d = parseDtInput($('#a' + n).value); return d ? fromWall(d, rt('Date_heure_appel_' + n)) : null; };
+    const shared = {Date_heure_appel_1: call(1), Date_heure_appel_2: call(2), Date_heure_appel_3: call(3), Statut: unplan ? null : (statut || (date ? 'Rdv pris' : null)),
+      Presence_souhaitee_agriculteur: $('#fPres').value || null, Preleveur: Number($('#fPrel').value) || 0, Inspecteur: Number($('#fInsp').value) || 0,
+      Date_RDV: date ? fromWall(date, rt('Date_RDV')) : null, Duree_min: Number($('#fDur').value), Modifie_le: Math.round(Date.now() / 1000)};
+    const acts = f.parcels.map((x, i) => {
+      const fields = Object.assign({}, shared, {Culture_en_place: $('#c' + i).value.trim() || null, Absence_fertilisation_recente: $('#af' + i).value || null,
+        Etiquette_prelevement: $('#et' + i).value.trim() || null, Commentaire: $('#co' + i).value.trim() || null});
+      if (x.src && x.src.dossier_number) fields.N_dossier_DN = Number(x.src.dossier_number) || null;
+      Object.keys(fields).forEach(k => { if (!cols(T_RDV)[k]) delete fields[k]; });
+      return x.rdv ? ['UpdateRecord', T_RDV, x.rdv.id, fields] : ['AddRecord', T_RDV, null, Object.assign({Cle_parcelle: x.key}, fields)];
+    });
+    if (await write(acts, unplan ? 'Rendez-vous annulé' : 'Fiche enregistrée')) { if (opts.back) opts.back(); else openFiche(farmKey); }
+  };
+  $('#fSave').onclick = () => save(false);
+  if ($('#fUnplan')) $('#fUnplan').onclick = () => {
+    const b = $('#fUnplan'); if (b.dataset.confirm !== '1') { b.dataset.confirm = '1'; b.innerHTML = ic('warning') + 'Confirmer : retirer la date et le statut'; return; }
+    save(true);
+  };
+}
+
+/* ---------- Feuille de route (préleveur ou inspecteur) ---------- */
+function openRoadmap() {
+  const [a, b] = periodRange(), list = filteredVisits().filter(v => v.start >= a && v.start < b);
+  const who = S.sel.kind === 'prel' ? personName(S.prelById.get(S.sel.id)) : personName(S.inspById.get(S.sel.id));
+  const map = byDay(list), keys = Object.keys(map).sort();
+  openModal(`<h2>${ic('user')}Feuille de route — ${esc(who)}</h2><p class="lead">${esc(periodLabel())} · ${list.length} rendez-vous</p>
+    ${keys.map(k => `<section class="road-day"><h3 style="text-transform:capitalize">${esc(fullDate(map[k][0].start))}</h3>
+      ${map[k].map(v => { const f = v.farm, i = S.inspById.get(v.insp), p = S.prelById.get(v.prel);
+        return `<article class="road"><div class="road-h"><b>${hm(v.start)}–${hm(v.end)} · ${esc(f.name)}</b><span class="sub">PACAGE ${esc(f.pacage)}${f.dossier_number ? ' · DN ' + esc(f.dossier_number) : ''}</span></div>
+          <div class="fgrid">${f.Telephone_portable ? `<div class="fld"><div class="k">Téléphone</div><div class="v"><a href="tel:${esc(f.Telephone_portable)}">${esc(f.Telephone_portable)}</a></div></div>` : ''}
+            ${infoField('Adresse', f.Adresse_complete, 'Text', true)}${infoField('Présence de l\'agriculteur', sharedOf(f, 'Presence_souhaitee_agriculteur'), 'Text')}
+            ${p ? infoField('Préleveur', personName(p), 'Text') : ''}${i ? infoField('Inspecteur FranceAgriMer', personName(i), 'Text') : ''}</div>
+          ${v.parcels.map(x => `<div class="road-p"><h4>${esc(x.key)}${x.rdv && x.rdv.Etiquette_prelevement ? ' · étiquette ' + esc(x.rdv.Etiquette_prelevement) : ''}</h4>
+            <div class="fgrid">${infoField('Culture en place', x.rdv && x.rdv.Culture_en_place, 'Text')}${infoField('Absence de fertilisation récente', x.rdv && x.rdv.Absence_fertilisation_recente, 'Text')}${infoField('Commentaire', x.rdv && x.rdv.Commentaire, 'Text', true)}</div>
+            ${parcelInfo(x)}</div>`).join('')}</article>`; }).join('')}</section>`).join('') || '<p class="empty">Aucun rendez-vous sur la période.</p>'}`,
+  {wide: true, foot: `<button class="btn ter" data-close>Fermer</button><button class="btn" id="rPrint">${ic('print')}Imprimer</button>`});
+  $('#rPrint').onclick = printModal;
+}
+function printModal() { document.body.classList.add('printing'); window.print(); setTimeout(() => document.body.classList.remove('printing'), 500); }
 
 /* ---------- Préleveurs / inspecteurs ---------- */
 const PEOPLE = {
-  [T_PREL]: {title: 'Préleveurs', one: 'préleveur', icon: 'user', k: 'preleveur', extra: ['Organisme', 'Organisme']},
-  [T_INSP]: {title: 'Inspecteurs FranceAgriMer', one: 'inspecteur', icon: 'shield', k: 'inspecteur', extra: ['Service', 'Service / délégation']}
+  [T_PREL]: {title: 'Préleveurs', one: 'préleveur', icon: 'user', k: 'prel', extra: ['Organisme', 'Organisme']},
+  [T_INSP]: {title: 'Inspecteurs FranceAgriMer', one: 'inspecteur', icon: 'shield', k: 'insp', extra: ['Service', 'Service / délégation']}
 };
-function personKey(t, p) { return colType(PEOPLE[t].k).startsWith('Ref:') ? '#' + p.id : normKey(personName(p)); }
 function renderPeople(t) {
   const P = PEOPLE[t], list = (t === T_PREL ? S.prel : S.insp).slice().sort((a, b) => (b.Actif !== false) - (a.Actif !== false) || personName(a).localeCompare(personName(b)));
-  const now = Date.now();
-  const count = p => { const key = personKey(t, p); return S.visits.filter(v => v[t === T_PREL ? 'prel' : 'insp'] && v[t === T_PREL ? 'prel' : 'insp'].key === key && v.start.getTime() >= now && !isCancelled(v.statut)).length; };
-  $('#main').innerHTML = `<div class="section-head"><h2>${P.title}</h2><button class="btn" id="addPerson">${ic('add')}Ajouter un ${P.one}</button></div>
-    ${!M(P.k) ? `<div class="alert warn"><p>Aucune colonne « ${esc(FIELD[P.k].label)} » n'est associée dans la configuration : la liste n'est pas utilisée par le calendrier.</p></div>` : ''}
+  const now = Date.now(), upcoming = p => S.visits.filter(v => v[P.k] === p.id && v.start.getTime() >= now).length;
+  $('#main').innerHTML = `<div class="section-head"><h2>${P.title}</h2><span class="muted">Table <code>${t}</code></span><button class="btn" id="addPerson">${ic('add')}Ajouter un ${P.one}</button></div>
     ${list.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Nom</th><th>${P.extra[1]}</th><th>Téléphone</th><th>E-mail</th><th>Départements</th><th>RDV à venir</th><th>État</th><th></th></tr></thead><tbody>
-    ${list.map(p => { const n = count(p);
-      return `<tr><td class="strong">${esc(personName(p) || '(sans nom)')}</td><td>${esc(p[P.extra[0]])}</td><td>${p.Telephone ? `<a href="tel:${esc(p.Telephone)}">${esc(p.Telephone)}</a>` : ''}</td>
-      <td>${p.Email ? `<a href="mailto:${esc(p.Email)}">${esc(p.Email)}</a>` : ''}</td><td>${esc(p.Departements)}</td><td>${n ? `<a href="#" data-filter-person="${t}|${esc(personKey(t, p))}">${n}</a>` : '0'}</td>
-      <td>${p.Actif === false ? '<span class="badge">Inactif</span>' : '<span class="badge st-fait">Actif</span>'}</td>
+    ${list.map(p => { const n = upcoming(p);
+      return `<tr><td class="strong">${P.k === 'prel' ? `<span class="dot" style="background:${prelColor(p.id)}"></span> ` : ''}${esc(personName(p) || '(sans nom)')}</td><td>${esc(p[P.extra[0]])}</td>
+      <td>${p.Telephone ? `<a href="tel:${esc(p.Telephone)}">${esc(p.Telephone)}</a>` : ''}</td><td>${p.Email ? `<a href="mailto:${esc(p.Email)}">${esc(p.Email)}</a>` : ''}</td><td>${esc(p.Departements)}</td>
+      <td>${n ? `<a href="#" data-sel="${P.k}:${p.id}">${n} — voir le planning</a>` : '0'}</td><td>${p.Actif === false ? '<span class="badge">Inactif</span>' : '<span class="badge st-pris">Actif</span>'}</td>
       <td class="act"><button class="btn ter icon" data-edit-person="${t}:${p.id}" title="Modifier">${ic('edit')}<span class="sr">Modifier</span></button></td></tr>`; }).join('')}
-    </tbody></table></div>` : `<div class="alert"><p>Aucun ${P.one} pour l'instant. Ajoutez-en pour pouvoir les affecter aux rendez-vous.</p></div>`}`;
+    </tbody></table></div>` : `<div class="alert"><p>Aucun ${P.one} pour l'instant.</p></div>`}`;
   $('#addPerson').onclick = () => openPersonForm(t, null);
 }
 function openPersonForm(t, id) {
   const P = PEOPLE[t], p = id ? (t === T_PREL ? S.prelById : S.inspById).get(id) : {Actif: true};
-  const used = id ? S.visits.some(v => { const x = v[t === T_PREL ? 'prel' : 'insp']; return x && x.key === personKey(t, p); }) : false;
+  const used = id ? S.rdv.some(r => r[t === T_PREL ? 'Preleveur' : 'Inspecteur'] === id) : false;
   openModal(`<h2>${ic(P.icon)}${id ? 'Modifier' : 'Ajouter'} un ${P.one}</h2><p class="lead">Table <code>${t}</code></p>
-    <form id="pForm"><div class="row">
-      <div class="grp"><label class="lbl" for="pNom">Nom</label><input class="input" id="pNom" value="${esc(p.Nom)}" required></div>
-      <div class="grp"><label class="lbl" for="pPrenom">Prénom</label><input class="input" id="pPrenom" value="${esc(p.Prenom)}"></div></div>
+    <form><div class="row"><div class="grp"><label class="lbl" for="pPrenom">Prénom</label><input class="input" id="pPrenom" value="${esc(p.Prenom)}"></div>
+      <div class="grp"><label class="lbl" for="pNom">Nom</label><input class="input" id="pNom" value="${esc(p.Nom)}"></div></div>
       <div class="grp"><label class="lbl" for="pExtra">${P.extra[1]}</label><input class="input" id="pExtra" value="${esc(p[P.extra[0]])}"></div>
       <div class="row"><div class="grp"><label class="lbl" for="pTel">Téléphone</label><input class="input" id="pTel" type="tel" value="${esc(p.Telephone)}"></div>
       <div class="grp"><label class="lbl" for="pMail">E-mail</label><input class="input" id="pMail" type="email" value="${esc(p.Email)}"></div></div>
-      <div class="grp"><label class="lbl" for="pDpt">Départements couverts<span class="hint">Ex. : 22, 29</span></label><input class="input" id="pDpt" value="${esc(p.Departements)}"></div>
-      <label class="chk"><input type="checkbox" id="pActif" ${p.Actif !== false ? 'checked' : ''}> Actif (proposé dans les rendez-vous)</label>
-      ${id && !colType(P.k).startsWith('Ref:') ? '<p class="sub">Les rendez-vous mémorisent le nom en texte : si vous renommez cette personne, les rendez-vous existants gardent l\'ancien nom.</p>' : ''}
-    </form>`, {foot: `<div class="left">${id ? `<button class="btn danger" id="pDel" ${used ? 'disabled title="Affecté à des rendez-vous : désactivez-le plutôt"' : ''}>${ic('delete')}Supprimer</button>` : ''}</div>
-      <button class="btn ter" data-close>Annuler</button><button class="btn" id="pSave">${ic('check')}Enregistrer</button>`});
+      <div class="grp"><label class="lbl" for="pDpt">Départements couverts<span class="hint">Ex. : 022, 029</span></label><input class="input" id="pDpt" value="${esc(p.Departements)}"></div>
+      <label class="chk"><input type="checkbox" id="pActif" ${p.Actif !== false ? 'checked' : ''}> Actif (proposé dans les fiches)</label></form>`,
+  {foot: `<div class="left">${id ? `<button class="btn danger" id="pDel" ${used ? 'disabled title="Affecté à des rendez-vous : désactivez-le plutôt"' : ''}>${ic('delete')}Supprimer</button>` : ''}</div>
+    <button class="btn ter" data-close>Annuler</button><button class="btn" id="pSave">${ic('check')}Enregistrer</button>`});
   $('#pSave').onclick = async () => {
     const fields = {Prenom: $('#pPrenom').value.trim(), Nom: $('#pNom').value.trim(), [P.extra[0]]: $('#pExtra').value.trim(), Telephone: $('#pTel').value.trim(),
       Email: $('#pMail').value.trim(), Departements: $('#pDpt').value.trim(), Actif: $('#pActif').checked};
@@ -1065,231 +1112,6 @@ function openPersonForm(t, id) {
     if (await write([id ? ['UpdateRecord', t, id, fields] : ['AddRecord', t, null, fields]], 'Enregistré')) closeModal();
   };
   if (id && $('#pDel')) $('#pDel').onclick = async () => { if (await write([['RemoveRecord', t, id]], 'Supprimé')) closeModal(); };
-}
-
-/* ============================================================
-   RENDEZ-VOUS (groupe de parcelles d'une exploitation)
-   ============================================================ */
-// Valeurs à écrire pour la date et l'heure, selon le type des colonnes
-function dateTimeFields(d) {
-  const out = {}, dc = M('date'), dt = colType('date'), hc = M('heure'), ht = colType('heure');
-  const [y, m, dd, h, mi] = [d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes()];
-  if (dt === 'Date') out[dc] = Date.UTC(y, m - 1, dd) / 1000;
-  else if (dt.startsWith('DateTime')) out[dc] = wallToEpoch(y, m, dd, hc ? 0 : h, hc ? 0 : mi, tzOf(dt));
-  else out[dc] = `${y}-${pad(m)}-${pad(dd)}` + (hc ? '' : ` ${pad(h)}:${pad(mi)}`);
-  if (hc && writable('heure')) {
-    const sample = S.rows.map(r => r[hc]).find(v => v !== null && v !== undefined && v !== '');
-    if (ht.startsWith('DateTime')) out[hc] = wallToEpoch(1970, 1, 1, h, mi, tzOf(ht));
-    else if (ht === 'Numeric' || ht === 'Int') out[hc] = typeof sample === 'number' && sample >= 1 ? h * 3600 + mi * 60 : (h * 60 + mi) / 1440;
-    else out[hc] = /^\d{1,2}:\d{2}:\d{2}$/.test(String(sample || '')) ? `${pad(h)}:${pad(mi)}:00` : `${pad(h)}:${pad(mi)}`;
-  }
-  return out;
-}
-function clearFields() {
-  const out = {};
-  for (const k of ['date', 'heure', 'statut']) if (writable(k)) out[M(k)] = null;
-  return out;
-}
-function personWriteValue(k, v) { return colType(k).startsWith('Ref:') ? (Number(v) || 0) : (v || null); }
-
-function openVisitForm(visitKey, opts = {}) {
-  const v = visitKey ? S.visitByKey.get(visitKey) : null;
-  let farm = v ? v.farm : (opts.farmKey ? S.farms.get(opts.farmKey) : null);
-  const d = v ? new Date(v.start) : new Date(opts.date || new Date());
-  if (!v && !opts.date) { d.setMinutes(0, 0, 0); d.setHours(Math.max(d.getHours() + 1, 8)); }
-  if (!v && d.getHours() === 0 && d.getMinutes() === 0) d.setHours(Math.max(8, S.cfg.hourStart), 0, 0, 0);
-  const dur = v ? v.duree : S.cfg.duree, durs = DUREES.includes(dur) ? DUREES : DUREES.concat([dur]).sort((a, b) => a - b);
-  const prelCh = personChoices('preleveur', v && v.prel), inspCh = personChoices('inspecteur', v && v.insp);
-  const farmLabel = f => [f.name, [f.cp, f.commune].filter(Boolean).join(' ')].filter(Boolean).join(' — ');
-  const farmsSorted = Array.from(S.farms.values()).sort((a, b) => a.name.localeCompare(b.name));
-  const ro = k => !writable(k) ? 'disabled' : '';
-  openModal(`<h2>${ic('calendar')}${v ? 'Rendez-vous de prélèvement' : 'Nouveau rendez-vous'}</h2>
-    <p class="lead">Les informations ci-dessous sont enregistrées sur chaque parcelle cochée de la table <code>${esc(S.cfg.rdvTable)}</code>.</p>
-    <form id="vForm" autocomplete="off">
-      ${v ? `<div class="grp"><div class="lbl">Exploitation</div><div class="strong" style="font-size:1.05rem">${esc(farmLabel(farm))}</div></div>`
-        : `<div class="grp"><label class="lbl" for="vFarm">Exploitation<span class="hint">Tapez le nom ou la commune puis choisissez dans la liste.</span></label>
-        <input class="input" id="vFarm" list="farmList" value="${esc(farm ? farmLabel(farm) : '')}" placeholder="Rechercher une exploitation…">
-        <datalist id="farmList">${farmsSorted.map(f => `<option value="${esc(farmLabel(f))}">`).join('')}</datalist></div>`}
-      <div id="farmInfo"></div>
-      <div class="grp"><div class="lbl">Parcelles concernées</div><div id="parcels"></div></div>
-      <div class="row">
-        <div class="grp"><label class="lbl" for="vDate">Date</label><input class="input" id="vDate" type="date" value="${toInputDate(d)}" required ${ro('date')}></div>
-        <div class="grp"><label class="lbl" for="vTime">Heure</label><input class="input" id="vTime" type="time" step="300" value="${v && !v.hasTime ? '' : toInputTime(d)}" ${M('heure') ? ro('heure') : (colType('date') === 'Date' ? 'disabled' : '')}></div>
-        ${M('duree') ? `<div class="grp"><label class="lbl" for="vDur">Durée</label><select class="select" id="vDur" ${ro('duree')}>${durs.map(m => `<option value="${m}" ${m === dur ? 'selected' : ''}>${m < 60 ? m + ' min' : (m / 60) + ' h'}</option>`).join('')}</select></div>` : ''}
-      </div>
-      <div class="row">
-        ${M('preleveur') ? `<div class="grp"><label class="lbl" for="vPrel">Préleveur</label><select class="select" id="vPrel" ${ro('preleveur')}>${optList(prelCh.map(o => [o.value, o.label]), v && v.prel ? v.prel.value : (S.f.prel && S.f.prel !== '__none' ? (prelCh.find(o => o.key === S.f.prel) || {}).value : ''), '— À désigner —')}</select></div>` : ''}
-        ${M('inspecteur') ? `<div class="grp"><label class="lbl" for="vInsp">Inspecteur FranceAgriMer<span class="hint">Facultatif (contrôle)</span></label><select class="select" id="vInsp" ${ro('inspecteur')}>${optList(inspCh.map(o => [o.value, o.label]), v && v.insp ? v.insp.value : '', '— Aucun —')}</select></div>` : ''}
-        ${M('statut') ? `<div class="grp"><label class="lbl" for="vSt">Statut</label><select class="select" id="vSt" ${ro('statut')}>${optList(STATUTS.concat(v && v.statut && !STATUTS.includes(v.statut) ? [v.statut] : []).map(x => [x, x]), v ? v.statut : 'Prévu', '— Non renseigné —')}</select></div>` : ''}
-      </div>
-      <div id="conflicts"></div>
-      ${M('remarques') ? `<div class="grp"><label class="lbl" for="vRem">Remarques RDV</label><textarea class="input" id="vRem" ${ro('remarques')}>${esc(v ? v.remarques : '')}</textarea></div>` : ''}
-    </form>`, {wide: true, foot: `<div class="left">${v ? `<button class="btn danger" id="vDel" title="Retire la date et l'heure des parcelles de ce rendez-vous">${ic('delete')}Déplanifier</button>` : ''}
-      <button class="btn ter" id="vFarmBtn">${ic('plant')}Fiche exploitation</button></div>
-      <button class="btn ter" data-close>Annuler</button><button class="btn" id="vSave">${ic('check')}Enregistrer</button>`});
-
-  const inVisit = new Set(v ? v.rows.map(r => r.id) : []);
-  const drawFarm = () => {
-    $('#vFarmBtn').disabled = !farm;
-    if (!farm) { $('#farmInfo').innerHTML = ''; $('#parcels').innerHTML = '<p class="sub">Choisissez d\'abord une exploitation.</p>'; return; }
-    $('#farmInfo').innerHTML = `<p class="sub" style="margin:-.5rem 0 1rem">${[farm.adresse ? ic('pin') + ' ' + esc([farm.adresse, farm.cp, farm.commune].filter(Boolean).join(' ')) : '',
-      farm.portable ? `<a href="tel:${esc(farm.portable)}">${esc(farm.portable)}</a>` : '', farm.tel ? `<a href="tel:${esc(farm.tel)}">${esc(farm.tel)}</a>` : '', farm.bassin ? 'BV ' + esc(farm.bassin) : ''].filter(Boolean).join(' · ')}</p>
-      ${farm.rows.map(r => val(r, 'observations')).filter(Boolean).length ? `<div class="alert warn"><p>${esc(Array.from(new Set(farm.rows.map(r => val(r, 'observations')).filter(Boolean))).join(' · '))}</p></div>` : ''}`;
-    $('#parcels').innerHTML = `<div class="tbl-wrap"><table class="tbl"><tbody>${farm.rows.map(r => {
-      const st = rowStart(r), here = inVisit.has(r.id), checked = here || (!v && !st && !opts.rowIds) || (opts.rowIds && opts.rowIds.includes(r.id));
-      const where = st && !here ? `<span class="badge ${stClass(val(r, 'statut'))}">déjà prévue le ${esc(shortDate(st.date))}${st.hasTime ? ' ' + hm(st.date) : ''}</span>` : '';
-      return `<tr><td style="width:2rem"><input type="checkbox" class="pchk" value="${r.id}" ${checked ? 'checked' : ''} aria-label="Inclure la parcelle"></td>
-        <td><span class="strong">${esc(parcelLabel(r))}</span><div class="sub">${esc([val(r, 'dossier') ? 'Dossier ' + val(r, 'dossier') : '', val(r, 'numPrelev') ? 'Prélèv. ' + val(r, 'numPrelev') : ''].filter(Boolean).join(' · '))}</div></td>
-        <td class="act">${where}</td></tr>`; }).join('')}</tbody></table></div>`;
-    $$('.pchk').forEach(c => c.addEventListener('change', checkConflicts));
-  };
-  const when = () => {
-    const [y, m, dd] = ($('#vDate').value || '').split('-').map(Number); if (!y) return null;
-    const t = $('#vTime').value; const [h, mi] = t ? t.split(':').map(Number) : [0, 0];
-    return {date: new Date(y, m - 1, dd, h, mi), hasTime: !!t};
-  };
-  const checkConflicts = () => {
-    const w = when(); if (!w || !w.hasTime || !$('#conflicts')) return;
-    const s0 = w.date.getTime(), s1 = s0 + (Number(($('#vDur') || {}).value) || dur) * 60000;
-    const pk = $('#vPrel') ? (prelCh.find(o => String(o.value) === $('#vPrel').value) || {}).key : null;
-    const ik = $('#vInsp') ? (inspCh.find(o => String(o.value) === $('#vInsp').value) || {}).key : null;
-    const clash = S.visits.filter(x => x !== v && x.hasTime && !isCancelled(x.statut) && ((pk && x.prel && x.prel.key === pk) || (ik && x.insp && x.insp.key === ik)) && x.start.getTime() < s1 && x.end.getTime() > s0);
-    $('#conflicts').innerHTML = clash.length ? `<div class="alert warn"><h3>Chevauchement d'horaires</h3>${clash.map(x => `<p>${hm(x.start)}–${hm(x.end)} : ${esc(x.farm.name)} (${esc(pk && x.prel && x.prel.key === pk ? x.prel.name : x.insp.name)})</p>`).join('')}<p class="sub">Vous pouvez enregistrer quand même.</p></div>` : '';
-  };
-  drawFarm(); checkConflicts();
-  if (!v) $('#vFarm').addEventListener('input', () => {
-    const t = $('#vFarm').value.trim(); const hit = farmsSorted.find(f => farmLabel(f) === t) || null;
-    if (hit !== farm) { farm = hit; drawFarm(); }
-  });
-  ['#vDate', '#vTime', '#vDur', '#vPrel', '#vInsp'].forEach(sel => { const el = $(sel); if (el) el.addEventListener('change', checkConflicts); });
-  $('#vFarmBtn').onclick = () => { if (farm) openFarm(farm.key); };
-
-  $('#vSave').onclick = async () => {
-    if (!farm) { toast('Choisissez une exploitation dans la liste.', true); return; }
-    const ids = $$('.pchk').filter(c => c.checked).map(c => Number(c.value));
-    if (!ids.length) { toast('Cochez au moins une parcelle.', true); return; }
-    const w = when(); if (!w) { toast('Date invalide.', true); return; }
-    const fields = dateTimeFields(w.date);
-    if (!w.hasTime && M('heure') && writable('heure')) fields[M('heure')] = null;
-    if ($('#vPrel') && writable('preleveur')) fields[M('preleveur')] = personWriteValue('preleveur', $('#vPrel').value);
-    if ($('#vInsp') && writable('inspecteur')) fields[M('inspecteur')] = personWriteValue('inspecteur', $('#vInsp').value);
-    if ($('#vSt') && writable('statut')) fields[M('statut')] = $('#vSt').value || null;
-    if ($('#vRem') && writable('remarques')) fields[M('remarques')] = $('#vRem').value.trim() || null;
-    if ($('#vDur') && writable('duree')) fields[M('duree')] = Number($('#vDur').value);
-    const acts = ids.map(id => ['UpdateRecord', S.cfg.rdvTable, id, fields]);
-    if (v) v.rows.filter(r => !ids.includes(r.id)).forEach(r => acts.push(['UpdateRecord', S.cfg.rdvTable, r.id, clearFields()]));
-    if (await write(acts, v ? 'Rendez-vous mis à jour' : 'Rendez-vous créé')) { if (opts.back) opts.back(); else closeModal(); }
-  };
-  if (v) $('#vDel').onclick = async () => {
-    if ($('#vDel').dataset.confirm !== '1') { $('#vDel').dataset.confirm = '1'; $('#vDel').innerHTML = ic('warning') + 'Confirmer : retirer la date de ' + v.rows.length + ' parcelle(s)'; return; }
-    if (await write(v.rows.map(r => ['UpdateRecord', S.cfg.rdvTable, r.id, clearFields()]), 'Rendez-vous déplanifié')) { if (opts.back) opts.back(); else closeModal(); }
-  };
-}
-function miniVisit(v) {
-  return `<div class="rdv-mini ${stClass(v.statut)}" data-visit="${esc(v.key)}" role="button" tabindex="0"><b>${esc(fullDate(v.start))}${v.hasTime ? ' · ' + hm(v.start) + '–' + hm(v.end) : ''}</b>
-    <span class="badge ${stClass(v.statut)}">${esc(v.statut || 'Sans statut')}</span><span class="sub">${v.rows.length} parcelle(s)</span>
-    ${v.prel ? `<span class="sub">${ic('user')} ${esc(v.prel.name)}</span>` : ''}${v.insp ? `<span class="sub">${ic('shield')} ${esc(v.insp.name)}</span>` : ''}${v.remarques ? `<span class="sub">${esc(v.remarques)}</span>` : ''}</div>`;
-}
-
-/* ============================================================
-   FICHE EXPLOITATION
-   ============================================================ */
-function openFarm(farmKey) {
-  const f = S.farms.get(farmKey); if (!f) return;
-  const obs = Array.from(new Set(f.rows.map(r => val(r, 'observations')).filter(Boolean)));
-  const fld = (k, v, html) => v ? `<div class="fld"><div class="k">${esc(k)}</div><div class="v">${html || esc(v)}</div></div>` : '';
-  const showCols = ['parcelle', 'surface', 'numPrelev', 'type', 'culture', 'dossier'].filter(k => M(k));
-  openModal(`<h2>${ic('plant')}${esc(f.name)}</h2>
-    <div class="fiche-head">${f.commune ? `<span class="tag">${esc(f.commune)}</span>` : ''}${f.bassin ? `<span class="tag">BV ${esc(f.bassin)}</span>` : ''}<span class="tag">${f.rows.length} parcelle(s)</span></div>
-    <section class="fsec"><h3>${ic('pin')}Coordonnées</h3><div class="fgrid">
-      ${fld('Adresse', [f.adresse, f.cp, f.commune].filter(Boolean).join(' '))}
-      ${fld('Portable', f.portable, `<a href="tel:${esc(f.portable)}">${esc(f.portable)}</a>`)}${fld('Téléphone', f.tel, `<a href="tel:${esc(f.tel)}">${esc(f.tel)}</a>`)}
-      ${fld('Bassin versant', f.bassin)}</div>
-      ${obs.length ? `<div class="alert warn" style="margin-top:1rem"><h3>Observations</h3>${obs.map(o => `<p>${esc(o)}</p>`).join('')}</div>` : ''}</section>
-    <section class="fsec"><h3>${ic('calendar')}Rendez-vous (${f.visits.length})</h3>
-      ${f.visits.length ? f.visits.map(miniVisit).join('') : '<p class="muted">Aucun rendez-vous planifié.</p>'}
-      <p><button class="btn sec" id="fPlan">${ic('add')}Planifier un rendez-vous</button></p></section>
-    <section class="fsec"><h3>${ic('plant')}Parcelles à prélever</h3>
-      <div class="tbl-wrap"><table class="tbl"><thead><tr>${showCols.map(k => `<th>${esc(FIELD[k].label)}</th>`).join('')}<th>Rendez-vous</th>${M('preleveur') ? '<th>Préleveur</th>' : ''}<th></th></tr></thead><tbody>
-      ${f.rows.map(r => { const st = rowStart(r), p = personOf(r, 'preleveur'), fr = ficheRow(r);
-        return `<tr>${showCols.map(k => `<td>${esc(val(r, k))}</td>`).join('')}<td>${st ? esc(shortDate(st.date)) + (st.hasTime ? ' ' + hm(st.date) : '') + (val(r, 'statut') ? ` <span class="badge ${stClass(val(r, 'statut'))}">${esc(val(r, 'statut'))}</span>` : '') : '<span class="sub">À planifier</span>'}</td>
-        ${M('preleveur') ? `<td>${esc(p ? p.name : '')}</td>` : ''}<td class="act">${fr ? `<button class="btn ter" data-lab="${fr.id}" data-farm-back="${esc(f.key)}">Fiche prélèvement</button>` : ''}</td></tr>`; }).join('')}
-      </tbody></table></div></section>`, {wide: true, foot: `<button class="btn ter" data-close>Fermer</button>`});
-  const back = () => openFarm(farmKey);
-  $('#fPlan').onclick = () => openVisitForm(null, {farmKey, date: nextFreeSlot(new Date(), []), back});
-  $$('.modal [data-visit]').forEach(el => { el.onclick = e => { e.stopPropagation(); openVisitForm(el.dataset.visit, {back}); }; });
-  $$('.modal [data-lab]').forEach(el => { el.onclick = e => { e.stopPropagation(); openLabFiche(Number(el.dataset.lab), false, back); }; });
-}
-
-/* ---------- Fiche de prélèvement détaillée (ex. DATA_Lab) ---------- */
-const TRIVIAL = new Set(['', "''", '""', 'None', 'False', '0']);
-function colKind(c) {
-  if (!c) return 'ro';
-  if (c.isFormula && c.formula.trim()) return TRIVIAL.has(c.formula.trim()) ? 'const' : 'ro';
-  if (c.type.startsWith('Ref') || c.type === 'Attachments' || c.type === 'ChoiceList') return 'ro';
-  return 'edit';
-}
-function fmtVal(v, c) {
-  if (v === null || v === undefined || v === '' || isErr(v)) return '';
-  const t = c ? c.type : 'Any';
-  if (t === 'Bool' || typeof v === 'boolean') return v ? 'Oui' : 'Non';
-  if (typeof v === 'number' && t.startsWith('DateTime')) { const p = partsInTz(v, tzOf(t)); return `${pad(p.d)}/${pad(p.m)}/${p.y} à ${pad(p.h)}h${pad(p.mi)}`; }
-  if (typeof v === 'number' && t === 'Date') return new Date(v * 1000).toLocaleDateString('fr-FR', {timeZone: 'UTC'});
-  if (Array.isArray(v)) return v[0] === 'L' ? v.slice(1).join(', ') : '';
-  if (typeof v === 'number') return v.toLocaleString('fr-FR', {maximumFractionDigits: 6, useGrouping: !/GPS|dossier/i.test(c ? c.colId : '')});
-  return String(v);
-}
-function editor(k, v, c, full) {
-  const t = c.type, id = 'f_' + k;
-  if (t === 'Bool') return `<label class="chk"><input type="checkbox" id="${id}" data-k="${k}" ${v ? 'checked' : ''}> Oui</label>`;
-  if (t.startsWith('DateTime')) { const p = typeof v === 'number' ? partsInTz(v, tzOf(t)) : null; return `<input class="input" type="datetime-local" id="${id}" data-k="${k}" value="${p ? `${p.y}-${pad(p.m)}-${pad(p.d)}T${pad(p.h)}:${pad(p.mi)}` : ''}">`; }
-  if (t === 'Date') { const d = typeof v === 'number' ? new Date(v * 1000).toISOString().slice(0, 10) : ''; return `<input class="input" type="date" id="${id}" data-k="${k}" value="${d}">`; }
-  if (t === 'Numeric' || t === 'Int') return `<input class="input" type="number" step="any" id="${id}" data-k="${k}" value="${typeof v === 'number' ? v : ''}">`;
-  if (t === 'Choice') { const ch = c.choices.slice(); if (v && !ch.includes(v)) ch.unshift(v); return `<select class="select" id="${id}" data-k="${k}">${optList(ch.map(x => [x, x]), v || '', '—')}</select>`; }
-  if (full) return `<textarea class="input" id="${id}" data-k="${k}">${esc(isErr(v) ? '' : v)}</textarea>`;
-  return `<input class="input" id="${id}" data-k="${k}" value="${esc(isErr(v) || v == null ? '' : v)}">`;
-}
-function readEditor(el, c) {
-  const t = c.type;
-  if (t === 'Bool') return el.checked;
-  if (t.startsWith('DateTime')) { if (!el.value) return null; const [a, b] = el.value.split('T'); const [y, m, d] = a.split('-').map(Number), [h, mi] = b.split(':').map(Number); return wallToEpoch(y, m, d, h, mi, tzOf(t)); }
-  if (t === 'Date') { if (!el.value) return null; const [y, m, d] = el.value.split('-').map(Number); return Date.UTC(y, m - 1, d) / 1000; }
-  if (t === 'Numeric' || t === 'Int') return el.value === '' ? null : Number(el.value);
-  return el.value === '' ? null : el.value;
-}
-async function reloadFiche() { const rows = await B.fetch(S.cfg.ficheTable); S.fiche = new Map(); rows.forEach(x => { const k = clean(x[S.cfg.ficheKey]); if (k && !S.fiche.has(k)) S.fiche.set(k, x); }); return rows; }
-function openLabFiche(rowId, editMode, back) {
-  const s = Array.from(S.fiche.values()).find(x => x.id === rowId); if (!s) return;
-  const c = S.meta[S.cfg.ficheTable].cols, listed = new Set();
-  const sections = FICHE_SECTIONS.map(sec => ({title: sec.title, icon: sec.icon, fields: sec.fields.filter(([k]) => { if (c[k]) { listed.add(k); return true; } return false; })}));
-  const extra = Object.keys(c).filter(k => !listed.has(k) && !FICHE_HIDDEN.has(k) && !k.startsWith('gristHelper') && !isErr(s[k]) && !(c[k].isFormula && !c[k].formula.trim() && s[k] == null));
-  if (extra.length) sections.push({title: 'Autres informations', icon: 'info', fields: extra.map(k => [k, c[k].label || k])});
-  const consts = editMode ? Object.keys(c).filter(k => listed.has(k) && colKind(c[k]) === 'const') : [];
-  const body = sections.filter(sec => sec.fields.length).map(sec => `<section class="fsec"><h3>${ic(sec.icon)}${esc(sec.title)}</h3><div class="fgrid">
-    ${sec.fields.map(([k, label, full]) => {
-      const cc = c[k], kind = colKind(cc), v = s[k], f = fmtVal(v, cc);
-      if (editMode && kind === 'edit') return `<div class="fld${full ? ' full' : ''}"><label class="lbl" for="f_${k}">${esc(label)}</label>${editor(k, v, cc, full)}</div>`;
-      return `<div class="fld${full ? ' full' : ''}"><div class="k">${esc(label)}</div><div class="v${f ? '' : ' na'}">${esc(f || 'Non renseigné')}</div>${editMode && kind !== 'edit' ? `<div class="ro">${kind === 'const' ? 'Formule constante' : 'Calculé (formule)'}</div>` : ''}</div>`;
-    }).join('')}</div></section>`).join('');
-  openModal(`<h2>${ic('info')}Fiche de prélèvement</h2><p class="lead">Table <code>${esc(S.cfg.ficheTable)}</code> · ${esc(S.cfg.ficheKey)} ${esc(s[S.cfg.ficheKey])}</p>
-    ${consts.length ? `<div class="alert warn"><p>${consts.length} champ(s) sont des formules constantes (${esc(consts.map(k => c[k].label || k).join(', '))}) et ne peuvent pas être saisis.</p><p><button class="btn sec" id="convertBtn">Les rendre saisissables</button></p></div>` : ''}
-    ${body}`, {wide: true, foot: editMode
-    ? `<button class="btn ter" id="lCancel">Annuler</button><button class="btn" id="lSave">${ic('check')}Enregistrer la fiche</button>`
-    : `<div class="left">${back ? `<button class="btn ter" id="lBack">${ic('left')}Retour à l'exploitation</button>` : ''}</div><button class="btn ter" data-close>Fermer</button><button class="btn" id="lEdit">${ic('edit')}Modifier la fiche</button>`});
-  const reopen = edit => openLabFiche(rowId, edit, back);
-  if (!editMode) { $('#lEdit').onclick = () => reopen(true); if ($('#lBack')) $('#lBack').onclick = back; return; }
-  $('#lCancel').onclick = () => reopen(false);
-  if ($('#convertBtn')) $('#convertBtn').onclick = async () => {
-    try { await B.apply(consts.map(k => ['ModifyColumn', S.cfg.ficheTable, k, {isFormula: false}])); S.meta = await B.meta(); await reloadFiche(); toast('Colonnes converties'); reopen(true); }
-    catch (e) { toast('Échec : ' + (e.message || e), true); }
-  };
-  $('#lSave').onclick = async () => {
-    const f = {};
-    $$('.modal [data-k]').forEach(el => { const k = el.dataset.k, v = readEditor(el, c[k]), old = s[k] ?? null; if (v !== old && !(v === null && old === '')) f[k] = v; });
-    if (!Object.keys(f).length) { reopen(false); return; }
-    try { await B.apply([['UpdateRecord', S.cfg.ficheTable, rowId, f]]); await reloadFiche(); toast('Fiche enregistrée'); reopen(false); }
-    catch (e) { toast('Échec de l\'enregistrement : ' + (e.message || e), true); }
-  };
 }
 
 /* ============================================================
@@ -1301,52 +1123,42 @@ function openModal(html, {foot = '', wide = false} = {}) {
   $('#modalRoot').innerHTML = `<div class="overlay" id="overlay"><div class="modal${wide ? ' wide' : ''}" role="dialog" aria-modal="true">
     <div class="modal-close"><button class="btn ghost" data-close>Fermer ${ic('close')}</button></div>
     <div class="modal-body">${html}</div>${foot ? `<div class="modal-foot">${foot}</div>` : ''}</div></div>`;
-  const f = $('.modal-body input:not([type=checkbox]):not([disabled]), .modal-body select:not([disabled]), .modal-body textarea') || $('.modal [data-close]');
-  if (f) f.focus();
+  const f = $('.modal-body input[type=search]') || $('.modal [data-close]'); if (f) f.focus();
 }
 function closeModal() { $('#modalRoot').innerHTML = ''; if (lastFocus && lastFocus.focus) lastFocus.focus(); }
-
 async function write(actions, okMsg) {
-  try {
-    await B.apply(actions);
-    await loadData(); render();
-    if (okMsg) toast(okMsg);
-    return true;
-  } catch (e) {
-    console.error(e);
-    toast('Échec de l\'enregistrement : ' + (e.message || e) + '. Vérifiez que le widget a l\'accès complet au document.', true);
-    return false;
-  }
+  try { await B.apply(actions); await loadData(); render(); if (okMsg) toast(okMsg); return true; }
+  catch (e) { console.error(e); toast('Échec de l\'enregistrement : ' + (e.message || e) + '. Vérifiez que le widget a l\'accès complet au document.', true); return false; }
 }
 
 document.addEventListener('click', e => {
   const t = e.target;
   if (t.closest('[data-close]') || t.id === 'overlay') { closeModal(); return; }
-  const vis = t.closest('[data-visit]'); if (vis) { openVisitForm(vis.dataset.visit); return; }
+  const vis = t.closest('[data-visit]'); if (vis) { const v = S.visitByKey.get(vis.dataset.visit); if (v) openFiche(v.farm.key); return; }
+  const fi = t.closest('[data-fiche]'); if (fi) { e.stopPropagation(); openFiche(fi.dataset.fiche); return; }
+  const qh = t.closest('[data-qfarm]');
+  if (qh) { const f = S.farms.get(qh.dataset.qfarm), v = f && (f.visits.find(x => x.start.getTime() >= Date.now()) || f.visits[f.visits.length - 1]);
+    if (v) { S.cursor = new Date(v.start); S.view = 'day'; S.sel = {kind: '', id: 0}; renderCalendar(); } openFiche(qh.dataset.qfarm); return; }
+  const sel = t.closest('[data-sel]');
+  if (sel) { e.preventDefault(); const [k, id] = sel.dataset.sel.split(':'); S.sel = {kind: k, id: Number(id)}; if (S.tab !== 'cal') { S.tab = 'cal'; if (S.view === 'month') S.view = 'week'; } render(); return; }
   const more = t.closest('[data-day-more]'); if (more) { openDay(more.dataset.dayMore); return; }
   const go = t.closest('[data-goto]'); if (go) { e.preventDefault(); S.cursor = new Date(Number(go.dataset.goto)); renderCalendar(); return; }
-  const plan = t.closest('[data-plan]'); if (plan) { e.stopPropagation(); openVisitForm(null, {farmKey: plan.dataset.plan, date: nextFreeSlot(new Date(), [])}); return; }
-  const farm = t.closest('[data-farm]'); if (farm) { openFarm(farm.dataset.farm); return; }
   const ep = t.closest('[data-edit-person]'); if (ep) { const [tb, id] = ep.dataset.editPerson.split(':'); openPersonForm(tb, Number(id)); return; }
-  const fp = t.closest('[data-filter-person]');
-  if (fp) { e.preventDefault(); const i = fp.dataset.filterPerson.indexOf('|'), tb = fp.dataset.filterPerson.slice(0, i), key = fp.dataset.filterPerson.slice(i + 1);
-    S.f = {prel: '', insp: '', statut: '', bassin: '', type: '', q: ''}; S.f[tb === T_PREL ? 'prel' : 'insp'] = key; S.tab = 'cal'; S.view = 'list'; render(); return; }
   const cell = t.closest('.cell[data-day]'); if (cell) { openDay(cell.dataset.day); return; }
   const wcol = t.closest('.wcol');
   if (wcol && t === wcol) {
-    const R = wcol.getBoundingClientRect(), hh = hourPx();
-    const mins = Math.floor((e.clientY - R.top) / hh * 60 / 15) * 15 + Number(wcol.dataset.h0) * 60;
+    const R = wcol.getBoundingClientRect(), mins = Math.floor((e.clientY - R.top) / hourPx() * 60 / 15) * 15 + Number(wcol.dataset.h0) * 60;
     const [y, m, d] = wcol.dataset.wday.split('-').map(Number);
-    openVisitForm(null, {date: new Date(y, m - 1, d, Math.floor(mins / 60), mins % 60)});
+    openPicker(new Date(y, m - 1, d, Math.floor(mins / 60), mins % 60));
   }
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && $('#modalRoot').firstChild) closeModal();
-  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.rdv-mini, .wev')) { e.preventDefault(); e.target.click(); }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.wev')) { e.preventDefault(); e.target.click(); }
 });
 $$('.tab').forEach(b => b.onclick = () => { S.tab = b.dataset.tab; render(); });
 $('#refreshBtn').onclick = async () => { if ($('#tabs').hidden) return; try { await loadData(); render(); toast('Données actualisées'); } catch (e) { toast(e.message || String(e), true); } };
-$('#settingsBtn').onclick = () => { closeModal(); renderConfig(); };
+$('#settingsBtn').onclick = () => { closeModal(); renderSetup(); };
 let resizeT; window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (S.tab === 'cal' && !$('#tabs').hidden) renderCalendar(); }, 150); });
 
 /* ============================================================
@@ -1355,7 +1167,8 @@ let resizeT; window.addEventListener('resize', () => { clearTimeout(resizeT); re
 async function boot() {
   try {
     S.meta = await B.meta();
-    if (!configReady()) { renderConfig(); return; }
+    if (!ready()) { $('#tabs').dataset.first = '1'; renderSetup(); return; }
+    delete $('#tabs').dataset.first;
     await loadData();
     $('#tabs').hidden = false;
     render();
@@ -1364,61 +1177,83 @@ async function boot() {
     $('#tabs').hidden = true;
     $('#main').innerHTML = `<div class="setup"><div class="alert err"><h3>Impossible de lire le document</h3><p>${esc(e.message || e)}</p>
       <p>Dans le panneau de droite de Grist, réglez l'<b>accès</b> du widget sur <b>« Accès complet au document »</b>, puis rechargez.</p></div>
-      <p><button class="btn" id="cfgBtn">${ic('settings')}Ouvrir la configuration</button></p></div>`;
-    $('#cfgBtn').onclick = () => renderConfig();
+      <p><button class="btn" id="cfgBtn">${ic('settings')}Mise en place</button></p></div>`;
+    $('#cfgBtn').onclick = () => renderSetup();
   }
 }
 let reloadT;
 function scheduleReload() { clearTimeout(reloadT); reloadT = setTimeout(async () => { if ($('#tabs').hidden) return; try { await loadData(); if (!$('#modalRoot').firstChild) render(); } catch (e) { console.warn(e); } }, 400); }
-
 async function start(backend) {
   B = backend;
   const saved = await B.getConfig();
-  if (saved && typeof saved === 'object') S.cfg = Object.assign({}, DEFAULT_CFG, saved);
+  if (saved && typeof saved === 'object' && saved.parcTable) S.cfg = Object.assign({}, DEFAULT_CFG, saved);
   await boot();
 }
 
-// Données fictives au format du fichier Excel quotidien
-function demoRows() {
-  const out = [];
-  const farms = ['EARL du Vallon', 'GAEC Beau Soleil', 'Ferme des Ajoncs', 'SCEA La Closerie', 'GAEC Trois Rivières', 'EARL Kerangoff', 'SARL Terres d\'Arvor', 'EARL Le Gall',
-    'GAEC de la Lande', 'SCEA Mor Glaz', 'EARL Ty Nevez', 'GAEC du Blavet', 'EARL des Hêtres', 'GAEC Ar Menez', 'SCEA du Moulin', 'EARL Penhoat'];
-  const communes = [['22400', 'LAMBALLE-ARMOR'], ['22800', 'QUINTIN'], ['22510', 'MONCONTOUR'], ['22150', 'PLOEUC-L\'HERMITAGE'], ['29550', 'PLOMODIERN']];
-  const bv = ['GOUESSANT', 'GOUET', 'BAIE DE LA FRESNAYE', 'BAIE DE DOUARNENEZ'], cult = ['Prairie', 'Maïs', 'Céréales', 'Oléoprotéagineux'], types = ['RDD', 'RPA', 'RPR'];
-  const prel = ['LE GALL Pierre', 'MORVAN Jean', 'TANGUY Marie', '<Aucun>'], hours = ['09:00:00', '09:45:00', '10:30:00', '11:15:00', '14:00:00', '14:45:00', '15:30:00', '16:15:00'];
-  const now = new Date(), y = now.getFullYear(), m = now.getMonth();
-  let n = 0;
-  farms.forEach((name, i) => {
-    const [cp, com] = communes[i % communes.length], np = 1 + (i % 3), day = 1 + ((i * 3) % 27), planned = i % 5 !== 4;
-    for (let j = 0; j < np; j++) {
-      n++;
-      out.push({id: n, N_dossier: 101600 + n * 7, Raison_Sociale: name, ilot: (i + 1) + '-' + (j + 1), Surface: (1 + ((i + j) % 5) * 0.37).toFixed(2).replace('.', ',') + ' / ' + (1 + ((i + j) % 5) * 0.37).toFixed(2).replace('.', ','),
-        N_prelev_: j === 0 && i % 4 === 0 ? '1' : 'Suppl', Type: types[(i + j) % 3], Culture: cult[(i + j) % 4], Adresse: 'Lieu-dit Ker' + ['gonan', 'hoat', 'ivin', 'laouen'][i % 4], Code_Postal: cp, Commune: com,
-        Telephone: i % 2 ? '02.96.00.00.' + pad(i) : null, Portable: '06.00.00.' + pad(i) + '.' + pad(j), Bassin_versant: bv[i % 4], Observations: i % 3 === 0 ? 'APPEL AVANT PASSAGE' : null,
-        Preleveur: planned ? prel[i % 4] : null, Prelevement_prevu_le: planned && !(j === 2 && i % 2) ? Date.UTC(y, m, day + (i % 2)) / 1000 : null,
-        Heure: planned && !(j === 2 && i % 2) ? hours[(i * 3) % hours.length] : null, Remarques_RDV: null});
+// Données fictives reprenant la structure de DATA_RELIQUATCLEAN et DATA_Parcelles_DEF
+function seedDemo() {
+  const L = LocalBackend, T = (cols) => ({next: 1, rows: [], cols: cols.map(([id, type]) => ({id, type: type || 'Text'}))});
+  L.db.DATA_RELIQUATCLEAN = T([['dossier_number', 'Numeric'], ['PACAGE'], ['Nom_exploitation'], ['Parcelle_Labo'], ['CLELAB'], ['Telephone_portable'], ['Mail'], ['Adresse_complete'],
+    ['Departement'], ['Code_departement'], ['Culture_2026'], ['Type_parcelle'], ['la_parcelle_comporte_t_elle_une_ou_plusieurs_zones_a_eviter_pour_le_prelevement', 'Bool'],
+    ['quelles_zones_sont_a_eviter'], ['decrivez_au_preleveur_l_emplacement_des_zones_a_eviter'], ['epandez_vous_habituellement_des_fertilisants_organiques_sur_cette_parcelle', 'Bool'],
+    ['indiquez_les_types_d_effluents_epandus'], ['cette_parcelle_a_t_elle_recu_un_apport_organique_ou_ete_paturee_au_cours_des_4_dernieres_semaines', 'Bool'],
+    ['la_parcelle_est_elle_en_prairie_actuellement', 'Bool'], ['quelle_est_la_prochaine_culture_prevue_sur_cette_parcelle']]);
+  L.db.DATA_Parcelles_DEF = T([['CLE'], ['NUM_ILOT'], ['NUM_PARCEL', 'Numeric'], ['SURF_CALC', 'Numeric'], ['CULT_2025'], ['CULT_2024'], ['LB_BAV'], ['Raison_de_la_selection'], ['latitude', 'Numeric'], ['longitude', 'Numeric']]);
+  const farms = [['EARL du Vallon', '022', 'Plérin'], ['GAEC Beau Soleil', '022', 'Lamballe-Armor'], ['Ferme des Ajoncs', '056', 'Baud'], ['SCEA La Closerie', '035', 'Janzé'],
+    ['GAEC Trois Rivières', '029', 'Landerneau'], ['EARL Kerangoff', '029', 'Plouvien'], ['SARL Terres d\'Arvor', '022', 'Moncontour'], ['EARL Le Gall', '056', 'Pontivy'],
+    ['GAEC de la Lande', '035', 'Fougères'], ['SCEA Mor Glaz', '029', 'Châteaulin'], ['EARL Ty Nevez', '022', 'Loudéac'], ['GAEC du Blavet', '056', 'Hennebont']];
+  const cult = ['Maïs', 'Blé tendre', 'Prairie temporaire', 'Colza', 'Orge'];
+  farms.forEach(([n, dpt, ville], i) => {
+    const pac = dpt + String(100000 + i * 731).slice(0, 6);
+    for (let j = 0; j < 1 + (i % 3); j++) {
+      const ilot = (i % 7) + 1 + j, parc = (j % 3) + 1, key = pac + '-' + ilot + '-' + parc;
+      L.db.DATA_RELIQUATCLEAN.rows.push({id: L.db.DATA_RELIQUATCLEAN.next++, dossier_number: 24187300 + i * 13, PACAGE: pac, Nom_exploitation: n, Parcelle_Labo: ilot + '-' + parc, CLELAB: key,
+        Telephone_portable: '06 12 34 ' + pad(i) + ' ' + pad(j + 10), Mail: 'contact' + i + '@exemple.fr', Adresse_complete: (i + 2) + ' lieu-dit Kerbrat ' + dpt.slice(1) + '1' + pad(i) + ' ' + ville,
+        Departement: {'022': 'Côtes-d\'Armor', '029': 'Finistère', '035': 'Ille-et-Vilaine', '056': 'Morbihan'}[dpt], Code_departement: dpt.slice(1), Culture_2026: cult[(i + j) % 5], Type_parcelle: 'Principale',
+        la_parcelle_comporte_t_elle_une_ou_plusieurs_zones_a_eviter_pour_le_prelevement: i % 4 === 0, quelles_zones_sont_a_eviter: i % 4 === 0 ? 'Zone humide' : null,
+        decrivez_au_preleveur_l_emplacement_des_zones_a_eviter: i % 4 === 0 ? 'Bas de parcelle côté ruisseau, sur 20 m' : null,
+        epandez_vous_habituellement_des_fertilisants_organiques_sur_cette_parcelle: i % 2 === 0, indiquez_les_types_d_effluents_epandus: i % 2 === 0 ? 'Lisier de porc' : null,
+        cette_parcelle_a_t_elle_recu_un_apport_organique_ou_ete_paturee_au_cours_des_4_dernieres_semaines: false, la_parcelle_est_elle_en_prairie_actuellement: (i + j) % 5 === 2,
+        quelle_est_la_prochaine_culture_prevue_sur_cette_parcelle: cult[(i + j + 1) % 5]});
+      L.db.DATA_Parcelles_DEF.rows.push({id: L.db.DATA_Parcelles_DEF.next++, CLE: key, NUM_ILOT: String(ilot), NUM_PARCEL: parc, SURF_CALC: Math.round((1.2 + (i + j) % 4 * 0.85) * 100) / 100,
+        CULT_2025: cult[(i + j + 2) % 5], CULT_2024: cult[(i + j + 3) % 5], LB_BAV: i % 3 ? 'Gouessant' : 'Lieue de Grève', Raison_de_la_selection: ['RDD', 'RPA', 'RPR'][i % 3],
+        latitude: 48.2 + i * 0.03, longitude: -3.2 + i * 0.07});
     }
   });
-  return out;
+  // anciennes tables, pour montrer le renommage
+  L.db.Preleveurs = T([['Nom'], ['Prenom'], ['Organisme'], ['Telephone'], ['Email'], ['Departements'], ['Actif', 'Bool'], ['Nom_complet']]);
+  [['Morvan', 'Jean', 'Chambre d\'agriculture'], ['Le Bris', 'Anne', 'Laboratoire'], ['Guillou', 'Sophie', 'Chambre d\'agriculture']]
+    .forEach(([Nom, Prenom, Organisme], i) => L.db.Preleveurs.rows.push({id: L.db.Preleveurs.next++, Nom, Prenom, Organisme, Telephone: '06 98 76 54 3' + i, Actif: true}));
+  L.db.Inspecteurs_FAM = T([['Nom'], ['Prenom'], ['Service'], ['Telephone'], ['Email'], ['Departements'], ['Actif', 'Bool'], ['Nom_complet']]);
+  [['Martin', 'Claire', 'FranceAgriMer — Rennes'], ['Kerdraon', 'Yann', 'FranceAgriMer — Quimper']]
+    .forEach(([Nom, Prenom, Service]) => L.db.Inspecteurs_FAM.rows.push({id: L.db.Inspecteurs_FAM.next++, Nom, Prenom, Service, Actif: true}));
+}
+async function seedDemoRdv() {
+  const now = new Date(), y = now.getFullYear(), m = now.getMonth(), farms = Array.from(S.farms.values()), acts = [];
+  const slots = [[2, 9, 0], [2, 10, 30], [5, 14, 0], [6, 9, 0], [6, 9, 30], [6, 14, 0], [9, 10, 0], [13, 8, 30], [16, 9, 0], [16, 11, 0], [20, 14, 0]];
+  farms.forEach((f, i) => {
+    const s = slots[i], st = s ? 'Rdv pris' : ['Injoignable', 'Refus', 'Faux numéro', null][i % 4];
+    f.parcels.forEach(x => acts.push(['AddRecord', T_RDV, null, {Cle_parcelle: x.key, N_dossier_DN: Number(x.src.dossier_number), Statut: st,
+      Date_heure_appel_1: wallToEpoch(y, m + 1, 1, 10, 0, TZ), Presence_souhaitee_agriculteur: i % 2 ? 'Oui' : 'Non',
+      Preleveur: s ? (i % 3) + 1 : 0, Inspecteur: s && i % 4 === 1 ? (i % 2) + 1 : 0, Date_RDV: s ? wallToEpoch(y, m + 1, s[0], s[1], s[2], TZ) : null, Duree_min: 60, Culture_en_place: x.src.Culture_2026}]));
+  });
+  await B.apply(acts);
 }
 
 if (window.grist && window.self !== window.top) {
-  grist.ready({requiredAccess: 'full', allowSelectBy: false, onEditOptions: () => renderConfig()});
+  grist.ready({requiredAccess: 'full', allowSelectBy: false, onEditOptions: () => renderSetup()});
   grist.onRecords(() => scheduleReload());
   start(GristBackend);
 } else {
   $('#demoBanner').hidden = false;
+  seedDemo();
   B = LocalBackend;
-  B.meta().then(async meta => {
-    S.meta = meta;
-    const draft = Object.assign({}, DEFAULT_CFG, {rdvTable: '__create__'});
-    await install(draft, false);
-    const rows = demoRows(); Object.assign(LocalBackend.db[T_RDV], {rows, next: rows.length + 1});
-    await install(LocalBackend.cfg, true);
-    await B.apply([['AddRecord', T_INSP, null, {Nom: 'MARTIN', Prenom: 'Claire', Service: 'FranceAgriMer — Rennes', Departements: '22, 35', Actif: true}],
-      ['AddRecord', T_INSP, null, {Nom: 'KERDRAON', Prenom: 'Yann', Service: 'FranceAgriMer — Quimper', Departements: '29, 56', Actif: true}]]);
+  (async () => {
+    S.meta = await B.meta();
+    for (const o of plan()) { await o.run(); S.meta = await B.meta(); }
+    await B.setConfig(S.cfg); await loadData(); await seedDemoRdv();
     await start(LocalBackend);
-  });
+  })();
 }
 })();
 </script>
