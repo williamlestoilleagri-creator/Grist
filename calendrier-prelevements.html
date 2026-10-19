@@ -535,7 +535,7 @@ const LocalBackend = {
     const T = {id: [], tableId: [], summarySourceTable: []}, C = {id: [], parentId: [], colId: [], label: [], type: [], isFormula: [], formula: [], visibleCol: [], widgetOptions: []};
     let tr = 0, cr = 0;
     for (const [tid, t] of Object.entries(this.db)) {
-      tr++; T.id.push(tr); T.tableId.push(tid); T.summarySourceTable.push(0);
+      tr++; T.id.push(tr); T.tableId.push(tid); T.summarySourceTable.push(0); (this.rowOf = this.rowOf || {})[tr] = tid;
       t.cols.forEach(c => { cr++; C.id.push(cr); C.parentId.push(tr); C.colId.push(c.id); C.label.push(c.label || c.id); C.type.push(c.type || 'Any');
         C.isFormula.push(!!c.isFormula); C.formula.push(c.formula || ''); C.visibleCol.push(0); C.widgetOptions.push(c.widgetOptions || ''); });
     }
@@ -559,7 +559,10 @@ const LocalBackend = {
     for (const a of actions) {
       const [op, tid] = a, t = this.db[tid];
       if (op === 'AddTable') { this.db[tid] = {next: 1, rows: [], cols: a[2].map(c => Object.assign({}, c))}; ret.push({table_id: tid}); }
-      else if (op === 'RenameTable') { this.db[a[2]] = t; delete this.db[tid]; Object.values(this.db).forEach(x => x.cols.forEach(c => { if (c.type === 'Ref:' + tid) c.type = 'Ref:' + a[2]; })); ret.push(null); }
+      else if (op === 'UpdateRecord' && tid === '_grist_Tables' && a[3].tableId) {
+        const old = this.rowOf[a[2]], nw = a[3].tableId; this.db[nw] = this.db[old]; delete this.db[old];
+        Object.values(this.db).forEach(x => x.cols.forEach(c => { if (c.type === 'Ref:' + old) c.type = 'Ref:' + nw; })); ret.push(null);
+      }
       else if (op === 'AddColumn') { t.cols.push(Object.assign({id: a[2]}, a[3])); ret.push({colId: a[2]}); }
       else if (op === 'ModifyColumn') { Object.assign(t.cols.find(c => c.id === a[2]), a[3]); ret.push(null); }
       else if (op === 'AddRecord') { const id = t.next++; const r = {id}; t.cols.forEach(c => { if (!c.isFormula && c.formula === 'True') r[c.id] = true; }); t.rows.push(Object.assign(r, a[3])); ret.push(id); }
@@ -653,7 +656,7 @@ function plan() {
   const ops = [];
   for (const t of [T_PREL, T_INSP]) {
     if (S.meta[t]) { const miss = PEOPLE_TABLES[t].filter(c => !S.meta[t].cols[c.id]); if (miss.length) ops.push({text: `Ajouter à <code>${t}</code> : ${miss.map(c => c.id).join(', ')}`, run: () => B.apply(miss.map(c => ['AddColumn', t, c.id, colInfo(c)]))}); }
-    else if (S.meta[OLD_NAMES[t]]) ops.push({text: `Renommer <code>${OLD_NAMES[t]}</code> en <code>${t}</code> (données conservées)`, run: () => B.apply([['RenameTable', OLD_NAMES[t], t]])});
+    else if (S.meta[OLD_NAMES[t]]) ops.push({text: `Renommer <code>${OLD_NAMES[t]}</code> en <code>${t}</code> (données conservées)`, run: () => B.apply([['UpdateRecord', '_grist_Tables', S.meta[OLD_NAMES[t]].rowId, {tableId: t}]])});
     else ops.push({text: `Créer la table <code>${t}</code>`, run: () => B.apply([['AddTable', t, PEOPLE_TABLES[t].map(c => Object.assign({id: c.id}, colInfo(c)))]])});
   }
   const sc = rdvSchema(), ex = S.meta[T_RDV];
@@ -670,6 +673,14 @@ function plan() {
     if (cd && cd.isFormula && cd.formula !== want && /\$Exploitation/.test(cd.formula)) ops.push({text: `<code>Code_dpt</code> calculé à partir de la clé parcelle (règles d'accès par département)`, run: () => B.apply([['ModifyColumn', T_RDV, 'Code_dpt', {formula: want}]])});
   }
   return ops;
+}
+async function runPlan() {
+  S.meta = await B.meta();
+  for (let i = 0, last = ''; i < 12; i++) {
+    const op = plan()[0]; if (!op) return;
+    if (op.text === last) throw new Error('Étape impossible : ' + op.text.replace(/<[^>]+>/g, ''));
+    last = op.text; await op.run(); S.meta = await B.meta();
+  }
 }
 async function fixRefs() {
   S.meta = await B.meta();
@@ -725,7 +736,7 @@ function renderSetup(errMsg) {
     keep();
     if (!S.meta[S.cfg.parcTable] || !cols(S.cfg.parcTable)[S.cfg.parcKey]) { toast('Choisissez la table des parcelles et sa clé.', true); return; }
     $('#sGo').disabled = true;
-    try { for (const o of plan()) { await o.run(); S.meta = await B.meta(); } await fixRefs(); await B.setConfig(S.cfg); await boot(); toast('Calendrier prêt'); }
+    try { await runPlan(); await fixRefs(); await B.setConfig(S.cfg); await boot(); toast('Calendrier prêt'); }
     catch (e) { console.error(e); renderSetup(e.message || String(e)); }
   };
 }
@@ -1254,7 +1265,7 @@ if (window.grist && window.self !== window.top) {
   B = LocalBackend;
   (async () => {
     S.meta = await B.meta();
-    for (const o of plan()) { await o.run(); S.meta = await B.meta(); }
+    await runPlan();
     await B.setConfig(S.cfg); await loadData(); await seedDemoRdv();
     await start(LocalBackend);
   })();
