@@ -6,7 +6,7 @@
 | `annuaire-adresses.html` | Annuaire d'adresses géocodées (BAN) |
 | `grist-assistant-claude.html` | Assistant Claude |
 | `prise-rdv-calendrier.html` | Prise de rendez-vous (calendrier) |
-| `calendrier-prelevements.html` | **Calendrier des prélèvements** reliquats sur la table des parcelles (préleveurs, inspecteurs FranceAgriMer, fiche exploitation) |
+| `calendrier-prelevements.html` | **Calendrier des prélèvements** : crée la table `RDV_Prelevements` au format du fichier Excel quotidien (préleveurs, inspecteurs FranceAgriMer) |
 | `rdv/index.html` | Formulaire public de prise de rendez-vous |
 | `duo.html` | **Duo** — interprète à deux écouteurs (ex. japonais ⇄ allemand) |
 
@@ -75,29 +75,36 @@ Structure (en-tête des documents, IBAN, mentions), devise, TVA et délai par d�
 
 ## Calendrier des prélèvements (`calendrier-prelevements.html`)
 
-Charte DSFR (police Marianne, bleu France, bloc-marque). Travaille directement sur la **table des prélèvements** importée depuis Excel (ex. `Table3` : une ligne par parcelle, avec `N° dossier`, `Raison Sociale`, `ilot`, `Surface`, `Type`, `Culture`, adresse, téléphones, `Bassin versant`, `Observations`, `Préleveur`, `Prélèvement prévu le`, `Heure`, `Remarques RDV`).
+Charte DSFR (police Marianne, bleu France, bloc-marque). Le widget crée la table **`RDV_Prelevements`** au format du fichier Excel reçu chaque jour, puis affiche et gère les rendez-vous de cette table.
 
-Un **rendez-vous** = les parcelles d'une même exploitation prévues le même jour à la même heure.
+### Table `RDV_Prelevements`
 
-### Installation dans Grist
+Une ligne par parcelle, colonnes identiques au fichier Excel (mêmes intitulés, même ordre) :
 
-1. Importez le fichier Excel dans le document (il devient par exemple la table `Table3`).
-2. Ajoutez un **Widget personnalisé** avec l'URL du fichier (ou collez-le dans le Custom Widget Builder), accès **Accès complet au document**, et liez-le à cette table.
-3. L'écran **Configuration** s'ouvre : la table et les colonnes sont reconnues automatiquement d'après leurs intitulés (modifiables). À l'enregistrement, le widget :
-   - crée les tables `Preleveurs` et `Inspecteurs_FAM` (`Nom`, `Prenom`, `Nom_complet` = « NOM Prénom », `Organisme` / `Service`, `Telephone`, `Email`, `Departements`, `Actif`) ;
-   - ajoute à la table des prélèvements les colonnes `Statut_RDV` (Prévu, À confirmer, Réalisé, Reporté, Annulé, Non retenu) et `Inspecteur_FAM` (référence) — chaque création peut être remplacée par une colonne existante ou désactivée ;
-   - peut remplir `Preleveurs` avec les noms déjà saisis dans la colonne `Préleveur` (`<Aucun>` est ignoré).
+`N° dossier` · `Raison Sociale` · `ilot` · `Surface` · `N° prélèv.` · `Type` · `Culture` · `Adresse` · `Code Postal` · `Commune` · `Téléphone` · `Portable` · `Bassin versant` · `Observations` · `Préleveur` · `Prélèvement prévu le` (date) · `Heure` · `Remarques RDV`
 
-La colonne `Préleveur` reste en texte : le widget y écrit le nom au format « NOM Prénom ». Date et heure sont écrites selon le type des colonnes (Date, Date/heure, texte `HH:MM:SS`…).
+plus deux colonnes remplies depuis le calendrier : `Statut_RDV` (Prévu, À confirmer, Réalisé, Reporté, Annulé, Non retenu) et `Inspecteur_FAM` (référence vers `Inspecteurs_FAM`). Le widget crée aussi `Preleveurs` et `Inspecteurs_FAM` (`Nom`, `Prenom`, `Nom_complet` = « NOM Prénom », `Organisme` / `Service`, `Telephone`, `Email`, `Departements`, `Actif`).
 
-### Fonctions
+### Installation
 
-- **Calendrier** mois / semaine / liste, plusieurs rendez-vous par jour ; filtres préleveur, inspecteur, statut, bassin versant, type (RDD, RPA, RPR…), recherche (exploitation, commune, n° dossier).
-- **Rendez-vous** : choix de l'exploitation puis des parcelles à cocher (celles non planifiées sont précochées), date, heure, préleveur, inspecteur, statut, remarques ; alerte de chevauchement ; « Déplanifier » retire la date et l'heure des parcelles.
-- **Exploitations** : parcelles planifiées / total, prochain rendez-vous, filtre « restant à planifier ».
-- **Fiche exploitation** : coordonnées (téléphones cliquables), observations, rendez-vous, parcelles.
-- **Fiche de prélèvement détaillée** (facultatif) : chaque parcelle peut être reliée par le n° de dossier à une ligne d'une autre table (ex. `DATA_Lab`) pour consulter et compléter sol, horizons, Lambert 93, etc.
-- **Préleveurs** / **Inspecteurs FranceAgriMer** : ajout, modification, désactivation.
+1. Ajoutez un **Widget personnalisé** (URL du fichier publié ou Custom Widget Builder), accès **Accès complet au document**.
+2. À l'écran **Configuration**, laissez « + Créer RDV_Prelevements » et cliquez sur **Enregistrer et ouvrir le calendrier**.
+3. Liez ensuite le widget à la table `RDV_Prelevements` (« Sélectionner les données ») pour qu'il se rafraîchisse après chaque import.
+
+### Import quotidien du fichier Excel
+
+Dans Grist : **Ajouter des données → Importer depuis un fichier**, choisissez le fichier, destination **`RDV_Prelevements`**, cochez **Mettre à jour les enregistrements existants** avec le champ de fusion **N° dossier**. Les nouvelles parcelles sont ajoutées, les existantes mises à jour ; `Statut_RDV` et `Inspecteur_FAM` ne sont pas touchées.
+
+> Les colonnes présentes dans le fichier (`Préleveur`, `Prélèvement prévu le`, `Heure`, `Remarques RDV`) sont remplacées par les valeurs du fichier lors de l'import.
+
+### Fonctions du calendrier
+
+- Vues mois / semaine / liste ; un rendez-vous = les parcelles d'une même exploitation prévues le même jour à la même heure ; plusieurs rendez-vous par jour.
+- Filtres préleveur, inspecteur, statut, bassin versant, type (RDD, RPA, RPR…), recherche (exploitation, commune, n° dossier).
+- Prise de rendez-vous : exploitation, parcelles à cocher, date, heure, préleveur, inspecteur, statut, remarques ; alerte de chevauchement ; « Déplanifier ».
+- Onglet **Exploitations** (parcelles planifiées / total, prochain rendez-vous), **fiche exploitation** (coordonnées, observations, parcelles), onglets **Préleveurs** et **Inspecteurs FranceAgriMer**.
+- Facultatif : fiche de prélèvement détaillée reliée par le n° de dossier à une autre table (ex. `DATA_Lab`).
+- Paramètres : autre table au même format, correspondance des colonnes, horaires, durée d'un rendez-vous.
 
 Ouvert hors de Grist, le widget s'affiche en mode démonstration avec des données fictives.
 

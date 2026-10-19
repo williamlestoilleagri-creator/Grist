@@ -317,7 +317,16 @@
 /* ============================================================
    CONFIGURATION
    ============================================================ */
-const T_PREL = 'Preleveurs', T_INSP = 'Inspecteurs_FAM';
+const T_RDV = 'RDV_Prelevements', T_PREL = 'Preleveurs', T_INSP = 'Inspecteurs_FAM';
+// Structure du fichier Excel reçu chaque jour : identifiants = ceux que Grist génère à partir des en-têtes,
+// pour que l'import du fichier dans la table associe les colonnes automatiquement.
+const RDV_SCHEMA = [
+  ['N_dossier', 'N° dossier', 'Numeric'], ['Raison_Sociale', 'Raison Sociale', 'Text'], ['ilot', 'ilot', 'Text'], ['Surface', 'Surface', 'Text'],
+  ['N_prelev_', 'N° prélèv.', 'Text'], ['Type', 'Type', 'Text'], ['Culture', 'Culture', 'Text'], ['Adresse', 'Adresse', 'Text'],
+  ['Code_Postal', 'Code Postal', 'Text'], ['Commune', 'Commune', 'Text'], ['Telephone', 'Téléphone', 'Text'], ['Portable', 'Portable', 'Text'],
+  ['Bassin_versant', 'Bassin versant', 'Text'], ['Observations', 'Observations', 'Text'], ['Preleveur', 'Préleveur', 'Text'],
+  ['Prelevement_prevu_le', 'Prélèvement prévu le', 'Date'], ['Heure', 'Heure', 'Text'], ['Remarques_RDV', 'Remarques RDV', 'Text']
+].map(([id, label, type]) => ({id, label, type}));
 const STATUTS = ['Prévu', 'À confirmer', 'Réalisé', 'Reporté', 'Annulé', 'Non retenu'];
 const STATUT_COLORS = {'Prévu': ['#e8edff', '#0063cb'], 'À confirmer': ['#feebd0', '#695240'], 'Réalisé': ['#b8fec9', '#18753c'],
   'Reporté': ['#e3e3fd', '#000091'], 'Annulé': ['#ffe9e9', '#ce0500'], 'Non retenu': ['#ffe9e9', '#ce0500']};
@@ -654,8 +663,8 @@ function peopleSchema(extra) {
     {id: 'Departements', type: 'Text'}, {id: 'Actif', type: 'Bool', formula: 'True'}];
 }
 const PEOPLE_SCHEMA = {[T_PREL]: peopleSchema({id: 'Organisme', type: 'Text'}), [T_INSP]: peopleSchema({id: 'Service', type: 'Text'})};
-const colInfo = c => ({type: c.type, isFormula: !!c.isFormula, formula: c.formula || '', widgetOptions: c.widgetOptions || ''});
-const userTables = () => Object.keys(S.meta).filter(t => !S.meta[t].summary && t !== T_PREL && t !== T_INSP).sort();
+const colInfo = c => Object.assign({type: c.type, isFormula: !!c.isFormula, formula: c.formula || '', widgetOptions: c.widgetOptions || ''}, c.label ? {label: c.label} : {});
+const userTables = () => Object.keys(S.meta).filter(t => !S.meta[t].summary && t !== T_PREL && t !== T_INSP).sort((a, b) => (b === T_RDV) - (a === T_RDV) || a.localeCompare(b));
 
 function guessMap(table) {
   const cols = (S.meta[table] || {cols: {}}).cols, ids = Object.keys(cols), used = new Set(), map = {};
@@ -673,6 +682,7 @@ function guessMap(table) {
   return map;
 }
 function guessRdvTable() {
+  if (S.meta[T_RDV]) return T_RDV;
   let best = '', score = 0;
   for (const t of userTables()) {
     const m = guessMap(t), s = (m.date && m.date !== '__new__' ? 3 : 0) + (m.exploitation ? 2 : 0) + (m.heure ? 1 : 0) + (m.preleveur && m.preleveur !== '__new__' ? 1 : 0) + (/table3/i.test(t) ? 1 : 0);
@@ -687,6 +697,12 @@ function configReady() {
 }
 
 async function install(draft, seedPeople) {
+  // table RDV_Prelevements au format du fichier Excel
+  if (draft.rdvTable === '__create__') {
+    if (!S.meta[T_RDV]) await B.apply([['AddTable', T_RDV, RDV_SCHEMA.map(c => Object.assign({id: c.id}, colInfo(c)))]]);
+    S.meta = await B.meta();
+    draft.rdvTable = T_RDV; draft.map = guessMap(T_RDV);
+  }
   // tables des préleveurs et des inspecteurs
   for (const t of [T_PREL, T_INSP]) {
     const ex = S.meta[t], cols = PEOPLE_SCHEMA[t];
@@ -726,8 +742,8 @@ async function install(draft, seedPeople) {
 function renderConfig(errMsg) {
   $('#tabs').hidden = true;
   const draft = JSON.parse(JSON.stringify(S.cfg));
-  if (!draft.rdvTable || !S.meta[draft.rdvTable]) draft.rdvTable = guessRdvTable() || userTables()[0] || '';
-  if (!draft.map || renderConfig.lastTable !== draft.rdvTable && !S.cfg.map) draft.map = guessMap(draft.rdvTable);
+  if (!draft.rdvTable || !S.meta[draft.rdvTable]) draft.rdvTable = S.meta[T_RDV] ? T_RDV : '__create__';
+  if (draft.rdvTable !== '__create__' && (!draft.map || renderConfig.lastTable !== draft.rdvTable && !S.cfg.map)) draft.map = guessMap(draft.rdvTable);
   if (!draft.ficheTable && S.meta.DATA_Lab) { draft.ficheTable = 'DATA_Lab'; draft.ficheKey = 'dossier_number'; }
   renderConfig.lastTable = draft.rdvTable;
   const draw = () => {
@@ -739,13 +755,17 @@ function renderConfig(errMsg) {
       <p class="muted">Le calendrier lit les rendez-vous dans votre table de prélèvements (une ligne par parcelle). Les parcelles d'une même exploitation prévues le même jour à la même heure forment un seul rendez-vous.</p>
       ${errMsg ? `<div class="alert err"><h3>Une erreur est survenue</h3><p>${esc(errMsg)}</p></div>` : ''}
       <div class="row">
-        <div class="grp"><label class="lbl" for="cTable">Table des prélèvements<span class="hint">Ex. : Table3, importée depuis Excel</span></label>
-          <select class="select" id="cTable">${optList(userTables().map(t => [t, t]), draft.rdvTable, '— Choisir —')}</select></div>
+        <div class="grp"><label class="lbl" for="cTable">Table des prélèvements<span class="hint">Au format du fichier Excel reçu chaque jour</span></label>
+          <select class="select" id="cTable">${S.meta[T_RDV] ? '' : `<option value="__create__" ${draft.rdvTable === '__create__' ? 'selected' : ''}>+ Créer ${T_RDV}</option>`}${optList(userTables().map(t => [t, t]), draft.rdvTable, null)}</select></div>
         <div class="grp"><label class="lbl" for="cH0">Début de journée</label><input class="input" id="cH0" type="number" min="0" max="23" value="${draft.hourStart}"></div>
         <div class="grp"><label class="lbl" for="cH1">Fin de journée</label><input class="input" id="cH1" type="number" min="1" max="24" value="${draft.hourEnd}"></div>
         <div class="grp"><label class="lbl" for="cDur">Durée d'un RDV (min)</label><select class="select" id="cDur">${optList(DUREES.map(m => [m, m]), draft.duree, null)}</select></div>
       </div>
-      ${draft.rdvTable ? `<h3 style="margin:1rem 0 .5rem">Correspondance des colonnes</h3>
+      ${draft.rdvTable === '__create__' ? `<div class="alert"><h3>Création de la table ${T_RDV}</h3>
+        <p>Colonnes reprises du fichier Excel, dans le même ordre : ${RDV_SCHEMA.map(c => `<code>${esc(c.label)}</code>`).join(', ')}.</p>
+        <p>S'y ajoutent <code>Statut_RDV</code> et <code>Inspecteur_FAM</code>, remplies depuis le calendrier.</p>
+        <p>Chaque jour : dans Grist, <b>Ajouter des données → Importer depuis un fichier</b>, destination <b>${T_RDV}</b>, cochez <b>Mettre à jour les enregistrements existants</b> avec le champ <b>N° dossier</b>.</p></div>`
+      : draft.rdvTable ? `<h3 style="margin:1rem 0 .5rem">Correspondance des colonnes</h3>
       <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Information</th><th>Colonne de <code>${esc(draft.rdvTable)}</code></th></tr></thead><tbody>
       ${FIELDS.map(f => `<tr><td class="strong">${esc(f.label)}${f.req ? ' <span style="color:var(--error)">*</span>' : ''}</td><td>
         <select class="select" data-map="${f.k}" style="min-height:2.1rem;padding:.3rem .7rem">
@@ -766,7 +786,7 @@ function renderConfig(errMsg) {
       <p style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn lg" id="cSave" ${draft.rdvTable ? '' : 'disabled'}>${ic('check')}Enregistrer et ouvrir le calendrier</button>
       ${configReady() ? '<button class="btn lg ter" id="cCancel">Annuler</button>' : ''}</p>
     </div>`;
-    $('#cTable').onchange = e => { draft.rdvTable = e.target.value; draft.map = guessMap(draft.rdvTable); draw(); };
+    $('#cTable').onchange = e => { draft.rdvTable = e.target.value; draft.map = draft.rdvTable === '__create__' ? null : guessMap(draft.rdvTable); draw(); };
     $('#cFt').onchange = e => { draft.ficheTable = e.target.value; const c = draft.ficheTable && S.meta[draft.ficheTable] ? S.meta[draft.ficheTable].cols : {}; draft.ficheKey = c.dossier_number ? 'dossier_number' : ''; draw(); };
     $('#cFk').onchange = e => { draft.ficheKey = e.target.value; };
     $$('[data-map]').forEach(s => { s.onchange = () => { draft.map[s.dataset.map] = s.value; }; });
@@ -775,9 +795,9 @@ function renderConfig(errMsg) {
       draft.hourStart = Math.max(0, Math.min(23, Number($('#cH0').value) || 0));
       draft.hourEnd = Math.max(draft.hourStart + 1, Math.min(24, Number($('#cH1').value) || 24));
       draft.duree = Number($('#cDur').value) || 45;
-      const missing = FIELDS.filter(f => f.req && !draft.map[f.k]);
+      const missing = draft.rdvTable === '__create__' ? [] : FIELDS.filter(f => f.req && !draft.map[f.k]);
       if (missing.length) { toast('Colonne obligatoire : ' + missing.map(f => f.label).join(', '), true); return; }
-      const dup = Object.values(draft.map).filter(v => v && v !== '__new__'), dupSet = new Set(dup);
+      const dup = Object.values(draft.map || {}).filter(v => v && v !== '__new__'), dupSet = new Set(dup);
       if (dupSet.size !== dup.length) { toast('Une même colonne est associée à deux informations.', true); return; }
       $('#cSave').disabled = true;
       try { await install(draft, $('#cSeed').checked); await boot(); toast('Configuration enregistrée'); }
@@ -1358,14 +1378,9 @@ async function start(backend) {
   await boot();
 }
 
-// Données fictives au format de la table des prélèvements (export Excel « Table3 »)
-function seedDemo() {
-  const L = LocalBackend;
-  const cols = [['N_dossier', 'N° dossier', 'Numeric'], ['Raison_Sociale', 'Raison Sociale', 'Text'], ['ilot', 'ilot', 'Text'], ['Surface', 'Surface', 'Text'],
-    ['N_prelev_', 'N° prélèv.', 'Text'], ['Type', 'Type', 'Text'], ['Culture', 'Culture', 'Text'], ['Adresse', 'Adresse', 'Text'], ['Code_Postal', 'Code Postal', 'Text'],
-    ['Commune', 'Commune', 'Text'], ['Telephone', 'Téléphone', 'Text'], ['Portable', 'Portable', 'Text'], ['Bassin_versant', 'Bassin versant', 'Text'],
-    ['Observations', 'Observations', 'Text'], ['Preleveur', 'Préleveur', 'Text'], ['Prelevement_prevu_le', 'Prélèvement prévu le', 'Date'], ['Heure', 'Heure', 'Text'], ['Remarques_RDV', 'Remarques RDV', 'Text']];
-  L.db.Table3 = {next: 1, rows: [], cols: cols.map(([id, label, type]) => ({id, label, type}))};
+// Données fictives au format du fichier Excel quotidien
+function demoRows() {
+  const out = [];
   const farms = ['EARL du Vallon', 'GAEC Beau Soleil', 'Ferme des Ajoncs', 'SCEA La Closerie', 'GAEC Trois Rivières', 'EARL Kerangoff', 'SARL Terres d\'Arvor', 'EARL Le Gall',
     'GAEC de la Lande', 'SCEA Mor Glaz', 'EARL Ty Nevez', 'GAEC du Blavet', 'EARL des Hêtres', 'GAEC Ar Menez', 'SCEA du Moulin', 'EARL Penhoat'];
   const communes = [['22400', 'LAMBALLE-ARMOR'], ['22800', 'QUINTIN'], ['22510', 'MONCONTOUR'], ['22150', 'PLOEUC-L\'HERMITAGE'], ['29550', 'PLOMODIERN']];
@@ -1377,13 +1392,14 @@ function seedDemo() {
     const [cp, com] = communes[i % communes.length], np = 1 + (i % 3), day = 1 + ((i * 3) % 27), planned = i % 5 !== 4;
     for (let j = 0; j < np; j++) {
       n++;
-      L.db.Table3.rows.push({id: L.db.Table3.next++, N_dossier: 101600 + n * 7, Raison_Sociale: name, ilot: (i + 1) + '-' + (j + 1), Surface: (1 + ((i + j) % 5) * 0.37).toFixed(2).replace('.', ',') + ' / ' + (1 + ((i + j) % 5) * 0.37).toFixed(2).replace('.', ','),
+      out.push({id: n, N_dossier: 101600 + n * 7, Raison_Sociale: name, ilot: (i + 1) + '-' + (j + 1), Surface: (1 + ((i + j) % 5) * 0.37).toFixed(2).replace('.', ',') + ' / ' + (1 + ((i + j) % 5) * 0.37).toFixed(2).replace('.', ','),
         N_prelev_: j === 0 && i % 4 === 0 ? '1' : 'Suppl', Type: types[(i + j) % 3], Culture: cult[(i + j) % 4], Adresse: 'Lieu-dit Ker' + ['gonan', 'hoat', 'ivin', 'laouen'][i % 4], Code_Postal: cp, Commune: com,
         Telephone: i % 2 ? '02.96.00.00.' + pad(i) : null, Portable: '06.00.00.' + pad(i) + '.' + pad(j), Bassin_versant: bv[i % 4], Observations: i % 3 === 0 ? 'APPEL AVANT PASSAGE' : null,
         Preleveur: planned ? prel[i % 4] : null, Prelevement_prevu_le: planned && !(j === 2 && i % 2) ? Date.UTC(y, m, day + (i % 2)) / 1000 : null,
         Heure: planned && !(j === 2 && i % 2) ? hours[(i * 3) % hours.length] : null, Remarques_RDV: null});
     }
   });
+  return out;
 }
 
 if (window.grist && window.self !== window.top) {
@@ -1392,12 +1408,13 @@ if (window.grist && window.self !== window.top) {
   start(GristBackend);
 } else {
   $('#demoBanner').hidden = false;
-  seedDemo();
   B = LocalBackend;
   B.meta().then(async meta => {
     S.meta = meta;
-    const draft = Object.assign({}, DEFAULT_CFG, {rdvTable: 'Table3', map: guessMap('Table3')});
-    await install(draft, true);
+    const draft = Object.assign({}, DEFAULT_CFG, {rdvTable: '__create__'});
+    await install(draft, false);
+    const rows = demoRows(); Object.assign(LocalBackend.db[T_RDV], {rows, next: rows.length + 1});
+    await install(LocalBackend.cfg, true);
     await B.apply([['AddRecord', T_INSP, null, {Nom: 'MARTIN', Prenom: 'Claire', Service: 'FranceAgriMer — Rennes', Departements: '22, 35', Actif: true}],
       ['AddRecord', T_INSP, null, {Nom: 'KERDRAON', Prenom: 'Yann', Service: 'FranceAgriMer — Quimper', Departements: '29, 56', Actif: true}]]);
     await start(LocalBackend);
