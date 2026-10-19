@@ -317,6 +317,8 @@
   .setup h2{font-size:1.6rem;margin-bottom:.5rem}
   .setup ul{padding-left:1.2rem}
   .setup li{margin:.3rem 0}
+  .adv{border-top:1px solid var(--border);padding-top:.75rem;margin-top:1rem}
+  .adv summary{cursor:pointer;color:var(--bf);font-weight:500;margin-bottom:.75rem}
   code{font-size:.85em;background:var(--alt);padding:0 4px}
 
   @media (max-width:720px){
@@ -686,30 +688,32 @@ function renderSetup(errMsg) {
   $('#tabs').hidden = true;
   const ops = plan(), tables = Object.keys(S.meta).filter(t => !S.meta[t].summary).sort();
   const parcCols = Object.keys(cols(S.cfg.parcTable)), defCols = Object.keys(cols(S.cfg.defTable));
-  $('#main').innerHTML = `<div class="setup" style="max-width:860px">
-    <h2>Mise en place du calendrier</h2>
-    <p class="muted">Le calendrier gère une fiche « Rendez-vous prélèvement » par exploitation, enregistrée dans <code>${T_RDV}</code> à raison d'une ligne par parcelle (clé PACAGE-îlot-parcelle).</p>
+  const srcOk = S.meta[S.cfg.parcTable] && cols(S.cfg.parcTable)[S.cfg.parcKey];
+  const first = !!$('#tabs').dataset.first;
+  $('#main').innerHTML = `<div class="setup" style="max-width:720px">
+    <h2>${first ? 'Installer le calendrier' : 'Paramètres'}</h2>
+    ${first ? '<p>Cliquez sur le bouton : tout est préparé automatiquement, il n\'y a rien à remplir.</p>' : ''}
     ${errMsg ? `<div class="alert err"><h3>Une erreur est survenue</h3><p>${esc(errMsg)}</p></div>` : ''}
-    <h3 style="margin:1rem 0 .5rem">Sources</h3>
-    <div class="row">
-      <div class="grp"><label class="lbl" for="sParc">Table des parcelles à prélever</label><select class="select" id="sParc">${optList(tables.map(t => [t, t]), S.cfg.parcTable, '—')}</select></div>
-      <div class="grp"><label class="lbl" for="sKey">Clé PACAGE-îlot-parcelle</label><select class="select" id="sKey">${optList(parcCols.map(c => [c, c]), S.cfg.parcKey, '—')}</select></div>
-    </div>
-    <div class="row">
-      <div class="grp"><label class="lbl" for="sDef">Table complémentaire (surface, cultures, GPS)<span class="hint">Facultatif</span></label><select class="select" id="sDef">${optList(tables.map(t => [t, t]), S.cfg.defTable, '— Aucune —')}</select></div>
-      <div class="grp"><label class="lbl" for="sDefKey">Clé de cette table</label><select class="select" id="sDefKey" ${S.cfg.defTable ? '' : 'disabled'}>${optList(defCols.map(c => [c, c]), S.cfg.defKey, '—')}</select></div>
-    </div>
-    <div class="row">
-      <div class="grp"><label class="lbl" for="sH0">Début de journée</label><input class="input" id="sH0" type="number" min="0" max="23" value="${S.cfg.hourStart}"></div>
-      <div class="grp"><label class="lbl" for="sH1">Fin de journée</label><input class="input" id="sH1" type="number" min="1" max="24" value="${S.cfg.hourEnd}"></div>
-      <div class="grp"><label class="lbl" for="sDur">Durée d'un RDV (min)</label><select class="select" id="sDur">${optList(DUREES.map(m => [m, m]), S.cfg.duree, null)}</select></div>
-    </div>
-    <h3 style="margin:1rem 0 .5rem">Modifications du document</h3>
-    ${ops.length ? `<ul>${ops.map(o => `<li>${o.text}</li>`).join('')}</ul>` : '<p class="muted">Aucune : les tables sont à jour.</p>'}
-    ${S.meta[T_RDV] ? `<p class="sub">Les colonnes existantes de <code>${T_RDV}</code> (et leurs données) ne sont ni supprimées ni renommées.</p>` : ''}
-    <div class="alert"><p>Le widget doit disposer de l'<b>accès complet au document</b>. Liez-le à <code>${T_RDV}</code> (« Sélectionner les données ») pour qu'il se mette à jour à chaque modification faite dans Grist.</p></div>
-    <p style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn lg" id="sGo">${ic('check')}${ops.length ? 'Appliquer et ouvrir le calendrier' : 'Enregistrer'}</button>
-    ${ready() && !$('#tabs').dataset.first ? '<button class="btn lg ter" id="sCancel">Annuler</button>' : ''}</p>
+    ${srcOk ? '' : `<div class="alert warn"><p>La table <code>${esc(DEFAULT_CFG.parcTable)}</code> est introuvable : choisissez la table des parcelles dans les options ci-dessous.</p></div>`}
+    <p style="display:flex;gap:10px;flex-wrap:wrap;margin:1.5rem 0"><button class="btn lg" id="sGo">${ic('check')}${first ? 'Installer et ouvrir le calendrier' : 'Enregistrer'}</button>
+    ${ready() && !first ? '<button class="btn lg ter" id="sCancel">Annuler</button>' : ''}</p>
+    <p class="sub">Pensez à régler l'accès du widget sur <b>Accès complet au document</b> (panneau de droite de Grist).</p>
+    <details class="adv" ${srcOk ? '' : 'open'}><summary>Options avancées (facultatif)</summary>
+      <div class="row">
+        <div class="grp"><label class="lbl" for="sH0">Début de journée</label><input class="input" id="sH0" type="number" min="0" max="23" value="${S.cfg.hourStart}"></div>
+        <div class="grp"><label class="lbl" for="sH1">Fin de journée</label><input class="input" id="sH1" type="number" min="1" max="24" value="${S.cfg.hourEnd}"></div>
+        <div class="grp"><label class="lbl" for="sDur">Durée d'un RDV (min)</label><select class="select" id="sDur">${optList(DUREES.map(m => [m, m]), S.cfg.duree, null)}</select></div>
+      </div>
+      <div class="row">
+        <div class="grp"><label class="lbl" for="sParc">Table des parcelles</label><select class="select" id="sParc">${optList(tables.map(t => [t, t]), S.cfg.parcTable, '—')}</select></div>
+        <div class="grp"><label class="lbl" for="sKey">Colonne clé (PACAGE-îlot-parcelle)</label><select class="select" id="sKey">${optList(parcCols.map(c => [c, c]), S.cfg.parcKey, '—')}</select></div>
+      </div>
+      <div class="row">
+        <div class="grp"><label class="lbl" for="sDef">Table surface / cultures / GPS</label><select class="select" id="sDef">${optList(tables.map(t => [t, t]), S.cfg.defTable, '— Aucune —')}</select></div>
+        <div class="grp"><label class="lbl" for="sDefKey">Sa colonne clé</label><select class="select" id="sDefKey" ${S.cfg.defTable ? '' : 'disabled'}>${optList(defCols.map(c => [c, c]), S.cfg.defKey, '—')}</select></div>
+      </div>
+      ${ops.length ? `<p class="sub" style="margin-top:.5rem">Ce que l'installation fera dans le document (aucune donnée supprimée) :</p><ul class="sub">${ops.map(o => `<li>${o.text}</li>`).join('')}</ul>` : ''}
+    </details>
   </div>`;
   const keep = () => { S.cfg.hourStart = Math.max(0, Math.min(23, Number($('#sH0').value) || 0)); S.cfg.hourEnd = Math.max(S.cfg.hourStart + 1, Math.min(24, Number($('#sH1').value) || 24)); S.cfg.duree = Number($('#sDur').value) || 45; };
   $('#sParc').onchange = e => { keep(); S.cfg.parcTable = e.target.value; const c = cols(S.cfg.parcTable); S.cfg.parcKey = ['CLELAB', 'CLE', 'Cle', 'Cle_parcelle'].find(k => c[k]) || ''; renderSetup(); };
