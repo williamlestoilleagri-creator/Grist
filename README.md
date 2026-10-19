@@ -6,6 +6,7 @@
 | `annuaire-adresses.html` | Annuaire d'adresses géocodées (BAN) |
 | `grist-assistant-claude.html` | Assistant Claude |
 | `prise-rdv-calendrier.html` | Prise de rendez-vous (calendrier) |
+| `calendrier-prelevements.html` | **Calendrier des prélèvements** reliquats (préleveurs, inspecteurs FranceAgriMer, fiche exploitation) |
 | `rdv/index.html` | Formulaire public de prise de rendez-vous |
 | `duo.html` | **Duo** — interprète à deux écouteurs (ex. japonais ⇄ allemand) |
 
@@ -71,6 +72,30 @@ Structure (en-tête des documents, IBAN, mentions), devise, TVA et délai par d�
 - **Ventes** : devis → commande → livraison (sortie de stock au CMP) → facture (411 / 70x / 44571) → encaissement (512 / 411).
 - **Achats** : commande → réception (entrée de stock) → facture (60x / 44566 / 401) → paiement (401 / 512).
 - Proposition de réapprovisionnement depuis `MMBE`, impression des devis, confirmations et factures.
+
+## Calendrier des prélèvements (`calendrier-prelevements.html`)
+
+Charte DSFR (police Marianne, bleu France, bloc-marque). Se branche sur la table des exploitations `DATA_Lab` (modifiable dans les paramètres).
+
+### Installation dans Grist
+
+1. Ajoutez un **Widget personnalisé** et indiquez l'URL du fichier publié (ou collez-le dans le Custom Widget Builder).
+2. Réglez **Accès** sur **Accès complet au document**.
+3. Au premier lancement, cliquez sur **Créer les tables** : le widget crée (ou complète) :
+   - `RDV_Prelevements` — `Exploitation` (Référence → `DATA_Lab`), `Date_RDV`, `Duree_min`, `Preleveur` (Réf.), `Inspecteur` (Réf.), `Statut` (Prévu, À confirmer, Réalisé, Reporté, Annulé, Non retenu), `Objet` (parcelles), `Lieu`, `Commentaire`, `Code_dpt` (= `$Exploitation.Code_dpt`, pour les règles d'accès par département), `Cree_le`, `Cree_par`, `Modifie_le` ;
+   - `Preleveurs` et `Inspecteurs_FAM` — `Nom`, `Prenom`, `Nom_complet` (formule), `Organisme` / `Service`, `Telephone`, `Email`, `Departements`, `Actif`.
+4. Conseillé : liez ensuite le widget à la table `RDV_Prelevements` (« Sélectionner les données ») pour qu'il se rafraîchisse à chaque modification faite dans Grist.
+
+### Fonctions
+
+- **Calendrier** mois / semaine (grille horaire, rendez-vous qui se chevauchent côte à côte) / liste ; plusieurs rendez-vous par jour, par exploitation et par préleveur ; filtres préleveur, inspecteur, statut, département, recherche.
+- **Rendez-vous** : création depuis le bouton, un jour ou une plage horaire de la vue semaine ; alerte de chevauchement pour un même préleveur ou inspecteur ; « Autre créneau » pour planifier une nouvelle date pour la même exploitation.
+- **Fiche exploitation** : reprend toutes les colonnes de `DATA_Lab` (exploitation, prise de contact, prélèvement, sol et horizons, Lambert 93, suivi) et la liste de ses rendez-vous ; mode « Modifier » pour les colonnes saisissables (les formules restent en lecture seule ; les formules constantes comme `''` peuvent être converties en colonnes de saisie).
+- **Exploitations** : liste avec nombre de rendez-vous, prochain rendez-vous, filtre « sans rendez-vous ».
+- **Préleveurs** / **Inspecteurs FranceAgriMer** : ajout, modification, désactivation.
+- **Report dans `DATA_Lab`** (désactivable) : `Date_Heure_RDV` et `Nom_du_preleveur` reçoivent le prochain rendez-vous actif, `Date_et_heure_de_prelevement` le dernier rendez-vous « Réalisé ».
+
+Ouvert hors de Grist, le widget s'affiche en mode démonstration avec des données fictives.
 
 ## Duo — interprète à deux écouteurs (`duo.html`)
 
