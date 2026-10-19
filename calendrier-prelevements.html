@@ -317,14 +317,44 @@
 /* ============================================================
    CONFIGURATION
    ============================================================ */
-const T_RDV = 'RDV_Prelevements', T_PREL = 'Preleveurs', T_INSP = 'Inspecteurs_FAM';
+const T_PREL = 'Preleveurs', T_INSP = 'Inspecteurs_FAM';
 const STATUTS = ['Prévu', 'À confirmer', 'Réalisé', 'Reporté', 'Annulé', 'Non retenu'];
 const STATUT_COLORS = {'Prévu': ['#e8edff', '#0063cb'], 'À confirmer': ['#feebd0', '#695240'], 'Réalisé': ['#b8fec9', '#18753c'],
   'Reporté': ['#e3e3fd', '#000091'], 'Annulé': ['#ffe9e9', '#ce0500'], 'Non retenu': ['#ffe9e9', '#ce0500']};
-const DUREES = [30, 45, 60, 90, 120, 180, 240];
-const DEFAULT_CFG = {source: 'DATA_Lab', sync: true, hourStart: 7, hourEnd: 19, duree: 60};
+const DUREES = [15, 30, 45, 60, 90, 120, 180];
+const DEFAULT_CFG = {rdvTable: '', map: null, ficheTable: '', ficheKey: '', hourStart: 8, hourEnd: 19, duree: 45};
 
-// Fiche exploitation : colonnes de DATA_Lab (libellés repris de l'export CSV)
+// Champs logiques de la table des prélèvements (une ligne = une parcelle à prélever).
+// syn : intitulés reconnus automatiquement (comparés sans accents ni ponctuation).
+const STATUT_CHOICE_OPTS = {}; STATUTS.forEach(s => { STATUT_CHOICE_OPTS[s] = {fillColor: STATUT_COLORS[s][0], textColor: STATUT_COLORS[s][1]}; });
+const FIELDS = [
+  {k: 'exploitation', label: 'Exploitation (raison sociale)', req: true, syn: ['raison sociale', 'nom ou raison sociale', 'nom raison sociale', 'exploitation', 'nom']},
+  {k: 'date', label: 'Date du prélèvement', req: true, syn: ['prelevement prevu le', 'date prelevement', 'date rdv', 'date heure rdv', 'date']},
+  {k: 'heure', label: 'Heure', syn: ['heure', 'horaire', 'heure rdv']},
+  {k: 'preleveur', label: 'Préleveur', syn: ['preleveur', 'nom du preleveur', 'nom prenom du preleveur']},
+  {k: 'inspecteur', label: 'Inspecteur FranceAgriMer', syn: ['inspecteur fam', 'inspecteur', 'inspecteur franceagrimer'],
+    create: {id: 'Inspecteur_FAM', type: 'Ref:' + T_INSP}},
+  {k: 'statut', label: 'Statut du rendez-vous', syn: ['statut rdv', 'statut du rdv', 'statut'],
+    create: {id: 'Statut_RDV', type: 'Choice', widgetOptions: JSON.stringify({choices: STATUTS, choiceOptions: STATUT_CHOICE_OPTS})}},
+  {k: 'remarques', label: 'Remarques RDV', syn: ['remarques rdv', 'remarques', 'commentaire rdv']},
+  {k: 'duree', label: 'Durée (min)', syn: ['duree', 'duree min']},
+  {k: 'dossier', label: 'N° dossier', syn: ['n dossier', 'no dossier', 'numero dossier', 'dossier', 'dossier number']},
+  {k: 'parcelle', label: 'Îlot-parcelle', syn: ['ilot', 'ilot parcelle', 'parcelle']},
+  {k: 'surface', label: 'Surface', syn: ['surface']},
+  {k: 'numPrelev', label: 'N° prélèvement', syn: ['n prelev', 'no prelev', 'n prelevement', 'numero de prelevement']},
+  {k: 'type', label: 'Type', syn: ['type']},
+  {k: 'culture', label: 'Culture', syn: ['culture', 'culture en place']},
+  {k: 'adresse', label: 'Adresse', syn: ['adresse', 'adresse complete']},
+  {k: 'cp', label: 'Code postal', syn: ['code postal', 'cp']},
+  {k: 'commune', label: 'Commune', syn: ['commune', 'ville']},
+  {k: 'tel', label: 'Téléphone', syn: ['telephone', 'telephone fixe', 'tel']},
+  {k: 'portable', label: 'Portable', syn: ['portable', 'mobile', 'telephone portable']},
+  {k: 'bassin', label: 'Bassin versant', syn: ['bassin versant', 'bassin']},
+  {k: 'observations', label: 'Observations', syn: ['observations', 'observation']}
+];
+const FIELD = Object.fromEntries(FIELDS.map(f => [f.k, f]));
+
+// Fiche de prélèvement détaillée (table DATA_Lab, facultative), libellés repris de l'export CSV
 const FICHE_SECTIONS = [
   {title: 'Exploitation', icon: 'plant', fields: [
     ['Pacage', 'Pacage'], ['Nom_ou_Raison_sociale', 'Nom ou raison sociale'], ['dossier_number', 'N° de dossier (DN)'],
@@ -347,11 +377,6 @@ const FICHE_SECTIONS = [
     ['Commentaire', 'Commentaire', true], ['Motif_Prelevement_non_retenu', 'Motif prélèvement non retenu', true], ['Etiquette_prelevement', 'Étiquette prélèvement']]}
 ];
 const FICHE_HIDDEN = new Set(['manualSort', 'A', 'N_PACAGE_de_l_exploitant_Nom_Raison_sociale', 'Code_dpt']);
-const pick = (cols, names) => names.find(n => cols[n]) || null;
-const NAME_COLS = ['Nom_ou_Raison_sociale', 'Raison_sociale', 'raison_sociale', 'Nom_Raison_sociale', 'Nom'];
-const PACAGE_COLS = ['Pacage', 'PACAGE'];
-const DPT_COLS = ['Code_dpt', 'Code_departement', 'Departement'];
-const ADDR_COLS = ['Adresse_complete', 'Adresse'];
 
 /* ============================================================
    OUTILS
@@ -368,16 +393,20 @@ function withTimeout(p, ms, msg) { return Promise.race([p, new Promise((_, rej) 
 const dkey = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
 const hm = d => pad(d.getHours()) + 'h' + pad(d.getMinutes());
 const fullDate = d => DAYS[d.getDay()] + ' ' + d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear();
+const shortDate = d => d.toLocaleDateString('fr-FR');
 const startOfWeek = d => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - (x.getDay() + 6) % 7); return x; };
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 const epoch = d => Math.round(d.getTime() / 1000);
 const isErr = v => Array.isArray(v) && v[0] === 'E';
+const clean = v => (v === null || v === undefined || isErr(v)) ? '' : String(v).trim();
+function norm(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+const normKey = s => norm(s).replace(/[^a-z0-9]+/g, ' ').trim();
 function initials(name) { return String(name || '').split(/[\s-]+/).filter(Boolean).map(w => w[0].toUpperCase()).slice(0, 3).join(''); }
 function stClass(s) {
-  const v = String(s || '').toLowerCase();
+  const v = norm(s);
   if (!v) return 'st-none';
   if (v.includes('annul') || v.includes('non retenu') || v.includes('refus')) return 'st-annule';
-  if (v.includes('réalis') || v.includes('realis') || v.includes('effectu')) return 'st-fait';
+  if (v.includes('realis') || v.includes('effectu') || v.includes('preleve')) return 'st-fait';
   if (v.includes('report')) return 'st-report';
   if (v.includes('confirm') || v.includes('attente')) return 'st-confirm';
   return 'st-prevu';
@@ -390,7 +419,47 @@ function toast(msg, err) {
   $('#toastRoot').appendChild(el);
   setTimeout(() => el.remove(), err ? 6000 : 2800);
 }
-function norm(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+function optList(arr, sel, empty) { return (empty === null ? '' : `<option value="">${empty}</option>`) + arr.map(([v, l]) => `<option value="${esc(v)}" ${String(v) === String(sel) ? 'selected' : ''}>${esc(l)}</option>`).join(''); }
+function toInputDate(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+function toInputTime(d) { return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+
+/* ---------- Dates et heures Grist ---------- */
+// Grist stocke Date en secondes UTC (minuit) et DateTime en secondes UTC, affichées dans le fuseau de la colonne.
+const tzOf = type => (/^DateTime:(.+)$/.exec(type || '') || [])[1] || 'Europe/Paris';
+function partsInTz(sec, tz) {
+  const o = {}; new Intl.DateTimeFormat('en-GB', {timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'})
+    .formatToParts(new Date(sec * 1000)).forEach(p => { o[p.type] = Number(p.value); });
+  return {y: o.year, m: o.month, d: o.day, h: o.hour % 24, mi: o.minute};
+}
+function wallToEpoch(y, m, d, h, mi, tz) {
+  let guess = Date.UTC(y, m - 1, d, h, mi) / 1000;
+  for (let i = 0; i < 2; i++) { const p = partsInTz(guess, tz); guess -= (Date.UTC(p.y, p.m - 1, p.d, p.h, p.mi) / 1000 - Date.UTC(y, m - 1, d, h, mi) / 1000); }
+  return guess;
+}
+function readDate(v, type) {
+  if (v === null || v === undefined || v === '' || isErr(v)) return null;
+  if (typeof v === 'number') {
+    if (String(type).startsWith('DateTime')) { const p = partsInTz(v, tzOf(type)); return {y: p.y, m: p.m, d: p.d, h: p.h, mi: p.mi}; }
+    const x = new Date(v * 1000); return {y: x.getUTCFullYear(), m: x.getUTCMonth() + 1, d: x.getUTCDate(), h: null, mi: null};
+  }
+  const s = String(v).trim();
+  let r = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?/.exec(s);
+  if (r) return {y: +r[1], m: +r[2], d: +r[3], h: r[4] ? +r[4] : null, mi: r[5] ? +r[5] : null};
+  r = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2})[:h](\d{2}))?/.exec(s);
+  if (r) return {y: r[3].length === 2 ? 2000 + +r[3] : +r[3], m: +r[2], d: +r[1], h: r[4] ? +r[4] : null, mi: r[5] ? +r[5] : null};
+  return null;
+}
+function readTime(v, type) {
+  if (v === null || v === undefined || v === '' || isErr(v)) return null;
+  if (typeof v === 'number') {
+    if (String(type).startsWith('DateTime')) { const p = partsInTz(v, tzOf(type)); return {h: p.h, mi: p.mi}; }
+    if (v >= 0 && v < 1) { const t = Math.round(v * 1440); return {h: Math.floor(t / 60), mi: t % 60}; }
+    if (v >= 0 && v < 86400 && type !== 'Date') { const x = new Date(v * 1000); return {h: x.getUTCHours(), mi: x.getUTCMinutes()}; }
+    const x = new Date(v * 1000); return {h: x.getUTCHours(), mi: x.getUTCMinutes()};
+  }
+  const r = /(\d{1,2})\s*[:hH]\s*(\d{2})?/.exec(String(v));
+  return r ? {h: +r[1] % 24, mi: r[2] ? +r[2] : 0} : null;
+}
 
 /* ============================================================
    ACCÈS AUX DONNÉES — Grist ou démo locale
@@ -434,33 +503,27 @@ const GristBackend = {
 // Mini-moteur en mémoire pour l'aperçu hors Grist
 const LocalBackend = {
   mode: 'local', db: {}, cfg: null,
-  table(t) { return this.db[t]; },
   async meta() {
     const T = {id: [], tableId: [], summarySourceTable: []}, C = {id: [], parentId: [], parentPos: [], colId: [], label: [], type: [], isFormula: [], formula: [], visibleCol: [], widgetOptions: []};
     let tr = 0, cr = 0;
     for (const [tid, t] of Object.entries(this.db)) {
       tr++; T.id.push(tr); T.tableId.push(tid); T.summarySourceTable.push(0);
-      t.cols.forEach((c, i) => { cr++; C.id.push(cr); C.parentId.push(tr); C.parentPos.push(i); C.colId.push(c.id); C.label.push(c.id); C.type.push(c.type || 'Any');
+      t.cols.forEach((c, i) => { cr++; C.id.push(cr); C.parentId.push(tr); C.parentPos.push(i); C.colId.push(c.id); C.label.push(c.label || c.id); C.type.push(c.type || 'Any');
         C.isFormula.push(!!c.isFormula); C.formula.push(c.formula || ''); C.visibleCol.push(0); C.widgetOptions.push(c.widgetOptions || ''); });
     }
     return parseMeta(T, C);
   },
-  calc(tid, r) {
-    const t = this.db[tid], out = Object.assign({}, r);
+  calc(t, r) {
+    const out = Object.assign({}, r);
     for (const c of t.cols) {
-      if (!c.isFormula) { if (!(c.id in out)) out[c.id] = c.type === 'Bool' ? false : (c.type.startsWith('Ref:') ? 0 : null); continue; }
-      const m = /^\$(\w+)\.(\w+)$/.exec(c.formula || '');
-      if (m) { const ref = t.cols.find(x => x.id === m[1]); const tgt = ref && this.db[ref.type.slice(4)]; const row = tgt && tgt.rows.find(x => x.id === r[m[1]]); out[c.id] = row ? this.calc(ref.type.slice(4), row)[m[2]] ?? null : null; }
-      else if (c.id === 'Nom_complet') out[c.id] = [r.Prenom, r.Nom].filter(Boolean).join(' ');
-      else out[c.id] = r[c.id] ?? null;
+      if (c.id === 'Nom_complet') out[c.id] = [String(r.Nom || '').toUpperCase(), r.Prenom].filter(Boolean).join(' ');
+      else if (!(c.id in out)) out[c.id] = c.type === 'Bool' ? false : (c.type.startsWith('Ref:') ? 0 : null);
     }
     return out;
   },
   async fetch(tid) {
     const t = this.db[tid]; if (!t) throw new Error('Table inconnue : ' + tid);
-    const rows = t.rows.map(r => this.calc(tid, r)), d = {id: rows.map(r => r.id)};
-    t.cols.forEach(c => { d[c.id] = rows.map(r => r[c.id]); });
-    return toRows(d);
+    return t.rows.map(r => this.calc(t, r));
   },
   async apply(actions) {
     const ret = [];
@@ -469,9 +532,7 @@ const LocalBackend = {
       if (op === 'AddTable') { this.db[tid] = {next: 1, rows: [], cols: a[2].map(c => Object.assign({}, c))}; ret.push({table_id: tid}); continue; }
       if (op === 'AddColumn') { t.cols.push(Object.assign({id: a[2]}, a[3])); ret.push({colId: a[2]}); continue; }
       if (op === 'ModifyColumn') { Object.assign(t.cols.find(c => c.id === a[2]), a[3]); ret.push(null); continue; }
-      if (op === 'AddRecord') { const id = t.next++; const r = {id}; const now = epoch(new Date());
-        t.cols.forEach(c => { if (!c.isFormula && c.formula) r[c.id] = c.formula === 'NOW()' ? now : c.formula === 'True' ? true : c.formula === 'user.Name' ? 'Démo' : null; });
-        t.rows.push(Object.assign(r, a[3])); ret.push(id); continue; }
+      if (op === 'AddRecord') { const id = t.next++; const r = {id}; t.cols.forEach(c => { if (!c.isFormula && c.formula === 'True') r[c.id] = true; }); t.rows.push(Object.assign(r, a[3])); ret.push(id); continue; }
       if (op === 'UpdateRecord') { if (!t) { ret.push(null); continue; } const r = t.rows.find(x => x.id === a[2]); if (r) Object.assign(r, a[3]); ret.push(null); continue; }
       if (op === 'RemoveRecord') { t.rows = t.rows.filter(x => x.id !== a[2]); ret.push(null); continue; }
       ret.push(null);
@@ -483,166 +544,274 @@ const LocalBackend = {
 };
 
 /* ============================================================
-   ÉTAT
+   ÉTAT ET MODÈLE
    ============================================================ */
 let B = null;
 const S = {
   meta: {}, cfg: Object.assign({}, DEFAULT_CFG),
-  src: [], rdv: [], prel: [], insp: [],
-  srcById: new Map(), prelById: new Map(), inspById: new Map(),
+  rows: [], prel: [], insp: [], fiche: new Map(),
+  prelById: new Map(), inspById: new Map(),
+  farms: new Map(), visits: [], visitByKey: new Map(),
   tab: 'cal', view: 'month', cursor: new Date(),
-  f: {prel: '', insp: '', statut: '', dpt: '', q: ''},
-  expQ: '', expOnlyFree: false, expDpt: ''
+  f: {prel: '', insp: '', statut: '', bassin: '', type: '', q: ''},
+  expQ: '', expFilter: '', expBassin: ''
 };
-const srcCols = () => (S.meta[S.cfg.source] || {cols: {}}).cols;
-const col = {name: null, pacage: null, dpt: null, addr: null};
+const rdvCols = () => (S.meta[S.cfg.rdvTable] || {cols: {}}).cols;
+const M = k => (S.cfg.map && S.cfg.map[k] && rdvCols()[S.cfg.map[k]]) ? S.cfg.map[k] : null;
+const colType = k => { const c = M(k); return c ? rdvCols()[c].type : ''; };
+const val = (r, k) => { const c = M(k); return c ? clean(r[c]) : ''; };
+const writable = k => { const c = M(k); if (!c) return false; const m = rdvCols()[c]; return !m.isFormula || !m.formula.trim(); };
+function personName(p) { if (!p) return ''; return clean(p.Nom_complet) || [String(p.Nom || '').toUpperCase(), p.Prenom].filter(Boolean).join(' '); }
 
-function srcName(r) { if (!r) return 'Exploitation inconnue'; const v = col.name && r[col.name]; return (v && !isErr(v)) ? String(v) : ('Dossier ' + (r.dossier_number || r.id)); }
-function srcLabel(r) { if (!r) return ''; return [srcName(r), col.pacage && r[col.pacage], r.dossier_number].filter(v => v && !isErr(v)).join(' — '); }
-function srcDpt(r) { const v = r && col.dpt && r[col.dpt]; return v && !isErr(v) ? String(v) : ''; }
-function personName(p) { if (!p) return ''; return p.Nom_complet && !isErr(p.Nom_complet) ? p.Nom_complet : [p.Prenom, p.Nom].filter(Boolean).join(' '); }
-function rdvDate(r) { return typeof r.Date_RDV === 'number' ? new Date(r.Date_RDV * 1000) : null; }
-function rdvEnd(r) { const d = rdvDate(r); return d ? new Date(d.getTime() + (Number(r.Duree_min) || S.cfg.duree) * 60000) : null; }
+// Préleveur / inspecteur : colonne Référence (vers les tables du widget) ou texte libre
+function personOf(r, k) {
+  const c = M(k); if (!c) return null;
+  const v = r[c], type = colType(k);
+  if (type.startsWith('Ref:')) {
+    if (!v) return null;
+    const p = (k === 'preleveur' ? S.prelById : S.inspById).get(v);
+    return {key: '#' + v, name: p ? personName(p) : 'n° ' + v, value: v};
+  }
+  const s = clean(v);
+  if (!s || /^<?\s*aucun\s*>?$/i.test(s)) return null;
+  return {key: normKey(s), name: s, value: s};
+}
+function personChoices(k, current) {
+  const list = k === 'preleveur' ? S.prel : S.insp, isRef = colType(k).startsWith('Ref:'), out = new Map();
+  list.slice().sort((a, b) => personName(a).localeCompare(personName(b))).forEach(p => {
+    if (p.Actif === false && !(current && (isRef ? current.value === p.id : current.key === normKey(personName(p))))) return;
+    const name = personName(p); if (!name) return;
+    out.set(isRef ? '#' + p.id : normKey(name), {value: isRef ? p.id : name, label: name + (p.Actif === false ? ' (inactif)' : '')});
+  });
+  if (!isRef) S.rows.forEach(r => { const pp = personOf(r, k); if (pp && !out.has(pp.key)) out.set(pp.key, {value: pp.value, label: pp.name}); });
+  if (current && !out.has(current.key)) out.set(current.key, {value: current.value, label: current.name});
+  return Array.from(out.entries()).map(([key, o]) => Object.assign({key}, o)).sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function farmKeyOf(r) { return normKey(val(r, 'exploitation')) + '|' + normKey(val(r, 'cp') || val(r, 'commune')); }
+function rowStart(r) {
+  const d = readDate(r[M('date')], colType('date')); if (!d) return null;
+  let t = M('heure') ? readTime(r[M('heure')], colType('heure')) : null;
+  if (!t && d.h !== null && d.h !== undefined && (d.h || d.mi)) t = {h: d.h, mi: d.mi};
+  return {date: new Date(d.y, d.m - 1, d.d, t ? t.h : 0, t ? t.mi : 0), hasTime: !!t};
+}
+function parcelLabel(r) {
+  const bits = [];
+  if (val(r, 'parcelle')) bits.push('Îlot ' + val(r, 'parcelle'));
+  if (val(r, 'surface')) bits.push(val(r, 'surface') + ' ha');
+  if (val(r, 'type')) bits.push(val(r, 'type'));
+  if (val(r, 'culture')) bits.push(val(r, 'culture'));
+  return bits.join(' · ') || ('Ligne ' + r.id);
+}
+
+function buildModel() {
+  S.farms = new Map(); S.visits = []; S.visitByKey = new Map();
+  for (const r of S.rows) {
+    if (!val(r, 'exploitation')) continue;
+    const fk = farmKeyOf(r);
+    let f = S.farms.get(fk);
+    if (!f) { f = {key: fk, name: val(r, 'exploitation'), rows: [], visits: []}; S.farms.set(fk, f); }
+    f.rows.push(r);
+    for (const k of ['adresse', 'cp', 'commune', 'tel', 'portable', 'bassin']) if (!f[k] && val(r, k)) f[k] = val(r, k);
+    const st = rowStart(r); if (!st) continue;
+    const vk = fk + '@' + dkey(st.date) + (st.hasTime ? 'T' + toInputTime(st.date) : '');
+    let v = S.visitByKey.get(vk);
+    if (!v) { v = {key: vk, farm: f, start: st.date, hasTime: st.hasTime, rows: []}; S.visitByKey.set(vk, v); S.visits.push(v); f.visits.push(v); }
+    v.rows.push(r);
+  }
+  for (const v of S.visits) {
+    const first = k => { for (const r of v.rows) { const x = k === 'preleveur' || k === 'inspecteur' ? personOf(r, k) : val(r, k); if (x) return x; } return k === 'preleveur' || k === 'inspecteur' ? null : ''; };
+    v.prel = first('preleveur'); v.insp = first('inspecteur'); v.statut = first('statut'); v.remarques = first('remarques');
+    const dur = Number(first('duree')) || S.cfg.duree;
+    v.end = new Date(v.start.getTime() + dur * 60000); v.duree = dur;
+  }
+  S.visits.sort((a, b) => a.start - b.start);
+  S.farms.forEach(f => f.visits.sort((a, b) => a.start - b.start));
+}
 
 async function loadData() {
   S.meta = await B.meta();
-  const src = S.meta[S.cfg.source] ? B.fetch(S.cfg.source) : Promise.resolve([]);
-  const [s, r, p, i] = await Promise.all([src, B.fetch(T_RDV), B.fetch(T_PREL), B.fetch(T_INSP)]);
-  S.src = s; S.rdv = r; S.prel = p; S.insp = i;
-  S.srcById = new Map(s.map(x => [x.id, x]));
+  const ficheOk = S.cfg.ficheTable && S.meta[S.cfg.ficheTable] && S.meta[S.cfg.ficheTable].cols[S.cfg.ficheKey] && M('dossier');
+  const [rows, p, i, fiche] = await Promise.all([B.fetch(S.cfg.rdvTable), B.fetch(T_PREL), B.fetch(T_INSP), ficheOk ? B.fetch(S.cfg.ficheTable) : Promise.resolve([])]);
+  S.rows = rows; S.prel = p; S.insp = i;
   S.prelById = new Map(p.map(x => [x.id, x]));
   S.inspById = new Map(i.map(x => [x.id, x]));
-  const c = srcCols();
-  col.name = pick(c, NAME_COLS); col.pacage = pick(c, PACAGE_COLS); col.dpt = pick(c, DPT_COLS); col.addr = pick(c, ADDR_COLS);
-  $('#cntExp').textContent = S.src.length;
+  S.fiche = new Map(); fiche.forEach(x => { const k = clean(x[S.cfg.ficheKey]); if (k && !S.fiche.has(k)) S.fiche.set(k, x); });
+  buildModel();
+  $('#cntExp').textContent = S.farms.size;
   $('#cntPrel').textContent = S.prel.filter(x => x.Actif !== false).length;
   $('#cntInsp').textContent = S.insp.filter(x => x.Actif !== false).length;
 }
+const ficheRow = r => { const k = val(r, 'dossier'); return k ? S.fiche.get(k) || S.fiche.get(String(Number(k))) || null : null; };
 
 /* ============================================================
-   INSTALLATION DES TABLES
+   CONFIGURATION ET INSTALLATION
    ============================================================ */
-function schema() {
-  const src = S.cfg.source, srcHasDpt = !!(S.meta[src] && S.meta[src].cols.Code_dpt);
-  const people = extra => [
-    {id: 'Nom', type: 'Text'}, {id: 'Prenom', type: 'Text'},
-    {id: 'Nom_complet', type: 'Text', isFormula: true, formula: '" ".join(x for x in [$Prenom, $Nom] if x)'},
+function peopleSchema(extra) {
+  return [{id: 'Nom', type: 'Text'}, {id: 'Prenom', type: 'Text'},
+    {id: 'Nom_complet', type: 'Text', isFormula: true, formula: '" ".join(x for x in [($Nom or "").upper(), $Prenom] if x)'},
     extra, {id: 'Telephone', type: 'Text'}, {id: 'Email', type: 'Text'},
     {id: 'Departements', type: 'Text'}, {id: 'Actif', type: 'Bool', formula: 'True'}];
-  const choiceOptions = {}; STATUTS.forEach(s => { choiceOptions[s] = {fillColor: STATUT_COLORS[s][0], textColor: STATUT_COLORS[s][1]}; });
-  return {
-    [T_PREL]: people({id: 'Organisme', type: 'Text'}),
-    [T_INSP]: people({id: 'Service', type: 'Text'}),
-    [T_RDV]: [
-      {id: 'Exploitation', type: 'Ref:' + src},
-      {id: 'Date_RDV', type: 'DateTime:Europe/Paris'},
-      {id: 'Duree_min', type: 'Numeric'},
-      {id: 'Preleveur', type: 'Ref:' + T_PREL},
-      {id: 'Inspecteur', type: 'Ref:' + T_INSP},
-      {id: 'Statut', type: 'Choice', widgetOptions: JSON.stringify({choices: STATUTS, choiceOptions})},
-      {id: 'Objet', type: 'Text'},
-      {id: 'Lieu', type: 'Text'},
-      {id: 'Commentaire', type: 'Text'},
-      srcHasDpt ? {id: 'Code_dpt', type: 'Text', isFormula: true, formula: '$Exploitation.Code_dpt'} : null,
-      {id: 'Cree_le', type: 'DateTime:Europe/Paris', formula: 'NOW()'},
-      {id: 'Cree_par', type: 'Text', formula: 'user.Name'},
-      {id: 'Modifie_le', type: 'DateTime:Europe/Paris'}
-    ].filter(Boolean)
-  };
 }
-function missingSchema() {
-  const sc = schema(), out = {};
-  for (const [t, cols] of Object.entries(sc)) {
-    const ex = S.meta[t];
-    const miss = ex ? cols.filter(c => !ex.cols[c.id]) : cols;
-    if (!ex || miss.length) out[t] = {create: !ex, cols: miss};
-  }
-  return out;
-}
+const PEOPLE_SCHEMA = {[T_PREL]: peopleSchema({id: 'Organisme', type: 'Text'}), [T_INSP]: peopleSchema({id: 'Service', type: 'Text'})};
 const colInfo = c => ({type: c.type, isFormula: !!c.isFormula, formula: c.formula || '', widgetOptions: c.widgetOptions || ''});
-async function install() {
-  S.meta = await B.meta();
-  const miss = missingSchema();
-  for (const t of [T_PREL, T_INSP, T_RDV]) {
-    const m = miss[t]; if (!m) continue;
-    if (m.create) await B.apply([['AddTable', t, m.cols.map(c => Object.assign({id: c.id}, colInfo(c)))]]);
-    else await B.apply(m.cols.map(c => ['AddColumn', t, c.id, colInfo(c)]));
+const userTables = () => Object.keys(S.meta).filter(t => !S.meta[t].summary && t !== T_PREL && t !== T_INSP).sort();
+
+function guessMap(table) {
+  const cols = (S.meta[table] || {cols: {}}).cols, ids = Object.keys(cols), used = new Set(), map = {};
+  const names = id => [normKey(cols[id].label), normKey(id.replace(/_/g, ' '))];
+  for (const pass of [0, 1]) {
+    for (const f of FIELDS) {
+      if (map[f.k]) continue;
+      for (const s of f.syn) {
+        const hit = ids.find(id => !used.has(id) && names(id).some(n => pass ? n.startsWith(s + ' ') : n === s));
+        if (hit) { map[f.k] = hit; used.add(hit); break; }
+      }
+    }
+  }
+  for (const f of FIELDS) if (!map[f.k]) map[f.k] = f.create ? '__new__' : '';
+  return map;
+}
+function guessRdvTable() {
+  let best = '', score = 0;
+  for (const t of userTables()) {
+    const m = guessMap(t), s = (m.date && m.date !== '__new__' ? 3 : 0) + (m.exploitation ? 2 : 0) + (m.heure ? 1 : 0) + (m.preleveur && m.preleveur !== '__new__' ? 1 : 0) + (/table3/i.test(t) ? 1 : 0);
+    if (s > score) { score = s; best = t; }
+  }
+  return score >= 5 ? best : '';
+}
+function configReady() {
+  const c = S.cfg;
+  return c.rdvTable && S.meta[c.rdvTable] && c.map && FIELDS.filter(f => f.req).every(f => M(f.k)) && S.meta[T_PREL] && S.meta[T_INSP] &&
+    !FIELDS.some(f => c.map[f.k] === '__new__');
+}
+
+async function install(draft, seedPeople) {
+  // tables des préleveurs et des inspecteurs
+  for (const t of [T_PREL, T_INSP]) {
+    const ex = S.meta[t], cols = PEOPLE_SCHEMA[t];
+    if (!ex) await B.apply([['AddTable', t, cols.map(c => Object.assign({id: c.id}, colInfo(c)))]]);
+    else { const miss = cols.filter(c => !ex.cols[c.id]); if (miss.length) await B.apply(miss.map(c => ['AddColumn', t, c.id, colInfo(c)])); }
+  }
+  // colonnes à créer dans la table des prélèvements
+  const cols = (S.meta[draft.rdvTable] || {cols: {}}).cols;
+  for (const f of FIELDS) {
+    if (draft.map[f.k] !== '__new__' || !f.create) continue;
+    if (cols[f.create.id]) { draft.map[f.k] = f.create.id; continue; }
+    const ret = await B.apply([['AddColumn', draft.rdvTable, f.create.id, colInfo(f.create)]]);
+    draft.map[f.k] = (ret[0] && ret[0].colId) || f.create.id;
   }
   S.meta = await B.meta();
-  // Affichage lisible des références dans Grist (nom plutôt que n° de ligne)
-  const refs = [['Exploitation', S.cfg.source, pick(srcCols(), NAME_COLS)], ['Preleveur', T_PREL, 'Nom_complet'], ['Inspecteur', T_INSP, 'Nom_complet']];
-  const actions = [];
-  for (const [c, target, show] of refs) {
-    const cm = S.meta[T_RDV] && S.meta[T_RDV].cols[c], sm = show && S.meta[target] && S.meta[target].cols[show];
-    if (!cm || !sm || cm.visibleCol) continue;
-    actions.push(['UpdateRecord', '_grist_Tables_column', cm.rowId, {visibleCol: sm.rowId}]);
-    actions.push(['SetDisplayFormula', T_RDV, null, cm.rowId, `$${c}.${show}`]);
+  // affichage lisible de la référence vers les inspecteurs
+  const refCol = S.meta[draft.rdvTable].cols[draft.map.inspecteur], show = S.meta[T_INSP] && S.meta[T_INSP].cols.Nom_complet;
+  if (refCol && show && refCol.type === 'Ref:' + T_INSP && !refCol.visibleCol) {
+    try { await B.apply([['UpdateRecord', '_grist_Tables_column', refCol.rowId, {visibleCol: show.rowId}], ['SetDisplayFormula', draft.rdvTable, null, refCol.rowId, `$${refCol.colId}.Nom_complet`]]); }
+    catch (e) { console.warn('Affichage de la référence non configuré', e); }
   }
-  if (actions.length) { try { await B.apply(actions); } catch (e) { console.warn('Affichage des références non configuré', e); } }
+  // import des préleveurs déjà saisis en texte (ex. « KERMAREC Olivier »)
+  if (seedPeople && draft.map.preleveur) {
+    const existing = new Set((await B.fetch(T_PREL)).map(p => normKey(personName(p))));
+    const rows = await B.fetch(draft.rdvTable), names = new Map();
+    rows.forEach(r => { const s = clean(r[draft.map.preleveur]); if (s && !/^<?\s*aucun\s*>?$/i.test(s) && !existing.has(normKey(s))) names.set(normKey(s), s); });
+    const acts = Array.from(names.values()).map(s => {
+      const w = s.split(/\s+/), up = w.filter(x => x === x.toUpperCase() && /[A-Z]/.test(x)), rest = w.filter(x => !up.includes(x));
+      return ['AddRecord', T_PREL, null, up.length && rest.length ? {Nom: up.join(' '), Prenom: rest.join(' '), Actif: true} : {Nom: s, Actif: true}];
+    });
+    if (acts.length) await B.apply(acts);
+  }
+  S.cfg = draft;
+  await B.setConfig(S.cfg);
+}
+
+function renderConfig(errMsg) {
+  $('#tabs').hidden = true;
+  const draft = JSON.parse(JSON.stringify(S.cfg));
+  if (!draft.rdvTable || !S.meta[draft.rdvTable]) draft.rdvTable = guessRdvTable() || userTables()[0] || '';
+  if (!draft.map || renderConfig.lastTable !== draft.rdvTable && !S.cfg.map) draft.map = guessMap(draft.rdvTable);
+  if (!draft.ficheTable && S.meta.DATA_Lab) { draft.ficheTable = 'DATA_Lab'; draft.ficheKey = 'dossier_number'; }
+  renderConfig.lastTable = draft.rdvTable;
+  const draw = () => {
+    const cols = (S.meta[draft.rdvTable] || {cols: {}}).cols, ids = Object.keys(cols);
+    const ficheCols = draft.ficheTable && S.meta[draft.ficheTable] ? Object.keys(S.meta[draft.ficheTable].cols) : [];
+    const needPeople = [T_PREL, T_INSP].filter(t => !S.meta[t]);
+    $('#main').innerHTML = `<div class="setup" style="max-width:900px">
+      <h2>Configuration du calendrier</h2>
+      <p class="muted">Le calendrier lit les rendez-vous dans votre table de prélèvements (une ligne par parcelle). Les parcelles d'une même exploitation prévues le même jour à la même heure forment un seul rendez-vous.</p>
+      ${errMsg ? `<div class="alert err"><h3>Une erreur est survenue</h3><p>${esc(errMsg)}</p></div>` : ''}
+      <div class="row">
+        <div class="grp"><label class="lbl" for="cTable">Table des prélèvements<span class="hint">Ex. : Table3, importée depuis Excel</span></label>
+          <select class="select" id="cTable">${optList(userTables().map(t => [t, t]), draft.rdvTable, '— Choisir —')}</select></div>
+        <div class="grp"><label class="lbl" for="cH0">Début de journée</label><input class="input" id="cH0" type="number" min="0" max="23" value="${draft.hourStart}"></div>
+        <div class="grp"><label class="lbl" for="cH1">Fin de journée</label><input class="input" id="cH1" type="number" min="1" max="24" value="${draft.hourEnd}"></div>
+        <div class="grp"><label class="lbl" for="cDur">Durée d'un RDV (min)</label><select class="select" id="cDur">${optList(DUREES.map(m => [m, m]), draft.duree, null)}</select></div>
+      </div>
+      ${draft.rdvTable ? `<h3 style="margin:1rem 0 .5rem">Correspondance des colonnes</h3>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Information</th><th>Colonne de <code>${esc(draft.rdvTable)}</code></th></tr></thead><tbody>
+      ${FIELDS.map(f => `<tr><td class="strong">${esc(f.label)}${f.req ? ' <span style="color:var(--error)">*</span>' : ''}</td><td>
+        <select class="select" data-map="${f.k}" style="min-height:2.1rem;padding:.3rem .7rem">
+          ${f.req ? '' : '<option value="">— Non utilisée —</option>'}
+          ${f.create && !cols[f.create.id] ? `<option value="__new__" ${draft.map[f.k] === '__new__' ? 'selected' : ''}>+ Créer la colonne ${f.create.id}</option>` : ''}
+          ${ids.map(id => `<option value="${esc(id)}" ${draft.map[f.k] === id ? 'selected' : ''}>${esc(cols[id].label !== id ? cols[id].label + ' (' + id + ')' : id)}</option>`).join('')}
+        </select></td></tr>`).join('')}
+      </tbody></table></div>` : ''}
+      <h3 style="margin:1.5rem 0 .5rem">Fiche de prélèvement détaillée (facultatif)</h3>
+      <p class="sub">Relie chaque parcelle à une ligne d'une autre table (ex. <code>DATA_Lab</code>) par le n° de dossier, pour afficher et compléter la fiche (sol, horizons, Lambert 93…).</p>
+      <div class="row">
+        <div class="grp"><label class="lbl" for="cFt">Table des fiches</label><select class="select" id="cFt">${optList(userTables().filter(t => t !== draft.rdvTable).map(t => [t, t]), draft.ficheTable, '— Aucune —')}</select></div>
+        <div class="grp"><label class="lbl" for="cFk">Colonne du n° de dossier</label><select class="select" id="cFk" ${draft.ficheTable ? '' : 'disabled'}>${optList(ficheCols.map(c => [c, c]), draft.ficheKey, '—')}</select></div>
+      </div>
+      ${needPeople.length ? `<div class="alert"><p>Tables qui seront créées : ${needPeople.map(t => `<code>${t}</code>`).join(', ')} (nom, prénom, ${needPeople.includes(T_PREL) ? 'organisme' : 'service'}, téléphone, e-mail, départements, actif).</p></div>` : ''}
+      <label class="chk grp"><input type="checkbox" id="cSeed" ${!S.prel.length ? 'checked' : ''}> Ajouter à la table <code>${T_PREL}</code> les préleveurs déjà saisis dans la colonne « Préleveur »</label>
+      <div class="alert"><p>Le widget doit disposer de l'<b>accès complet au document</b>. Liez-le à la table des prélèvements (« Sélectionner les données ») pour qu'il se mette à jour à chaque modification faite dans Grist.</p></div>
+      <p style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn lg" id="cSave" ${draft.rdvTable ? '' : 'disabled'}>${ic('check')}Enregistrer et ouvrir le calendrier</button>
+      ${configReady() ? '<button class="btn lg ter" id="cCancel">Annuler</button>' : ''}</p>
+    </div>`;
+    $('#cTable').onchange = e => { draft.rdvTable = e.target.value; draft.map = guessMap(draft.rdvTable); draw(); };
+    $('#cFt').onchange = e => { draft.ficheTable = e.target.value; const c = draft.ficheTable && S.meta[draft.ficheTable] ? S.meta[draft.ficheTable].cols : {}; draft.ficheKey = c.dossier_number ? 'dossier_number' : ''; draw(); };
+    $('#cFk').onchange = e => { draft.ficheKey = e.target.value; };
+    $$('[data-map]').forEach(s => { s.onchange = () => { draft.map[s.dataset.map] = s.value; }; });
+    if ($('#cCancel')) $('#cCancel').onclick = () => { $('#tabs').hidden = false; render(); };
+    $('#cSave').onclick = async () => {
+      draft.hourStart = Math.max(0, Math.min(23, Number($('#cH0').value) || 0));
+      draft.hourEnd = Math.max(draft.hourStart + 1, Math.min(24, Number($('#cH1').value) || 24));
+      draft.duree = Number($('#cDur').value) || 45;
+      const missing = FIELDS.filter(f => f.req && !draft.map[f.k]);
+      if (missing.length) { toast('Colonne obligatoire : ' + missing.map(f => f.label).join(', '), true); return; }
+      const dup = Object.values(draft.map).filter(v => v && v !== '__new__'), dupSet = new Set(dup);
+      if (dupSet.size !== dup.length) { toast('Une même colonne est associée à deux informations.', true); return; }
+      $('#cSave').disabled = true;
+      try { await install(draft, $('#cSeed').checked); await boot(); toast('Configuration enregistrée'); }
+      catch (e) { console.error(e); renderConfig(e.message || String(e)); }
+    };
+  };
+  draw();
 }
 
 /* ============================================================
-   RENDU — écrans
+   RENDU
    ============================================================ */
-function renderSetup(errMsg) {
-  $('#tabs').hidden = true;
-  const miss = missingSchema();
-  const tables = Object.keys(S.meta).filter(t => !S.meta[t].summary && ![T_RDV, T_PREL, T_INSP].includes(t)).sort();
-  const desc = {
-    [T_RDV]: 'les rendez-vous de prélèvement : exploitation, date et heure, durée, préleveur, inspecteur, statut, parcelles, lieu, commentaire — plusieurs par jour et par exploitation',
-    [T_PREL]: 'la liste des préleveurs (nom, prénom, organisme, téléphone, e-mail, départements, actif)',
-    [T_INSP]: 'la liste des inspecteurs FranceAgriMer (nom, prénom, service, téléphone, e-mail, départements, actif)'
-  };
-  $('#main').innerHTML = `<div class="setup">
-    <h2>Installation du calendrier</h2>
-    <p class="muted">Le widget a besoin de trois tables dans votre document Grist. Elles seront créées (ou complétées) automatiquement.</p>
-    ${errMsg ? `<div class="alert err"><h3>Une erreur est survenue</h3><p>${esc(errMsg)}</p></div>` : ''}
-    <div class="grp" style="max-width:420px">
-      <label class="lbl" for="srcSel">Table des exploitations à prélever<span class="hint">Les rendez-vous y seront rattachés par une colonne Référence.</span></label>
-      <select class="select" id="srcSel">${tables.map(t => `<option ${t === S.cfg.source ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
-    </div>
-    <ul>${[T_RDV, T_PREL, T_INSP].map(t => {
-      const m = miss[t];
-      const st = !m ? '<span class="badge st-fait">Prête</span>' : m.create ? '<span class="badge st-prevu">À créer</span>' : `<span class="badge st-confirm">${m.cols.length} colonne(s) à ajouter</span>`;
-      return `<li><code>${t}</code> ${st}<br><span class="sub">${desc[t]}</span></li>`;
-    }).join('')}</ul>
-    <p><button class="btn lg" id="installBtn">${ic('check')}Créer les tables</button></p>
-    <div class="alert"><p>Le widget doit disposer de l'<b>accès complet au document</b> (panneau de droite de Grist → « Accès » → « Accès complet »).</p>
-    <p>Astuce : une fois les tables créées, liez le widget à la table <code>${T_RDV}</code> pour qu'il se mette à jour automatiquement à chaque modification faite dans Grist.</p></div>
-  </div>`;
-  $('#srcSel').onchange = e => { S.cfg.source = e.target.value; renderSetup(); };
-  $('#installBtn').onclick = async () => {
-    $('#installBtn').disabled = true;
-    try { await install(); await B.setConfig(S.cfg); await boot(); toast('Tables créées'); }
-    catch (e) { console.error(e); renderSetup(e.message || String(e)); }
-  };
-}
-
 function render() {
   $$('.tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === S.tab)));
   if (S.tab === 'cal') renderCalendar();
-  else if (S.tab === 'exp') renderExploitations();
+  else if (S.tab === 'exp') renderFarms();
   else renderPeople(S.tab === 'prel' ? T_PREL : T_INSP);
 }
 
 /* ---------- Calendrier ---------- */
-function filteredRdv() {
+function filteredVisits() {
   const f = S.f, q = norm(f.q);
-  return S.rdv.filter(r => {
-    if (!rdvDate(r)) return false;
-    if (f.prel && String(r.Preleveur) !== f.prel) return false;
-    if (f.insp && String(r.Inspecteur) !== f.insp) return false;
-    if (f.statut === '__none' ? r.Statut : (f.statut && r.Statut !== f.statut)) return false;
-    const s = S.srcById.get(r.Exploitation);
-    if (f.dpt && srcDpt(s) !== f.dpt) return false;
-    if (q && !norm(srcLabel(s) + ' ' + (r.Objet || '') + ' ' + (r.Lieu || '')).includes(q)) return false;
+  return S.visits.filter(v => {
+    if (f.prel && (f.prel === '__none' ? v.prel : (!v.prel || v.prel.key !== f.prel))) return false;
+    if (f.insp && (!v.insp || v.insp.key !== f.insp)) return false;
+    if (f.statut === '__none' ? v.statut : (f.statut && v.statut !== f.statut)) return false;
+    if (f.bassin && v.farm.bassin !== f.bassin) return false;
+    if (f.type && !v.rows.some(r => val(r, 'type') === f.type)) return false;
+    if (q && !norm([v.farm.name, v.farm.commune, v.farm.cp, v.farm.adresse].concat(v.rows.map(r => val(r, 'dossier') + ' ' + val(r, 'parcelle'))).join(' ')).includes(q)) return false;
     return true;
-  }).sort((a, b) => a.Date_RDV - b.Date_RDV);
+  });
 }
-function byDay(list) { const m = {}; list.forEach(r => { const k = dkey(rdvDate(r)); (m[k] = m[k] || []).push(r); }); return m; }
-function optList(arr, sel, empty) { return `<option value="">${empty}</option>` + arr.map(([v, l]) => `<option value="${esc(v)}" ${String(v) === String(sel) ? 'selected' : ''}>${esc(l)}</option>`).join(''); }
-function peopleOpts(list) { return list.slice().sort((a, b) => personName(a).localeCompare(personName(b))).map(p => [p.id, personName(p) + (p.Actif === false ? ' (inactif)' : '')]); }
-function dptList() { return Array.from(new Set(S.src.map(srcDpt).filter(Boolean))).sort(); }
+function byDay(list) { const m = {}; list.forEach(v => { const k = dkey(v.start); (m[k] = m[k] || []).push(v); }); return m; }
+const distinct = k => Array.from(new Set(S.rows.map(r => val(r, k)).filter(Boolean))).sort((a, b) => a.localeCompare(b));
 
 function periodLabel() {
   const c = S.cursor;
@@ -652,10 +821,10 @@ function periodLabel() {
   }
   return MONTHS[c.getMonth()] + ' ' + c.getFullYear();
 }
-
 function renderCalendar() {
   const f = S.f, narrow = window.innerWidth <= 720;
   const view = narrow && S.view === 'month' ? 'list' : S.view;
+  const pOpts = personChoices('preleveur').map(o => [o.key, o.label]).concat([['__none', 'Non désigné']]);
   $('#main').innerHTML = `
     <div class="toolbar">
       <div class="btn-group">
@@ -671,24 +840,23 @@ function renderCalendar() {
       <button class="btn" id="newRdvBtn">${ic('add')}Nouveau rendez-vous</button>
     </div>
     <div class="filters">
-      <div><label class="lbl" for="fq">Recherche</label><input class="input" id="fq" type="search" placeholder="Nom, PACAGE, n° dossier…" value="${esc(f.q)}"></div>
-      <div><label class="lbl" for="fprel">Préleveur</label><select class="select" id="fprel">${optList(peopleOpts(S.prel), f.prel, 'Tous')}</select></div>
-      <div><label class="lbl" for="finsp">Inspecteur FAM</label><select class="select" id="finsp">${optList(peopleOpts(S.insp), f.insp, 'Tous')}</select></div>
-      <div><label class="lbl" for="fst">Statut</label><select class="select" id="fst">${optList(STATUTS.map(s => [s, s]).concat([['__none', 'Non renseigné']]), f.statut, 'Tous')}</select></div>
-      <div><label class="lbl" for="fdpt">Département</label><select class="select" id="fdpt">${optList(dptList().map(d => [d, d]), f.dpt, 'Tous')}</select></div>
+      <div><label class="lbl" for="fq">Recherche</label><input class="input" id="fq" type="search" placeholder="Exploitation, commune, n° dossier…" value="${esc(f.q)}"></div>
+      ${M('preleveur') ? `<div><label class="lbl" for="fprel">Préleveur</label><select class="select" id="fprel">${optList(pOpts, f.prel, 'Tous')}</select></div>` : ''}
+      ${M('inspecteur') ? `<div><label class="lbl" for="finsp">Inspecteur FAM</label><select class="select" id="finsp">${optList(personChoices('inspecteur').map(o => [o.key, o.label]), f.insp, 'Tous')}</select></div>` : ''}
+      ${M('statut') ? `<div><label class="lbl" for="fst">Statut</label><select class="select" id="fst">${optList(STATUTS.map(s => [s, s]).concat([['__none', 'Non renseigné']]), f.statut, 'Tous')}</select></div>` : ''}
+      ${M('bassin') ? `<div><label class="lbl" for="fbv">Bassin versant</label><select class="select" id="fbv">${optList(distinct('bassin').map(d => [d, d]), f.bassin, 'Tous')}</select></div>` : ''}
+      ${M('type') ? `<div><label class="lbl" for="fty">Type</label><select class="select" id="fty">${optList(distinct('type').map(d => [d, d]), f.type, 'Tous')}</select></div>` : ''}
     </div>
     <div id="calBody"></div>
-    <div class="legend" style="margin-top:12px">${STATUTS.slice(0, 5).map(s => `<span class="badge ${stClass(s)}">${s}</span>`).join('')}</div>`;
-  const list = filteredRdv();
-  if (view === 'month') renderMonth(list);
-  else if (view === 'week') renderWeek(list);
-  else renderList(list);
+    <div class="legend" style="margin-top:12px">${STATUTS.slice(0, 5).map(s => `<span class="badge ${stClass(s)}">${s}</span>`).join('')}<span class="badge st-none">Sans statut</span></div>`;
+  const list = filteredVisits();
+  if (view === 'month') renderMonth(list); else if (view === 'week') renderWeek(list); else renderList(list);
 
   $$('[data-nav]').forEach(b => b.onclick = () => navigate(Number(b.dataset.nav)));
   $$('[data-view]').forEach(b => b.onclick = () => { S.view = b.dataset.view; renderCalendar(); });
-  $('#newRdvBtn').onclick = () => openRdvForm(null, {date: S.view === 'week' ? startOfWeek(S.cursor) : new Date()});
-  const bindF = (id, key, ev = 'change') => { $(id).addEventListener(ev, e => { S.f[key] = e.target.value; if (key === 'q') { clearTimeout(bindF.t); bindF.t = setTimeout(() => { renderCalendar(); const i = $('#fq'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); } else renderCalendar(); }); };
-  bindF('#fq', 'q', 'input'); bindF('#fprel', 'prel'); bindF('#finsp', 'insp'); bindF('#fst', 'statut'); bindF('#fdpt', 'dpt');
+  $('#newRdvBtn').onclick = () => openVisitForm(null, {date: S.view === 'week' ? startOfWeek(S.cursor) : new Date()});
+  const bindF = (id, key, ev = 'change') => { const el = $(id); if (!el) return; el.addEventListener(ev, e => { S.f[key] = e.target.value; if (key === 'q') { clearTimeout(bindF.t); bindF.t = setTimeout(() => { renderCalendar(); const i = $('#fq'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); } else renderCalendar(); }); };
+  bindF('#fq', 'q', 'input'); bindF('#fprel', 'prel'); bindF('#finsp', 'insp'); bindF('#fst', 'statut'); bindF('#fbv', 'bassin'); bindF('#fty', 'type');
 }
 function navigate(n) {
   const c = S.cursor;
@@ -697,11 +865,10 @@ function navigate(n) {
   else S.cursor = new Date(c.getFullYear(), c.getMonth() + n, 1);
   renderCalendar();
 }
-function evLabel(r) {
-  const s = S.srcById.get(r.Exploitation), p = S.prelById.get(r.Preleveur);
-  return {name: srcName(s), who: p ? initials(personName(p)) : '', title: `${hm(rdvDate(r))} · ${srcLabel(s)}${p ? ' · Préleveur : ' + personName(p) : ''}${S.inspById.get(r.Inspecteur) ? ' · Inspecteur : ' + personName(S.inspById.get(r.Inspecteur)) : ''} · ${r.Statut || 'Statut non renseigné'}`};
+const timeLabel = v => v.hasTime ? hm(v.start) : '––h––';
+function evTitle(v) {
+  return `${timeLabel(v)} · ${v.farm.name}${v.farm.commune ? ' (' + v.farm.commune + ')' : ''} · ${v.rows.length} parcelle(s)${v.prel ? ' · Préleveur : ' + v.prel.name : ''}${v.insp ? ' · Inspecteur : ' + v.insp.name : ''}${v.statut ? ' · ' + v.statut : ''}`;
 }
-
 function renderMonth(list) {
   const c = S.cursor, y = c.getFullYear(), m = c.getMonth();
   const first = new Date(y, m, 1), off = (first.getDay() + 6) % 7, dim = new Date(y, m + 1, 0).getDate();
@@ -709,27 +876,23 @@ function renderMonth(list) {
   let html = '<div class="wd-row">' + WD.map(w => `<div>${w}</div>`).join('') + '</div><div class="month">';
   for (let i = 0; i < total; i++) {
     const d = new Date(y, m, i - off + 1), k = dkey(d), evs = map[k] || [];
-    const out = d.getMonth() !== m, we = d.getDay() === 0 || d.getDay() === 6;
-    const shown = evs.slice(0, 4);
+    const out = d.getMonth() !== m, we = d.getDay() === 0 || d.getDay() === 6, shown = evs.slice(0, 4);
     html += `<div class="cell${out ? ' out' : ''}${we ? ' we' : ''}${k === today ? ' today' : ''}" data-day="${k}">
       <div class="cell-top"><span class="nb">${evs.length ? evs.length + ' RDV' : ''}</span><span class="dnum">${d.getDate()}</span></div>
-      ${shown.map(r => { const l = evLabel(r); return `<button class="ev ${stClass(r.Statut)}" data-rdv="${r.id}" title="${esc(l.title)}"><b>${hm(rdvDate(r))}</b>${esc(l.name)}${l.who ? ` <span class="who">· ${esc(l.who)}</span>` : ''}</button>`; }).join('')}
+      ${shown.map(v => `<button class="ev ${stClass(v.statut)}" data-visit="${esc(v.key)}" title="${esc(evTitle(v))}"><b>${timeLabel(v)}</b>${esc(v.farm.name)}${v.rows.length > 1 ? ` <span class="who">×${v.rows.length}</span>` : ''}${v.prel ? ` <span class="who">· ${esc(initials(v.prel.name))}</span>` : ''}</button>`).join('')}
       ${evs.length > shown.length ? `<button class="more" data-day-more="${k}">+ ${evs.length - shown.length} autre(s)</button>` : ''}
     </div>`;
   }
   $('#calBody').innerHTML = html + '</div>';
-  if (!list.some(r => { const d = rdvDate(r); return d.getFullYear() === y && d.getMonth() === m; })) {
-    $('#calBody').insertAdjacentHTML('beforeend', `<p class="empty">Aucun rendez-vous ce mois-ci${nextHint(list)}.</p>`);
-  }
+  if (!list.some(v => v.start.getFullYear() === y && v.start.getMonth() === m)) $('#calBody').insertAdjacentHTML('beforeend', `<p class="empty">Aucun rendez-vous ce mois-ci${nearestHint(list)}.</p>`);
 }
-function nextHint(list) {
-  const now = S.cursor.getTime(), nx = list.find(r => r.Date_RDV * 1000 > now);
-  return nx ? ` — prochain : <a href="#" data-goto="${nx.Date_RDV}">${esc(fullDate(rdvDate(nx)))}</a>` : '';
+function nearestHint(list) {
+  if (!list.length) return '';
+  const t = S.cursor.getTime(), nx = list.find(v => v.start.getTime() > t) || list[list.length - 1];
+  return ` — ${nx.start.getTime() > t ? 'prochain' : 'dernier'} : <a href="#" data-goto="${nx.start.getTime()}">${esc(fullDate(nx.start))}</a>`;
 }
-
 function layoutDay(evs) {
-  // répartit les rendez-vous qui se chevauchent en colonnes
-  const items = evs.map(r => ({r, s: rdvDate(r).getTime(), e: rdvEnd(r).getTime(), lane: 0, lanes: 1}));
+  const items = evs.map(v => ({v, s: v.start.getTime(), e: v.end.getTime(), lane: 0, lanes: 1}));
   let cluster = [], end = -1;
   const flush = () => { const n = Math.max(1, ...cluster.map(x => x.lane + 1)); cluster.forEach(x => { x.lanes = n; }); cluster = []; };
   for (const it of items) {
@@ -741,11 +904,13 @@ function layoutDay(evs) {
   if (cluster.length) flush();
   return items;
 }
+const hourPx = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue('--hour'), 10) || 44;
 function renderWeek(list) {
   const a = startOfWeek(S.cursor), map = byDay(list), today = dkey(new Date());
   let h0 = S.cfg.hourStart, h1 = S.cfg.hourEnd;
-  for (let i = 0; i < 7; i++) (map[dkey(addDays(a, i))] || []).forEach(r => { const d = rdvDate(r), e = rdvEnd(r); h0 = Math.min(h0, d.getHours()); h1 = Math.max(h1, e.getHours() + (e.getMinutes() ? 1 : 0)); });
-  const H = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--hour'), 10) || 44, ppm = H / 60, height = (h1 - h0) * H;
+  for (let i = 0; i < 7; i++) (map[dkey(addDays(a, i))] || []).filter(v => v.hasTime).forEach(v => { h0 = Math.min(h0, v.start.getHours()); h1 = Math.max(h1, v.end.getHours() + (v.end.getMinutes() ? 1 : 0)); });
+  h1 = Math.min(24, h1);
+  const H = hourPx(), ppm = H / 60, height = (h1 - h0) * H;
   let head = '<div class="week-head"><div></div>', body = `<div class="week" style="height:${height}px"><div class="hours">`;
   for (let h = h0 + 1; h < h1; h++) body += `<span style="top:${(h - h0) * H}px">${pad(h)}h</span>`;
   body += '</div>';
@@ -753,11 +918,13 @@ function renderWeek(list) {
     const d = addDays(a, i), k = dkey(d), evs = map[k] || [];
     head += `<div class="${k === today ? 'today' : ''}">${DAYS[d.getDay()].slice(0, 3)}. <b>${d.getDate()}</b><span class="sub">${evs.length ? evs.length + ' RDV' : ''}</span></div>`;
     body += `<div class="wcol${k === today ? ' today' : ''}" data-wday="${k}" data-h0="${h0}">`;
-    layoutDay(evs).forEach(it => {
-      const r = it.r, d0 = rdvDate(r), top = ((d0.getHours() - h0) * 60 + d0.getMinutes()) * ppm;
-      const hgt = Math.max(20, (it.e - it.s) / 60000 * ppm - 2), w = 100 / it.lanes, l = evLabel(r);
-      body += `<div class="wev ${stClass(r.Statut)}" role="button" tabindex="0" data-rdv="${r.id}" title="${esc(l.title)}" style="top:${top}px;height:${hgt}px;left:calc(${it.lane * w}% + 1px);width:calc(${w}% - 3px)"><b>${hm(d0)} ${esc(l.name)}</b><span class="who">${esc(l.who)}</span></div>`;
+    const untimed = evs.filter(v => !v.hasTime);
+    layoutDay(evs.filter(v => v.hasTime)).forEach(it => {
+      const v = it.v, top = ((v.start.getHours() - h0) * 60 + v.start.getMinutes()) * ppm;
+      const hgt = Math.max(20, (it.e - it.s) / 60000 * ppm - 2), w = 100 / it.lanes;
+      body += `<div class="wev ${stClass(v.statut)}" role="button" tabindex="0" data-visit="${esc(v.key)}" title="${esc(evTitle(v))}" style="top:${top}px;height:${hgt}px;left:calc(${it.lane * w}% + 1px);width:calc(${w}% - 3px)"><b>${hm(v.start)} ${esc(v.farm.name)}</b><span class="who">${v.rows.length} parc.${v.prel ? ' · ' + esc(initials(v.prel.name)) : ''}</span></div>`;
     });
+    untimed.forEach((v, j) => { body += `<div class="wev ${stClass(v.statut)}" role="button" tabindex="0" data-visit="${esc(v.key)}" title="${esc(evTitle(v))}" style="top:${j * 22}px;height:20px;left:1px;width:calc(100% - 3px);opacity:.85"><b>Heure ? ${esc(v.farm.name)}</b></div>`; });
     if (k === today) { const n = new Date(); const t = ((n.getHours() - h0) * 60 + n.getMinutes()) * ppm; if (t >= 0 && t <= height) body += `<div class="nowline" style="top:${t}px"></div>`; }
     body += '</div>';
   }
@@ -765,88 +932,92 @@ function renderWeek(list) {
 }
 function renderList(list) {
   const c = S.cursor, y = c.getFullYear(), m = c.getMonth();
-  const inMonth = list.filter(r => { const d = rdvDate(r); return d.getFullYear() === y && d.getMonth() === m; });
+  const inMonth = list.filter(v => v.start.getFullYear() === y && v.start.getMonth() === m);
   const map = byDay(inMonth), keys = Object.keys(map).sort();
-  if (!keys.length) { $('#calBody').innerHTML = `<p class="empty">Aucun rendez-vous ce mois-ci${nextHint(list)}.</p>`; return; }
-  $('#calBody').innerHTML = keys.map(k => `<section class="agenda-day"><h3><span style="text-transform:capitalize">${esc(fullDate(rdvDate(map[k][0])))}</span><span class="sub">${map[k].length} rendez-vous</span></h3>
-    ${map[k].map(r => rdvRow(r)).join('')}</section>`).join('');
+  if (!keys.length) { $('#calBody').innerHTML = `<p class="empty">Aucun rendez-vous ce mois-ci${nearestHint(list)}.</p>`; return; }
+  $('#calBody').innerHTML = keys.map(k => `<section class="agenda-day"><h3><span style="text-transform:capitalize">${esc(fullDate(map[k][0].start))}</span><span class="sub">${map[k].length} rendez-vous${countByPrel(map[k])}</span></h3>
+    ${map[k].map(visitRow).join('')}</section>`).join('');
 }
-function rdvRow(r) {
-  const s = S.srcById.get(r.Exploitation), p = S.prelById.get(r.Preleveur), i = S.inspById.get(r.Inspecteur), e = rdvEnd(r);
-  return `<button class="agenda-item ${stClass(r.Statut)}" data-rdv="${r.id}">
-    <span class="h">${hm(rdvDate(r))}<br><span class="sub">→ ${hm(e)}</span></span>
-    <span><span class="n">${esc(srcName(s))}</span>
-      <span class="s">${col.pacage && s && s[col.pacage] ? `<span>PACAGE ${esc(s[col.pacage])}</span>` : ''}${p ? `<span>${ic('user')} ${esc(personName(p))}</span>` : '<span>Préleveur à désigner</span>'}${i ? `<span>${ic('shield')} ${esc(personName(i))}</span>` : ''}${r.Lieu ? `<span>${ic('pin')} ${esc(r.Lieu)}</span>` : ''}</span>
-      ${r.Objet ? `<span class="s">${esc(r.Objet)}</span>` : ''}</span>
-    <span class="badge ${stClass(r.Statut)}">${esc(r.Statut || 'Non renseigné')}</span></button>`;
-}
-
-/* ---------- Panneau d'un jour ---------- */
-function openDay(k) {
-  const evs = filteredRdv().filter(r => dkey(rdvDate(r)) === k);
-  const [y, m, d] = k.split('-').map(Number), date = new Date(y, m - 1, d);
-  openModal(`<h2>${ic('calendar')}<span style="text-transform:capitalize">${esc(fullDate(date))}</span></h2>
-    <p class="lead">${evs.length ? evs.length + ' rendez-vous' : 'Aucun rendez-vous ce jour'}${countByPrel(evs)}</p>
-    <div class="daylist">${evs.map(rdvRow).join('')}</div>`,
-  {foot: `<button class="btn" id="dayNew">${ic('add')}Ajouter un rendez-vous ce jour</button>`, wide: true});
-  $('#dayNew').onclick = () => openRdvForm(null, {date: nextFreeSlot(date, evs)});
+function visitRow(v) {
+  const f = v.farm;
+  return `<button class="agenda-item ${stClass(v.statut)}" data-visit="${esc(v.key)}">
+    <span class="h">${timeLabel(v)}${v.hasTime ? `<br><span class="sub">→ ${hm(v.end)}</span>` : ''}</span>
+    <span><span class="n">${esc(f.name)}</span>
+      <span class="s">${f.commune ? `<span>${ic('pin')} ${esc(f.commune)}</span>` : ''}<span>${v.rows.length} parcelle(s) : ${esc(v.rows.map(r => val(r, 'parcelle') || '#' + r.id).join(', '))}</span>
+      ${v.prel ? `<span>${ic('user')} ${esc(v.prel.name)}</span>` : (M('preleveur') ? '<span>Préleveur à désigner</span>' : '')}${v.insp ? `<span>${ic('shield')} ${esc(v.insp.name)}</span>` : ''}</span>
+      ${v.remarques ? `<span class="s">${esc(v.remarques)}</span>` : ''}</span>
+    <span class="badge ${stClass(v.statut)}">${esc(v.statut || 'Sans statut')}</span></button>`;
 }
 function countByPrel(evs) {
-  const m = {}; evs.forEach(r => { const p = S.prelById.get(r.Preleveur); const n = p ? personName(p) : 'Non désigné'; m[n] = (m[n] || 0) + 1; });
-  const parts = Object.entries(m).map(([n, c]) => `${n} : ${c}`);
-  return parts.length ? ' · ' + esc(parts.join(' · ')) : '';
+  if (!M('preleveur')) return '';
+  const m = {}; evs.forEach(v => { const n = v.prel ? v.prel.name : 'non désigné'; m[n] = (m[n] || 0) + 1; });
+  return ' · ' + esc(Object.entries(m).map(([n, c]) => `${n} : ${c}`).join(' · '));
+}
+function openDay(k) {
+  const evs = filteredVisits().filter(v => dkey(v.start) === k);
+  const [y, m, d] = k.split('-').map(Number), date = new Date(y, m - 1, d);
+  openModal(`<h2>${ic('calendar')}<span style="text-transform:capitalize">${esc(fullDate(date))}</span></h2>
+    <p class="lead">${evs.length ? evs.length + ' rendez-vous' + countByPrel(evs) : 'Aucun rendez-vous ce jour'}</p>
+    <div class="daylist">${evs.map(visitRow).join('')}</div>`,
+  {foot: `<button class="btn" id="dayNew">${ic('add')}Ajouter un rendez-vous ce jour</button>`, wide: true});
+  $('#dayNew').onclick = () => openVisitForm(null, {date: nextFreeSlot(date, evs)});
 }
 function nextFreeSlot(date, evs) {
   const d = new Date(date.getFullYear(), date.getMonth(), date.getDate(), Math.max(8, S.cfg.hourStart), 0);
-  const active = evs.filter(r => !isCancelled(r.Statut));
-  if (active.length) { const last = active.reduce((a, r) => Math.max(a, rdvEnd(r).getTime()), 0); if (last > d.getTime()) d.setTime(Math.ceil(last / 1800000) * 1800000); }
+  const active = evs.filter(v => !isCancelled(v.statut) && v.hasTime);
+  if (active.length) { const last = Math.max(...active.map(v => v.end.getTime())); if (last > d.getTime()) d.setTime(Math.ceil(last / 900000) * 900000); }
   return d;
 }
 
 /* ---------- Exploitations ---------- */
-function rdvOf(srcId) { return S.rdv.filter(r => r.Exploitation === srcId && rdvDate(r)).sort((a, b) => a.Date_RDV - b.Date_RDV); }
-function renderExploitations() {
-  const q = norm(S.expQ), now = Date.now() / 1000;
-  const rows = S.src.map(s => {
-    const list = rdvOf(s.id), active = list.filter(r => !isCancelled(r.Statut));
-    const next = active.find(r => r.Date_RDV >= now) || null;
-    return {s, list, active, next};
-  }).filter(x => (!q || norm(srcLabel(x.s) + ' ' + (col.addr ? x.s[col.addr] : '')).includes(q)) && (!S.expOnlyFree || !x.active.length) && (!S.expDpt || srcDpt(x.s) === S.expDpt))
-    .sort((a, b) => srcName(a.s).localeCompare(srcName(b.s)));
-  const withRdv = S.src.filter(s => rdvOf(s.id).some(r => !isCancelled(r.Statut))).length;
+function renderFarms() {
+  const q = norm(S.expQ), now = Date.now();
+  const all = Array.from(S.farms.values());
+  const rows = all.map(f => {
+    const planned = f.rows.filter(r => rowStart(r)).length, active = f.visits.filter(v => !isCancelled(v.statut));
+    return {f, planned, next: active.find(v => v.start.getTime() >= now) || null, last: active[active.length - 1] || null};
+  }).filter(x => (!q || norm([x.f.name, x.f.commune, x.f.cp, x.f.adresse].concat(x.f.rows.map(r => val(r, 'dossier'))).join(' ')).includes(q))
+    && (!S.expBassin || x.f.bassin === S.expBassin)
+    && (S.expFilter !== 'todo' || x.planned < x.f.rows.length) && (S.expFilter !== 'none' || !x.planned))
+    .sort((a, b) => a.f.name.localeCompare(b.f.name));
+  const fullyPlanned = all.filter(f => f.rows.every(r => rowStart(r))).length;
+  const shown = rows.slice(0, 300);
   $('#main').innerHTML = `<div class="section-head"><h2>Exploitations</h2>
-      <span class="muted">${withRdv} / ${S.src.length} avec au moins un rendez-vous actif · table <code>${esc(S.cfg.source)}</code></span></div>
+      <span class="muted">${fullyPlanned} / ${all.length} entièrement planifiées · ${S.rows.length} parcelles · table <code>${esc(S.cfg.rdvTable)}</code></span></div>
     <div class="filters">
-      <div><label class="lbl" for="eq">Recherche</label><input class="input" id="eq" type="search" placeholder="Nom, PACAGE, n° dossier, adresse…" value="${esc(S.expQ)}"></div>
-      <div><label class="lbl" for="edpt">Département</label><select class="select" id="edpt">${optList(dptList().map(d => [d, d]), S.expDpt, 'Tous')}</select></div>
-      <div style="display:flex;align-items:flex-end"><label class="chk"><input type="checkbox" id="efree" ${S.expOnlyFree ? 'checked' : ''}> Sans rendez-vous uniquement</label></div>
+      <div><label class="lbl" for="eq">Recherche</label><input class="input" id="eq" type="search" placeholder="Nom, commune, n° dossier…" value="${esc(S.expQ)}"></div>
+      ${M('bassin') ? `<div><label class="lbl" for="ebv">Bassin versant</label><select class="select" id="ebv">${optList(distinct('bassin').map(d => [d, d]), S.expBassin, 'Tous')}</select></div>` : ''}
+      <div><label class="lbl" for="ef">Planification</label><select class="select" id="ef">${optList([['todo', 'Parcelles restant à planifier'], ['none', 'Aucun rendez-vous']], S.expFilter, 'Toutes')}</select></div>
     </div>
-    ${rows.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Exploitation</th><th>Département</th><th>Statut</th><th>Rendez-vous</th><th>Prochain</th><th></th></tr></thead><tbody>
-    ${rows.map(x => { const p = x.next && S.prelById.get(x.next.Preleveur), st = x.s.Statut && !isErr(x.s.Statut) ? x.s.Statut : '';
-      return `<tr class="click" data-fiche="${x.s.id}"><td><span class="strong">${esc(srcName(x.s))}</span><div class="sub">${esc([col.pacage && x.s[col.pacage] ? 'PACAGE ' + x.s[col.pacage] : '', x.s.dossier_number ? 'Dossier ' + x.s.dossier_number : ''].filter(Boolean).join(' · '))}</div></td>
-      <td>${esc(srcDpt(x.s))}</td><td>${st ? `<span class="badge">${esc(st)}</span>` : ''}</td>
-      <td>${x.active.length ? `<span class="tag">${x.active.length} actif(s)</span>` : '<span class="sub">Aucun</span>'}${x.list.length > x.active.length ? ` <span class="sub">+${x.list.length - x.active.length} annulé(s)</span>` : ''}</td>
-      <td>${x.next ? `${esc(fullDate(rdvDate(x.next)))} à ${hm(rdvDate(x.next))}${p ? `<div class="sub">${esc(personName(p))}</div>` : ''}` : ''}</td>
-      <td class="act"><button class="btn sec" data-plan="${x.s.id}">${ic('add')}Planifier</button></td></tr>`; }).join('')}
-    </tbody></table></div>` : '<p class="empty">Aucune exploitation ne correspond.</p>'}`;
-  $('#eq').addEventListener('input', e => { S.expQ = e.target.value; clearTimeout(renderExploitations.t); renderExploitations.t = setTimeout(() => { renderExploitations(); const i = $('#eq'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); });
-  $('#edpt').onchange = e => { S.expDpt = e.target.value; renderExploitations(); };
-  $('#efree').onchange = e => { S.expOnlyFree = e.target.checked; renderExploitations(); };
+    ${rows.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Exploitation</th><th>Commune</th>${M('bassin') ? '<th>Bassin versant</th>' : ''}<th>Parcelles</th><th>Prochain / dernier RDV</th><th></th></tr></thead><tbody>
+    ${shown.map(x => { const v = x.next || x.last;
+      return `<tr class="click" data-farm="${esc(x.f.key)}"><td><span class="strong">${esc(x.f.name)}</span>${x.f.portable || x.f.tel ? `<div class="sub">${esc(x.f.portable || x.f.tel)}</div>` : ''}</td>
+      <td>${esc([x.f.cp, x.f.commune].filter(Boolean).join(' '))}</td>${M('bassin') ? `<td>${esc(x.f.bassin)}</td>` : ''}
+      <td><span class="tag">${x.planned} / ${x.f.rows.length} planifiée(s)</span></td>
+      <td>${v ? `${esc(shortDate(v.start))}${v.hasTime ? ' à ' + hm(v.start) : ''} <span class="badge ${stClass(v.statut)}">${esc(v.statut || 'Sans statut')}</span>${v.prel ? `<div class="sub">${esc(v.prel.name)}</div>` : ''}` : '<span class="sub">—</span>'}</td>
+      <td class="act"><button class="btn sec" data-plan="${esc(x.f.key)}">${ic('add')}Planifier</button></td></tr>`; }).join('')}
+    </tbody></table></div>${rows.length > shown.length ? `<p class="sub">${rows.length - shown.length} exploitation(s) supplémentaire(s) : affinez la recherche.</p>` : ''}` : '<p class="empty">Aucune exploitation ne correspond.</p>'}`;
+  $('#eq').addEventListener('input', e => { S.expQ = e.target.value; clearTimeout(renderFarms.t); renderFarms.t = setTimeout(() => { renderFarms(); const i = $('#eq'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); });
+  if ($('#ebv')) $('#ebv').onchange = e => { S.expBassin = e.target.value; renderFarms(); };
+  $('#ef').onchange = e => { S.expFilter = e.target.value; renderFarms(); };
 }
 
 /* ---------- Préleveurs / inspecteurs ---------- */
 const PEOPLE = {
-  [T_PREL]: {title: 'Préleveurs', one: 'préleveur', icon: 'user', ref: 'Preleveur', extra: ['Organisme', 'Organisme']},
-  [T_INSP]: {title: 'Inspecteurs FranceAgriMer', one: 'inspecteur', icon: 'shield', ref: 'Inspecteur', extra: ['Service', 'Service / délégation']}
+  [T_PREL]: {title: 'Préleveurs', one: 'préleveur', icon: 'user', k: 'preleveur', extra: ['Organisme', 'Organisme']},
+  [T_INSP]: {title: 'Inspecteurs FranceAgriMer', one: 'inspecteur', icon: 'shield', k: 'inspecteur', extra: ['Service', 'Service / délégation']}
 };
+function personKey(t, p) { return colType(PEOPLE[t].k).startsWith('Ref:') ? '#' + p.id : normKey(personName(p)); }
 function renderPeople(t) {
   const P = PEOPLE[t], list = (t === T_PREL ? S.prel : S.insp).slice().sort((a, b) => (b.Actif !== false) - (a.Actif !== false) || personName(a).localeCompare(personName(b)));
-  const now = Date.now() / 1000;
+  const now = Date.now();
+  const count = p => { const key = personKey(t, p); return S.visits.filter(v => v[t === T_PREL ? 'prel' : 'insp'] && v[t === T_PREL ? 'prel' : 'insp'].key === key && v.start.getTime() >= now && !isCancelled(v.statut)).length; };
   $('#main').innerHTML = `<div class="section-head"><h2>${P.title}</h2><button class="btn" id="addPerson">${ic('add')}Ajouter un ${P.one}</button></div>
+    ${!M(P.k) ? `<div class="alert warn"><p>Aucune colonne « ${esc(FIELD[P.k].label)} » n'est associée dans la configuration : la liste n'est pas utilisée par le calendrier.</p></div>` : ''}
     ${list.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Nom</th><th>${P.extra[1]}</th><th>Téléphone</th><th>E-mail</th><th>Départements</th><th>RDV à venir</th><th>État</th><th></th></tr></thead><tbody>
-    ${list.map(p => { const n = S.rdv.filter(r => r[P.ref] === p.id && r.Date_RDV >= now && !isCancelled(r.Statut)).length;
+    ${list.map(p => { const n = count(p);
       return `<tr><td class="strong">${esc(personName(p) || '(sans nom)')}</td><td>${esc(p[P.extra[0]])}</td><td>${p.Telephone ? `<a href="tel:${esc(p.Telephone)}">${esc(p.Telephone)}</a>` : ''}</td>
-      <td>${p.Email ? `<a href="mailto:${esc(p.Email)}">${esc(p.Email)}</a>` : ''}</td><td>${esc(p.Departements)}</td><td>${n ? `<a href="#" data-filter-person="${t}:${p.id}">${n}</a>` : '0'}</td>
+      <td>${p.Email ? `<a href="mailto:${esc(p.Email)}">${esc(p.Email)}</a>` : ''}</td><td>${esc(p.Departements)}</td><td>${n ? `<a href="#" data-filter-person="${t}|${esc(personKey(t, p))}">${n}</a>` : '0'}</td>
       <td>${p.Actif === false ? '<span class="badge">Inactif</span>' : '<span class="badge st-fait">Actif</span>'}</td>
       <td class="act"><button class="btn ter icon" data-edit-person="${t}:${p.id}" title="Modifier">${ic('edit')}<span class="sr">Modifier</span></button></td></tr>`; }).join('')}
     </tbody></table></div>` : `<div class="alert"><p>Aucun ${P.one} pour l'instant. Ajoutez-en pour pouvoir les affecter aux rendez-vous.</p></div>`}`;
@@ -854,143 +1025,183 @@ function renderPeople(t) {
 }
 function openPersonForm(t, id) {
   const P = PEOPLE[t], p = id ? (t === T_PREL ? S.prelById : S.inspById).get(id) : {Actif: true};
-  const used = id ? S.rdv.filter(r => r[P.ref] === id).length : 0;
+  const used = id ? S.visits.some(v => { const x = v[t === T_PREL ? 'prel' : 'insp']; return x && x.key === personKey(t, p); }) : false;
   openModal(`<h2>${ic(P.icon)}${id ? 'Modifier' : 'Ajouter'} un ${P.one}</h2><p class="lead">Table <code>${t}</code></p>
     <form id="pForm"><div class="row">
-      <div class="grp"><label class="lbl" for="pPrenom">Prénom</label><input class="input" id="pPrenom" value="${esc(p.Prenom)}"></div>
-      <div class="grp"><label class="lbl" for="pNom">Nom</label><input class="input" id="pNom" value="${esc(p.Nom)}" required></div></div>
+      <div class="grp"><label class="lbl" for="pNom">Nom</label><input class="input" id="pNom" value="${esc(p.Nom)}" required></div>
+      <div class="grp"><label class="lbl" for="pPrenom">Prénom</label><input class="input" id="pPrenom" value="${esc(p.Prenom)}"></div></div>
       <div class="grp"><label class="lbl" for="pExtra">${P.extra[1]}</label><input class="input" id="pExtra" value="${esc(p[P.extra[0]])}"></div>
       <div class="row"><div class="grp"><label class="lbl" for="pTel">Téléphone</label><input class="input" id="pTel" type="tel" value="${esc(p.Telephone)}"></div>
       <div class="grp"><label class="lbl" for="pMail">E-mail</label><input class="input" id="pMail" type="email" value="${esc(p.Email)}"></div></div>
-      <div class="grp"><label class="lbl" for="pDpt">Départements couverts<span class="hint">Ex. : 022, 029, 035, 056</span></label><input class="input" id="pDpt" value="${esc(p.Departements)}"></div>
+      <div class="grp"><label class="lbl" for="pDpt">Départements couverts<span class="hint">Ex. : 22, 29</span></label><input class="input" id="pDpt" value="${esc(p.Departements)}"></div>
       <label class="chk"><input type="checkbox" id="pActif" ${p.Actif !== false ? 'checked' : ''}> Actif (proposé dans les rendez-vous)</label>
+      ${id && !colType(P.k).startsWith('Ref:') ? '<p class="sub">Les rendez-vous mémorisent le nom en texte : si vous renommez cette personne, les rendez-vous existants gardent l\'ancien nom.</p>' : ''}
     </form>`, {foot: `<div class="left">${id ? `<button class="btn danger" id="pDel" ${used ? 'disabled title="Affecté à des rendez-vous : désactivez-le plutôt"' : ''}>${ic('delete')}Supprimer</button>` : ''}</div>
       <button class="btn ter" data-close>Annuler</button><button class="btn" id="pSave">${ic('check')}Enregistrer</button>`});
   $('#pSave').onclick = async () => {
     const fields = {Prenom: $('#pPrenom').value.trim(), Nom: $('#pNom').value.trim(), [P.extra[0]]: $('#pExtra').value.trim(), Telephone: $('#pTel').value.trim(),
       Email: $('#pMail').value.trim(), Departements: $('#pDpt').value.trim(), Actif: $('#pActif').checked};
     if (!fields.Nom && !fields.Prenom) { toast('Indiquez au moins un nom.', true); return; }
-    await write([id ? ['UpdateRecord', t, id, fields] : ['AddRecord', t, null, fields]], 'Enregistré');
-    closeModal();
+    if (await write([id ? ['UpdateRecord', t, id, fields] : ['AddRecord', t, null, fields]], 'Enregistré')) closeModal();
   };
-  if (id && $('#pDel')) $('#pDel').onclick = async () => { await write([['RemoveRecord', t, id]], 'Supprimé'); closeModal(); };
+  if (id && $('#pDel')) $('#pDel').onclick = async () => { if (await write([['RemoveRecord', t, id]], 'Supprimé')) closeModal(); };
 }
 
 /* ============================================================
-   FORMULAIRE RENDEZ-VOUS
+   RENDEZ-VOUS (groupe de parcelles d'une exploitation)
    ============================================================ */
-function toInputDate(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
-function toInputTime(d) { return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
-function openRdvForm(id, opts = {}) {
-  const r = id ? S.rdv.find(x => x.id === id) : null;
-  const d = r ? rdvDate(r) : (opts.date || new Date());
-  if (!r && !opts.date) { d.setMinutes(0, 0, 0); d.setHours(Math.max(d.getHours() + 1, 8)); }
-  if (!r && opts.date && opts.date.getHours() === 0) d.setHours(Math.max(8, S.cfg.hourStart), 0, 0, 0);
-  const srcId = r ? r.Exploitation : opts.srcId || 0, s = S.srcById.get(srcId);
-  const dur = r ? Number(r.Duree_min) || S.cfg.duree : (opts.duree || S.cfg.duree);
-  const prel = r ? r.Preleveur : opts.prel || (S.f.prel ? Number(S.f.prel) : 0);
-  const insp = r ? r.Inspecteur : opts.insp || (S.f.insp ? Number(S.f.insp) : 0);
-  const act = list => list.filter(p => p.Actif !== false);
-  const durs = DUREES.includes(dur) ? DUREES : DUREES.concat([dur]).sort((a, b) => a - b);
-  const others = srcId ? rdvOf(srcId).filter(x => x.id !== id) : [];
-  openModal(`<h2>${ic('calendar')}${r ? 'Rendez-vous de prélèvement' : 'Nouveau rendez-vous'}</h2>
-    <p class="lead">${r ? `Créé ${r.Cree_le ? 'le ' + esc(fullDate(new Date(r.Cree_le * 1000))) : ''}${r.Cree_par ? ' par ' + esc(r.Cree_par) : ''}` : 'Plusieurs rendez-vous peuvent être pris le même jour, pour une même exploitation ou pour un même préleveur.'}</p>
-    <form id="rdvForm" autocomplete="off">
-      <div class="grp"><label class="lbl" for="rSrc">Exploitation<span class="hint">Tapez le nom, le PACAGE ou le n° de dossier puis choisissez dans la liste.</span></label>
-        <input class="input" id="rSrc" list="srcList" value="${esc(s ? srcLabel(s) : '')}" placeholder="Rechercher une exploitation…" required>
-        <datalist id="srcList">${S.src.map(x => `<option value="${esc(srcLabel(x))}">`).join('')}</datalist>
-        <div id="srcInfo" class="sub" style="margin-top:4px"></div></div>
+// Valeurs à écrire pour la date et l'heure, selon le type des colonnes
+function dateTimeFields(d) {
+  const out = {}, dc = M('date'), dt = colType('date'), hc = M('heure'), ht = colType('heure');
+  const [y, m, dd, h, mi] = [d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes()];
+  if (dt === 'Date') out[dc] = Date.UTC(y, m - 1, dd) / 1000;
+  else if (dt.startsWith('DateTime')) out[dc] = wallToEpoch(y, m, dd, hc ? 0 : h, hc ? 0 : mi, tzOf(dt));
+  else out[dc] = `${y}-${pad(m)}-${pad(dd)}` + (hc ? '' : ` ${pad(h)}:${pad(mi)}`);
+  if (hc && writable('heure')) {
+    const sample = S.rows.map(r => r[hc]).find(v => v !== null && v !== undefined && v !== '');
+    if (ht.startsWith('DateTime')) out[hc] = wallToEpoch(1970, 1, 1, h, mi, tzOf(ht));
+    else if (ht === 'Numeric' || ht === 'Int') out[hc] = typeof sample === 'number' && sample >= 1 ? h * 3600 + mi * 60 : (h * 60 + mi) / 1440;
+    else out[hc] = /^\d{1,2}:\d{2}:\d{2}$/.test(String(sample || '')) ? `${pad(h)}:${pad(mi)}:00` : `${pad(h)}:${pad(mi)}`;
+  }
+  return out;
+}
+function clearFields() {
+  const out = {};
+  for (const k of ['date', 'heure', 'statut']) if (writable(k)) out[M(k)] = null;
+  return out;
+}
+function personWriteValue(k, v) { return colType(k).startsWith('Ref:') ? (Number(v) || 0) : (v || null); }
+
+function openVisitForm(visitKey, opts = {}) {
+  const v = visitKey ? S.visitByKey.get(visitKey) : null;
+  let farm = v ? v.farm : (opts.farmKey ? S.farms.get(opts.farmKey) : null);
+  const d = v ? new Date(v.start) : new Date(opts.date || new Date());
+  if (!v && !opts.date) { d.setMinutes(0, 0, 0); d.setHours(Math.max(d.getHours() + 1, 8)); }
+  if (!v && d.getHours() === 0 && d.getMinutes() === 0) d.setHours(Math.max(8, S.cfg.hourStart), 0, 0, 0);
+  const dur = v ? v.duree : S.cfg.duree, durs = DUREES.includes(dur) ? DUREES : DUREES.concat([dur]).sort((a, b) => a - b);
+  const prelCh = personChoices('preleveur', v && v.prel), inspCh = personChoices('inspecteur', v && v.insp);
+  const farmLabel = f => [f.name, [f.cp, f.commune].filter(Boolean).join(' ')].filter(Boolean).join(' — ');
+  const farmsSorted = Array.from(S.farms.values()).sort((a, b) => a.name.localeCompare(b.name));
+  const ro = k => !writable(k) ? 'disabled' : '';
+  openModal(`<h2>${ic('calendar')}${v ? 'Rendez-vous de prélèvement' : 'Nouveau rendez-vous'}</h2>
+    <p class="lead">Les informations ci-dessous sont enregistrées sur chaque parcelle cochée de la table <code>${esc(S.cfg.rdvTable)}</code>.</p>
+    <form id="vForm" autocomplete="off">
+      ${v ? `<div class="grp"><div class="lbl">Exploitation</div><div class="strong" style="font-size:1.05rem">${esc(farmLabel(farm))}</div></div>`
+        : `<div class="grp"><label class="lbl" for="vFarm">Exploitation<span class="hint">Tapez le nom ou la commune puis choisissez dans la liste.</span></label>
+        <input class="input" id="vFarm" list="farmList" value="${esc(farm ? farmLabel(farm) : '')}" placeholder="Rechercher une exploitation…">
+        <datalist id="farmList">${farmsSorted.map(f => `<option value="${esc(farmLabel(f))}">`).join('')}</datalist></div>`}
+      <div id="farmInfo"></div>
+      <div class="grp"><div class="lbl">Parcelles concernées</div><div id="parcels"></div></div>
       <div class="row">
-        <div class="grp"><label class="lbl" for="rDate">Date</label><input class="input" id="rDate" type="date" value="${toInputDate(d)}" required></div>
-        <div class="grp"><label class="lbl" for="rTime">Heure</label><input class="input" id="rTime" type="time" step="300" value="${toInputTime(d)}" required></div>
-        <div class="grp"><label class="lbl" for="rDur">Durée</label><select class="select" id="rDur">${durs.map(m => `<option value="${m}" ${m === dur ? 'selected' : ''}>${m < 60 ? m + ' min' : (m / 60) + ' h'}</option>`).join('')}</select></div>
+        <div class="grp"><label class="lbl" for="vDate">Date</label><input class="input" id="vDate" type="date" value="${toInputDate(d)}" required ${ro('date')}></div>
+        <div class="grp"><label class="lbl" for="vTime">Heure</label><input class="input" id="vTime" type="time" step="300" value="${v && !v.hasTime ? '' : toInputTime(d)}" ${M('heure') ? ro('heure') : (colType('date') === 'Date' ? 'disabled' : '')}></div>
+        ${M('duree') ? `<div class="grp"><label class="lbl" for="vDur">Durée</label><select class="select" id="vDur" ${ro('duree')}>${durs.map(m => `<option value="${m}" ${m === dur ? 'selected' : ''}>${m < 60 ? m + ' min' : (m / 60) + ' h'}</option>`).join('')}</select></div>` : ''}
       </div>
       <div class="row">
-        <div class="grp"><label class="lbl" for="rPrel">Préleveur</label><select class="select" id="rPrel">${optList(peopleOpts(act(S.prel).concat(S.prel.filter(p => p.id === prel && p.Actif === false))), prel, '— À désigner —')}</select></div>
-        <div class="grp"><label class="lbl" for="rInsp">Inspecteur FranceAgriMer<span class="hint">Facultatif (contrôle)</span></label><select class="select" id="rInsp">${optList(peopleOpts(act(S.insp).concat(S.insp.filter(p => p.id === insp && p.Actif === false))), insp, '— Aucun —')}</select></div>
-        <div class="grp"><label class="lbl" for="rSt">Statut</label><select class="select" id="rSt">${optList(STATUTS.concat(r && r.Statut && !STATUTS.includes(r.Statut) ? [r.Statut] : []).map(x => [x, x]), r ? r.Statut || '' : 'Prévu', '— Non renseigné —')}</select></div>
+        ${M('preleveur') ? `<div class="grp"><label class="lbl" for="vPrel">Préleveur</label><select class="select" id="vPrel" ${ro('preleveur')}>${optList(prelCh.map(o => [o.value, o.label]), v && v.prel ? v.prel.value : (S.f.prel && S.f.prel !== '__none' ? (prelCh.find(o => o.key === S.f.prel) || {}).value : ''), '— À désigner —')}</select></div>` : ''}
+        ${M('inspecteur') ? `<div class="grp"><label class="lbl" for="vInsp">Inspecteur FranceAgriMer<span class="hint">Facultatif (contrôle)</span></label><select class="select" id="vInsp" ${ro('inspecteur')}>${optList(inspCh.map(o => [o.value, o.label]), v && v.insp ? v.insp.value : '', '— Aucun —')}</select></div>` : ''}
+        ${M('statut') ? `<div class="grp"><label class="lbl" for="vSt">Statut</label><select class="select" id="vSt" ${ro('statut')}>${optList(STATUTS.concat(v && v.statut && !STATUTS.includes(v.statut) ? [v.statut] : []).map(x => [x, x]), v ? v.statut : 'Prévu', '— Non renseigné —')}</select></div>` : ''}
       </div>
       <div id="conflicts"></div>
-      <div class="grp"><label class="lbl" for="rObj">Parcelles / objet<span class="hint">Ex. : îlot 3 – parcelle 2, contrôle FAM…</span></label><input class="input" id="rObj" value="${esc(r ? r.Objet : '')}"></div>
-      <div class="grp"><label class="lbl" for="rLieu">Lieu de rendez-vous</label><input class="input" id="rLieu" value="${esc(r ? r.Lieu : (s && col.addr ? s[col.addr] || '' : ''))}"></div>
-      <div class="grp"><label class="lbl" for="rCom">Commentaire</label><textarea class="input" id="rCom">${esc(r ? r.Commentaire : '')}</textarea></div>
-      ${others.length ? `<div class="fsec"><h3>${ic('calendar')}Autres rendez-vous de cette exploitation</h3>${others.map(miniRdv).join('')}</div>` : ''}
-    </form>`, {foot: `<div class="left">${r ? `<button class="btn danger" id="rDel">${ic('delete')}Supprimer</button><button class="btn ter" id="rDup" title="Créer un autre créneau pour la même exploitation">${ic('copy')}Autre créneau</button>` : ''}
-      <button class="btn ter" id="rFiche" ${srcId ? '' : 'disabled'}>${ic('plant')}Fiche exploitation</button></div>
-      <button class="btn ter" data-close>Annuler</button><button class="btn" id="rSave">${ic('check')}Enregistrer</button>`, wide: true});
+      ${M('remarques') ? `<div class="grp"><label class="lbl" for="vRem">Remarques RDV</label><textarea class="input" id="vRem" ${ro('remarques')}>${esc(v ? v.remarques : '')}</textarea></div>` : ''}
+    </form>`, {wide: true, foot: `<div class="left">${v ? `<button class="btn danger" id="vDel" title="Retire la date et l'heure des parcelles de ce rendez-vous">${ic('delete')}Déplanifier</button>` : ''}
+      <button class="btn ter" id="vFarmBtn">${ic('plant')}Fiche exploitation</button></div>
+      <button class="btn ter" data-close>Annuler</button><button class="btn" id="vSave">${ic('check')}Enregistrer</button>`});
 
-  const resolveSrc = () => { const v = $('#rSrc').value.trim(); const hit = S.src.find(x => srcLabel(x) === v) || S.src.find(x => norm(srcLabel(x)).includes(norm(v)) && v.length > 2); return hit || null; };
-  const refreshSrc = () => {
-    const hit = resolveSrc();
-    $('#srcInfo').innerHTML = hit ? `${ic('pin')} ${esc(col.addr ? hit[col.addr] || 'Adresse non renseignée' : '')}${srcDpt(hit) ? ' · ' + esc(srcDpt(hit)) : ''}` : ($('#rSrc').value ? '<span style="color:var(--error)">Exploitation non trouvée dans la liste</span>' : '');
-    $('#rFiche').disabled = !hit;
-    if (hit && !$('#rLieu').value && col.addr) $('#rLieu').value = hit[col.addr] || '';
+  const inVisit = new Set(v ? v.rows.map(r => r.id) : []);
+  const drawFarm = () => {
+    $('#vFarmBtn').disabled = !farm;
+    if (!farm) { $('#farmInfo').innerHTML = ''; $('#parcels').innerHTML = '<p class="sub">Choisissez d\'abord une exploitation.</p>'; return; }
+    $('#farmInfo').innerHTML = `<p class="sub" style="margin:-.5rem 0 1rem">${[farm.adresse ? ic('pin') + ' ' + esc([farm.adresse, farm.cp, farm.commune].filter(Boolean).join(' ')) : '',
+      farm.portable ? `<a href="tel:${esc(farm.portable)}">${esc(farm.portable)}</a>` : '', farm.tel ? `<a href="tel:${esc(farm.tel)}">${esc(farm.tel)}</a>` : '', farm.bassin ? 'BV ' + esc(farm.bassin) : ''].filter(Boolean).join(' · ')}</p>
+      ${farm.rows.map(r => val(r, 'observations')).filter(Boolean).length ? `<div class="alert warn"><p>${esc(Array.from(new Set(farm.rows.map(r => val(r, 'observations')).filter(Boolean))).join(' · '))}</p></div>` : ''}`;
+    $('#parcels').innerHTML = `<div class="tbl-wrap"><table class="tbl"><tbody>${farm.rows.map(r => {
+      const st = rowStart(r), here = inVisit.has(r.id), checked = here || (!v && !st && !opts.rowIds) || (opts.rowIds && opts.rowIds.includes(r.id));
+      const where = st && !here ? `<span class="badge ${stClass(val(r, 'statut'))}">déjà prévue le ${esc(shortDate(st.date))}${st.hasTime ? ' ' + hm(st.date) : ''}</span>` : '';
+      return `<tr><td style="width:2rem"><input type="checkbox" class="pchk" value="${r.id}" ${checked ? 'checked' : ''} aria-label="Inclure la parcelle"></td>
+        <td><span class="strong">${esc(parcelLabel(r))}</span><div class="sub">${esc([val(r, 'dossier') ? 'Dossier ' + val(r, 'dossier') : '', val(r, 'numPrelev') ? 'Prélèv. ' + val(r, 'numPrelev') : ''].filter(Boolean).join(' · '))}</div></td>
+        <td class="act">${where}</td></tr>`; }).join('')}</tbody></table></div>`;
+    $$('.pchk').forEach(c => c.addEventListener('change', checkConflicts));
   };
-  const when = () => { const [y, m, dd] = $('#rDate').value.split('-').map(Number), [h, mi] = $('#rTime').value.split(':').map(Number); return isNaN(y) || isNaN(h) ? null : new Date(y, m - 1, dd, h, mi); };
+  const when = () => {
+    const [y, m, dd] = ($('#vDate').value || '').split('-').map(Number); if (!y) return null;
+    const t = $('#vTime').value; const [h, mi] = t ? t.split(':').map(Number) : [0, 0];
+    return {date: new Date(y, m - 1, dd, h, mi), hasTime: !!t};
+  };
   const checkConflicts = () => {
-    const w = when(); if (!w) return;
-    const s0 = w.getTime(), s1 = s0 + Number($('#rDur').value) * 60000, pr = Number($('#rPrel').value), ins = Number($('#rInsp').value);
-    const clash = S.rdv.filter(x => x.id !== id && rdvDate(x) && !isCancelled(x.Statut) && ((pr && x.Preleveur === pr) || (ins && x.Inspecteur === ins)) && rdvDate(x).getTime() < s1 && rdvEnd(x).getTime() > s0);
-    $('#conflicts').innerHTML = clash.length ? `<div class="alert warn"><h3>Chevauchement d'horaires</h3>${clash.map(x => `<p>${hm(rdvDate(x))}–${hm(rdvEnd(x))} : ${esc(srcName(S.srcById.get(x.Exploitation)))} (${esc(x.Preleveur === pr ? personName(S.prelById.get(pr)) : personName(S.inspById.get(ins)))})</p>`).join('')}<p class="sub">Vous pouvez enregistrer quand même.</p></div>` : '';
+    const w = when(); if (!w || !w.hasTime || !$('#conflicts')) return;
+    const s0 = w.date.getTime(), s1 = s0 + (Number(($('#vDur') || {}).value) || dur) * 60000;
+    const pk = $('#vPrel') ? (prelCh.find(o => String(o.value) === $('#vPrel').value) || {}).key : null;
+    const ik = $('#vInsp') ? (inspCh.find(o => String(o.value) === $('#vInsp').value) || {}).key : null;
+    const clash = S.visits.filter(x => x !== v && x.hasTime && !isCancelled(x.statut) && ((pk && x.prel && x.prel.key === pk) || (ik && x.insp && x.insp.key === ik)) && x.start.getTime() < s1 && x.end.getTime() > s0);
+    $('#conflicts').innerHTML = clash.length ? `<div class="alert warn"><h3>Chevauchement d'horaires</h3>${clash.map(x => `<p>${hm(x.start)}–${hm(x.end)} : ${esc(x.farm.name)} (${esc(pk && x.prel && x.prel.key === pk ? x.prel.name : x.insp.name)})</p>`).join('')}<p class="sub">Vous pouvez enregistrer quand même.</p></div>` : '';
   };
-  refreshSrc(); checkConflicts();
-  $('#rSrc').addEventListener('input', refreshSrc);
-  ['#rDate', '#rTime', '#rDur', '#rPrel', '#rInsp'].forEach(sel => $(sel).addEventListener('change', checkConflicts));
-  $('#rFiche').onclick = () => { const hit = resolveSrc(); if (hit) openFiche(hit.id); };
+  drawFarm(); checkConflicts();
+  if (!v) $('#vFarm').addEventListener('input', () => {
+    const t = $('#vFarm').value.trim(); const hit = farmsSorted.find(f => farmLabel(f) === t) || null;
+    if (hit !== farm) { farm = hit; drawFarm(); }
+  });
+  ['#vDate', '#vTime', '#vDur', '#vPrel', '#vInsp'].forEach(sel => { const el = $(sel); if (el) el.addEventListener('change', checkConflicts); });
+  $('#vFarmBtn').onclick = () => { if (farm) openFarm(farm.key); };
 
-  $('#rSave').onclick = async () => {
-    const hit = resolveSrc(), w = when();
-    if (!hit) { toast('Choisissez une exploitation dans la liste.', true); $('#rSrc').focus(); return; }
-    if (!w) { toast('Date ou heure invalide.', true); return; }
-    const fields = {Exploitation: hit.id, Date_RDV: epoch(w), Duree_min: Number($('#rDur').value), Preleveur: Number($('#rPrel').value) || 0,
-      Inspecteur: Number($('#rInsp').value) || 0, Statut: $('#rSt').value || null, Objet: $('#rObj').value.trim(), Lieu: $('#rLieu').value.trim(),
-      Commentaire: $('#rCom').value.trim(), Modifie_le: epoch(new Date())};
-    const ok = await write([id ? ['UpdateRecord', T_RDV, id, fields] : ['AddRecord', T_RDV, null, fields]], id ? 'Rendez-vous mis à jour' : 'Rendez-vous créé');
-    if (!ok) return;
-    const touched = new Set([hit.id]); if (r && r.Exploitation && r.Exploitation !== hit.id) touched.add(r.Exploitation);
-    await syncSource(touched);
-    if (opts.back) opts.back(); else closeModal();
+  $('#vSave').onclick = async () => {
+    if (!farm) { toast('Choisissez une exploitation dans la liste.', true); return; }
+    const ids = $$('.pchk').filter(c => c.checked).map(c => Number(c.value));
+    if (!ids.length) { toast('Cochez au moins une parcelle.', true); return; }
+    const w = when(); if (!w) { toast('Date invalide.', true); return; }
+    const fields = dateTimeFields(w.date);
+    if (!w.hasTime && M('heure') && writable('heure')) fields[M('heure')] = null;
+    if ($('#vPrel') && writable('preleveur')) fields[M('preleveur')] = personWriteValue('preleveur', $('#vPrel').value);
+    if ($('#vInsp') && writable('inspecteur')) fields[M('inspecteur')] = personWriteValue('inspecteur', $('#vInsp').value);
+    if ($('#vSt') && writable('statut')) fields[M('statut')] = $('#vSt').value || null;
+    if ($('#vRem') && writable('remarques')) fields[M('remarques')] = $('#vRem').value.trim() || null;
+    if ($('#vDur') && writable('duree')) fields[M('duree')] = Number($('#vDur').value);
+    const acts = ids.map(id => ['UpdateRecord', S.cfg.rdvTable, id, fields]);
+    if (v) v.rows.filter(r => !ids.includes(r.id)).forEach(r => acts.push(['UpdateRecord', S.cfg.rdvTable, r.id, clearFields()]));
+    if (await write(acts, v ? 'Rendez-vous mis à jour' : 'Rendez-vous créé')) { if (opts.back) opts.back(); else closeModal(); }
   };
-  if (r) {
-    $('#rDel').onclick = async () => {
-      if ($('#rDel').dataset.confirm !== '1') { $('#rDel').dataset.confirm = '1'; $('#rDel').innerHTML = ic('warning') + 'Confirmer la suppression'; return; }
-      if (await write([['RemoveRecord', T_RDV, id]], 'Rendez-vous supprimé')) { await syncSource(new Set([r.Exploitation])); if (opts.back) opts.back(); else closeModal(); }
-    };
-    $('#rDup').onclick = () => openRdvForm(null, {srcId: r.Exploitation, date: new Date(rdvEnd(r).getTime()), duree: dur, prel: r.Preleveur, insp: r.Inspecteur, back: opts.back});
-  }
+  if (v) $('#vDel').onclick = async () => {
+    if ($('#vDel').dataset.confirm !== '1') { $('#vDel').dataset.confirm = '1'; $('#vDel').innerHTML = ic('warning') + 'Confirmer : retirer la date de ' + v.rows.length + ' parcelle(s)'; return; }
+    if (await write(v.rows.map(r => ['UpdateRecord', S.cfg.rdvTable, r.id, clearFields()]), 'Rendez-vous déplanifié')) { if (opts.back) opts.back(); else closeModal(); }
+  };
 }
-function miniRdv(r) {
-  const p = S.prelById.get(r.Preleveur), i = S.inspById.get(r.Inspecteur);
-  return `<div class="rdv-mini ${stClass(r.Statut)}" data-rdv="${r.id}" role="button" tabindex="0"><b>${esc(fullDate(rdvDate(r)))} · ${hm(rdvDate(r))}–${hm(rdvEnd(r))}</b>
-    <span class="badge ${stClass(r.Statut)}">${esc(r.Statut || 'Non renseigné')}</span>
-    ${p ? `<span class="sub">${ic('user')} ${esc(personName(p))}</span>` : ''}${i ? `<span class="sub">${ic('shield')} ${esc(personName(i))}</span>` : ''}${r.Objet ? `<span class="sub">${esc(r.Objet)}</span>` : ''}</div>`;
-}
-
-// Reporte le prochain RDV actif dans la table des exploitations (Date/heure RDV, préleveur, date de prélèvement)
-async function syncSource(ids) {
-  if (!S.cfg.sync || !S.meta[S.cfg.source]) return;
-  const c = srcCols(), now = Date.now() / 1000;
-  const writable = k => c[k] && (!c[k].isFormula || !c[k].formula.trim());
-  const actions = [];
-  for (const sid of ids) {
-    if (!S.srcById.has(sid)) continue;
-    const list = rdvOf(sid).filter(r => !isCancelled(r.Statut));
-    const done = list.filter(r => stClass(r.Statut) === 'st-fait').pop();
-    const ref = list.find(r => r.Date_RDV >= now && stClass(r.Statut) !== 'st-fait') || list[list.length - 1] || null;
-    const f = {};
-    if (writable('Date_Heure_RDV')) f.Date_Heure_RDV = ref ? ref.Date_RDV : null;
-    if (writable('Nom_du_preleveur')) f.Nom_du_preleveur = ref && S.prelById.get(ref.Preleveur) ? personName(S.prelById.get(ref.Preleveur)) : null;
-    if (writable('Date_et_heure_de_prelevement') && done) f.Date_et_heure_de_prelevement = done.Date_RDV;
-    if (Object.keys(f).length) actions.push(['UpdateRecord', S.cfg.source, sid, f]);
-  }
-  if (!actions.length) return;
-  try { await B.apply(actions); await loadData(); render(); }
-  catch (e) { console.warn(e); toast('Rendez-vous enregistré, mais la mise à jour de ' + S.cfg.source + ' a échoué.', true); }
+function miniVisit(v) {
+  return `<div class="rdv-mini ${stClass(v.statut)}" data-visit="${esc(v.key)}" role="button" tabindex="0"><b>${esc(fullDate(v.start))}${v.hasTime ? ' · ' + hm(v.start) + '–' + hm(v.end) : ''}</b>
+    <span class="badge ${stClass(v.statut)}">${esc(v.statut || 'Sans statut')}</span><span class="sub">${v.rows.length} parcelle(s)</span>
+    ${v.prel ? `<span class="sub">${ic('user')} ${esc(v.prel.name)}</span>` : ''}${v.insp ? `<span class="sub">${ic('shield')} ${esc(v.insp.name)}</span>` : ''}${v.remarques ? `<span class="sub">${esc(v.remarques)}</span>` : ''}</div>`;
 }
 
 /* ============================================================
-   FICHE EXPLOITATION (métadonnées)
+   FICHE EXPLOITATION
    ============================================================ */
+function openFarm(farmKey) {
+  const f = S.farms.get(farmKey); if (!f) return;
+  const obs = Array.from(new Set(f.rows.map(r => val(r, 'observations')).filter(Boolean)));
+  const fld = (k, v, html) => v ? `<div class="fld"><div class="k">${esc(k)}</div><div class="v">${html || esc(v)}</div></div>` : '';
+  const showCols = ['parcelle', 'surface', 'numPrelev', 'type', 'culture', 'dossier'].filter(k => M(k));
+  openModal(`<h2>${ic('plant')}${esc(f.name)}</h2>
+    <div class="fiche-head">${f.commune ? `<span class="tag">${esc(f.commune)}</span>` : ''}${f.bassin ? `<span class="tag">BV ${esc(f.bassin)}</span>` : ''}<span class="tag">${f.rows.length} parcelle(s)</span></div>
+    <section class="fsec"><h3>${ic('pin')}Coordonnées</h3><div class="fgrid">
+      ${fld('Adresse', [f.adresse, f.cp, f.commune].filter(Boolean).join(' '))}
+      ${fld('Portable', f.portable, `<a href="tel:${esc(f.portable)}">${esc(f.portable)}</a>`)}${fld('Téléphone', f.tel, `<a href="tel:${esc(f.tel)}">${esc(f.tel)}</a>`)}
+      ${fld('Bassin versant', f.bassin)}</div>
+      ${obs.length ? `<div class="alert warn" style="margin-top:1rem"><h3>Observations</h3>${obs.map(o => `<p>${esc(o)}</p>`).join('')}</div>` : ''}</section>
+    <section class="fsec"><h3>${ic('calendar')}Rendez-vous (${f.visits.length})</h3>
+      ${f.visits.length ? f.visits.map(miniVisit).join('') : '<p class="muted">Aucun rendez-vous planifié.</p>'}
+      <p><button class="btn sec" id="fPlan">${ic('add')}Planifier un rendez-vous</button></p></section>
+    <section class="fsec"><h3>${ic('plant')}Parcelles à prélever</h3>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr>${showCols.map(k => `<th>${esc(FIELD[k].label)}</th>`).join('')}<th>Rendez-vous</th>${M('preleveur') ? '<th>Préleveur</th>' : ''}<th></th></tr></thead><tbody>
+      ${f.rows.map(r => { const st = rowStart(r), p = personOf(r, 'preleveur'), fr = ficheRow(r);
+        return `<tr>${showCols.map(k => `<td>${esc(val(r, k))}</td>`).join('')}<td>${st ? esc(shortDate(st.date)) + (st.hasTime ? ' ' + hm(st.date) : '') + (val(r, 'statut') ? ` <span class="badge ${stClass(val(r, 'statut'))}">${esc(val(r, 'statut'))}</span>` : '') : '<span class="sub">À planifier</span>'}</td>
+        ${M('preleveur') ? `<td>${esc(p ? p.name : '')}</td>` : ''}<td class="act">${fr ? `<button class="btn ter" data-lab="${fr.id}" data-farm-back="${esc(f.key)}">Fiche prélèvement</button>` : ''}</td></tr>`; }).join('')}
+      </tbody></table></div></section>`, {wide: true, foot: `<button class="btn ter" data-close>Fermer</button>`});
+  const back = () => openFarm(farmKey);
+  $('#fPlan').onclick = () => openVisitForm(null, {farmKey, date: nextFreeSlot(new Date(), []), back});
+  $$('.modal [data-visit]').forEach(el => { el.onclick = e => { e.stopPropagation(); openVisitForm(el.dataset.visit, {back}); }; });
+  $$('.modal [data-lab]').forEach(el => { el.onclick = e => { e.stopPropagation(); openLabFiche(Number(el.dataset.lab), false, back); }; });
+}
+
+/* ---------- Fiche de prélèvement détaillée (ex. DATA_Lab) ---------- */
 const TRIVIAL = new Set(['', "''", '""', 'None', 'False', '0']);
 function colKind(c) {
   if (!c) return 'ro';
@@ -1002,7 +1213,7 @@ function fmtVal(v, c) {
   if (v === null || v === undefined || v === '' || isErr(v)) return '';
   const t = c ? c.type : 'Any';
   if (t === 'Bool' || typeof v === 'boolean') return v ? 'Oui' : 'Non';
-  if (typeof v === 'number' && t.startsWith('DateTime')) { const d = new Date(v * 1000); return d.toLocaleDateString('fr-FR') + ' à ' + hm(d); }
+  if (typeof v === 'number' && t.startsWith('DateTime')) { const p = partsInTz(v, tzOf(t)); return `${pad(p.d)}/${pad(p.m)}/${p.y} à ${pad(p.h)}h${pad(p.mi)}`; }
   if (typeof v === 'number' && t === 'Date') return new Date(v * 1000).toLocaleDateString('fr-FR', {timeZone: 'UTC'});
   if (Array.isArray(v)) return v[0] === 'L' ? v.slice(1).join(', ') : '';
   if (typeof v === 'number') return v.toLocaleString('fr-FR', {maximumFractionDigits: 6, useGrouping: !/GPS|dossier/i.test(c ? c.colId : '')});
@@ -1011,7 +1222,7 @@ function fmtVal(v, c) {
 function editor(k, v, c, full) {
   const t = c.type, id = 'f_' + k;
   if (t === 'Bool') return `<label class="chk"><input type="checkbox" id="${id}" data-k="${k}" ${v ? 'checked' : ''}> Oui</label>`;
-  if (t.startsWith('DateTime')) { const d = typeof v === 'number' ? new Date(v * 1000) : null; return `<input class="input" type="datetime-local" id="${id}" data-k="${k}" value="${d ? toInputDate(d) + 'T' + toInputTime(d) : ''}">`; }
+  if (t.startsWith('DateTime')) { const p = typeof v === 'number' ? partsInTz(v, tzOf(t)) : null; return `<input class="input" type="datetime-local" id="${id}" data-k="${k}" value="${p ? `${p.y}-${pad(p.m)}-${pad(p.d)}T${pad(p.h)}:${pad(p.mi)}` : ''}">`; }
   if (t === 'Date') { const d = typeof v === 'number' ? new Date(v * 1000).toISOString().slice(0, 10) : ''; return `<input class="input" type="date" id="${id}" data-k="${k}" value="${d}">`; }
   if (t === 'Numeric' || t === 'Int') return `<input class="input" type="number" step="any" id="${id}" data-k="${k}" value="${typeof v === 'number' ? v : ''}">`;
   if (t === 'Choice') { const ch = c.choices.slice(); if (v && !ch.includes(v)) ch.unshift(v); return `<select class="select" id="${id}" data-k="${k}">${optList(ch.map(x => [x, x]), v || '', '—')}</select>`; }
@@ -1021,69 +1232,43 @@ function editor(k, v, c, full) {
 function readEditor(el, c) {
   const t = c.type;
   if (t === 'Bool') return el.checked;
-  if (t.startsWith('DateTime')) return el.value ? epoch(new Date(el.value)) : null;
-  if (t === 'Date') return el.value ? Date.UTC(...el.value.split('-').map((x, i) => Number(x) - (i === 1 ? 1 : 0))) / 1000 : null;
+  if (t.startsWith('DateTime')) { if (!el.value) return null; const [a, b] = el.value.split('T'); const [y, m, d] = a.split('-').map(Number), [h, mi] = b.split(':').map(Number); return wallToEpoch(y, m, d, h, mi, tzOf(t)); }
+  if (t === 'Date') { if (!el.value) return null; const [y, m, d] = el.value.split('-').map(Number); return Date.UTC(y, m - 1, d) / 1000; }
   if (t === 'Numeric' || t === 'Int') return el.value === '' ? null : Number(el.value);
   return el.value === '' ? null : el.value;
 }
-function openFiche(srcId, editMode) {
-  const s = S.srcById.get(srcId); if (!s) return;
-  const c = srcCols(), listed = new Set();
+async function reloadFiche() { const rows = await B.fetch(S.cfg.ficheTable); S.fiche = new Map(); rows.forEach(x => { const k = clean(x[S.cfg.ficheKey]); if (k && !S.fiche.has(k)) S.fiche.set(k, x); }); return rows; }
+function openLabFiche(rowId, editMode, back) {
+  const s = Array.from(S.fiche.values()).find(x => x.id === rowId); if (!s) return;
+  const c = S.meta[S.cfg.ficheTable].cols, listed = new Set();
   const sections = FICHE_SECTIONS.map(sec => ({title: sec.title, icon: sec.icon, fields: sec.fields.filter(([k]) => { if (c[k]) { listed.add(k); return true; } return false; })}));
   const extra = Object.keys(c).filter(k => !listed.has(k) && !FICHE_HIDDEN.has(k) && !k.startsWith('gristHelper') && !isErr(s[k]) && !(c[k].isFormula && !c[k].formula.trim() && s[k] == null));
   if (extra.length) sections.push({title: 'Autres informations', icon: 'info', fields: extra.map(k => [k, c[k].label || k])});
   const consts = editMode ? Object.keys(c).filter(k => listed.has(k) && colKind(c[k]) === 'const') : [];
-  const list = rdvOf(srcId);
-  const st = s.Statut && !isErr(s.Statut) ? s.Statut : '';
   const body = sections.filter(sec => sec.fields.length).map(sec => `<section class="fsec"><h3>${ic(sec.icon)}${esc(sec.title)}</h3><div class="fgrid">
     ${sec.fields.map(([k, label, full]) => {
       const cc = c[k], kind = colKind(cc), v = s[k], f = fmtVal(v, cc);
       if (editMode && kind === 'edit') return `<div class="fld${full ? ' full' : ''}"><label class="lbl" for="f_${k}">${esc(label)}</label>${editor(k, v, cc, full)}</div>`;
       return `<div class="fld${full ? ' full' : ''}"><div class="k">${esc(label)}</div><div class="v${f ? '' : ' na'}">${esc(f || 'Non renseigné')}</div>${editMode && kind !== 'edit' ? `<div class="ro">${kind === 'const' ? 'Formule constante' : 'Calculé (formule)'}</div>` : ''}</div>`;
     }).join('')}</div></section>`).join('');
-  openModal(`<h2>${ic('plant')}${esc(srcName(s))}</h2>
-    <div class="fiche-head">${col.pacage && s[col.pacage] ? `<span class="tag">PACAGE ${esc(s[col.pacage])}</span>` : ''}${s.dossier_number ? `<span class="tag">Dossier ${esc(s.dossier_number)}</span>` : ''}${srcDpt(s) ? `<span class="tag">${esc(srcDpt(s))}</span>` : ''}${st ? `<span class="badge">${esc(st)}</span>` : ''}</div>
-    ${consts.length ? `<div class="alert warn"><p>${consts.length} champ(s) de la fiche sont des formules constantes (${esc(consts.map(k => c[k].label || k).join(', '))}) et ne peuvent pas être saisis.</p><p><button class="btn sec" id="convertBtn">Les rendre saisissables</button></p></div>` : ''}
-    <section class="fsec"><h3>${ic('calendar')}Rendez-vous de prélèvement (${list.length})</h3>
-      ${list.length ? list.map(miniRdv).join('') : '<p class="muted">Aucun rendez-vous planifié.</p>'}
-      <p><button class="btn sec" id="fPlan">${ic('add')}Planifier un rendez-vous</button></p></section>
+  openModal(`<h2>${ic('info')}Fiche de prélèvement</h2><p class="lead">Table <code>${esc(S.cfg.ficheTable)}</code> · ${esc(S.cfg.ficheKey)} ${esc(s[S.cfg.ficheKey])}</p>
+    ${consts.length ? `<div class="alert warn"><p>${consts.length} champ(s) sont des formules constantes (${esc(consts.map(k => c[k].label || k).join(', '))}) et ne peuvent pas être saisis.</p><p><button class="btn sec" id="convertBtn">Les rendre saisissables</button></p></div>` : ''}
     ${body}`, {wide: true, foot: editMode
-    ? `<button class="btn ter" id="fCancel">Annuler</button><button class="btn" id="fSave">${ic('check')}Enregistrer la fiche</button>`
-    : `<button class="btn ter" data-close>Fermer</button><button class="btn" id="fEdit">${ic('edit')}Modifier la fiche</button>`});
-  const back = () => openFiche(srcId);
-  $('#fPlan').onclick = () => openRdvForm(null, {srcId, date: nextFreeSlot(new Date(), []), back});
-  $$('.modal [data-rdv]').forEach(el => { el.onclick = e => { e.stopPropagation(); openRdvForm(Number(el.dataset.rdv), {back}); }; });
-  if (!editMode) { $('#fEdit').onclick = () => openFiche(srcId, true); return; }
-  $('#fCancel').onclick = back;
+    ? `<button class="btn ter" id="lCancel">Annuler</button><button class="btn" id="lSave">${ic('check')}Enregistrer la fiche</button>`
+    : `<div class="left">${back ? `<button class="btn ter" id="lBack">${ic('left')}Retour à l'exploitation</button>` : ''}</div><button class="btn ter" data-close>Fermer</button><button class="btn" id="lEdit">${ic('edit')}Modifier la fiche</button>`});
+  const reopen = edit => openLabFiche(rowId, edit, back);
+  if (!editMode) { $('#lEdit').onclick = () => reopen(true); if ($('#lBack')) $('#lBack').onclick = back; return; }
+  $('#lCancel').onclick = () => reopen(false);
   if ($('#convertBtn')) $('#convertBtn').onclick = async () => {
-    if (await write(consts.map(k => ['ModifyColumn', S.cfg.source, k, {isFormula: false}]), 'Colonnes converties')) openFiche(srcId, true);
+    try { await B.apply(consts.map(k => ['ModifyColumn', S.cfg.ficheTable, k, {isFormula: false}])); S.meta = await B.meta(); await reloadFiche(); toast('Colonnes converties'); reopen(true); }
+    catch (e) { toast('Échec : ' + (e.message || e), true); }
   };
-  $('#fSave').onclick = async () => {
+  $('#lSave').onclick = async () => {
     const f = {};
     $$('.modal [data-k]').forEach(el => { const k = el.dataset.k, v = readEditor(el, c[k]), old = s[k] ?? null; if (v !== old && !(v === null && old === '')) f[k] = v; });
-    if (!Object.keys(f).length) { back(); return; }
-    if (await write([['UpdateRecord', S.cfg.source, srcId, f]], 'Fiche enregistrée')) back();
-  };
-}
-
-/* ============================================================
-   PARAMÈTRES
-   ============================================================ */
-function openSettings() {
-  const tables = Object.keys(S.meta).filter(t => !S.meta[t].summary && ![T_RDV, T_PREL, T_INSP].includes(t)).sort();
-  openModal(`<h2>${ic('settings')}Paramètres</h2><p class="lead">Enregistrés dans les options du widget.</p>
-    <div class="grp"><label class="lbl" for="sSrc">Table des exploitations</label><select class="select" id="sSrc">${tables.map(t => `<option ${t === S.cfg.source ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
-      <span class="sub">Les rendez-vous existants restent liés à la table choisie lors de l'installation (colonne <code>Exploitation</code>).</span></div>
-    <label class="chk grp"><input type="checkbox" id="sSync" ${S.cfg.sync ? 'checked' : ''}> Reporter le prochain rendez-vous dans la table des exploitations (<code>Date_Heure_RDV</code>, <code>Nom_du_preleveur</code>, <code>Date_et_heure_de_prelevement</code> si réalisé)</label>
-    <div class="row">
-      <div class="grp"><label class="lbl" for="sH0">Début de journée (vue semaine)</label><input class="input" id="sH0" type="number" min="0" max="23" value="${S.cfg.hourStart}"></div>
-      <div class="grp"><label class="lbl" for="sH1">Fin de journée</label><input class="input" id="sH1" type="number" min="1" max="24" value="${S.cfg.hourEnd}"></div>
-      <div class="grp"><label class="lbl" for="sDur">Durée par défaut (min)</label><select class="select" id="sDur">${DUREES.map(m => `<option ${m === S.cfg.duree ? 'selected' : ''}>${m}</option>`).join('')}</select></div>
-    </div>`, {foot: `<button class="btn ter" data-close>Annuler</button><button class="btn" id="sSave">${ic('check')}Enregistrer</button>`});
-  $('#sSave').onclick = async () => {
-    const h0 = Math.max(0, Math.min(23, Number($('#sH0').value) || 0)), h1 = Math.max(h0 + 1, Math.min(24, Number($('#sH1').value) || 24));
-    S.cfg = Object.assign({}, S.cfg, {source: $('#sSrc').value, sync: $('#sSync').checked, hourStart: h0, hourEnd: h1, duree: Number($('#sDur').value)});
-    await B.setConfig(S.cfg); closeModal(); await boot(); toast('Paramètres enregistrés');
+    if (!Object.keys(f).length) { reopen(false); return; }
+    try { await B.apply([['UpdateRecord', S.cfg.ficheTable, rowId, f]]); await reloadFiche(); toast('Fiche enregistrée'); reopen(false); }
+    catch (e) { toast('Échec de l\'enregistrement : ' + (e.message || e), true); }
   };
 }
 
@@ -1096,7 +1281,7 @@ function openModal(html, {foot = '', wide = false} = {}) {
   $('#modalRoot').innerHTML = `<div class="overlay" id="overlay"><div class="modal${wide ? ' wide' : ''}" role="dialog" aria-modal="true">
     <div class="modal-close"><button class="btn ghost" data-close>Fermer ${ic('close')}</button></div>
     <div class="modal-body">${html}</div>${foot ? `<div class="modal-foot">${foot}</div>` : ''}</div></div>`;
-  const f = $('.modal-body input, .modal-body select, .modal-body textarea') || $('.modal [data-close]');
+  const f = $('.modal-body input:not([type=checkbox]):not([disabled]), .modal-body select:not([disabled]), .modal-body textarea') || $('.modal [data-close]');
   if (f) f.focus();
 }
 function closeModal() { $('#modalRoot').innerHTML = ''; if (lastFocus && lastFocus.focus) lastFocus.focus(); }
@@ -1117,21 +1302,22 @@ async function write(actions, okMsg) {
 document.addEventListener('click', e => {
   const t = e.target;
   if (t.closest('[data-close]') || t.id === 'overlay') { closeModal(); return; }
-  const rdv = t.closest('[data-rdv]');
-  if (rdv) { openRdvForm(Number(rdv.dataset.rdv)); return; }
+  const vis = t.closest('[data-visit]'); if (vis) { openVisitForm(vis.dataset.visit); return; }
   const more = t.closest('[data-day-more]'); if (more) { openDay(more.dataset.dayMore); return; }
-  const go = t.closest('[data-goto]'); if (go) { e.preventDefault(); S.cursor = new Date(Number(go.dataset.goto) * 1000); renderCalendar(); return; }
-  const plan = t.closest('[data-plan]'); if (plan) { e.stopPropagation(); openRdvForm(null, {srcId: Number(plan.dataset.plan), date: nextFreeSlot(new Date(), [])}); return; }
-  const fiche = t.closest('[data-fiche]'); if (fiche) { openFiche(Number(fiche.dataset.fiche)); return; }
+  const go = t.closest('[data-goto]'); if (go) { e.preventDefault(); S.cursor = new Date(Number(go.dataset.goto)); renderCalendar(); return; }
+  const plan = t.closest('[data-plan]'); if (plan) { e.stopPropagation(); openVisitForm(null, {farmKey: plan.dataset.plan, date: nextFreeSlot(new Date(), [])}); return; }
+  const farm = t.closest('[data-farm]'); if (farm) { openFarm(farm.dataset.farm); return; }
   const ep = t.closest('[data-edit-person]'); if (ep) { const [tb, id] = ep.dataset.editPerson.split(':'); openPersonForm(tb, Number(id)); return; }
-  const fp = t.closest('[data-filter-person]'); if (fp) { e.preventDefault(); const [tb, id] = fp.dataset.filterPerson.split(':'); S.f = {prel: '', insp: '', statut: '', dpt: '', q: ''}; S.f[tb === T_PREL ? 'prel' : 'insp'] = id; S.tab = 'cal'; S.view = 'list'; render(); return; }
+  const fp = t.closest('[data-filter-person]');
+  if (fp) { e.preventDefault(); const i = fp.dataset.filterPerson.indexOf('|'), tb = fp.dataset.filterPerson.slice(0, i), key = fp.dataset.filterPerson.slice(i + 1);
+    S.f = {prel: '', insp: '', statut: '', bassin: '', type: '', q: ''}; S.f[tb === T_PREL ? 'prel' : 'insp'] = key; S.tab = 'cal'; S.view = 'list'; render(); return; }
   const cell = t.closest('.cell[data-day]'); if (cell) { openDay(cell.dataset.day); return; }
   const wcol = t.closest('.wcol');
   if (wcol && t === wcol) {
-    const H = wcol.getBoundingClientRect(), hh = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--hour'), 10) || 44;
-    const mins = Math.floor((e.clientY - H.top) / hh * 60 / 30) * 30 + Number(wcol.dataset.h0) * 60;
+    const R = wcol.getBoundingClientRect(), hh = hourPx();
+    const mins = Math.floor((e.clientY - R.top) / hh * 60 / 15) * 15 + Number(wcol.dataset.h0) * 60;
     const [y, m, d] = wcol.dataset.wday.split('-').map(Number);
-    openRdvForm(null, {date: new Date(y, m - 1, d, Math.floor(mins / 60), mins % 60)});
+    openVisitForm(null, {date: new Date(y, m - 1, d, Math.floor(mins / 60), mins % 60)});
   }
 });
 document.addEventListener('keydown', e => {
@@ -1139,8 +1325,8 @@ document.addEventListener('keydown', e => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.rdv-mini, .wev')) { e.preventDefault(); e.target.click(); }
 });
 $$('.tab').forEach(b => b.onclick = () => { S.tab = b.dataset.tab; render(); });
-$('#refreshBtn').onclick = async () => { try { await loadData(); render(); toast('Données actualisées'); } catch (e) { toast(e.message || String(e), true); } };
-$('#settingsBtn').onclick = () => openSettings();
+$('#refreshBtn').onclick = async () => { if ($('#tabs').hidden) return; try { await loadData(); render(); toast('Données actualisées'); } catch (e) { toast(e.message || String(e), true); } };
+$('#settingsBtn').onclick = () => { closeModal(); renderConfig(); };
 let resizeT; window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (S.tab === 'cal' && !$('#tabs').hidden) renderCalendar(); }, 150); });
 
 /* ============================================================
@@ -1149,8 +1335,7 @@ let resizeT; window.addEventListener('resize', () => { clearTimeout(resizeT); re
 async function boot() {
   try {
     S.meta = await B.meta();
-    if (!S.meta[S.cfg.source]) { const g = Object.keys(S.meta).find(t => /lab/i.test(t)); if (g) S.cfg.source = g; }
-    if (Object.keys(missingSchema()).length) { renderSetup(); return; }
+    if (!configReady()) { renderConfig(); return; }
     await loadData();
     $('#tabs').hidden = false;
     render();
@@ -1158,7 +1343,9 @@ async function boot() {
     console.error(e);
     $('#tabs').hidden = true;
     $('#main').innerHTML = `<div class="setup"><div class="alert err"><h3>Impossible de lire le document</h3><p>${esc(e.message || e)}</p>
-      <p>Dans le panneau de droite de Grist, réglez l'<b>accès</b> du widget sur <b>« Accès complet au document »</b>, puis rechargez.</p></div></div>`;
+      <p>Dans le panneau de droite de Grist, réglez l'<b>accès</b> du widget sur <b>« Accès complet au document »</b>, puis rechargez.</p></div>
+      <p><button class="btn" id="cfgBtn">${ic('settings')}Ouvrir la configuration</button></p></div>`;
+    $('#cfgBtn').onclick = () => renderConfig();
   }
 }
 let reloadT;
@@ -1171,48 +1358,50 @@ async function start(backend) {
   await boot();
 }
 
+// Données fictives au format de la table des prélèvements (export Excel « Table3 »)
 function seedDemo() {
   const L = LocalBackend;
-  const cols = ['Pacage', 'Nom_ou_Raison_sociale', 'Adresse_complete', 'Departement', 'Code_departement', 'dossier_number', 'Date_heure_appel_1', 'Date_heure_appel_2', 'Date_heure_appel_3',
-    'Statut', 'Presence_souhaitee_de_l_agriculteur', 'Culture_en_place', 'Absence_de_fertilisation_recente', 'Nom_prenom_du_preleveur', 'Date_Heure_RDV', 'Commentaire',
-    'Date_et_heure_de_prelevement', 'Nom_du_preleveur', 'Lieu_du_depot_des_echantillons', 'GPS_LAMBERT_93_X_1_', 'GPS_LAMBERT_93_Y_1_', 'GPS_LAMBERT_93_X_2_', 'GPS_LAMBERT_93_Y_2_',
-    'Profondeur_du_sol_preleve_en_cm_', 'Type_de_sol', 'Nombre_d_horizons_preleves', 'Nature_du_couvert_en_place', 'Estimation_pierrosite_de_l_horizon_1', 'Motif_Prelevement_non_retenu', 'Etiquette_prelevement', 'Code_dpt'];
-  const types = {dossier_number: 'Numeric', Date_heure_appel_1: 'DateTime:Europe/Paris', Date_heure_appel_2: 'DateTime:Europe/Paris', Date_heure_appel_3: 'DateTime:Europe/Paris', Date_Heure_RDV: 'DateTime:Europe/Paris',
-    Date_et_heure_de_prelevement: 'DateTime:Europe/Paris', Statut: 'Choice', Profondeur_du_sol_preleve_en_cm_: 'Numeric', Nombre_d_horizons_preleves: 'Numeric', Presence_souhaitee_de_l_agriculteur: 'Choice',
-    GPS_LAMBERT_93_X_1_: 'Numeric', GPS_LAMBERT_93_Y_1_: 'Numeric'};
-  L.db.DATA_Lab = {next: 1, rows: [], cols: cols.map(id => ({id, type: types[id] || 'Text',
-    isFormula: ['Nom_ou_Raison_sociale', 'Adresse_complete', 'Departement', 'Code_departement', 'Code_dpt', 'Pacage'].includes(id) || id === 'Culture_en_place',
-    formula: id === 'Culture_en_place' ? "''" : (['Nom_ou_Raison_sociale', 'Adresse_complete', 'Departement', 'Code_departement', 'Code_dpt', 'Pacage'].includes(id) ? '$x' : ''),
-    widgetOptions: id === 'Statut' ? JSON.stringify({choices: ['À appeler', 'RDV pris', 'Prélevé', 'Refus']}) : id === 'Presence_souhaitee_de_l_agriculteur' ? JSON.stringify({choices: ['Oui', 'Non']}) : ''}))};
-  const farms = [['EARL du Vallon', 'Finistère', '29', 'Kerlaz'], ['GAEC Beau Soleil', 'Côtes-d\'Armor', '22', 'Plérin'], ['Ferme des Ajoncs', 'Morbihan', '56', 'Baud'], ['SCEA La Closerie', 'Ille-et-Vilaine', '35', 'Janzé'],
-    ['GAEC Trois Rivières', 'Finistère', '29', 'Landerneau'], ['EARL Kerangoff', 'Finistère', '29', 'Plouvien'], ['SARL Terres d\'Arvor', 'Côtes-d\'Armor', '22', 'Lamballe'], ['EARL Le Gall', 'Morbihan', '56', 'Pontivy'],
-    ['GAEC de la Lande', 'Ille-et-Vilaine', '35', 'Fougères'], ['SCEA Mor Glaz', 'Finistère', '29', 'Châteaulin'], ['EARL Ty Nevez', 'Côtes-d\'Armor', '22', 'Loudéac'], ['GAEC du Blavet', 'Morbihan', '56', 'Hennebont']];
-  farms.forEach(([n, dep, cd, ville], i) => L.db.DATA_Lab.rows.push({id: L.db.DATA_Lab.next++, Pacage: '0' + cd + '0' + (12345 + i * 97), Nom_ou_Raison_sociale: n, Adresse_complete: (i + 3) + ' lieu-dit Ker' + ['gonan', 'hoat', 'ivin', 'laouen'][i % 4] + ' ' + cd + (100 + i * 7) + ' ' + ville,
-    Departement: dep, Code_departement: cd, Code_dpt: '0' + cd, dossier_number: 24187300 + i * 13, Statut: ['RDV pris', 'À appeler', 'RDV pris', 'Prélevé'][i % 4], Type_de_sol: i % 2 ? 'Limon' : 'Limon sableux', Culture_en_place: '',
-    Lieu_du_depot_des_echantillons: i % 3 ? 'Laboratoire — point relais' : '', GPS_LAMBERT_93_X_1_: 180000 + i * 1234, GPS_LAMBERT_93_Y_1_: 6830000 + i * 987}));
-  return async () => {
-    await install();
-    const P = [['Morvan', 'Jean', 'Chambre d\'agriculture', '029, 022'], ['Le Bris', 'Anne', 'Laboratoire Agro', '056, 035'], ['Guillou', 'Sophie', 'Chambre d\'agriculture', '029']];
-    const I = [['Martin', 'Claire', 'FranceAgriMer — Rennes', '035, 022'], ['Kerdraon', 'Yann', 'FranceAgriMer — Quimper', '029, 056']];
-    await L.apply(P.map(([Nom, Prenom, Organisme, Departements]) => ['AddRecord', T_PREL, null, {Nom, Prenom, Organisme, Departements, Telephone: '06 12 34 56 7' + Nom.length, Email: Prenom.toLowerCase() + '.' + Nom.toLowerCase().replace(/\s/g, '') + '@exemple.fr', Actif: true}]));
-    await L.apply(I.map(([Nom, Prenom, Service, Departements]) => ['AddRecord', T_INSP, null, {Nom, Prenom, Service, Departements, Email: Prenom.toLowerCase() + '.' + Nom.toLowerCase() + '@franceagrimer.fr', Actif: true}]));
-    const now = new Date(), y = now.getFullYear(), m = now.getMonth(), acts = [];
-    const slots = [[2, 9, 0], [2, 10, 30], [2, 14, 0], [5, 8, 30], [6, 9, 0], [6, 9, 30], [6, 11, 0], [6, 14, 0], [9, 10, 0], [12, 9, 0], [12, 13, 30], [13, 8, 0], [16, 9, 0], [16, 10, 0], [16, 15, 0], [19, 9, 0], [20, 14, 0], [23, 9, 30], [26, 10, 0], [27, 9, 0]];
-    slots.forEach(([d, h, mi], i) => acts.push(['AddRecord', T_RDV, null, {Exploitation: (i % 12) + 1, Date_RDV: epoch(new Date(y, m, d, h, mi)), Duree_min: [60, 90, 60, 120][i % 4],
-      Preleveur: (i % 3) + 1, Inspecteur: i % 5 === 0 ? (i % 2) + 1 : 0, Statut: ['Prévu', 'À confirmer', 'Réalisé', 'Prévu', 'Annulé', 'Prévu', 'Reporté'][i % 7], Objet: 'Îlot ' + (i % 6 + 1) + ' – parcelle ' + (i % 3 + 1)}]));
-    await L.apply(acts);
-  };
+  const cols = [['N_dossier', 'N° dossier', 'Numeric'], ['Raison_Sociale', 'Raison Sociale', 'Text'], ['ilot', 'ilot', 'Text'], ['Surface', 'Surface', 'Text'],
+    ['N_prelev_', 'N° prélèv.', 'Text'], ['Type', 'Type', 'Text'], ['Culture', 'Culture', 'Text'], ['Adresse', 'Adresse', 'Text'], ['Code_Postal', 'Code Postal', 'Text'],
+    ['Commune', 'Commune', 'Text'], ['Telephone', 'Téléphone', 'Text'], ['Portable', 'Portable', 'Text'], ['Bassin_versant', 'Bassin versant', 'Text'],
+    ['Observations', 'Observations', 'Text'], ['Preleveur', 'Préleveur', 'Text'], ['Prelevement_prevu_le', 'Prélèvement prévu le', 'Date'], ['Heure', 'Heure', 'Text'], ['Remarques_RDV', 'Remarques RDV', 'Text']];
+  L.db.Table3 = {next: 1, rows: [], cols: cols.map(([id, label, type]) => ({id, label, type}))};
+  const farms = ['EARL du Vallon', 'GAEC Beau Soleil', 'Ferme des Ajoncs', 'SCEA La Closerie', 'GAEC Trois Rivières', 'EARL Kerangoff', 'SARL Terres d\'Arvor', 'EARL Le Gall',
+    'GAEC de la Lande', 'SCEA Mor Glaz', 'EARL Ty Nevez', 'GAEC du Blavet', 'EARL des Hêtres', 'GAEC Ar Menez', 'SCEA du Moulin', 'EARL Penhoat'];
+  const communes = [['22400', 'LAMBALLE-ARMOR'], ['22800', 'QUINTIN'], ['22510', 'MONCONTOUR'], ['22150', 'PLOEUC-L\'HERMITAGE'], ['29550', 'PLOMODIERN']];
+  const bv = ['GOUESSANT', 'GOUET', 'BAIE DE LA FRESNAYE', 'BAIE DE DOUARNENEZ'], cult = ['Prairie', 'Maïs', 'Céréales', 'Oléoprotéagineux'], types = ['RDD', 'RPA', 'RPR'];
+  const prel = ['LE GALL Pierre', 'MORVAN Jean', 'TANGUY Marie', '<Aucun>'], hours = ['09:00:00', '09:45:00', '10:30:00', '11:15:00', '14:00:00', '14:45:00', '15:30:00', '16:15:00'];
+  const now = new Date(), y = now.getFullYear(), m = now.getMonth();
+  let n = 0;
+  farms.forEach((name, i) => {
+    const [cp, com] = communes[i % communes.length], np = 1 + (i % 3), day = 1 + ((i * 3) % 27), planned = i % 5 !== 4;
+    for (let j = 0; j < np; j++) {
+      n++;
+      L.db.Table3.rows.push({id: L.db.Table3.next++, N_dossier: 101600 + n * 7, Raison_Sociale: name, ilot: (i + 1) + '-' + (j + 1), Surface: (1 + ((i + j) % 5) * 0.37).toFixed(2).replace('.', ',') + ' / ' + (1 + ((i + j) % 5) * 0.37).toFixed(2).replace('.', ','),
+        N_prelev_: j === 0 && i % 4 === 0 ? '1' : 'Suppl', Type: types[(i + j) % 3], Culture: cult[(i + j) % 4], Adresse: 'Lieu-dit Ker' + ['gonan', 'hoat', 'ivin', 'laouen'][i % 4], Code_Postal: cp, Commune: com,
+        Telephone: i % 2 ? '02.96.00.00.' + pad(i) : null, Portable: '06.00.00.' + pad(i) + '.' + pad(j), Bassin_versant: bv[i % 4], Observations: i % 3 === 0 ? 'APPEL AVANT PASSAGE' : null,
+        Preleveur: planned ? prel[i % 4] : null, Prelevement_prevu_le: planned && !(j === 2 && i % 2) ? Date.UTC(y, m, day + (i % 2)) / 1000 : null,
+        Heure: planned && !(j === 2 && i % 2) ? hours[(i * 3) % hours.length] : null, Remarques_RDV: null});
+    }
+  });
 }
 
 if (window.grist && window.self !== window.top) {
-  grist.ready({requiredAccess: 'full', allowSelectBy: false, onEditOptions: () => openSettings()});
+  grist.ready({requiredAccess: 'full', allowSelectBy: false, onEditOptions: () => renderConfig()});
   grist.onRecords(() => scheduleReload());
   start(GristBackend);
 } else {
   $('#demoBanner').hidden = false;
-  const fill = seedDemo();
+  seedDemo();
   B = LocalBackend;
-  fill().then(() => start(LocalBackend));
+  B.meta().then(async meta => {
+    S.meta = meta;
+    const draft = Object.assign({}, DEFAULT_CFG, {rdvTable: 'Table3', map: guessMap('Table3')});
+    await install(draft, true);
+    await B.apply([['AddRecord', T_INSP, null, {Nom: 'MARTIN', Prenom: 'Claire', Service: 'FranceAgriMer — Rennes', Departements: '22, 35', Actif: true}],
+      ['AddRecord', T_INSP, null, {Nom: 'KERDRAON', Prenom: 'Yann', Service: 'FranceAgriMer — Quimper', Departements: '29, 56', Actif: true}]]);
+    await start(LocalBackend);
+  });
 }
 })();
 </script>
