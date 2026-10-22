@@ -96,9 +96,10 @@ Charte DSFR, police Marianne. Intègre une ou plusieurs restitutions Chorus (INF
   | Rapport | Table | Clé unique par défaut |
   |---|---|---|
   | INF-BUD-41 | `DATA_INFBUD41` | Référentiel de programmation (une ligne par référentiel) |
-  | INF-BUD-53 | `INFBUD53` | Toutes les colonnes d'axe (une ligne par EJ / fournisseur / référentiel…) |
+  | INF-BUD-53 | `INFBUD53` | Toutes les colonnes d'axe (une ligne par année / centre / référentiel / EJ) |
   | Autre INF-BUD-xx | `DATA_INFBUDxx` | Référentiel de programmation |
 
+  `INFBUD53` a une structure fixe, dans cet ordre : **Année**, **Centre financier**, **Référentiel de programmation**, **N° EJ**, **Montant engagé (EUR)**, **Montant payé (EUR)**, puis la traçabilité. Les autres colonnes de l'export sont ignorées.
   Le nom de table et la clé sont modifiables dans « Tables de destination ».
 - **À l'ouverture du widget**, `DATA_INFBUD41` et `INFBUD53` sont créées si elles n'existent pas, avec leur structure standard et les colonnes de traçabilité.
 - **À l'import**, chaque table est mise à jour : une ligne dont la clé existe déjà est mise à jour, les autres sont ajoutées ; les colonnes manquantes sont ajoutées (correspondance par libellé), les colonnes formule ne sont jamais écrites ; les lignes en double ou sans clé déjà présentes sont supprimées. Les doublons d'un même fichier sont fusionnés (montants additionnés).

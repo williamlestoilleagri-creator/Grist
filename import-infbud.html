@@ -461,9 +461,14 @@ function analyzeSheet(ws, opts, override) {
     for (const r of kept) { const x = cell(r, c); if (!x) continue; ne++; if (isNumCell(x)) nn++; else if (isDateCell(x)) nd++; }
     types.push(ne && nd / ne >= 0.9 ? 'Date' : ne && nn / ne >= 0.9 ? 'Numeric' : 'Text');
   }
+  // Les axes sont à gauche des mesures dans Chorus : une colonne « numérique » placée avant un axe texte
+  // (exercice « 2026 », n° de mois…) est un axe, pas un montant
+  const hasData = c => kept.some(r => cell(r, c));
+  let lastText = -1;
+  for (let c = 0; c < W; c++) if (types[c] === 'Text' && hasData(c)) lastText = c;
+  for (let c = 0; c < lastText; c++) if (types[c] === 'Numeric') types[c] = 'Text';
   // Colonnes de mesures entièrement vides (ex. « Montant payé » pas encore alimenté) : numériques elles aussi
-  const fm0 = types.indexOf('Numeric');
-  if (fm0 >= 0) for (let c = fm0 + 1; c < W; c++) if (types[c] === 'Text' && !kept.some(r => cell(r, c))) types[c] = 'Numeric';
+  if (types.includes('Numeric')) for (let c = lastText + 1; c < W; c++) if (types[c] === 'Text' && !hasData(c)) types[c] = 'Numeric';
   const firstMeas = types.indexOf('Numeric');
 
   // Nommage des colonnes
@@ -736,20 +741,34 @@ const BASE_41 = [
   {label: 'Consommation AE (EUR)', id: 'Consommation_AE_EUR', type: 'Numeric'},
   {label: 'Consommation CP (EUR)', id: 'Consommation_CP_EUR', type: 'Numeric'},
 ];
+/** INF-BUD-53 : structure fixe, colonnes dans cet ordre ; `from` liste les en-têtes Chorus acceptés. */
 const BASE_53 = [
-  ['Exercice comptable', 'Text'], ['Centre financier', 'Text'], ['Centre financier (libellé)', 'Text'], ["Date de création de l'EJ", 'Date'],
-  ['Référentiel de programmation', 'Text'], ['Référentiel de programmation (libellé)', 'Text'],
-  ['Fournisseur titulaire principal (EJ)', 'Text'], ['Fournisseur titulaire principal (EJ) (libellé)', 'Text'],
-  ['Montant engagé (EUR)', 'Numeric'], ['Montant certifié non soldé (EUR)', 'Numeric'], ['Montant réceptionné (EUR)', 'Numeric'],
-  ['Montant pré-enregistré (EUR)', 'Numeric'], ['Montant facturé (EUR)', 'Numeric'], ['Montant payé (EUR)', 'Numeric'],
-].map(([label, type]) => ({label, type, id: toColId(label)}));
+  {label: 'Année', id: 'Annee', type: 'Text', from: ['Exercice comptable', 'Exercice', 'Année', 'Année budgétaire', 'Gestion']},
+  {label: 'Centre financier', id: 'Centre_financier', type: 'Text', from: ['Centre financier']},
+  {label: 'Référentiel de programmation', id: 'Referentiel_de_programmation', type: 'Text', from: ['Référentiel de programmation']},
+  {label: 'N° EJ', id: 'N_EJ', type: 'Text', from: ['N° EJ', 'N° d\'EJ', 'Numéro EJ', 'Numéro d\'EJ', 'No EJ', 'EJ', 'Engagement juridique', 'N° engagement juridique']},
+  {label: 'Montant engagé (EUR)', id: 'Montant_engage_EUR', type: 'Numeric', from: ['Montant engagé (EUR)', 'Montant engagé']},
+  {label: 'Montant payé (EUR)', id: 'Montant_paye_EUR', type: 'Numeric', from: ['Montant payé (EUR)', 'Montant payé']},
+];
+BASE_53.forEach(c => { c.key = normKey(c.label); c.from = c.from.map(normKey); });
+/** Schéma fixe d'une table (colonnes imposées + traçabilité). */
+function fixedSchema(base) {
+  const cols = base.map(c => ({...c}));
+  if (opts().trace) TRACE_COLS.forEach(t => cols.push({...t, key: normKey(t.label)}));
+  return cols;
+}
+/** Position, dans un fichier, de la colonne qui alimente une colonne cible. */
+function colIndex(ds, col) {
+  if (col.from) { for (const f of col.from) { const i = ds.res.names.findIndex(n => normKey(n) === f); if (i >= 0) return i; } return -1; }
+  return ds.res.names.findIndex(n => normKey(n) === col.key);
+}
 
 /* ---------------- Aiguillage par type de rapport ---------------- */
 const KEY_REF = normKey('Référentiel de programmation');
 const KEY_AXES = '__axes';
 const ROUTES = [
   {code: '41', label: 'INF-BUD-41', desc: 'Consommation des crédits', table: 'DATA_INFBUD41', key: KEY_REF, base: BASE_41},
-  {code: '53', label: 'INF-BUD-53', desc: 'Pilotage de la gestion (détail des EJ)', table: 'INFBUD53', key: KEY_AXES, base: BASE_53},
+  {code: '53', label: 'INF-BUD-53', desc: 'Pilotage de la gestion : année, centre, référentiel, EJ, engagé, payé', table: 'INFBUD53', key: KEY_AXES, base: BASE_53, fixed: true},
 ];
 /** Numéro du rapport (« 41 », « 53 »…) lu dans le titre, les filtres, l'onglet ou le nom du fichier. */
 function reportCode(ds) {
@@ -776,7 +795,7 @@ function groups() {
     if (!g.has(r.code)) g.set(r.code, {route: r, sets: []});
     g.get(r.code).sets.push(ds);
   }
-  return [...g.values()].map(x => { x.table = cleanTableName(x.route.cfg.table); x.schema = buildSchema(x.sets); return x; });
+  return [...g.values()].map(x => { x.table = cleanTableName(x.route.cfg.table); x.schema = x.route.fixed ? fixedSchema(x.route.base) : buildSchema(x.sets); return x; });
 }
 
 function buildSchema(sets) {
@@ -801,7 +820,7 @@ function valueFor(col, ds, row, i, now) {
   if (col.trace === 'sheet') return ds.sheetName;
   if (col.trace === 'title') return ds.res.title || null;
   if (col.trace === 'date') return now;
-  const idx = ds.res.names.findIndex(n => normKey(n) === col.key);
+  const idx = colIndex(ds, col);
   if (idx < 0) return null;
   const v = row[idx];
   if (v != null && col.type === 'Text' && ds.res.types[idx] !== 'Text') return ds.res.types[idx] === 'Date' ? fmtDate(v) : String(v);
@@ -834,7 +853,7 @@ function buildRecords(schema, sets, now, choice) {
   const stats = {merged: 0, replaced: 0, noKey: 0};
   for (const ds of sets) {
     const local = new Map();
-    const present = schema.filter(c => c.trace || ds.res.names.some(n => normKey(n) === c.key));
+    const present = schema.filter(c => c.trace || colIndex(ds, c) >= 0);
     ds.res.rows.forEach((row, i) => {
       const rec = {__present: new Set(present.map(c => c.id))};
       for (const c of schema) rec[c.id] = valueFor(c, ds, row, i, now);
