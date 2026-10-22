@@ -163,6 +163,7 @@
   .route .rt-name{align-self:center}
   .route .rt-name strong{display:block;color:var(--title)}
   .route .rt-name span{font-size:.8rem;color:var(--mention)}
+  .route .rt-hint{grid-column:1/-1;font-size:.8rem;color:var(--warning)}
   @media (max-width:760px){.route{grid-template-columns:1fr}}
   .empty{padding:20px;text-align:center;color:var(--mention);border:1px solid var(--border);font-size:.9rem}
 
@@ -286,7 +287,21 @@ const IC = {
 
 /* ---------------- Environnement Grist ---------------- */
 const IN_GRIST = window.parent !== window && typeof grist !== 'undefined';
-if (IN_GRIST) grist.ready({requiredAccess: 'full', allowSelectBy: false});
+if (IN_GRIST) {
+  grist.ready({requiredAccess: 'full', allowSelectBy: false});
+  // Réglages (table, regroupement) mémorisés dans les options du widget
+  grist.onOptions(o => {
+    const saved = o && o.routes;
+    if (!saved || typeof saved !== 'object') return;
+    state.cfg = state.cfg || {};
+    for (const code in saved) if (saved[code] && typeof saved[code] === 'object') state.cfg[code] = {...(state.cfg[code] || {}), ...saved[code]};
+    if (typeof render === 'function') render();
+  });
+}
+function saveCfg() {
+  if (!IN_GRIST || !grist.setOption) return;
+  grist.setOption('routes', state.cfg).catch(e => console.warn('Options non enregistrées', e));
+}
 
 function setEnv() {
   const b = $('#envBadge');
@@ -840,7 +855,18 @@ function keyCols(schema, choice) {
   const c = schema.find(x => x.key === choice && !x.trace);
   return c ? [c] : schema.filter(x => !x.trace && x.type !== 'Numeric');
 }
-const keyOf = (rec, kcs) => { const parts = kcs.map(c => keyNorm(rec[c.id])); return parts.some(Boolean) ? parts.join('\u0001') : ''; };
+/** Clé d'une ligne. Si la colonne de regroupement est vide (ex. dépense sans EJ, « # » dans Chorus),
+ *  la ligne est regroupée sur l'ensemble des axes (`fb`) pour ne pas être perdue. */
+function makeKey(get, kcs, fb) {
+  const parts = kcs.map(c => keyNorm(get(c)));
+  if (parts.some(Boolean)) return parts.join('\u0001');
+  if (!fb || !fb.length) return '';
+  const alt = fb.map(c => keyNorm(get(c)));
+  return alt.some(Boolean) ? '\u2205' + alt.join('\u0001') : '';
+}
+const keyOf = (rec, kcs, fb) => makeKey(c => rec[c.id], kcs, fb);
+/** Axes de repli quand la clé choisie n'est pas l'ensemble des axes. */
+const fallbackCols = (schema, choice) => choice && choice !== KEY_AXES ? keyCols(schema, KEY_AXES) : null;
 function keyLabel(schema, choice) {
   if (!choice) return 'aucune';
   const kcs = keyCols(schema, choice);
@@ -853,6 +879,7 @@ function keyLabel(schema, choice) {
 function buildRecords(schema, sets, now, choice) {
   const kcs = keyCols(schema, choice);
   const kc = kcs.length ? kcs : null;
+  const fb = fallbackCols(schema, choice);
   const recs = [], byKey = new Map();
   const stats = {merged: 0, replaced: 0, noKey: 0};
   for (const ds of sets) {
@@ -862,7 +889,7 @@ function buildRecords(schema, sets, now, choice) {
       const rec = {__present: new Set(present.map(c => c.id))};
       for (const c of schema) rec[c.id] = valueFor(c, ds, row, i, now);
       if (!kc) { recs.push(rec); return; }
-      const k = keyOf(rec, kcs);
+      const k = keyOf(rec, kcs, fb);
       if (!k) { stats.noKey++; return; }
       const same = local.get(k);
       if (same) {
@@ -981,15 +1008,24 @@ function routesHtml(gs) {
     const n = g.sets.length ? buildRecords(g.schema, g.sets, 0, r.cfg.key).recs.length : 0;
     const cands = g.schema.filter(c => !c.trace && c.type !== 'Numeric');
     const opt = (v, l) => `<option value="${esc(v)}" ${r.cfg.key === v ? 'selected' : ''}>${esc(l)}</option>`;
-    const keySel = opt(KEY_AXES, 'Toutes les colonnes d\'axe (une ligne par combinaison)') +
-      (cands.some(c => c.key === KEY_REF) || !cands.length ? opt(KEY_REF, 'Référentiel de programmation') : '') +
-      cands.filter(c => c.key !== KEY_REF).map(c => opt(c.key, c.label)).join('') + opt('', 'Aucune');
+    const axes = keyCols(g.schema, KEY_AXES);
+    const lc = l => l.charAt(0).toLowerCase() + l.slice(1);
+    // Colonnes de clé en premier (N° EJ, fournisseur…), puis les autres axes
+    const hasParts = cands.some(c => c.keyPart);
+    const order = hasParts
+      ? cands.filter(c => c.keyPart && c.key !== KEY_REF && c.id !== 'Annee').sort((a, b) => (b.id === 'N_EJ') - (a.id === 'N_EJ'))
+      : cands.filter(c => c.key !== KEY_REF);
+    const keySel = opt(KEY_AXES, axes.length ? `Détail : une ligne par ${axes.map(c => lc(c.label)).join(' × ')}` : 'Détail : une ligne par combinaison d\'axes') +
+      order.map(c => opt(c.key, `Une ligne par ${lc(c.label)} (montants additionnés)`)).join('') +
+      (cands.some(c => c.key === KEY_REF) || !cands.length ? opt(KEY_REF, 'Une ligne par référentiel de programmation (montants additionnés)') : '') +
+      opt('', 'Aucun regroupement (lignes telles qu\'exportées)');
     return `<div class="route">
-      <div class="rt-name"><strong>${esc(r.label)}</strong><span>${esc(r.desc)}${g.sets.length ? ` · ${plural(g.sets.length, 'fichier')} · ${plural(n, 'ligne')}` : ''}</span></div>
+      <div class="rt-name"><strong>${esc(r.label)}</strong><span>${esc(r.desc)}${g.sets.length ? ` · ${plural(g.sets.length, 'fichier')} · <strong style="display:inline;color:var(--bf)">${plural(n, 'ligne')} après regroupement</strong>` : ''}</span></div>
       <div class="field"><label for="rt-t-${esc(r.code)}">Table Grist</label>
         <input class="input" id="rt-t-${esc(r.code)}" data-route="${esc(r.code)}" data-field="table" value="${esc(r.cfg.table)}" spellcheck="false" autocomplete="off"></div>
-      <div class="field"><label for="rt-k-${esc(r.code)}">Clé unique</label>
+      <div class="field"><label for="rt-k-${esc(r.code)}">Regroupement des lignes</label>
         <select class="input" id="rt-k-${esc(r.code)}" data-route="${esc(r.code)}" data-field="key">${keySel}</select></div>
+      ${r.cfg.key !== r.key ? `<p class="rt-hint">Regroupement différent du réglage habituel : si la table contient déjà des lignes regroupées autrement, choisissez « Vider les tables concernées puis importer » pour éviter les doubles comptes.</p>` : ''}
     </div>`;
   }).join('');
 }
@@ -1157,12 +1193,13 @@ async function importGroup(g, mode, now, progress) {
     // Mise à jour sur la clé ; doublons et lignes sans clé déjà présents dans la table supprimés
     const data = await grist.docApi.fetchTable(tableId);
     const ids = data.id || [];
-    const keyAt = i => { const parts = kcs.map(c => keyNorm((data[colMap.get(c.id)] || [])[i])); return parts.some(Boolean) ? parts.join('\u0001') : ''; };
+    const fb = (fallbackCols(schema, choice) || []).filter(c => colMap.has(c.id));
+    const keyAt = i => makeKey(c => (data[colMap.get(c.id)] || [])[i], kcs, fb);
     const known = new Map(), toRemove = [];
     ids.forEach((id, i) => { const k = keyAt(i); if (!k || known.has(k)) toRemove.push(id); else known.set(k, id); });
     const upd = [];
     toAdd = [];
-    for (const r of recs) { const id = known.get(keyOf(r, kcs)); if (id) upd.push([id, r]); else toAdd.push(r); }
+    for (const r of recs) { const id = known.get(keyOf(r, kcs, fb)); if (id) upd.push([id, r]); else toAdd.push(r); }
     for (let i = 0; i < toRemove.length; i += 2000) await grist.docApi.applyUserActions([['BulkRemoveRecord', tableId, toRemove.slice(i, i + 2000)]]);
     cleaned = toRemove.length;
     let done = 0;
@@ -1260,6 +1297,7 @@ $('#routes').addEventListener('change', e => {
   const r = routeFor(el.dataset.route);
   if (el.dataset.field === 'table') r.cfg.table = cleanTableName(el.value);
   if (el.dataset.field === 'key') r.cfg.key = el.value;
+  saveCfg();
   render();
   if (el.dataset.field === 'table' && ROUTES.some(x => x.code === r.code)) ensureTables();
 });
