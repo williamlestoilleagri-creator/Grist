@@ -149,6 +149,8 @@
   thead th .ty{display:block;font-weight:400;font-size:.7rem;color:var(--mention);font-family:var(--mono)}
   tbody tr:nth-child(even) td{background:var(--alt)}
   td.num{text-align:right;font-variant-numeric:tabular-nums}
+  tbody tr.miss td,tbody tr.miss:nth-child(even) td{background:var(--error-bg)}
+  td.missing{color:var(--error);font-weight:700}
   td.null{color:var(--disabled)}
   th.num{text-align:right}
 
@@ -768,6 +770,24 @@ const BASE_53 = [
   {label: 'Montant payé (EUR)', id: 'Montant_paye_EUR', type: 'Numeric', from: ['Montant payé (EUR)', 'Montant payé']},
 ];
 BASE_53.forEach(c => { c.key = normKey(c.label); c.from = c.from.map(normKey); });
+/** Lignes à contrôler : sans N° EJ ou sans N° de tiers fournisseur (vide ou « # » dans Chorus). */
+const ALIAS_EJ = BASE_53.find(c => c.id === 'N_EJ').from;
+const ALIAS_FRS = BASE_53.find(c => c.id === 'N_fournisseur').from;
+function missingCols(r) {
+  const find = al => { for (const a of al) { const i = r.names.findIndex(n => normKey(n) === a); if (i >= 0) return i; } return -1; };
+  return {ej: find(ALIAS_EJ), frs: find(ALIAS_FRS)};
+}
+const isMissing = v => v == null || v === '#' || String(v).trim() === '';
+function rowMissing(row, mc) {
+  return {ej: mc.ej >= 0 && isMissing(row[mc.ej]), frs: mc.frs >= 0 && isMissing(row[mc.frs])};
+}
+function countMissing(r) {
+  const mc = missingCols(r);
+  if (mc.ej < 0 && mc.frs < 0) return null;
+  let ej = 0, frs = 0, any = 0;
+  for (const row of r.rows) { const m = rowMissing(row, mc); if (m.ej) ej++; if (m.frs) frs++; if (m.ej || m.frs) any++; }
+  return {ej, frs, any, mc};
+}
 /** Schéma fixe d'une table (colonnes imposées + traçabilité). */
 function fixedSchema(base) {
   const cols = base.map(c => ({...c}));
@@ -785,7 +805,7 @@ const KEY_REF = normKey('Référentiel de programmation');
 const KEY_AXES = '__axes';
 const ROUTES = [
   {code: '41', label: 'INF-BUD-41', desc: 'Consommation des crédits', table: 'DATA_INFBUD41', key: KEY_REF, base: BASE_41},
-  {code: '53', label: 'INF-BUD-53', desc: 'Pilotage de la gestion : année, fournisseur, EJ, référentiel, engagé, payé', table: 'INFBUD53', key: KEY_AXES, base: BASE_53, fixed: true},
+  {code: '53', alerts: true, label: 'INF-BUD-53', desc: 'Pilotage de la gestion : année, fournisseur, EJ, référentiel, engagé, payé', table: 'INFBUD53', key: KEY_AXES, base: BASE_53, fixed: true},
 ];
 /** Numéro du rapport (« 41 », « 53 »…) lu dans le titre, les filtres, l'onglet ou le nom du fichier. */
 function reportCode(ds) {
@@ -938,20 +958,25 @@ function statBadges(r) {
   if (r.filledDown) b.push(`<span class="badge info sm">${plural(r.filledDown, 'libellé recopié', 'libellés recopiés')}</span>`);
   if (r.stripped) b.push(`<span class="badge info sm">${plural(r.stripped, 'préfixe retiré', 'préfixes retirés')}</span>`);
   if (r.consts && r.consts.length) b.push(...r.consts.map(k => `<span class="badge info sm">${esc(k.label)} : ${esc(k.value)}</span>`));
+  const miss = countMissing(r);
+  if (miss && miss.any) b.push(`<span class="badge error sm" title="${esc([miss.ej ? plural(miss.ej, 'ligne sans N° EJ', 'lignes sans N° EJ') : '', miss.frs ? plural(miss.frs, 'ligne sans N° fournisseur', 'lignes sans N° fournisseur') : ''].filter(Boolean).join(' · '))}">${plural(miss.any, 'ligne à contrôler', 'lignes à contrôler')} (sans EJ / fournisseur)</span>`);
   if (r.badNum) b.push(`<span class="badge error sm">${plural(r.badNum, 'montant illisible', 'montants illisibles')}</span>`);
   return b.join('');
 }
 
-function previewTable(r) {
+function previewTable(r, ds) {
   const typeLbl = {Text: 'Texte', Numeric: 'Numérique', Date: 'Date'};
   const head = r.names.map((n, i) => `<th scope="col" class="${r.types[i] === 'Numeric' ? 'num' : ''}">${esc(n)}<span class="ty">${typeLbl[r.types[i]]}</span></th>`).join('');
-  const body = r.rows.slice(0, 50).map(row => '<tr>' + row.map((v, i) => {
+  const mc = missingCols(r);
+  const rows = ds && ds.onlyMissing ? r.rows.filter(row => { const m = rowMissing(row, mc); return m.ej || m.frs; }) : r.rows;
+  const body = rows.slice(0, 50).map(row => { const m = rowMissing(row, mc); return `<tr class="${m.ej || m.frs ? 'miss' : ''}">` + row.map((v, i) => {
+    if ((i === mc.ej && m.ej) || (i === mc.frs && m.frs)) return '<td class="missing">Manquant</td>';
     if (v == null) return '<td class="null">—</td>';
     if (r.types[i] === 'Numeric') return `<td class="num">${fmtNum(v)}</td>`;
     if (r.types[i] === 'Date') return `<td>${fmtDate(v)}</td>`;
     return `<td>${esc(v)}</td>`;
-  }).join('') + '</tr>').join('');
-  const more = r.rows.length > 50 ? `<p class="muted" style="font-size:.8rem">Aperçu des 50 premières lignes sur ${fmtInt(r.rows.length)}.</p>` : '';
+  }).join('') + '</tr>'; }).join('');
+  const more = rows.length > 50 ? `<p class="muted" style="font-size:.8rem">Aperçu des 50 premières lignes sur ${fmtInt(rows.length)}.</p>` : '';
   return `<div class="tbl-wrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>${more}`;
 }
 
@@ -995,7 +1020,8 @@ function card(ds) {
         ${r && r.headerXl.length ? `<p class="muted" style="font-size:.85rem;padding-bottom:6px">En-têtes lus ligne${r.headerXl.length > 1 ? 's' : ''} ${r.headerXl.join(', ')}.</p>` : ''}
       </div>
       ${r && r.meta.length ? `<p style="font-size:.85rem"><strong>Titre et filtres retirés :</strong> ${r.meta.map(esc).join(' — ')}</p>` : ''}
-      ${r && r.rows.length ? previewTable(r) : ''}
+      ${r && countMissing(r) && countMissing(r).any ? `<label class="check"><input type="checkbox" data-act="onlymiss" data-id="${ds.id}" ${ds.onlyMissing ? 'checked' : ''}><span>Afficher seulement les lignes sans N° EJ ou sans N° fournisseur <small>en rouge dans l'aperçu et dans la table Grist</small></span></label>` : ''}
+      ${r && r.rows.length ? previewTable(r, ds) : ''}
       ${r ? droppedList(r) : ''}
     </div>
   </article>`;
@@ -1120,12 +1146,54 @@ async function ensureTables() {
       await grist.docApi.applyUserActions([['AddTable', table, [...r.base, ...TRACE_COLS].map(colInfo)]]);
       created.push({r, table});
     }
+    for (const {r, table} of targets) if (r.alerts) { try { await ensureAlerts(table); } catch (e) { console.warn('Mise en forme conditionnelle', e); } }
     box.innerHTML = created.length ? `<div class="alert success"><h3>${created.length > 1 ? 'Tables créées' : 'Table créée'}</h3><ul>${created.map(c => `<li><strong class="mono">${esc(c.table)}</strong> : ${esc(c.r.label)}, ${plural(c.r.base.length + TRACE_COLS.length, 'colonne')}</li>`).join('')}</ul><p>Les colonnes propres à d'autres variantes du rapport seront ajoutées automatiquement à l'import.</p></div>` : '';
   } catch (e) {
     console.error(e);
     box.innerHTML = `<div class="alert warning"><h3>Les tables n'ont pas pu être créées</h3><p>Le widget doit disposer de l'<strong>accès complet au document</strong> (panneau de droite → Accès). ${esc(e.message || '')}</p><div class="btns" style="margin-top:8px"><button class="btn sec sm" id="btnRetry">Réessayer</button></div></div>`;
     $('#btnRetry').addEventListener('click', ensureTables);
   }
+}
+
+/** Table INF-BUD-53 : colonne « Contrôle » et cellules en rouge quand le N° EJ ou le N° fournisseur manque. */
+const ALERT_STYLE = {fillColor: '#FFE9E9', textColor: '#CE0500', fontBold: true};
+const CONTROL_FORMULA = 'manque = []\nif not $N_EJ: manque.append("EJ")\nif not $N_fournisseur: manque.append("n° fournisseur")\nreturn ("Sans " + " ni ".join(manque)) if manque else ""';
+async function ensureAlerts(tableId) {
+  const cols = async () => {
+    const T = await grist.docApi.fetchTable('_grist_Tables');
+    const tRef = T.id[T.tableId.findIndex(t => t === tableId)];
+    const C = await grist.docApi.fetchTable('_grist_Tables_column');
+    const out = {};
+    C.id.forEach((id, i) => { if (C.parentId[i] === tRef) out[C.colId[i]] = {id, rules: C.rules ? C.rules[i] : null, widgetOptions: C.widgetOptions ? C.widgetOptions[i] : ''}; });
+    return out;
+  };
+  let c = await cols();
+  if (!c.N_EJ || !c.N_fournisseur) return false;
+  if (!c.Controle) {
+    await grist.docApi.applyUserActions([['AddColumn', tableId, 'Controle', {label: 'Contrôle', type: 'Text', isFormula: true, formula: CONTROL_FORMULA}]]);
+    c = await cols();
+  }
+  const targets = [['N_EJ', 'not $N_EJ'], ['N_fournisseur', 'not $N_fournisseur'], ['Controle', 'bool($Controle)']];
+  for (const [colId, formula] of targets) {
+    const col = c[colId];
+    if (!col) continue;
+    const has = Array.isArray(col.rules) && col.rules.length > 1;
+    if (has) continue;
+    await grist.docApi.applyUserActions([['AddEmptyRule', tableId, 0, col.id]]);
+    const after = (await cols())[colId];
+    const ruleRef = Array.isArray(after.rules) ? after.rules[after.rules.length - 1] : null;
+    if (!ruleRef) continue;
+    const C = await grist.docApi.fetchTable('_grist_Tables_column');
+    const helper = C.colId[C.id.indexOf(ruleRef)];
+    let wo = {};
+    try { wo = JSON.parse(after.widgetOptions || '{}') || {}; } catch (e) { wo = {}; }
+    wo.rulesOptions = [ALERT_STYLE];
+    await grist.docApi.applyUserActions([
+      ['ModifyColumn', tableId, helper, {formula}],
+      ['UpdateRecord', '_grist_Tables_column', col.id, {widgetOptions: JSON.stringify(wo)}],
+    ]);
+  }
+  return true;
 }
 
 /** Écrit un groupe de fichiers dans sa table : création, colonnes manquantes, mise à jour sur la clé. */
@@ -1233,6 +1301,9 @@ async function importGroup(g, mode, now, progress) {
   if (stats.merged) warn.push(`${plural(stats.merged, 'doublon fusionné', 'doublons fusionnés')} (montants additionnés).`);
   if (stats.noKey) warn.push(`${plural(stats.noKey, 'ligne sans clé ignorée', 'lignes sans clé ignorées')}.`);
   if (cleaned) warn.push(`${plural(cleaned, 'ligne en double ou sans clé supprimée', 'lignes en double ou sans clé supprimées')} de la table.`);
+  if (g.route.alerts) {
+    try { await ensureAlerts(tableId); } catch (e) { console.warn(e); warn.push('Mise en forme rouge non appliquée : ' + esc(e.message || e) + '. La colonne « Contrôle » permet de filtrer les lignes sans EJ ou sans fournisseur.'); }
+  }
   return {tableId, created, added: toAdd.length, updated, removed, warn, key: keyLabel(schema, choice)};
 }
 
@@ -1287,6 +1358,7 @@ $('#files').addEventListener('change', e => {
   const el = e.target.closest('[data-act]'); if (!el) return;
   const ds = state.datasets.find(d => d.id === +el.dataset.id); if (!ds) return;
   if (el.dataset.act === 'skip') ds.skip = !el.checked;
+  if (el.dataset.act === 'onlymiss') ds.onlyMissing = el.checked;
   if (el.dataset.act === 'start') { const v = parseInt(el.value, 10); ds.override = v > 0 ? v : null; reanalyze(ds); }
   render();
 });

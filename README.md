@@ -100,6 +100,7 @@ Charte DSFR, police Marianne. Intègre une ou plusieurs restitutions Chorus (INF
   | Autre INF-BUD-xx | `DATA_INFBUDxx` | Référentiel de programmation |
 
   `INFBUD53` a une structure fixe, dans cet ordre : **Année**, **N° fournisseur**, **Nom fournisseur**, **N° EJ**, **Référentiel de programmation**, **Libellé référentiel**, **Montant engagé (EUR)**, **Montant payé (EUR)**, puis la traçabilité. Les lignes « Résultat » (sous-totaux) sont exclues et « # » (non affecté) devient vide. Les autres colonnes de l'export sont ignorées.
+  **Lignes à contrôler** : dans `INFBUD53`, les cellules N° EJ et N° fournisseur vides (« # » dans Chorus) sont en rouge (mise en forme conditionnelle posée par le widget) et une colonne formule **Contrôle** indique « Sans EJ », « Sans n° fournisseur » ou « Sans EJ ni n° fournisseur » pour filtrer. Dans l'aperçu du widget, ces lignes sont surlignées en rouge, avec un filtre « seulement les lignes à contrôler ».
   **Regroupement des lignes** (au choix, par table, mémorisé dans les options du widget) : détail (une ligne par année × fournisseur × EJ × référentiel), une ligne par **N° EJ**, par fournisseur ou par référentiel (montants additionnés), ou aucun regroupement. Les dépenses sans EJ (« # ») ne sont pas perdues : elles sont regroupées sur les autres axes.
   Le nom de table et la clé sont modifiables dans « Tables de destination ».
 - **À l'ouverture du widget**, `DATA_INFBUD41` et `INFBUD53` sont créées si elles n'existent pas, avec leur structure standard et les colonnes de traçabilité.
