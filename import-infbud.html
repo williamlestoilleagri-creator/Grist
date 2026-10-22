@@ -744,11 +744,11 @@ const BASE_41 = [
 /** INF-BUD-53 : structure fixe, colonnes dans cet ordre ; `from` liste les en-têtes Chorus acceptés. */
 const BASE_53 = [
   {label: 'Année', id: 'Annee', type: 'Text', keyPart: true, from: ['Exercice comptable', 'Exercice', 'Année', 'Année budgétaire', 'Gestion']},
-  {label: 'Centre financier', id: 'Centre_financier', type: 'Text', keyPart: true, from: ['Centre financier']},
-  {label: 'Référentiel de programmation', id: 'Referentiel_de_programmation', type: 'Text', keyPart: true, from: ['Référentiel de programmation']},
-  {label: 'N° EJ', id: 'N_EJ', type: 'Text', keyPart: true, from: ['N° EJ', 'N° d\'EJ', 'Numéro EJ', 'Numéro d\'EJ', 'No EJ', 'EJ', 'Engagement juridique', 'N° engagement juridique']},
   {label: 'N° fournisseur', id: 'N_fournisseur', type: 'Text', keyPart: true, from: ['Fournisseur titulaire principal (EJ)', 'Fournisseur titulaire principal', 'Fournisseur titulaire', 'Fournisseur', 'N° fournisseur', 'Code fournisseur', 'Tiers', 'Bénéficiaire']},
   {label: 'Nom fournisseur', id: 'Nom_fournisseur', type: 'Text', from: ['Fournisseur titulaire principal (EJ) (libellé)', 'Fournisseur titulaire principal (libellé)', 'Fournisseur titulaire (libellé)', 'Fournisseur (libellé)', 'Nom fournisseur', 'Nom du fournisseur', 'Raison sociale', 'Tiers (libellé)', 'Bénéficiaire (libellé)']},
+  {label: 'N° EJ', id: 'N_EJ', type: 'Text', keyPart: true, from: ['N° EJ', 'N° d\'EJ', 'Numéro EJ', 'Numéro d\'EJ', 'No EJ', 'EJ', 'Engagement juridique', 'N° engagement juridique']},
+  {label: 'Référentiel de programmation', id: 'Referentiel_de_programmation', type: 'Text', keyPart: true, from: ['Référentiel de programmation']},
+  {label: 'Libellé référentiel', id: 'Libelle_referentiel', type: 'Text', from: ['Référentiel de programmation (libellé)', 'Libellé référentiel', 'Libellé du référentiel']},
   {label: 'Montant engagé (EUR)', id: 'Montant_engage_EUR', type: 'Numeric', from: ['Montant engagé (EUR)', 'Montant engagé']},
   {label: 'Montant payé (EUR)', id: 'Montant_paye_EUR', type: 'Numeric', from: ['Montant payé (EUR)', 'Montant payé']},
 ];
@@ -770,7 +770,7 @@ const KEY_REF = normKey('Référentiel de programmation');
 const KEY_AXES = '__axes';
 const ROUTES = [
   {code: '41', label: 'INF-BUD-41', desc: 'Consommation des crédits', table: 'DATA_INFBUD41', key: KEY_REF, base: BASE_41},
-  {code: '53', label: 'INF-BUD-53', desc: 'Pilotage de la gestion : année, centre, référentiel, EJ, fournisseur, engagé, payé', table: 'INFBUD53', key: KEY_AXES, base: BASE_53, fixed: true},
+  {code: '53', label: 'INF-BUD-53', desc: 'Pilotage de la gestion : année, fournisseur, EJ, référentiel, engagé, payé', table: 'INFBUD53', key: KEY_AXES, base: BASE_53, fixed: true},
 ];
 /** Numéro du rapport (« 41 », « 53 »…) lu dans le titre, les filtres, l'onglet ou le nom du fichier. */
 function reportCode(ds) {
@@ -825,6 +825,7 @@ function valueFor(col, ds, row, i, now) {
   const idx = colIndex(ds, col);
   if (idx < 0) return null;
   const v = row[idx];
+  if (v === '#') return null; // « # » = non affecté dans Chorus
   if (v != null && col.type === 'Text' && ds.res.types[idx] !== 'Text') return ds.res.types[idx] === 'Date' ? fmtDate(v) : String(v);
   return v;
 }
