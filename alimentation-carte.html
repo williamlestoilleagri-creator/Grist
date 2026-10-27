@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alimentation de la carte</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<style>
+  :root{
+    --bg:#F5F4F0; --surface:#FFFFFF; --ink:#1B1B1E; --ink-soft:#65656B; --border:#E2E0D8;
+    --primary:#000091; --primary-soft:#E5E5FB; --success:#18753C; --success-soft:#E2F3E8;
+    --error:#CE0500; --error-soft:#FEE9E9; --radius:10px;
+    --font:'Marianne','Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#18181B; --surface:#232327; --ink:#EDEDED; --ink-soft:#A1A1AA; --border:#3A3A40;
+      --primary:#8585F6; --primary-soft:#2A2A4A; --success:#3FBF6E; --success-soft:#1C3325;
+      --error:#FF6F6B; --error-soft:#3A1F1F;
+    }
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--ink); font:14px/1.45 var(--font); }
+  button,select,input{ font:inherit; color:inherit; }
+  .wrap{ max-width:720px; margin:0 auto; padding:16px; }
+  h1{ font-size:17px; margin:0 0 2px; }
+  .sub{ color:var(--ink-soft); font-size:12.5px; margin-bottom:14px; }
+  .card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin-bottom:12px; }
+  .grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:520px){ .grid{ grid-template-columns:1fr; } }
+  label.f{ display:block; font-size:12px; font-weight:600; color:var(--ink-soft); margin-bottom:4px; }
+  select{ width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:6px; background:var(--surface); }
+  .opts{ display:flex; flex-direction:column; gap:6px; margin-top:12px; font-size:13px; }
+  .opts label{ display:flex; gap:8px; align-items:center; cursor:pointer; }
+  .btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; width:100%;
+        padding:12px 16px; border:0; border-radius:8px; background:var(--primary); color:#fff;
+        font-weight:600; font-size:15px; cursor:pointer; }
+  .btn:disabled{ opacity:.5; cursor:not-allowed; }
+  .btn.secondary{ background:transparent; color:var(--primary); border:1px solid var(--primary); font-size:13px; padding:8px 12px; width:auto; }
+  .stats{ display:flex; gap:16px; flex-wrap:wrap; font-size:13px; margin-bottom:8px; }
+  .stats b{ font-size:18px; display:block; }
+  .list{ max-height:220px; overflow:auto; border-top:1px solid var(--border); margin-top:6px; padding-top:6px; font-size:12.5px; }
+  .list div{ padding:3px 0; border-bottom:1px dashed var(--border); display:flex; justify-content:space-between; gap:8px; }
+  .list .tag{ color:var(--ink-soft); white-space:nowrap; }
+  .msg{ padding:10px 12px; border-radius:8px; font-size:13px; margin-top:10px; display:none; }
+  .msg.ok{ display:block; background:var(--success-soft); color:var(--success); }
+  .msg.err{ display:block; background:var(--error-soft); color:var(--error); }
+  .row{ display:flex; justify-content:space-between; align-items:center; gap:8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🗺️ Alimentation de la carte</h1>
+  <div class="sub">Choisissez l'année et la campagne, puis remplissez <code>DATA_Carte</code> en un clic.</div>
+
+  <div class="card">
+    <div class="grid">
+      <div>
+        <label class="f" for="annee">Année</label>
+        <select id="annee"></select>
+      </div>
+      <div>
+        <label class="f" for="campagne">Campagne</label>
+        <select id="campagne"></select>
+      </div>
+    </div>
+    <div class="opts">
+      <label><input type="checkbox" id="participants"> Uniquement les établissements ayant participé (saisie de résultats)</label>
+      <label><input type="radio" name="mode" value="replace" checked> Remplacer le contenu actuel de la carte</label>
+      <label><input type="radio" name="mode" value="append"> Ajouter à la carte (sans doublons)</label>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div class="stats">
+        <div><b id="nbSel">–</b>établissements sélectionnés</div>
+        <div><b id="nbCarte">–</b>déjà sur la carte</div>
+      </div>
+      <button class="btn secondary" id="refresh" title="Relire les tables">↻ Actualiser</button>
+    </div>
+    <div class="list" id="list"></div>
+  </div>
+
+  <button class="btn" id="go" disabled>▶ Alimenter la carte</button>
+  <div class="msg" id="msg"></div>
+</div>
+
+<script>
+  // Noms des tables / colonnes du document
+  var T = {
+    carte: 'DATA_Carte', carteRef: 'Etablissement',
+    inscrits: 'DATA_Inscrits', annee: 'Liste_Annee', campagne: 'Liste_Campagne'
+  };
+
+  var state = { annees: [], campagnes: [], inscrits: [], carte: [] };
+  var $ = function (id) { return document.getElementById(id); };
+
+  function rows(data) {
+    var keys = Object.keys(data), n = (data.id || []).length, out = [];
+    for (var i = 0; i < n; i++) {
+      var r = {};
+      keys.forEach(function (k) { r[k] = data[k][i]; });
+      out.push(r);
+    }
+    return out;
+  }
+
+  function showMsg(text, kind) {
+    var m = $('msg');
+    m.className = 'msg ' + (kind || '');
+    m.textContent = text;
+  }
+
+  async function load() {
+    showMsg('', '');
+    try {
+      var res = await Promise.all([
+        grist.docApi.fetchTable(T.annee),
+        grist.docApi.fetchTable(T.campagne),
+        grist.docApi.fetchTable(T.inscrits),
+        grist.docApi.fetchTable(T.carte)
+      ]);
+      state.annees = rows(res[0]).sort(function (a, b) { return (b.Annee || 0) - (a.Annee || 0); });
+      state.campagnes = rows(res[1]);
+      state.inscrits = rows(res[2]);
+      state.carte = rows(res[3]);
+    } catch (e) {
+      showMsg('Lecture impossible : ' + (e.message || e) +
+        '. Vérifiez que le widget a l\'accès « complet au document ».', 'err');
+      return;
+    }
+    fillAnnees();
+  }
+
+  function fillAnnees() {
+    var sel = $('annee'), prev = sel.value;
+    sel.innerHTML = '';
+    state.annees.forEach(function (a) {
+      sel.add(new Option(a.Annee, a.id));
+    });
+    if (prev && state.annees.some(function (a) { return String(a.id) === prev; })) sel.value = prev;
+    fillCampagnes();
+  }
+
+  function fillCampagnes() {
+    var sel = $('campagne'), prev = sel.value, anneeId = Number($('annee').value);
+    sel.innerHTML = '';
+    sel.add(new Option('Toutes les campagnes de l\'année', ''));
+    state.campagnes
+      .filter(function (c) { return c.Annee === anneeId; })
+      .sort(function (a, b) { return String(a.Numero).localeCompare(String(b.Numero), 'fr', { numeric: true }); })
+      .forEach(function (c) { sel.add(new Option(c.Campagne || c.Alter || ('Campagne ' + c.Numero), c.id)); });
+    if ([].some.call(sel.options, function (o) { return o.value === prev; })) sel.value = prev;
+    preview();
+  }
+
+  function selection() {
+    var anneeId = Number($('annee').value);
+    var campId = $('campagne').value ? Number($('campagne').value) : null;
+    var onlyPart = $('participants').checked;
+    return state.inscrits.filter(function (r) {
+      if (campId ? r.CampagneREF !== campId : r.AnneeREF !== anneeId) return false;
+      if (onlyPart && !r.A_participe) return false;
+      return true;
+    });
+  }
+
+  function campagneLabel(id) {
+    var c = state.campagnes.find(function (x) { return x.id === id; });
+    return c ? (c.Campagne || c.Alter || '') : '';
+  }
+
+  function preview() {
+    var sel = selection();
+    var onCarte = new Set(state.carte.map(function (r) { return r[T.carteRef]; }));
+    $('nbSel').textContent = sel.length;
+    $('nbCarte').textContent = state.carte.length;
+    $('go').disabled = !$('annee').value || sel.length === 0;
+    $('list').innerHTML = '';
+    sel.slice()
+      .sort(function (a, b) { return String(a.Etablissement || '').localeCompare(String(b.Etablissement || ''), 'fr'); })
+      .forEach(function (r) {
+        var d = document.createElement('div');
+        var name = document.createElement('span');
+        name.textContent = (r.Etablissement || '(sans nom)') + (onCarte.has(r.id) ? '  ✓' : '');
+        var tag = document.createElement('span');
+        tag.className = 'tag';
+        tag.textContent = campagneLabel(r.CampagneREF);
+        d.appendChild(name); d.appendChild(tag);
+        $('list').appendChild(d);
+      });
+    if (!sel.length) $('list').textContent = 'Aucun établissement pour ces critères.';
+  }
+
+  async function run() {
+    var sel = selection();
+    var replace = document.querySelector('input[name=mode]:checked').value === 'replace';
+    if (replace && state.carte.length &&
+        !confirm('Remplacer les ' + state.carte.length + ' ligne(s) actuelles de la carte par ' + sel.length + ' établissement(s) ?')) return;
+
+    var existing = new Set(replace ? [] : state.carte.map(function (r) { return r[T.carteRef]; }));
+    var ids = [];
+    sel.forEach(function (r) { if (!existing.has(r.id)) { existing.add(r.id); ids.push(r.id); } });
+
+    var actions = [];
+    if (replace && state.carte.length) {
+      actions.push(['BulkRemoveRecord', T.carte, state.carte.map(function (r) { return r.id; })]);
+    }
+    if (ids.length) {
+      var cols = {}; cols[T.carteRef] = ids;
+      actions.push(['BulkAddRecord', T.carte, ids.map(function () { return null; }), cols]);
+    }
+    if (!actions.length) { showMsg('Rien à ajouter : tous ces établissements sont déjà sur la carte.', 'ok'); return; }
+
+    $('go').disabled = true;
+    showMsg('Mise à jour en cours…', 'ok');
+    try {
+      await grist.docApi.applyUserActions(actions);
+      showMsg('✓ Carte mise à jour : ' + ids.length + ' établissement(s) ajouté(s)' +
+        (replace ? ' (contenu précédent remplacé).' : '.'), 'ok');
+    } catch (e) {
+      showMsg('Erreur : ' + (e.message || e), 'err');
+    }
+    await load();
+  }
+
+  $('annee').addEventListener('change', fillCampagnes);
+  $('campagne').addEventListener('change', preview);
+  $('participants').addEventListener('change', preview);
+  $('refresh').addEventListener('click', load);
+  $('go').addEventListener('click', run);
+
+  grist.ready({ requiredAccess: 'full', allowSelectBy: false });
+  load();
+</script>
+</body>
+</html>

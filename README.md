@@ -7,6 +7,7 @@
 | `grist-assistant-claude.html` | Assistant Claude |
 | `prise-rdv-calendrier.html` | Prise de rendez-vous (calendrier) |
 | `rdv/index.html` | Formulaire public de prise de rendez-vous |
+| `alimentation-carte.html` | Alimente `DATA_Carte` en un clic (année + campagne → établissements) |
 | `duo.html` | **Duo** — interprète à deux écouteurs (ex. japonais ⇄ allemand) |
 
 ## ERP « façon SAP » (`erp-sap.html`)
@@ -103,3 +104,14 @@ Langues proposées : japonais, allemand, français, anglais, espagnol, italien, 
 - Export par conversation en **TXT**, **CSV** (Excel) ou **JSON** ; export / import global en JSON pour sauvegarder ou changer d'appareil.
 
 > Astuce : gardez le micro du téléphone actif. Si le système bascule sur le micro des écouteurs Bluetooth, certains appareils passent en mode « appel » mono et la séparation gauche/droite est perdue.
+
+## Alimentation de la carte (`alimentation-carte.html`)
+
+Remplit la table `DATA_Carte` (colonne `Etablissement`) à partir de `DATA_Inscrits`, en un clic.
+
+1. Ajoutez une vue **Widget personnalisé** (sur une page non publique), URL du fichier publié, **Accès complet au document**.
+2. Choisissez l'**année** (`Liste_Annee`) et la **campagne** (`Liste_Campagne`, ou « Toutes les campagnes de l'année »).
+3. Option : ne garder que les établissements ayant participé (`A_participe`).
+4. Mode **Remplacer** (vide la carte puis la remplit) ou **Ajouter** (sans doublons), puis **Alimenter la carte**.
+
+Le filtrage se fait sur `DATA_Inscrits.CampagneREF` (ou `AnneeREF` si toutes les campagnes).
