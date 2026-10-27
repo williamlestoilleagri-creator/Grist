@@ -337,6 +337,9 @@
   .contact{border:1px solid var(--border);padding:.75rem 1rem}
   .contact h4{font-size:.9rem;color:var(--title);margin:0 0 .6rem;display:flex;gap:6px;align-items:center}
 
+  .stock-h{font-size:.9rem;color:var(--title);margin:1rem 0 .5rem}
+  span.click{cursor:pointer;color:var(--bf);text-decoration:underline;text-underline-offset:3px}
+
   /* ================= Toast / chargement ================= */
   #toastRoot{position:fixed;right:16px;bottom:16px;z-index:200;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
   .toast{background:var(--title);color:#fff;padding:.7rem 1rem;font-size:.875rem;box-shadow:var(--shadow-lg);display:flex;gap:8px;align-items:center;max-width:min(420px,90vw)}
@@ -403,6 +406,32 @@
    ============================================================ */
 const T_RDV = 'RDV_Prelevements', T_PREL = 'DATA_Preleveur', T_INSP = 'DATA_Inspecteur';
 const OLD_NAMES = {[T_PREL]: 'Preleveurs', [T_INSP]: 'Inspecteurs_FAM'};
+// Lieux de stockage des échantillons (table fournie) et contrôles inopinés déclarés par les inspecteurs
+const T_STOCK = 'DATA_Stockage', T_CTL = 'DATA_Controle_Stockage';
+const CTL_RESULTATS = ['Conforme', 'Avec réserves', 'Non conforme'];
+const CTL_STYLE = {'Conforme': ['#b8fec9', '#18753c'], 'Avec réserves': ['#feebd0', '#695240'], 'Non conforme': ['#ffe9e9', '#ce0500']};
+const CTL_COLOR = '#6a6af4', CTL_DUREE = 60;
+function ctlSchema() {
+  const co = {}; CTL_RESULTATS.forEach(r => { co[r] = {fillColor: CTL_STYLE[r][0], textColor: CTL_STYLE[r][1]}; });
+  return [
+    {id: 'Lieu', label: 'Lieu de stockage', type: 'Ref:' + T_STOCK},
+    {id: 'Date_controle', label: 'Date/heure du contrôle', type: 'DateTime:' + TZ},
+    {id: 'Inspecteur', label: 'Inspecteur FranceAgriMer', type: 'Ref:' + T_INSP},
+    {id: 'Nombre_d_echantillons_constates', label: 'Nombre d\'échantillons constatés', type: 'Numeric'},
+    {id: 'Resultat', label: 'Résultat', type: 'Choice', widgetOptions: JSON.stringify({choices: CTL_RESULTATS, choiceOptions: co})},
+    {id: 'Constat', label: 'Constat / observations', type: 'Text'},
+    {id: 'Code_dpt', type: 'Text', isFormula: true, formula: 'cp = str($Lieu.CP or "").split(".")[0].strip()\nreturn "0" + cp[:2] if cp else None'},
+    {id: 'Cree_le', type: 'DateTime:' + TZ, formula: 'NOW()'},
+    {id: 'Cree_par', type: 'Text', formula: 'user.Name'}
+  ];
+}
+// Colonnes vides de DATA_Stockage : typage des champs de saisie, et champs de suivi calculés à partir des contrôles
+const STOCK_TYPES = {Adresse: 'Text', Ville: 'Text', CP: 'Text', Responsable: 'Text', Organisme: 'Text', Nombre_d_echantillons_stockes: 'Numeric'};
+const STOCK_FORMULAS = {
+  A_ete_controle: ['Bool', `bool(${T_CTL}.lookupRecords(Lieu=$id))`],
+  Date_de_controle: ['DateTime:Europe/Paris', `d = [c.Date_controle for c in ${T_CTL}.lookupRecords(Lieu=$id) if c.Date_controle]\nreturn max(d) if d else None`],
+  Inspecteur: ['Ref:' + T_INSP, `c = sorted(${T_CTL}.lookupRecords(Lieu=$id), key=lambda r: r.Date_controle.timestamp() if r.Date_controle else 0)\nreturn c[-1].Inspecteur if c else None`]
+};
 const STATUTS = ['Rdv pris', 'Injoignable', 'Refus', 'Faux numéro'];
 const STATUT_STYLE = {'Rdv pris': ['#b8fec9', '#18753c'], 'Injoignable': ['#feebd0', '#695240'], 'Refus': ['#ffe9e9', '#ce0500'], 'Faux numéro': ['#eeeeee', '#3a3a3a']};
 const OUI_NON = ['Oui', 'Non'];
@@ -626,6 +655,7 @@ const S = {
   sel: {kind: '', id: 0}, q: '', statut: '', dpt: '',
   expQ: '', expStatut: '', expDpt: '',
   dashPeriod: 'all', dashDpt: '', dashOpen: 0,
+  stock: [], stockById: new Map(), ctl: [], controls: [], showCtl: true,
   me: 0, espRange: 30, espMine: true, espTaken: false, espQ: ''
 };
 const cols = t => (S.meta[t] || {cols: {}}).cols;
@@ -672,6 +702,24 @@ function buildModel() {
   S.visits.sort((a, b) => a.start - b.start);
 }
 
+// Lieux de stockage et contrôles inopinés (affichés dans le calendrier comme des événements)
+const lieuName = l => l ? (clean(l.Organisme) || clean(l.Responsable) || 'Lieu n° ' + l.id) : 'Lieu inconnu';
+const lieuAddr = l => l ? [clean(l.Adresse), clean(l.CP).split('.')[0], clean(l.Ville)].filter(Boolean).join(' ') : '';
+const lieuDpt = l => { const cp = l ? clean(l.CP).split('.')[0] : ''; return cp ? cp.slice(0, 2) : ''; };
+function buildControls() {
+  S.controls = [];
+  const tt = typeOf(T_CTL, 'Date_controle');
+  for (const r of S.ctl) {
+    if (typeof r.Date_controle !== 'number') continue;
+    const l = S.stockById.get(r.Lieu), start = toWall(r.Date_controle, tt);
+    const v = {key: 'ctl@' + r.id, ctl: r, lieu: l, start, end: new Date(start.getTime() + CTL_DUREE * 60000), parcels: [], prel: 0, insp: r.Inspecteur || 0,
+      statut: clean(r.Resultat), farm: {name: lieuName(l), pacage: '', Ville: l ? clean(l.Ville) : '', Adresse_complete: lieuAddr(l), dpt: lieuDpt(l)}};
+    S.controls.push(v); S.visitByKey.set(v.key, v);
+  }
+  S.controls.sort((a, b) => a.start - b.start);
+}
+const ctlOf = lieuId => S.controls.filter(v => v.ctl.Lieu === lieuId).sort((a, b) => b.start - a.start);
+const resBadge = r => r ? `<span class="badge" style="background:${(CTL_STYLE[r] || ['#eee'])[0]};color:${(CTL_STYLE[r] || [0, '#3a3a3a'])[1]}">${esc(r)}</span>` : '';
 async function loadData() {
   S.meta = await B.meta();
   const defOk = S.cfg.defTable && S.meta[S.cfg.defTable] && cols(S.cfg.defTable)[S.cfg.defKey];
@@ -679,7 +727,11 @@ async function loadData() {
   S.parc = parc; S.rdv = rdv; S.prel = p; S.insp = i;
   S.def = new Map(); def.forEach(x => { const k = clean(x[S.cfg.defKey]); if (k && !S.def.has(k)) S.def.set(k, x); });
   S.prelById = new Map(p.map(x => [x.id, x])); S.inspById = new Map(i.map(x => [x.id, x]));
+  const ctlOk = S.meta[T_STOCK] && S.meta[T_CTL];
+  const [stock, ctl] = ctlOk ? await Promise.all([B.fetch(T_STOCK), B.fetch(T_CTL)]) : [[], []];
+  S.stock = stock; S.ctl = ctl; S.stockById = new Map(stock.map(x => [x.id, x]));
   buildModel();
+  buildControls();
   $('#cntExp').textContent = S.farms.size;
   $('#cntPrel').textContent = S.prel.filter(x => x.Actif !== false).length;
   $('#cntInsp').textContent = S.insp.filter(x => x.Actif !== false).length;
@@ -704,6 +756,14 @@ function plan() {
     if (S.meta[t]) { const miss = PEOPLE_TABLES[t].filter(c => !S.meta[t].cols[c.id] && !(c.id === 'Zone_d_action' && S.meta[t].cols.Departements)); if (miss.length) ops.push({text: `Ajouter à <code>${t}</code> : ${miss.map(c => c.id).join(', ')}`, run: () => B.apply(miss.map(c => ['AddColumn', t, c.id, colInfo(c)]))}); }
     else if (S.meta[OLD_NAMES[t]]) ops.push({text: `Renommer <code>${OLD_NAMES[t]}</code> en <code>${t}</code> (données conservées)`, run: () => B.apply([['UpdateRecord', '_grist_Tables', S.meta[OLD_NAMES[t]].rowId, {tableId: t}]])});
     else ops.push({text: `Créer la table <code>${t}</code>`, run: () => B.apply([['AddTable', t, PEOPLE_TABLES[t].map(c => Object.assign({id: c.id}, colInfo(c)))]])});
+  }
+  if (S.meta[T_STOCK]) {
+    if (!S.meta[T_CTL]) ops.push({text: `Créer la table <code>${T_CTL}</code> (contrôles inopinés des lieux de stockage)`, run: () => B.apply([['AddTable', T_CTL, ctlSchema().map(c => Object.assign({id: c.id}, colInfo(c)))]])});
+    else { const miss = ctlSchema().filter(c => !S.meta[T_CTL].cols[c.id]); if (miss.length) ops.push({text: `Ajouter à <code>${T_CTL}</code> : ${miss.map(c => c.label || c.id).join(', ')}`, run: () => B.apply(miss.map(c => ['AddColumn', T_CTL, c.id, colInfo(c)]))}); }
+    const sc0 = S.meta[T_STOCK].cols, empty = k => sc0[k] && sc0[k].isFormula && !sc0[k].formula.trim();
+    const typ = Object.keys(STOCK_TYPES).filter(empty), calc = Object.keys(STOCK_FORMULAS).filter(empty);
+    if (S.meta[T_CTL] && (typ.length || calc.length)) ops.push({text: `Préparer <code>${T_STOCK}</code> : ${typ.length ? 'colonnes de saisie typées (' + typ.join(', ') + ')' : ''}${typ.length && calc.length ? ' ; ' : ''}${calc.length ? calc.join(', ') + ' calculées à partir des contrôles déclarés' : ''}`,
+      run: () => B.apply(typ.map(k => ['ModifyColumn', T_STOCK, k, {type: STOCK_TYPES[k], isFormula: false}]).concat(calc.map(k => ['ModifyColumn', T_STOCK, k, {type: STOCK_FORMULAS[k][0], isFormula: true, formula: STOCK_FORMULAS[k][1]}])))});
   }
   const sc = rdvSchema(), ex = S.meta[T_RDV];
   if (!ex) ops.push({text: `Créer la table <code>${T_RDV}</code> (${sc.filter(c => !c.isFormula && !c.formula).length} champs de saisie)`, run: () => B.apply([['AddTable', T_RDV, sc.map(c => Object.assign({id: c.id}, colInfo(c)))]])});
@@ -737,6 +797,10 @@ async function fixRefs() {
     if (cm && show && cm.type === 'Ref:' + t && cm.visibleCol !== show.rowId) {
       acts.push(['UpdateRecord', '_grist_Tables_column', cm.rowId, {visibleCol: show.rowId}], ['SetDisplayFormula', T_RDV, null, cm.rowId, formula]);
     }
+  }
+  for (const [t, c, target, show, formula] of [[T_CTL, 'Inspecteur', T_INSP, 'Nom_complet', '$Inspecteur.Nom_complet'], [T_CTL, 'Lieu', T_STOCK, 'Organisme', '$Lieu.Organisme'], [T_STOCK, 'Inspecteur', T_INSP, 'Nom_complet', '$Inspecteur.Nom_complet']]) {
+    const cm = cols(t)[c], sh = cols(target)[show];
+    if (cm && sh && cm.type === 'Ref:' + target && cm.visibleCol !== sh.rowId) acts.push(['UpdateRecord', '_grist_Tables_column', cm.rowId, {visibleCol: sh.rowId}], ['SetDisplayFormula', t, null, cm.rowId, formula]);
   }
   if (acts.length && B.mode === 'grist') { try { await B.apply(acts); } catch (e) { console.warn('Affichage des références non configuré', e); } }
 }
@@ -804,13 +868,14 @@ function render() {
 }
 
 function filteredVisits() {
+  const ctl = !S.showCtl || S.sel.kind === 'prel' ? [] : S.controls.filter(v => (S.sel.kind !== 'insp' || S.sel.id === -1 || v.insp === S.sel.id) && (!S.dpt || v.farm.dpt === S.dpt));
   return S.visits.filter(v => {
     if (S.sel.kind === 'prel' && (S.sel.id === -1 ? v.prel : v.prel !== S.sel.id)) return false;
     if (S.sel.kind === 'insp' && (S.sel.id === -1 ? !v.insp : v.insp !== S.sel.id)) return false;
     if (S.statut && v.statut !== S.statut) return false;
     if (S.dpt && v.farm.dpt !== S.dpt) return false;
     return true;
-  });
+  }).concat(ctl).sort((a, b) => a.start - b.start);
 }
 const byDay = list => { const m = {}; list.forEach(v => { (m[dkey(v.start)] = m[dkey(v.start)] || []).push(v); }); return m; };
 const dptList = () => Array.from(new Set(Array.from(S.farms.values()).map(f => f.dpt).filter(Boolean))).sort();
@@ -844,6 +909,9 @@ function sidebar() {
     <div class="side-sec"><h3>${ic('shield')}Planning des inspecteurs</h3>
       ${people(S.insp, 'insp').map(p => item('insp', p.id, personName(p), '', count('insp', p.id))).join('') || '<p class="sub">Aucun inspecteur.</p>'}
       ${S.insp.length ? item('insp', -1, 'Tous les contrôles', '', count('insp', -1)) : ''}</div>
+    ${S.meta[T_CTL] ? `<div class="side-sec"><h3>${ic('search')}Lieux de stockage</h3>
+      <button class="side-item${S.showCtl ? ' on' : ''}" id="ctlToggle"><span class="dot" style="background:${CTL_COLOR}"></span><span class="nm">Contrôles inopinés</span><span class="n">${S.controls.filter(inPeriod).length}</span></button>
+      <p style="margin:.4rem 0 0"><button class="btn ter" data-ctl-new="0" style="width:100%;justify-content:center">${ic('add')}Déclarer un contrôle inopiné</button></p></div>` : ''}
     ${S.sel.kind && S.sel.id > 0 ? `<p><button class="btn sec" id="roadBtn" style="width:100%;justify-content:center">${ic('print')}Feuille de route</button></p>` : ''}
   </aside>`;
 }
@@ -881,6 +949,7 @@ function renderCalendar() {
   $$('[data-view]').forEach(b => b.onclick = () => { S.view = b.dataset.view; renderCalendar(); });
   $('#fdpt').onchange = e => { S.dpt = e.target.value; renderCalendar(); };
   if ($('#roadBtn')) $('#roadBtn').onclick = openRoadmap;
+  if ($('#ctlToggle')) $('#ctlToggle').onclick = () => { S.showCtl = !S.showCtl; renderCalendar(); };
 }
 function navigate(n) {
   const c = S.cursor;
@@ -890,8 +959,12 @@ function navigate(n) {
   else S.cursor = new Date(c.getFullYear(), c.getMonth() + n, 1);
   renderCalendar();
 }
-function evStyle(v) { const c = prelColor(v.prel); return `border-left-color:${c};background:${c}1a`; }
+function evStyle(v) {
+  if (v.ctl) return `border-left-color:${CTL_COLOR};background:repeating-linear-gradient(135deg,${CTL_COLOR}26 0 6px,${CTL_COLOR}10 6px 12px)`;
+  const c = prelColor(v.prel); return `border-left-color:${c};background:${c}1a`;
+}
 function evTitle(v) {
+  if (v.ctl) return `${hm(v.start)} · Contrôle inopiné · ${v.farm.name}${v.farm.Adresse_complete ? ' (' + v.farm.Adresse_complete + ')' : ''}${v.insp ? ' · Inspecteur : ' + personName(S.inspById.get(v.insp)) : ''}${v.statut ? ' · ' + v.statut : ''}`;
   return `${hm(v.start)}–${hm(v.end)} · ${v.farm.name} (${v.farm.pacage}) · ${v.parcels.length} parcelle(s)${v.prel ? ' · Préleveur : ' + personName(S.prelById.get(v.prel)) : ''}${v.insp ? ' · Inspecteur : ' + personName(S.inspById.get(v.insp)) : ''}`;
 }
 function renderMonth(list) {
@@ -903,7 +976,7 @@ function renderMonth(list) {
     const d = new Date(y, m, i - off + 1), k = dkey(d), evs = map[k] || [], shown = evs.slice(0, 4);
     html += `<div class="cell${d.getMonth() !== m ? ' out' : ''}${d.getDay() % 6 === 0 ? ' we' : ''}${k === today ? ' today' : ''}" data-day="${k}">
       <div class="cell-top"><span class="nb">${evs.length ? evs.length + ' RDV' : ''}</span><span class="dnum">${d.getDate()}</span></div>
-      ${shown.map(v => `<button class="ev" style="${evStyle(v)}" data-visit="${esc(v.key)}" title="${esc(evTitle(v))}"><b>${hm(v.start)}</b>${esc(v.farm.name)}${v.insp ? ' ' + ic('shield') : ''}</button>`).join('')}
+      ${shown.map(v => `<button class="ev" style="${evStyle(v)}" data-visit="${esc(v.key)}" title="${esc(evTitle(v))}"><b>${hm(v.start)}</b>${v.ctl ? ic('search') + ' ' : ''}${esc(v.farm.name)}${v.insp && !v.ctl ? ' ' + ic('shield') : ''}</button>`).join('')}
       ${evs.length > shown.length ? `<button class="more" data-day-more="${k}">+ ${evs.length - shown.length} autre(s)</button>` : ''}</div>`;
   }
   $('#calBody').innerHTML = html + '</div>' + (list.some(v => v.start.getFullYear() === y && v.start.getMonth() === m) ? '' : `<p class="empty">Aucun rendez-vous ce mois-ci${nearestHint(list)}.</p>`);
@@ -943,7 +1016,7 @@ function renderWeek(list, ndays) {
       const v = it.v, top = ((v.start.getHours() - h0) * 60 + v.start.getMinutes()) * ppm, hgt = Math.max(20, (it.e - it.s) / 60000 * ppm - 2), w = 100 / it.lanes;
       const p = S.prelById.get(v.prel);
       body += `<div class="wev" role="button" tabindex="0" data-visit="${esc(v.key)}" title="${esc(evTitle(v))}" style="${evStyle(v)};top:${top}px;height:${hgt}px;left:calc(${it.lane * w}% + 1px);width:calc(${w}% - 3px)">
-        <b>${hm(v.start)} ${esc(v.farm.name)}</b><span class="who">${v.parcels.length} parc.${ndays === 1 ? ' · ' + esc(v.farm.Ville || v.farm.Adresse_complete || '') : ''}${p ? ' · ' + esc(ndays === 1 ? personName(p) : initials(personName(p))) : ''}${v.insp ? ' · ' + ic('shield') : ''}</span></div>`;
+        <b>${hm(v.start)} ${esc(v.farm.name)}</b><span class="who">${v.ctl ? 'Contrôle inopiné' + (p0 => p0 ? ' · ' + esc(ndays === 1 ? personName(p0) : initials(personName(p0))) : '')(S.inspById.get(v.insp)) : `${v.parcels.length} parc.${ndays === 1 ? ' · ' + esc(v.farm.Ville || v.farm.Adresse_complete || '') : ''}${p ? ' · ' + esc(ndays === 1 ? personName(p) : initials(personName(p))) : ''}${v.insp ? ' · ' + ic('shield') : ''}`}</span></div>`;
     });
     if (k === today) { const n = new Date(), t = ((n.getHours() - h0) * 60 + n.getMinutes()) * ppm; if (t >= 0 && t <= height) body += `<div class="nowline" style="top:${t}px"></div>`; }
     body += '</div>';
@@ -956,7 +1029,17 @@ function renderList(list) {
   if (!keys.length) { $('#calBody').innerHTML = `<p class="empty">Aucun rendez-vous sur la période${nearestHint(list)}.</p>`; return; }
   $('#calBody').innerHTML = keys.map(k => `<section class="agenda-day"><h3><span style="text-transform:capitalize">${esc(fullDate(map[k][0].start))}</span><span class="sub">${map[k].length} rendez-vous</span></h3>${map[k].map(visitRow).join('')}</section>`).join('');
 }
+function ctlRow(v) {
+  const i = S.inspById.get(v.insp), l = v.lieu;
+  return `<button class="agenda-item" style="border-left-color:${CTL_COLOR}" data-visit="${esc(v.key)}">
+    <span class="h">${hm(v.start)}</span>
+    <span><span class="n">${ic('search')} Contrôle inopiné · ${esc(v.farm.name)}</span>
+      <span class="s">${v.farm.Adresse_complete ? `<span>${ic('pin')} ${esc(v.farm.Adresse_complete)}</span>` : ''}${i ? `<span>${ic('shield')} ${esc(personName(i))}</span>` : ''}
+      ${v.ctl.Nombre_d_echantillons_constates != null ? `<span>${esc(fmtAny(v.ctl.Nombre_d_echantillons_constates))} échantillon(s) constaté(s)${l && l.Nombre_d_echantillons_stockes != null ? ' / ' + esc(fmtAny(l.Nombre_d_echantillons_stockes)) + ' déclaré(s)' : ''}</span>` : ''}</span></span>
+    ${resBadge(v.statut) || '<span class="badge">Contrôle</span>'}</button>`;
+}
 function visitRow(v) {
+  if (v.ctl) return ctlRow(v);
   const f = v.farm, p = S.prelById.get(v.prel), i = S.inspById.get(v.insp);
   return `<button class="agenda-item" style="border-left-color:${prelColor(v.prel)}" data-visit="${esc(v.key)}">
     <span class="h">${hm(v.start)}<br><span class="sub">→ ${hm(v.end)}</span></span>
@@ -1146,6 +1229,8 @@ function openRoadmap() {
   openModal(`<h2>${ic('user')}Feuille de route — ${esc(who)}</h2><p class="lead">${esc(periodLabel())} · ${list.length} rendez-vous</p>
     ${keys.map(k => `<section class="road-day"><h3 style="text-transform:capitalize">${esc(fullDate(map[k][0].start))}</h3>
       ${map[k].map(v => { const f = v.farm, i = S.inspById.get(v.insp), p = S.prelById.get(v.prel);
+        if (v.ctl) return `<article class="road"><div class="road-h"><b>${hm(v.start)} · Contrôle inopiné · ${esc(f.name)}</b>${resBadge(v.statut)}</div>
+          <div class="fgrid">${infoField('Adresse', f.Adresse_complete, 'Text', true)}${infoField('Responsable', v.lieu && v.lieu.Responsable, 'Text')}${infoField('Constat', v.ctl.Constat, 'Text', true)}</div></article>`;
         return `<article class="road"><div class="road-h"><b>${hm(v.start)}–${hm(v.end)} · ${esc(f.name)}</b><span class="sub">PACAGE ${esc(f.pacage)}${f.dossier_number ? ' · DN ' + esc(f.dossier_number) : ''}</span></div>
           <div class="fgrid">${f.Telephone_portable ? `<div class="fld"><div class="k">Téléphone</div><div class="v"><a href="tel:${esc(f.Telephone_portable)}">${esc(f.Telephone_portable)}</a></div></div>` : ''}
             ${infoField('Adresse', f.Adresse_complete, 'Text', true)}${infoField('Présence de l\'agriculteur', sharedOf(f, 'Presence_souhaitee_agriculteur'), 'Text')}
@@ -1161,6 +1246,31 @@ function printModal() { document.body.classList.add('printing'); window.print();
 
 
 /* ---------- Tableau de bord : inspections des préleveurs ---------- */
+function dashRange() {
+  const now = new Date(), p = S.dashPeriod;
+  if (p === 'month') return [new Date(now.getFullYear(), now.getMonth(), 1), new Date(now.getFullYear(), now.getMonth() + 1, 1)];
+  if (p === 'week') { const a = startOfWeek(now); return [a, addDays(a, 7)]; }
+  if (p === '30') return [addDays(now, -30), now];
+  return [null, null];
+}
+function dashStock() {
+  if (!S.meta[T_CTL]) return '';
+  const [a, b] = dashRange(), ctl = S.controls.filter(v => (!a || v.start >= a) && (!b || v.start < b) && (!S.dashDpt || v.farm.dpt === S.dashDpt));
+  const lieux = S.stock.filter(l => !S.dashDpt || lieuDpt(l) === S.dashDpt), done = new Set(ctl.map(v => v.ctl.Lieu));
+  const nc = ctl.filter(v => v.statut === 'Non conforme').length, byInsp = new Map();
+  ctl.forEach(v => byInsp.set(v.insp, (byInsp.get(v.insp) || 0) + 1));
+  const tile = (label, value, sub) => `<div class="kpi" style="border-top-color:${CTL_COLOR}"><div class="kpi-l">${esc(label)}</div><div class="kpi-v">${value}</div>${sub ? `<div class="kpi-s">${sub}</div>` : ''}</div>`;
+  return `<section class="fsec"><h3>${ic('search')}Contrôles inopinés des lieux de stockage</h3>
+    <div class="kpis">${tile('Contrôles inopinés', ctl.length, nc ? nc + ' non conforme(s)' : 'aucun non conforme')}
+      ${tile('Lieux contrôlés', `${lieux.filter(l => done.has(l.id)).length} / ${lieux.length}`, `${lieux.filter(l => !done.has(l.id)).length} jamais contrôlé(s) sur la période`)}
+      ${tile('Par inspecteur', byInsp.size, Array.from(byInsp.entries()).map(([i, n]) => esc(personName(S.inspById.get(i)) || '?') + ' : ' + n).join(' · ') || '—')}</div>
+    ${lieux.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Lieu</th><th class="num">Contrôles</th><th>Dernier contrôle</th><th>Inspecteurs</th></tr></thead><tbody>
+      ${lieux.map(l => { const cs = ctl.filter(v => v.ctl.Lieu === l.id).sort((x, y) => y.start - x.start), ins = new Map(); cs.forEach(v => ins.set(v.insp, (ins.get(v.insp) || 0) + 1));
+        return `<tr><td class="strong">${esc(lieuName(l))}<div class="sub">${esc(lieuAddr(l))}</div></td><td class="num">${cs.length}</td>
+          <td>${cs[0] ? `<span class="click" data-visit="${esc(cs[0].key)}" role="button" tabindex="0">${esc(shortDate(cs[0].start))}</span> ${resBadge(cs[0].statut)}` : '<span class="badge st-injoignable">Jamais contrôlé</span>'}</td>
+          <td>${Array.from(ins.entries()).map(([i, n]) => `<span class="tag">${ic('shield')} ${esc(personName(S.inspById.get(i)) || '?')} × ${n}</span>`).join(' ')}</td></tr>`; }).join('')}
+    </tbody></table></div>` : `<p class="muted">Aucun lieu dans <code>${T_STOCK}</code>.</p>`}</section>`;
+}
 function dashVisits() {
   const now = new Date(), p = S.dashPeriod;
   let a = null, b = null;
@@ -1228,7 +1338,8 @@ function renderDash() {
       ${named.map(r => `<tr><td class="strong">${esc(personName(r.p))}</td>${inspIds.map(i => { const b = r.byInsp.get(i), n = b ? b.done + b.todo : 0;
         return `<td class="num heat${n / maxCell > .6 ? ' dark' : ''}" style="--h:${n / maxCell}" title="${esc(personName(r.p))} / ${esc(personName(S.inspById.get(i)))} : ${b ? b.done : 0} réalisé(s), ${b ? b.todo : 0} prévu(s)">${n || ''}</td>`; }).join('')}<td class="num strong">${r.done + r.todo}</td></tr>`).join('')}
       <tr class="tot"><td>Total</td>${inspIds.map(i => `<td class="num">${inspected.filter(v => v.insp === i).length}</td>`).join('')}<td class="num">${inspected.length}</td></tr>
-      </tbody></table></div></section>` : '<p class="muted">Aucun rendez-vous inspecté sur la période.</p>'}`;
+      </tbody></table></div></section>` : '<p class="muted">Aucun rendez-vous inspecté sur la période.</p>'}
+    ${dashStock()}`;
   $('#dPer').onchange = e => { S.dashPeriod = e.target.value; renderDash(); };
   $('#dDpt').onchange = e => { S.dashDpt = e.target.value; renderDash(); };
   $$('[data-dash]').forEach(tr => tr.onclick = () => { const id = Number(tr.dataset.dash); S.dashOpen = S.dashOpen === id ? 0 : id; renderDash(); });
@@ -1239,6 +1350,70 @@ function renderDash() {
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], {type: 'text/csv;charset=utf-8'})); a.download = 'inspections-preleveurs.csv';
     document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
   };
+}
+
+
+/* ---------- Contrôles inopinés des lieux de stockage ---------- */
+function openCtlForm(id, opts = {}) {
+  if (!S.meta[T_CTL]) { toast(`La table ${T_STOCK} est introuvable : ajoutez-la puis relancez l'installation (Paramètres).`, true); return; }
+  const r = id ? S.ctl.find(x => x.id === id) : null, lieuId = r ? r.Lieu : (opts.lieuId || 0);
+  const tt = typeOf(T_CTL, 'Date_controle'), d = r && typeof r.Date_controle === 'number' ? toWall(r.Date_controle, tt) : new Date(Math.round(Date.now() / 300000) * 300000);
+  const lieux = S.stock.slice().sort((a, b) => lieuName(a).localeCompare(lieuName(b))).map(l => [l.id, lieuName(l) + (clean(l.Ville) ? ' — ' + clean(l.Ville) : '')]);
+  const insp = S.insp.filter(p => p.Actif !== false || p.id === (r && r.Inspecteur)).sort((a, b) => personName(a).localeCompare(personName(b))).map(p => [p.id, personName(p)]);
+  const res = r ? clean(r.Resultat) : '';
+  openModal(`<h2>${ic('search')}${r ? 'Contrôle inopiné' : 'Déclarer un contrôle inopiné'}</h2>
+    <p class="lead">Contrôle réalisé sur un lieu de stockage des échantillons · table <code>${T_CTL}</code>${r && r.Cree_par ? ' · déclaré par ' + esc(r.Cree_par) : ''}</p>
+    ${!S.stock.length ? `<div class="alert warn"><p>La table <code>${T_STOCK}</code> ne contient aucun lieu : ajoutez les lieux de stockage dans Grist.</p></div>` : ''}
+    <div class="grp"><label class="lbl" for="cLieu">Lieu de stockage</label><select class="select" id="cLieu">${optList(lieux, lieuId || '', '— Choisir le lieu —')}</select></div>
+    <div id="cLieuInfo"></div>
+    <div class="row">
+      <div class="grp"><label class="lbl" for="cDate">Date/heure du contrôle</label><input class="input" type="datetime-local" id="cDate" step="300" value="${dtInput(d)}"></div>
+      <div class="grp"><label class="lbl" for="cInsp">Inspecteur FranceAgriMer</label><select class="select" id="cInsp">${optList(insp, r ? r.Inspecteur || '' : (S.me || ''), '— Choisir —')}</select></div>
+    </div>
+    <div class="row">
+      <div class="grp"><label class="lbl" for="cNb">Nombre d'échantillons constatés</label><input class="input" type="number" min="0" step="1" id="cNb" value="${r && r.Nombre_d_echantillons_constates != null ? esc(r.Nombre_d_echantillons_constates) : ''}"></div>
+      <div class="grp"><label class="lbl" for="cRes">Résultat</label><select class="select" id="cRes">${optList(CTL_RESULTATS.concat(res && !CTL_RESULTATS.includes(res) ? [res] : []).map(x => [x, x]), res, '—')}</select></div>
+    </div>
+    <div class="grp"><label class="lbl" for="cConst">Constat / observations</label><textarea class="input" id="cConst">${esc(r ? clean(r.Constat) : '')}</textarea></div>`,
+  {wide: true, foot: `<div class="left">${r ? `<button class="btn danger" id="cDel">${ic('delete')}Supprimer</button>` : ''}</div>
+    <button class="btn ter" data-close>Annuler</button><button class="btn" id="cSave">${ic('check')}Enregistrer</button>`});
+  const info = () => {
+    const l = S.stockById.get(Number($('#cLieu').value)), past = l ? ctlOf(l.id).filter(v => !r || v.ctl.id !== r.id) : [];
+    $('#cLieuInfo').innerHTML = l ? `<div class="pinfo"><div class="fgrid">${infoField('Adresse', lieuAddr(l), 'Text', true)}${infoField('Responsable', l.Responsable, 'Text')}${infoField('Organisme', l.Organisme, 'Text')}
+      ${infoField('Échantillons stockés (déclarés)', l.Nombre_d_echantillons_stockes, 'Numeric')}</div>
+      <p class="sub" style="margin:.5rem 0 0">${past.length ? 'Contrôles précédents : ' + past.map(v => esc(shortDate(v.start) + ' (' + (personName(S.inspById.get(v.insp)) || '?') + (v.statut ? ', ' + v.statut : '') + ')')).join(' · ') : 'Jamais contrôlé.'}</p></div>` : '';
+  };
+  $('#cLieu').onchange = info; info();
+  $('#cSave').onclick = async () => {
+    const lieu = Number($('#cLieu').value), dt = parseDtInput($('#cDate').value), ins = Number($('#cInsp').value);
+    if (!lieu) { toast('Choisissez le lieu de stockage.', true); return; }
+    if (!dt) { toast('Indiquez la date du contrôle.', true); return; }
+    if (!ins) { toast('Choisissez l\'inspecteur.', true); return; }
+    const nb = $('#cNb').value;
+    const fields = {Lieu: lieu, Date_controle: fromWall(dt, tt), Inspecteur: ins, Nombre_d_echantillons_constates: nb === '' ? null : Number(nb), Resultat: $('#cRes').value || null, Constat: $('#cConst').value.trim() || null};
+    if (!r && ins && !S.me) setMe(ins);
+    if (await write([r ? ['UpdateRecord', T_CTL, r.id, fields] : ['AddRecord', T_CTL, null, fields]], r ? 'Contrôle mis à jour' : 'Contrôle inopiné enregistré')) closeModal();
+  };
+  if (r) $('#cDel').onclick = async () => {
+    const b = $('#cDel'); if (b.dataset.confirm !== '1') { b.dataset.confirm = '1'; b.innerHTML = ic('warning') + 'Confirmer la suppression'; return; }
+    if (await write([['RemoveRecord', T_CTL, r.id]], 'Contrôle supprimé')) closeModal();
+  };
+}
+// Liste des lieux de stockage avec leur dernier contrôle (espace inspecteur)
+function stockSection(dpts) {
+  if (!S.meta[T_CTL]) return '';
+  const mine = S.controls.filter(v => v.insp === S.me).sort((a, b) => b.start - a.start);
+  const lieux = S.stock.filter(l => !S.espMine || !dpts.length || dpts.includes(dptNorm(lieuDpt(l)))).map(l => ({l, last: ctlOf(l.id)[0] || null}))
+    .sort((a, b) => (a.last ? a.last.start.getTime() : 0) - (b.last ? b.last.start.getTime() : 0) || lieuName(a.l).localeCompare(lieuName(b.l)));
+  return `<section class="fsec"><h3>${ic('search')}Contrôles inopinés des lieux de stockage</h3>
+    <p><button class="btn" data-ctl-new="0">${ic('add')}Déclarer un contrôle inopiné</button></p>
+    ${mine.length ? `<h4 class="stock-h">Mes contrôles déclarés (${mine.length})</h4>${mine.slice(0, 20).map(ctlRow).join('')}` : ''}
+    <h4 class="stock-h">Lieux de stockage (${lieux.length})</h4>
+    ${lieux.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Lieu</th><th>Adresse</th><th>Responsable</th><th class="num">Échantillons</th><th>Dernier contrôle</th><th></th></tr></thead><tbody>
+      ${lieux.map(({l, last}) => `<tr><td class="strong">${esc(lieuName(l))}</td><td>${esc(lieuAddr(l))}</td><td>${esc(clean(l.Responsable))}</td><td class="num">${esc(fmtAny(l.Nombre_d_echantillons_stockes))}</td>
+        <td>${last ? `${esc(shortDate(last.start))} ${resBadge(last.statut)}<div class="sub">${esc(personName(S.inspById.get(last.insp)))}</div>` : '<span class="badge st-injoignable">Jamais contrôlé</span>'}</td>
+        <td class="act"><button class="btn sec" data-ctl-new="${l.id}">${ic('add')}Contrôle</button></td></tr>`).join('')}</tbody></table></div>`
+      : `<p class="muted">Aucun lieu de stockage${S.espMine && dpts.length ? ' dans vos départements' : ''} dans <code>${T_STOCK}</code>.</p>`}</section>`;
 }
 
 /* ---------- Espace inspecteur : s'associer à un rendez-vous existant ---------- */
@@ -1296,7 +1471,8 @@ function renderEspace() {
     ${!insp.length ? `<div class="alert warn"><p>Aucun inspecteur dans <code>${T_INSP}</code> : ajoutez-les dans l'onglet « Inspecteurs FranceAgriMer ».</p></div>`
       : !S.me ? '<div class="alert"><p>Choisissez votre nom ci-dessus (une seule fois sur cet ordinateur), puis associez-vous aux rendez-vous de prélèvement que vous souhaitez contrôler.</p></div>'
       : `<section class="fsec"><h3>${ic('check')}Mes contrôles à venir (${mine.length})</h3>${mine.length ? group(mine) : '<p class="muted">Aucun pour l\'instant : choisissez un rendez-vous ci-dessous.</p>'}</section>
-         <section class="fsec"><h3>${ic('calendar')}Rendez-vous ${S.espTaken ? '' : 'sans inspecteur '}(${avail.length})</h3>${avail.length ? group(avail) : '<p class="muted">Aucun rendez-vous sur la période.</p>'}</section>`}`;
+         <section class="fsec"><h3>${ic('calendar')}Rendez-vous ${S.espTaken ? '' : 'sans inspecteur '}(${avail.length})</h3>${avail.length ? group(avail) : '<p class="muted">Aucun rendez-vous sur la période.</p>'}</section>
+         ${stockSection(dpts)}`}`;
   $('#eMe').onchange = e => { setMe(Number(e.target.value) || 0); S.espMine = true; renderEspace(); };
   $('#eRange').onchange = e => { S.espRange = Number(e.target.value); renderEspace(); };
   $('#eMine').onchange = e => { S.espMine = e.target.checked; renderEspace(); };
@@ -1334,7 +1510,7 @@ function renderPeople(t) {
     ${list.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Nom</th><th>${P.extra[1]}</th><th>Téléphone</th><th>E-mail</th><th>${P.zone[1]}</th><th>RDV à venir</th>${cols(t).Actif ? '<th>État</th>' : ''}<th></th></tr></thead><tbody>
     ${list.map(p => { const n = upcoming(p);
       return `<tr><td class="strong">${P.k === 'prel' ? `<span class="dot" style="background:${prelColor(p.id)}"></span> ` : ''}${esc(personName(p) || '(sans nom)')}</td><td>${esc(p[P.extra[0]])}</td>
-      <td>${p.Telephone ? `<a href="tel:${esc(p.Telephone)}">${esc(p.Telephone)}</a>` : ''}</td><td>${p.Email ? `<a href="mailto:${esc(p.Email)}">${esc(p.Email)}</a>` : ''}</td><td>${esc(p[P.zone[0]])}</td>
+      <td>${p.Telephone ? `<a href="tel:${esc(p.Telephone)}">${esc(p.Telephone)}</a>` : ''}</td><td>${p.Email ? `<a href="mailto:${esc(p.Email)}">${esc(p.Email)}</a>` : ''}</td><td>${esc(fmtAny(p[P.zone[0]], typeOf(t, P.zone[0])))}</td>
       <td>${n ? `<a href="#" data-sel="${P.k}:${p.id}">${n} — voir le planning</a>` : '0'}</td>${cols(t).Actif ? `<td>${p.Actif === false ? '<span class="badge">Inactif</span>' : '<span class="badge st-pris">Actif</span>'}</td>` : ''}
       <td class="act"><button class="btn ter icon" data-edit-person="${t}:${p.id}" title="Modifier">${ic('edit')}<span class="sr">Modifier</span></button></td></tr>`; }).join('')}
     </tbody></table></div>` : `<div class="alert"><p>Aucun ${P.one} pour l'instant.</p></div>`}`;
@@ -1349,7 +1525,7 @@ function openPersonForm(t, id) {
       <div class="grp"><label class="lbl" for="pExtra">${P.extra[1]}</label><input class="input" id="pExtra" value="${esc(p[P.extra[0]])}"></div>
       <div class="row"><div class="grp"><label class="lbl" for="pTel">Téléphone</label><input class="input" id="pTel" type="tel" value="${esc(p.Telephone)}"></div>
       <div class="grp"><label class="lbl" for="pMail">E-mail</label><input class="input" id="pMail" type="email" value="${esc(p.Email)}"></div></div>
-      <div class="grp"><label class="lbl" for="pDpt">${P.zone[1]}<span class="hint">${P.zone[2]}</span></label><input class="input" id="pDpt" value="${esc(p[P.zone[0]])}"></div>
+      <div class="grp"><label class="lbl" for="pDpt">${P.zone[1]}<span class="hint">${P.zone[2]}</span></label><input class="input" id="pDpt" value="${esc(fmtAny(p[P.zone[0]], typeOf(t, P.zone[0])).replace(/, /g, '; '))}"></div>
       ${cols(t).Actif ? `<label class="chk"><input type="checkbox" id="pActif" ${p.Actif !== false ? 'checked' : ''}> Actif (proposé dans les fiches)</label>` : ''}</form>`,
   {foot: `<div class="left">${id ? `<button class="btn danger" id="pDel" ${used ? 'disabled title="Affecté à des rendez-vous"' : ''}>${ic('delete')}Supprimer</button>` : ''}</div>
     <button class="btn ter" data-close>Annuler</button><button class="btn" id="pSave">${ic('check')}Enregistrer</button>`});
@@ -1357,6 +1533,7 @@ function openPersonForm(t, id) {
     const fields = {Prenom: $('#pPrenom').value.trim(), Nom: $('#pNom').value.trim(), [P.extra[0]]: $('#pExtra').value.trim(), Telephone: $('#pTel').value.trim(),
       Email: $('#pMail').value.trim(), [P.zone[0]]: $('#pDpt').value.trim()};
     if ($('#pActif')) fields.Actif = $('#pActif').checked;
+    if (typeOf(t, P.zone[0]) === 'ChoiceList') { const z = fields[P.zone[0]]; fields[P.zone[0]] = z ? ['L'].concat(z.split(/\s*[;,]\s*/).filter(Boolean)) : null; }
     Object.keys(fields).forEach(k => { if (!cols(t)[k]) delete fields[k]; });
     if (!fields.Nom && !fields.Prenom) { toast('Indiquez au moins un nom.', true); return; }
     if (await write([id ? ['UpdateRecord', t, id, fields] : ['AddRecord', t, null, fields]], 'Enregistré')) closeModal();
@@ -1385,7 +1562,8 @@ document.addEventListener('click', e => {
   const t = e.target;
   if (t.closest('[data-close]') || t.id === 'overlay') { closeModal(); return; }
   const ia = t.closest('[data-assoc]'); if (ia) { e.stopPropagation(); toggleAssoc(ia.dataset.assoc, ia); return; }
-  const vis = t.closest('[data-visit]'); if (vis) { const v = S.visitByKey.get(vis.dataset.visit); if (v) { if (S.cfg.inspectorOnly || S.tab === 'espace') openVisitInspect(v.key); else openFiche(v.farm.key); } return; }
+  const cn = t.closest('[data-ctl-new]'); if (cn) { e.stopPropagation(); openCtlForm(0, {lieuId: Number(cn.dataset.ctlNew) || 0}); return; }
+  const vis = t.closest('[data-visit]'); if (vis) { const v = S.visitByKey.get(vis.dataset.visit); if (v && v.ctl) { openCtlForm(v.ctl.id); return; } if (v) { if (S.cfg.inspectorOnly || S.tab === 'espace') openVisitInspect(v.key); else openFiche(v.farm.key); } return; }
   const fi = t.closest('[data-fiche]'); if (fi) { e.stopPropagation(); openFiche(fi.dataset.fiche); return; }
   const qh = t.closest('[data-qfarm]');
   if (qh) { const f = S.farms.get(qh.dataset.qfarm), v = f && (f.visits.find(x => x.start.getTime() >= Date.now()) || f.visits[f.visits.length - 1]);
@@ -1472,6 +1650,12 @@ function seedDemo() {
         latitude: 48.2 + i * 0.03, longitude: -3.2 + i * 0.07});
     }
   });
+  // lieux de stockage : colonnes vides, comme dans le document
+  L.db.DATA_Stockage = {next: 1, rows: [], cols: ['Adresse', 'Ville', 'CP', 'Responsable', 'Organisme', 'Nombre_d_echantillons_stockes', 'A_ete_controle', 'Date_de_controle', 'Inspecteur']
+    .map(id => ({id, type: 'Any', isFormula: true, formula: ''}))};
+  [['Zone artisanale de Kerbrat', 'Pontivy', '56300', 'M. Le Goff', 'Laboratoire Agro — dépôt Pontivy', 120], ['12 rue du Port', 'Plérin', '22190', 'Mme Tanguy', 'Point relais coopérative', 45],
+    ['Route de Brest', 'Landerneau', '29800', 'M. Kerjean', 'Chambre d\'agriculture — antenne', 60], ['Parc d\'activités', 'Janzé', '35150', 'Mme Robert', 'Dépôt laboratoire Janzé', 30]]
+    .forEach(([Adresse, Ville, CP, Responsable, Organisme, n]) => L.db.DATA_Stockage.rows.push({id: L.db.DATA_Stockage.next++, Adresse, Ville, CP, Responsable, Organisme, Nombre_d_echantillons_stockes: n}));
   // anciennes tables, pour montrer le renommage
   L.db.Preleveurs = T([['Nom'], ['Prenom'], ['Organisme'], ['Telephone'], ['Email'], ['Departements'], ['Actif', 'Bool'], ['Nom_complet']]);
   [['Morvan', 'Jean', 'Chambre d\'agriculture'], ['Le Bris', 'Anne', 'Laboratoire'], ['Guillou', 'Sophie', 'Chambre d\'agriculture']]
@@ -1491,6 +1675,10 @@ async function seedDemoRdv() {
       Preleveur: s ? (i % 3) + 1 : 0, Inspecteur: s && i % 2 === 1 ? ((i >> 1) % 2) + 1 : 0, Date_RDV: s ? (d => wallToEpoch(d.getFullYear(), d.getMonth() + 1, d.getDate(), s[1], s[2], TZ))(addDays(now, s[0])) : null, Duree_min: 60, Culture_en_place: x.src.Culture_2026}]));
   });
   await B.apply(acts);
+  if (LocalBackend.db[T_CTL]) {
+    const c = (o, h, lieu, insp, nb, res, txt) => { const d = addDays(now, o); return ['AddRecord', T_CTL, null, {Lieu: lieu, Date_controle: wallToEpoch(d.getFullYear(), d.getMonth() + 1, d.getDate(), h, 0, TZ), Inspecteur: insp, Nombre_d_echantillons_constates: nb, Resultat: res, Constat: txt}]; };
+    await B.apply([c(-9, 10, 1, 2, 118, 'Conforme', 'Échantillons au froid, étiquetage correct.'), c(-3, 15, 2, 1, 40, 'Avec réserves', 'Température du réfrigérateur à 7 °C.'), c(-1, 11, 1, 1, 96, 'Conforme', '')]);
+  }
 }
 
 if (window.grist && window.self !== window.top) {
