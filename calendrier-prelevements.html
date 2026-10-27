@@ -64,6 +64,8 @@
   .ic-check{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='m10 15.172 9.192-9.193 1.415 1.414L10 18l-6.364-6.364 1.414-1.414 4.95 4.95Z'/></svg>")}
   .ic-info{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10Zm0-2a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM11 7h2v2h-2V7Zm0 4h2v6h-2v-6Z'/></svg>")}
   .ic-warning{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='m12.866 3 9.526 16.5a1 1 0 0 1-.866 1.5H2.474a1 1 0 0 1-.866-1.5L11.134 3a1 1 0 0 1 1.732 0zm-8.66 16h15.588L12 5.5 4.206 19zM11 16h2v2h-2v-2zm0-7h2v5h-2V9z'/></svg>")}
+  .ic-chart{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M2 13h6v8H2v-8zm14-5h6v13h-6V8zM9 3h6v18H9V3zM4 15v4h2v-4H4zm7-10v14h2V5h-2zm7 5v9h2v-9h-2z'/></svg>")}
+  .ic-download{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M3 19h18v2H3v-2zm10-5.828L19.071 7.1l1.414 1.414L12 17 3.515 8.515 4.929 7.1 11 13.17V2h2v11.172z'/></svg>")}
   .ic-search{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='m18.031 16.617 4.283 4.282-1.415 1.415-4.282-4.283A8.96 8.96 0 0 1 11 20c-4.968 0-9-4.032-9-9s4.032-9 9-9 9 4.032 9 9a8.96 8.96 0 0 1-1.969 5.617Zm-2.006-.742A6.977 6.977 0 0 0 18 11c0-3.868-3.133-7-7-7-3.868 0-7 3.132-7 7 0 3.867 3.132 7 7 7a6.977 6.977 0 0 0 4.875-1.975l.15-.15Z'/></svg>")}
 
   /* ================= Bloc-marque DSFR (DSFR 1.14.2) ================= */
@@ -317,6 +319,20 @@
   .esp-row .s{font-size:.8rem;color:var(--mention);display:flex;gap:12px;flex-wrap:wrap}
   @media (max-width:720px){.esp-row{grid-template-columns:60px 1fr}.esp-row .act{grid-column:2}}
 
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:0 0 1rem}
+  .kpi{border:1px solid var(--border);border-top:3px solid var(--bf);padding:.75rem 1rem}
+  .kpi-l{font-size:.8rem;color:var(--mention)}
+  .kpi-v{font-size:2rem;font-weight:700;color:var(--title);line-height:1.2;font-variant-numeric:tabular-nums}
+  .kpi-s{font-size:.78rem;color:var(--mention)}
+  .tbl .num{text-align:right;font-variant-numeric:tabular-nums}
+  .tbl.dash tr.open>td{background:var(--bf-975)}
+  .dash-detail>td{background:var(--alt)!important;padding:.5rem 1rem 1rem}
+  .bar{height:8px;background:var(--contrast);border-radius:4px;overflow:hidden;width:120px;max-width:100%;margin:.35rem 0 .1rem}
+  .bar span{display:block;height:100%;background:var(--bf);border-radius:0 4px 4px 0}
+  .tbl.matrix td.heat{background:color-mix(in srgb,var(--bf) calc(var(--h) * 75%),var(--surface))!important;color:var(--title)}
+  .tbl.matrix td.heat.dark{color:#fff}
+  .tbl.matrix tr.tot td{font-weight:700;border-top:2px solid var(--text)}
+
   /* ================= Toast / chargement ================= */
   #toastRoot{position:fixed;right:16px;bottom:16px;z-index:200;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
   .toast{background:var(--title);color:#fff;padding:.7rem 1rem;font-size:.875rem;box-shadow:var(--shadow-lg);display:flex;gap:8px;align-items:center;max-width:min(420px,90vw)}
@@ -364,6 +380,7 @@
 <div class="demo" id="demoBanner" hidden><span class="ic ic-info" aria-hidden="true"></span><span><b>Mode démonstration</b> — ouvert hors de Grist : données fictives conservées en mémoire le temps de la session.</span></div>
 <nav class="tabs" role="tablist" id="tabs" hidden>
   <button class="tab" role="tab" data-tab="cal" aria-selected="true"><span class="ic ic-calendar" aria-hidden="true"></span>Calendrier</button>
+  <button class="tab" role="tab" data-tab="dash" aria-selected="false"><span class="ic ic-chart" aria-hidden="true"></span>Tableau de bord</button>
   <button class="tab" role="tab" data-tab="exp" aria-selected="false"><span class="ic ic-plant" aria-hidden="true"></span>Exploitations <span class="count" id="cntExp">0</span></button>
   <button class="tab" role="tab" data-tab="prel" aria-selected="false"><span class="ic ic-user" aria-hidden="true"></span>Préleveurs <span class="count" id="cntPrel">0</span></button>
   <button class="tab" role="tab" data-tab="espace" aria-selected="false"><span class="ic ic-shield" aria-hidden="true"></span>Espace inspecteur</button>
@@ -598,6 +615,7 @@ const S = {
   tab: 'cal', view: 'month', cursor: new Date(),
   sel: {kind: '', id: 0}, q: '', statut: '', dpt: '',
   expQ: '', expStatut: '', expDpt: '',
+  dashPeriod: 'all', dashDpt: '', dashOpen: 0,
   me: 0, espRange: 30, espMine: true, espTaken: false, espQ: ''
 };
 const cols = t => (S.meta[t] || {cols: {}}).cols;
@@ -762,6 +780,7 @@ function render() {
   $$('.tab').forEach(t => { t.hidden = S.cfg.inspectorOnly && !['espace', 'cal'].includes(t.dataset.tab); t.setAttribute('aria-selected', String(t.dataset.tab === S.tab)); });
   if (S.tab === 'cal') renderCalendar();
   else if (S.tab === 'espace') renderEspace();
+  else if (S.tab === 'dash') renderDash();
   else if (S.tab === 'exp') renderFarms();
   else renderPeople(S.tab === 'prel' ? T_PREL : T_INSP);
 }
@@ -1105,6 +1124,88 @@ function openRoadmap() {
 function printModal() { document.body.classList.add('printing'); window.print(); setTimeout(() => document.body.classList.remove('printing'), 500); }
 
 
+
+/* ---------- Tableau de bord : inspections des préleveurs ---------- */
+function dashVisits() {
+  const now = new Date(), p = S.dashPeriod;
+  let a = null, b = null;
+  if (p === 'month') { a = new Date(now.getFullYear(), now.getMonth(), 1); b = new Date(now.getFullYear(), now.getMonth() + 1, 1); }
+  else if (p === 'week') { a = startOfWeek(now); b = addDays(a, 7); }
+  else if (p === '30') { a = addDays(now, -30); b = now; }
+  return S.visits.filter(v => (!a || v.start >= a) && (!b || v.start < b) && (!S.dashDpt || v.farm.dpt === S.dashDpt));
+}
+function dashStats() {
+  const now = new Date(), list = dashVisits(), rows = new Map();
+  const rowOf = id => { if (!rows.has(id)) rows.set(id, {id, p: S.prelById.get(id), rdv: 0, done: 0, todo: 0, byInsp: new Map(), visits: [], last: null}); return rows.get(id); };
+  S.prel.filter(p => p.Actif !== false).forEach(p => rowOf(p.id));
+  for (const v of list) {
+    const r = rowOf(v.prel || 0); r.rdv++; r.visits.push(v);
+    if (!v.insp) continue;
+    const past = v.start < now; if (past) r.done++; else r.todo++;
+    const b = r.byInsp.get(v.insp) || {done: 0, todo: 0}; past ? b.done++ : b.todo++; r.byInsp.set(v.insp, b);
+    if (past && (!r.last || v.start > r.last.start)) r.last = v;
+  }
+  const out = Array.from(rows.values()).filter(r => r.id || r.rdv);
+  out.forEach(r => { r.rate = r.rdv ? (r.done + r.todo) / r.rdv : 0; });
+  out.sort((x, y) => (!x.id - !y.id) || (x.done + x.todo) - (y.done + y.todo) || personName(x.p).localeCompare(personName(y.p)));
+  return {list, rows: out, now};
+}
+const pct = x => Math.round(x * 100) + ' %';
+function renderDash() {
+  const {list, rows, now} = dashStats(), named = rows.filter(r => r.id);
+  const inspected = list.filter(v => v.insp), done = inspected.filter(v => v.start < now).length, never = named.filter(r => !r.done);
+  const inspIds = Array.from(new Set(inspected.map(v => v.insp))).sort((a, b) => personName(S.inspById.get(a)).localeCompare(personName(S.inspById.get(b))));
+  const maxCell = Math.max(1, ...named.flatMap(r => inspIds.map(i => { const b = r.byInsp.get(i); return b ? b.done + b.todo : 0; })));
+  const tile = (label, value, sub) => `<div class="kpi"><div class="kpi-l">${esc(label)}</div><div class="kpi-v">${value}</div>${sub ? `<div class="kpi-s">${sub}</div>` : ''}</div>`;
+  const inspList = r => Array.from(r.byInsp.entries()).sort((a, b) => (b[1].done + b[1].todo) - (a[1].done + a[1].todo))
+    .map(([i, b]) => `<span class="tag" title="${b.done} réalisé(s), ${b.todo} prévu(s)">${ic('shield')} ${esc(personName(S.inspById.get(i)))} × ${b.done + b.todo}</span>`).join(' ');
+  const detail = r => {
+    const vs = r.visits.filter(v => v.insp).sort((a, b) => b.start - a.start);
+    return `<tr class="dash-detail"><td colspan="7">${vs.length ? `<table class="tbl"><thead><tr><th>Date</th><th>Exploitation</th><th>Inspecteur</th><th>État</th></tr></thead><tbody>
+      ${vs.map(v => `<tr class="click" data-visit="${esc(v.key)}"><td>${esc(shortDate(v.start))} ${hm(v.start)}</td><td>${esc(v.farm.name)} <span class="sub">${esc(v.farm.pacage)}</span></td>
+        <td>${esc(personName(S.inspById.get(v.insp)))}</td><td>${v.start < now ? '<span class="badge st-pris">Réalisée</span>' : '<span class="badge st-none">Prévue</span>'}</td></tr>`).join('')}</tbody></table>`
+      : '<p class="sub">Aucune inspection sur la période.</p>'}</td></tr>`;
+  };
+  $('#main').innerHTML = `<div class="section-head"><h2>${ic('chart')} Tableau de bord des inspections</h2>
+      <button class="btn ter" id="dashCsv">${ic('download')}Exporter (CSV)</button></div>
+    <div class="filters">
+      <div><label class="lbl" for="dPer">Période</label><select class="select" id="dPer">${optList([['all', 'Toute la campagne'], ['month', 'Ce mois-ci'], ['week', 'Cette semaine'], ['30', '30 derniers jours']], S.dashPeriod, null)}</select></div>
+      <div><label class="lbl" for="dDpt">Département</label><select class="select" id="dDpt">${optList(dptList().map(d => [d, d]), S.dashDpt, 'Tous')}</select></div>
+    </div>
+    <div class="kpis">
+      ${tile('Rendez-vous', list.length, `${list.filter(v => v.start < now).length} passés · ${list.filter(v => v.start >= now).length} à venir`)}
+      ${tile('Rendez-vous inspectés', inspected.length, `${done} réalisés · ${inspected.length - done} prévus`)}
+      ${tile('Taux d\'inspection', list.length ? pct(inspected.length / list.length) : '—', 'part des rendez-vous avec un inspecteur')}
+      ${tile('Préleveurs déjà inspectés', `${named.length - never.length} / ${named.length}`, never.length ? `${never.length} jamais inspecté(s)${never.filter(r => r.todo).length ? ', dont ' + never.filter(r => r.todo).length + ' avec une inspection prévue' : ''}` : 'tous inspectés au moins une fois')}
+    </div>
+    ${never.length ? `<div class="alert warn"><p><b>Jamais inspectés sur la période :</b> ${never.map(r => esc(personName(r.p)) + (r.todo ? ' (inspection prévue)' : '')).join(', ')}</p></div>` : ''}
+    <section class="fsec"><h3>${ic('user')}Inspections par préleveur</h3>
+      <div class="tbl-wrap"><table class="tbl dash"><thead><tr><th>Préleveur</th><th class="num">RDV</th><th class="num">Inspections réalisées</th><th class="num">Prévues</th><th>Taux d'inspection</th><th>Inspecté par</th><th>Dernière inspection</th></tr></thead><tbody>
+      ${rows.map(r => { const n = r.done + r.todo, open = S.dashOpen === (r.id || -1);
+        return `<tr class="click${open ? ' open' : ''}" data-dash="${r.id || -1}"><td class="strong">${r.id ? `<span class="dot" style="background:${prelColor(r.id)}"></span> ` : ''}${esc(r.id ? personName(r.p) : 'Sans préleveur')}</td>
+        <td class="num">${r.rdv}</td><td class="num strong">${r.done}</td><td class="num">${r.todo}</td>
+        <td><div class="bar" title="${n} inspection(s) sur ${r.rdv} rendez-vous"><span style="width:${r.rdv ? Math.max(n ? 3 : 0, r.rate * 100) : 0}%"></span></div><span class="sub">${r.rdv ? pct(r.rate) : '—'}</span></td>
+        <td>${inspList(r)}${!r.done && r.rdv ? ' <span class="badge st-injoignable">Jamais inspecté</span>' : ''}${!r.rdv ? '<span class="sub">Aucun RDV</span>' : ''}</td>
+        <td>${r.last ? `${esc(shortDate(r.last.start))}<div class="sub">${esc(personName(S.inspById.get(r.last.insp)))}</div>` : '<span class="sub">—</span>'}</td></tr>${open ? detail(r) : ''}`; }).join('')}
+      </tbody></table></div><p class="sub">Cliquez sur un préleveur pour voir le détail de ses inspections (date, exploitation, inspecteur).</p></section>
+    ${inspIds.length ? `<section class="fsec"><h3>${ic('shield')}Qui a inspecté qui</h3><p class="sub">Nombre de rendez-vous du préleveur (ligne) suivis par l'inspecteur (colonne), réalisés et prévus.</p>
+      <div class="tbl-wrap"><table class="tbl matrix"><thead><tr><th>Préleveur</th>${inspIds.map(i => `<th class="num">${esc(personName(S.inspById.get(i)))}</th>`).join('')}<th class="num">Total</th></tr></thead><tbody>
+      ${named.map(r => `<tr><td class="strong">${esc(personName(r.p))}</td>${inspIds.map(i => { const b = r.byInsp.get(i), n = b ? b.done + b.todo : 0;
+        return `<td class="num heat${n / maxCell > .6 ? ' dark' : ''}" style="--h:${n / maxCell}" title="${esc(personName(r.p))} / ${esc(personName(S.inspById.get(i)))} : ${b ? b.done : 0} réalisé(s), ${b ? b.todo : 0} prévu(s)">${n || ''}</td>`; }).join('')}<td class="num strong">${r.done + r.todo}</td></tr>`).join('')}
+      <tr class="tot"><td>Total</td>${inspIds.map(i => `<td class="num">${inspected.filter(v => v.insp === i).length}</td>`).join('')}<td class="num">${inspected.length}</td></tr>
+      </tbody></table></div></section>` : '<p class="muted">Aucun rendez-vous inspecté sur la période.</p>'}`;
+  $('#dPer').onchange = e => { S.dashPeriod = e.target.value; renderDash(); };
+  $('#dDpt').onchange = e => { S.dashDpt = e.target.value; renderDash(); };
+  $$('[data-dash]').forEach(tr => tr.onclick = () => { const id = Number(tr.dataset.dash); S.dashOpen = S.dashOpen === id ? 0 : id; renderDash(); });
+  $('#dashCsv').onclick = () => {
+    const lines = [['Préleveur', 'Date', 'Heure', 'Exploitation', 'PACAGE', 'Inspecteur', 'État']];
+    rows.forEach(r => r.visits.filter(v => v.insp).forEach(v => lines.push([r.id ? personName(r.p) : 'Sans préleveur', shortDate(v.start), hm(v.start), v.farm.name, v.farm.pacage, personName(S.inspById.get(v.insp)), v.start < now ? 'Réalisée' : 'Prévue'])));
+    const csv = '﻿' + lines.map(l => l.map(x => '"' + String(x).replace(/"/g, '""') + '"').join(';')).join('\r\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], {type: 'text/csv;charset=utf-8'})); a.download = 'inspections-preleveurs.csv';
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  };
+}
+
 /* ---------- Espace inspecteur : s'associer à un rendez-vous existant ---------- */
 const dptNorm = s => String(s || '').replace(/\D/g, '').replace(/^0+/, '');
 function myDpts(p) { return String(p && p.Departements || '').split(/[,;\s/]+/).map(dptNorm).filter(Boolean); }
@@ -1350,7 +1451,7 @@ async function seedDemoRdv() {
     const s = slots[i], st = s ? 'Rdv pris' : ['Injoignable', 'Refus', 'Faux numéro', null][i % 4];
     f.parcels.forEach(x => acts.push(['AddRecord', T_RDV, null, {Cle_parcelle: x.key, N_dossier_DN: Number(x.src.dossier_number), Statut: st,
       Date_heure_appel_1: wallToEpoch(y, m + 1, 1, 10, 0, TZ), Presence_souhaitee_agriculteur: i % 2 ? 'Oui' : 'Non',
-      Preleveur: s ? (i % 3) + 1 : 0, Inspecteur: s && i % 4 === 1 ? (i % 2) + 1 : 0, Date_RDV: s ? (d => wallToEpoch(d.getFullYear(), d.getMonth() + 1, d.getDate(), s[1], s[2], TZ))(addDays(now, s[0])) : null, Duree_min: 60, Culture_en_place: x.src.Culture_2026}]));
+      Preleveur: s ? (i % 3) + 1 : 0, Inspecteur: s && i % 2 === 1 ? ((i >> 1) % 2) + 1 : 0, Date_RDV: s ? (d => wallToEpoch(d.getFullYear(), d.getMonth() + 1, d.getDate(), s[1], s[2], TZ))(addDays(now, s[0])) : null, Duree_min: 60, Culture_en_place: x.src.Culture_2026}]));
   });
   await B.apply(acts);
 }
