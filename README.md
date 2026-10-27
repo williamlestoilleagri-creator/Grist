@@ -84,12 +84,14 @@ Charte DSFR (police Marianne, bleu France, bloc-marque). Gère une **fiche « Re
 | `DATA_RELIQUATCLEAN` (source, lecture) | Parcelles à prélever : clé `CLELAB`, n° dossier DN, PACAGE, exploitation, téléphone, e-mail, adresse, réponses de l'agriculteur (zones à éviter, fertilisation, prairie…) |
 | `DATA_Parcelles_DEF` (source, lecture, facultatif) | Îlot, parcelle, surface, cultures 2024-2025, bassin, raison de la sélection, latitude / longitude (clé `CLE`) |
 | `RDV_Prelevements` | `Cle_parcelle`*, `N_dossier_DN`, `Date_heure_appel_1/2/3`, `Statut` (Rdv pris, Injoignable, Refus, Faux numéro), `Presence_souhaitee_agriculteur`, `Culture_en_place`, `Absence_fertilisation_recente`, `Preleveur` (réf. `DATA_Preleveur`), `Date_RDV`, `Etiquette_prelevement`, `Commentaire`, `Inspecteur` (réf. `DATA_Inspecteur`), `Duree_min` ; formules `PACAGE`, `Code_dpt`, `Nom_exploitation` ; `Cree_le`, `Cree_par`, `Modifie_le` |
-| `DATA_Preleveur`, `DATA_Inspecteur` | Nom, prénom, organisme / service, téléphone, e-mail, départements, actif |
+| `DATA_Preleveur` | Même structure que le fichier `CAMPAGNE_2026_Suivi_de_campagne_Reliquat-DATA_Preleveur.xlsx` : `Nom`, `Prenom`, `Organisme`, `Telephone`, `Email`, `Zone d'action` (`Zone_d_action`) — le fichier s'importe directement dans la table |
+| `DATA_Inspecteur` | Nom, prénom, service, téléphone, e-mail, départements, actif |
 
 ### Mise en place
 
 Widget personnalisé, accès **Accès complet au document**, lié à `RDV_Prelevements`. L'écran **Mise en place** liste les modifications avant de les appliquer :
 - renomme `Preleveurs` → `DATA_Preleveur` et `Inspecteurs_FAM` → `DATA_Inspecteur` (données et références conservées), ou les crée ;
+- aligne `DATA_Preleveur` sur le fichier de référence : `Departements` renommée en « Zone d'action », colonnes `Nom_complet` et `Actif` retirées ;
 - crée `RDV_Prelevements`, ou ajoute les colonnes manquantes à la table existante (aucune colonne supprimée ni renommée), remplace les choix de `Statut` et calcule `Code_dpt` à partir de la clé parcelle (règles d'accès par département).
 
 ### Fonctions

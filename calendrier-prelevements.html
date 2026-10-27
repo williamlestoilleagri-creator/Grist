@@ -444,7 +444,11 @@ function rdvSchema() {
 const PEOPLE_SCHEMA = extra => [{id: 'Nom', type: 'Text'}, {id: 'Prenom', type: 'Text'},
   {id: 'Nom_complet', type: 'Text', isFormula: true, formula: '" ".join(x for x in [$Prenom, $Nom] if x)'},
   extra, {id: 'Telephone', type: 'Text'}, {id: 'Email', type: 'Text'}, {id: 'Departements', type: 'Text'}, {id: 'Actif', type: 'Bool', formula: 'True'}];
-const PEOPLE_TABLES = {[T_PREL]: PEOPLE_SCHEMA({id: 'Organisme', type: 'Text'}), [T_INSP]: PEOPLE_SCHEMA({id: 'Service', type: 'Text'})};
+// DATA_Preleveur : même structure que le fichier « CAMPAGNE_2026_Suivi_de_campagne_Reliquat-DATA_Preleveur.xlsx »
+const PREL_SCHEMA = [{id: 'Nom', type: 'Text'}, {id: 'Prenom', type: 'Text'}, {id: 'Organisme', type: 'Text'}, {id: 'Telephone', type: 'Text'},
+  {id: 'Email', type: 'Text'}, {id: 'Zone_d_action', label: 'Zone d\'action', type: 'Text'}];
+const PREL_OBSOLETE = ['Nom_complet', 'Actif'];
+const PEOPLE_TABLES = {[T_PREL]: PREL_SCHEMA, [T_INSP]: PEOPLE_SCHEMA({id: 'Service', type: 'Text'})};
 
 // Informations utiles au préleveur : [colonne, libellé] (table des parcelles puis DATA_Parcelles_DEF)
 const INFO_PARC = [
@@ -595,6 +599,8 @@ const LocalBackend = {
         Object.values(this.db).forEach(x => x.cols.forEach(c => { if (c.type === 'Ref:' + old) c.type = 'Ref:' + nw; })); ret.push(null);
       }
       else if (op === 'AddColumn') { t.cols.push(Object.assign({id: a[2]}, a[3])); ret.push({colId: a[2]}); }
+      else if (op === 'RenameColumn') { const c = t.cols.find(x => x.id === a[2]); c.id = a[3]; t.rows.forEach(r => { r[a[3]] = r[a[2]]; delete r[a[2]]; }); ret.push(null); }
+      else if (op === 'RemoveColumn') { t.cols = t.cols.filter(x => x.id !== a[2]); t.rows.forEach(r => { delete r[a[2]]; }); ret.push(null); }
       else if (op === 'ModifyColumn') { Object.assign(t.cols.find(c => c.id === a[2]), a[3]); ret.push(null); }
       else if (op === 'AddRecord') { const id = t.next++; const r = {id}; t.cols.forEach(c => { if (!c.isFormula && c.formula === 'True') r[c.id] = true; }); t.rows.push(Object.assign(r, a[3])); ret.push(id); }
       else if (op === 'UpdateRecord') { const r = t && t.rows.find(x => x.id === a[2]); if (r) Object.assign(r, a[3]); ret.push(null); }
@@ -688,7 +694,14 @@ const colInfo = c => Object.assign({type: c.type, isFormula: !!c.isFormula, form
 function plan() {
   const ops = [];
   for (const t of [T_PREL, T_INSP]) {
-    if (S.meta[t]) { const miss = PEOPLE_TABLES[t].filter(c => !S.meta[t].cols[c.id]); if (miss.length) ops.push({text: `Ajouter à <code>${t}</code> : ${miss.map(c => c.id).join(', ')}`, run: () => B.apply(miss.map(c => ['AddColumn', t, c.id, colInfo(c)]))}); }
+    if (S.meta[t] && t === T_PREL) {
+      const pc = S.meta[t].cols;
+      if (pc.Departements && !pc.Zone_d_action) ops.push({text: `Renommer la colonne <code>Departements</code> de <code>${t}</code> en « Zone d'action » (données conservées)`,
+        run: () => B.apply([['RenameColumn', t, 'Departements', 'Zone_d_action'], ['ModifyColumn', t, 'Zone_d_action', {label: 'Zone d\'action'}]])});
+      const old = PREL_OBSOLETE.filter(c => pc[c]);
+      if (old.length) ops.push({text: `Retirer de <code>${t}</code> les colonnes absentes du fichier de référence : ${old.join(', ')}`, run: () => B.apply(old.map(c => ['RemoveColumn', t, c]))});
+    }
+    if (S.meta[t]) { const miss = PEOPLE_TABLES[t].filter(c => !S.meta[t].cols[c.id] && !(c.id === 'Zone_d_action' && S.meta[t].cols.Departements)); if (miss.length) ops.push({text: `Ajouter à <code>${t}</code> : ${miss.map(c => c.id).join(', ')}`, run: () => B.apply(miss.map(c => ['AddColumn', t, c.id, colInfo(c)]))}); }
     else if (S.meta[OLD_NAMES[t]]) ops.push({text: `Renommer <code>${OLD_NAMES[t]}</code> en <code>${t}</code> (données conservées)`, run: () => B.apply([['UpdateRecord', '_grist_Tables', S.meta[OLD_NAMES[t]].rowId, {tableId: t}]])});
     else ops.push({text: `Créer la table <code>${t}</code>`, run: () => B.apply([['AddTable', t, PEOPLE_TABLES[t].map(c => Object.assign({id: c.id}, colInfo(c)))]])});
   }
@@ -718,10 +731,11 @@ async function runPlan() {
 async function fixRefs() {
   S.meta = await B.meta();
   const acts = [];
-  for (const [c, t] of [['Preleveur', T_PREL], ['Inspecteur', T_INSP]]) {
-    const cm = cols(T_RDV)[c], show = cols(t).Nom_complet;
+  // Préleveur : affiché « Prénom Nom » (DATA_Preleveur n'a pas de colonne Nom_complet) ; inspecteur : Nom_complet
+  for (const [c, t, showCol, formula] of [['Preleveur', T_PREL, 'Nom', '" ".join(x for x in [$Preleveur.Prenom, $Preleveur.Nom] if x)'], ['Inspecteur', T_INSP, 'Nom_complet', '$Inspecteur.Nom_complet']]) {
+    const cm = cols(T_RDV)[c], show = cols(t)[showCol];
     if (cm && show && cm.type === 'Ref:' + t && cm.visibleCol !== show.rowId) {
-      acts.push(['UpdateRecord', '_grist_Tables_column', cm.rowId, {visibleCol: show.rowId}], ['SetDisplayFormula', T_RDV, null, cm.rowId, `$${c}.Nom_complet`]);
+      acts.push(['UpdateRecord', '_grist_Tables_column', cm.rowId, {visibleCol: show.rowId}], ['SetDisplayFormula', T_RDV, null, cm.rowId, formula]);
     }
   }
   if (acts.length && B.mode === 'grist') { try { await B.apply(acts); } catch (e) { console.warn('Affichage des références non configuré', e); } }
@@ -1025,7 +1039,7 @@ function parcelInfo(x) {
   return html || '<p class="sub">Aucune information complémentaire.</p>';
 }
 // Fiche contact du préleveur : toutes les colonnes de DATA_Preleveur
-const PREL_LABELS = {Telephone: 'Téléphone', Email: 'E-mail', Departements: 'Départements couverts', Organisme: 'Organisme'};
+const PREL_LABELS = {Telephone: 'Téléphone', Email: 'E-mail', Departements: 'Départements couverts', Organisme: 'Organisme', Zone_d_action: 'Zone d\'action'};
 const PREL_HIDDEN = new Set(['id', 'manualSort', 'Nom', 'Prenom', 'Nom_complet', 'Actif']);
 function prelContact(id) {
   const p = S.prelById.get(id);
@@ -1310,18 +1324,18 @@ function openVisitInspect(key) {
 
 /* ---------- Préleveurs / inspecteurs ---------- */
 const PEOPLE = {
-  [T_PREL]: {title: 'Préleveurs', one: 'préleveur', icon: 'user', k: 'prel', extra: ['Organisme', 'Organisme']},
-  [T_INSP]: {title: 'Inspecteurs FranceAgriMer', one: 'inspecteur', icon: 'shield', k: 'insp', extra: ['Service', 'Service / délégation']}
+  [T_PREL]: {title: 'Préleveurs', one: 'préleveur', icon: 'user', k: 'prel', extra: ['Organisme', 'Organisme'], zone: ['Zone_d_action', 'Zone d\'action', 'Ex. : 22; 35 ou Bretagne']},
+  [T_INSP]: {title: 'Inspecteurs FranceAgriMer', one: 'inspecteur', icon: 'shield', k: 'insp', extra: ['Service', 'Service / délégation'], zone: ['Departements', 'Départements couverts', 'Ex. : 022, 029']}
 };
 function renderPeople(t) {
   const P = PEOPLE[t], list = (t === T_PREL ? S.prel : S.insp).slice().sort((a, b) => (b.Actif !== false) - (a.Actif !== false) || personName(a).localeCompare(personName(b)));
   const now = Date.now(), upcoming = p => S.visits.filter(v => v[P.k] === p.id && v.start.getTime() >= now).length;
   $('#main').innerHTML = `<div class="section-head"><h2>${P.title}</h2><span class="muted">Table <code>${t}</code></span><button class="btn" id="addPerson">${ic('add')}Ajouter un ${P.one}</button></div>
-    ${list.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Nom</th><th>${P.extra[1]}</th><th>Téléphone</th><th>E-mail</th><th>Départements</th><th>RDV à venir</th><th>État</th><th></th></tr></thead><tbody>
+    ${list.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Nom</th><th>${P.extra[1]}</th><th>Téléphone</th><th>E-mail</th><th>${P.zone[1]}</th><th>RDV à venir</th>${cols(t).Actif ? '<th>État</th>' : ''}<th></th></tr></thead><tbody>
     ${list.map(p => { const n = upcoming(p);
       return `<tr><td class="strong">${P.k === 'prel' ? `<span class="dot" style="background:${prelColor(p.id)}"></span> ` : ''}${esc(personName(p) || '(sans nom)')}</td><td>${esc(p[P.extra[0]])}</td>
-      <td>${p.Telephone ? `<a href="tel:${esc(p.Telephone)}">${esc(p.Telephone)}</a>` : ''}</td><td>${p.Email ? `<a href="mailto:${esc(p.Email)}">${esc(p.Email)}</a>` : ''}</td><td>${esc(p.Departements)}</td>
-      <td>${n ? `<a href="#" data-sel="${P.k}:${p.id}">${n} — voir le planning</a>` : '0'}</td><td>${p.Actif === false ? '<span class="badge">Inactif</span>' : '<span class="badge st-pris">Actif</span>'}</td>
+      <td>${p.Telephone ? `<a href="tel:${esc(p.Telephone)}">${esc(p.Telephone)}</a>` : ''}</td><td>${p.Email ? `<a href="mailto:${esc(p.Email)}">${esc(p.Email)}</a>` : ''}</td><td>${esc(p[P.zone[0]])}</td>
+      <td>${n ? `<a href="#" data-sel="${P.k}:${p.id}">${n} — voir le planning</a>` : '0'}</td>${cols(t).Actif ? `<td>${p.Actif === false ? '<span class="badge">Inactif</span>' : '<span class="badge st-pris">Actif</span>'}</td>` : ''}
       <td class="act"><button class="btn ter icon" data-edit-person="${t}:${p.id}" title="Modifier">${ic('edit')}<span class="sr">Modifier</span></button></td></tr>`; }).join('')}
     </tbody></table></div>` : `<div class="alert"><p>Aucun ${P.one} pour l'instant.</p></div>`}`;
   $('#addPerson').onclick = () => openPersonForm(t, null);
@@ -1335,13 +1349,15 @@ function openPersonForm(t, id) {
       <div class="grp"><label class="lbl" for="pExtra">${P.extra[1]}</label><input class="input" id="pExtra" value="${esc(p[P.extra[0]])}"></div>
       <div class="row"><div class="grp"><label class="lbl" for="pTel">Téléphone</label><input class="input" id="pTel" type="tel" value="${esc(p.Telephone)}"></div>
       <div class="grp"><label class="lbl" for="pMail">E-mail</label><input class="input" id="pMail" type="email" value="${esc(p.Email)}"></div></div>
-      <div class="grp"><label class="lbl" for="pDpt">Départements couverts<span class="hint">Ex. : 022, 029</span></label><input class="input" id="pDpt" value="${esc(p.Departements)}"></div>
-      <label class="chk"><input type="checkbox" id="pActif" ${p.Actif !== false ? 'checked' : ''}> Actif (proposé dans les fiches)</label></form>`,
-  {foot: `<div class="left">${id ? `<button class="btn danger" id="pDel" ${used ? 'disabled title="Affecté à des rendez-vous : désactivez-le plutôt"' : ''}>${ic('delete')}Supprimer</button>` : ''}</div>
+      <div class="grp"><label class="lbl" for="pDpt">${P.zone[1]}<span class="hint">${P.zone[2]}</span></label><input class="input" id="pDpt" value="${esc(p[P.zone[0]])}"></div>
+      ${cols(t).Actif ? `<label class="chk"><input type="checkbox" id="pActif" ${p.Actif !== false ? 'checked' : ''}> Actif (proposé dans les fiches)</label>` : ''}</form>`,
+  {foot: `<div class="left">${id ? `<button class="btn danger" id="pDel" ${used ? 'disabled title="Affecté à des rendez-vous"' : ''}>${ic('delete')}Supprimer</button>` : ''}</div>
     <button class="btn ter" data-close>Annuler</button><button class="btn" id="pSave">${ic('check')}Enregistrer</button>`});
   $('#pSave').onclick = async () => {
     const fields = {Prenom: $('#pPrenom').value.trim(), Nom: $('#pNom').value.trim(), [P.extra[0]]: $('#pExtra').value.trim(), Telephone: $('#pTel').value.trim(),
-      Email: $('#pMail').value.trim(), Departements: $('#pDpt').value.trim(), Actif: $('#pActif').checked};
+      Email: $('#pMail').value.trim(), [P.zone[0]]: $('#pDpt').value.trim()};
+    if ($('#pActif')) fields.Actif = $('#pActif').checked;
+    Object.keys(fields).forEach(k => { if (!cols(t)[k]) delete fields[k]; });
     if (!fields.Nom && !fields.Prenom) { toast('Indiquez au moins un nom.', true); return; }
     if (await write([id ? ['UpdateRecord', t, id, fields] : ['AddRecord', t, null, fields]], 'Enregistré')) closeModal();
   };
