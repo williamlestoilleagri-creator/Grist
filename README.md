@@ -112,6 +112,7 @@ Remplit la table `DATA_Carte` (colonne `Etablissement`) à partir de `DATA_Inscr
 1. Ajoutez une vue **Widget personnalisé** (sur une page non publique), URL du fichier publié, **Accès complet au document**.
 2. Choisissez l'**année** (`Liste_Annee`) et la **campagne** (`Liste_Campagne`, ou « Toutes les campagnes de l'année »).
 3. Option : ne garder que les établissements ayant participé (`A_participe`).
-4. Mode **Remplacer** (vide la carte puis la remplit) ou **Ajouter** (sans doublons), puis **Alimenter la carte**.
+4. Mode **Garder uniquement la sélection** (retire de la carte les établissements hors sélection et les doublons, ajoute les manquants) ou **Ajouter** (sans doublons), puis **Alimenter la carte**.
+5. Option **Actualiser automatiquement** : la carte se met à jour dès qu'on change l'année, la campagne ou le filtre.
 
 Le filtrage se fait sur `DATA_Inscrits.CampagneREF` (ou `AnneeREF` si toutes les campagnes).

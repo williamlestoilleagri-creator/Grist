@@ -66,8 +66,9 @@
     </div>
     <div class="opts">
       <label><input type="checkbox" id="participants"> Uniquement les établissements ayant participé (saisie de résultats)</label>
-      <label><input type="radio" name="mode" value="replace" checked> Remplacer le contenu actuel de la carte</label>
-      <label><input type="radio" name="mode" value="append"> Ajouter à la carte (sans doublons)</label>
+      <label><input type="radio" name="mode" value="sync" checked> Garder uniquement la sélection (retire les autres établissements de la carte)</label>
+      <label><input type="radio" name="mode" value="append"> Ajouter à la carte (sans doublons, ne retire rien)</label>
+      <label><input type="checkbox" id="auto"> Actualiser la carte automatiquement dès que je change l'année, la campagne ou le filtre</label>
     </div>
   </div>
 
@@ -75,7 +76,9 @@
     <div class="row">
       <div class="stats">
         <div><b id="nbSel">–</b>établissements sélectionnés</div>
-        <div><b id="nbCarte">–</b>déjà sur la carte</div>
+        <div><b id="nbCarte">–</b>actuellement sur la carte</div>
+        <div><b id="nbAdd">–</b>à ajouter</div>
+        <div><b id="nbDel">–</b>à retirer</div>
       </div>
       <button class="btn secondary" id="refresh" title="Relire les tables">↻ Actualiser</button>
     </div>
@@ -166,17 +169,34 @@
     });
   }
 
+  function plan() {
+    var sel = selection();
+    var sync = document.querySelector('input[name=mode]:checked').value === 'sync';
+    var wanted = new Set(sel.map(function (r) { return r.id; }));
+    var kept = new Set(), del = [];
+    state.carte.forEach(function (r) {
+      var ref = r[T.carteRef];
+      // en mode synchro : retire ce qui n'est pas sélectionné, les doublons et les lignes vides
+      if (sync && (!wanted.has(ref) || kept.has(ref))) del.push(r.id);
+      else kept.add(ref);
+    });
+    var add = sel.map(function (r) { return r.id; }).filter(function (id) { return !kept.has(id); });
+    return { sel: sel, add: add, del: del };
+  }
+
   function campagneLabel(id) {
     var c = state.campagnes.find(function (x) { return x.id === id; });
     return c ? (c.Campagne || c.Alter || '') : '';
   }
 
   function preview() {
-    var sel = selection();
+    var p = plan(), sel = p.sel;
     var onCarte = new Set(state.carte.map(function (r) { return r[T.carteRef]; }));
     $('nbSel').textContent = sel.length;
     $('nbCarte').textContent = state.carte.length;
-    $('go').disabled = !$('annee').value || sel.length === 0;
+    $('nbAdd').textContent = p.add.length;
+    $('nbDel').textContent = p.del.length;
+    $('go').disabled = !$('annee').value || (p.add.length === 0 && p.del.length === 0);
     $('list').innerHTML = '';
     sel.slice()
       .sort(function (a, b) { return String(a.Etablissement || '').localeCompare(String(b.Etablissement || ''), 'fr'); })
@@ -193,43 +213,43 @@
     if (!sel.length) $('list').textContent = 'Aucun établissement pour ces critères.';
   }
 
-  async function run() {
-    var sel = selection();
-    var replace = document.querySelector('input[name=mode]:checked').value === 'replace';
-    if (replace && state.carte.length &&
-        !confirm('Remplacer les ' + state.carte.length + ' ligne(s) actuelles de la carte par ' + sel.length + ' établissement(s) ?')) return;
-
-    var existing = new Set(replace ? [] : state.carte.map(function (r) { return r[T.carteRef]; }));
-    var ids = [];
-    sel.forEach(function (r) { if (!existing.has(r.id)) { existing.add(r.id); ids.push(r.id); } });
+  async function run(auto) {
+    var p = plan();
+    if (!p.add.length && !p.del.length) { showMsg('La carte est déjà à jour.', 'ok'); return; }
+    if (!auto && p.del.length &&
+        !confirm('Retirer ' + p.del.length + ' ligne(s) de la carte et en ajouter ' + p.add.length +
+                 ' ? La carte contiendra ' + (state.carte.length - p.del.length + p.add.length) + ' établissement(s).')) return;
 
     var actions = [];
-    if (replace && state.carte.length) {
-      actions.push(['BulkRemoveRecord', T.carte, state.carte.map(function (r) { return r.id; })]);
+    if (p.del.length) actions.push(['BulkRemoveRecord', T.carte, p.del]);
+    if (p.add.length) {
+      var cols = {}; cols[T.carteRef] = p.add;
+      actions.push(['BulkAddRecord', T.carte, p.add.map(function () { return null; }), cols]);
     }
-    if (ids.length) {
-      var cols = {}; cols[T.carteRef] = ids;
-      actions.push(['BulkAddRecord', T.carte, ids.map(function () { return null; }), cols]);
-    }
-    if (!actions.length) { showMsg('Rien à ajouter : tous ces établissements sont déjà sur la carte.', 'ok'); return; }
 
     $('go').disabled = true;
     showMsg('Mise à jour en cours…', 'ok');
     try {
       await grist.docApi.applyUserActions(actions);
-      showMsg('✓ Carte mise à jour : ' + ids.length + ' établissement(s) ajouté(s)' +
-        (replace ? ' (contenu précédent remplacé).' : '.'), 'ok');
+      showMsg('✓ Carte mise à jour : ' + p.add.length + ' ajouté(s), ' + p.del.length + ' retiré(s).', 'ok');
     } catch (e) {
       showMsg('Erreur : ' + (e.message || e), 'err');
     }
     await load();
   }
 
-  $('annee').addEventListener('change', fillCampagnes);
-  $('campagne').addEventListener('change', preview);
-  $('participants').addEventListener('change', preview);
+  function changed() {
+    preview();
+    if ($('auto').checked) run(true);
+  }
+
+  $('annee').addEventListener('change', function () { fillCampagnes(); if ($('auto').checked) run(true); });
+  $('campagne').addEventListener('change', changed);
+  $('participants').addEventListener('change', changed);
+  document.querySelectorAll('input[name=mode]').forEach(function (el) { el.addEventListener('change', preview); });
+  $('auto').addEventListener('change', changed);
   $('refresh').addEventListener('click', load);
-  $('go').addEventListener('click', run);
+  $('go').addEventListener('click', function () { run(false); });
 
   grist.ready({ requiredAccess: 'full', allowSelectBy: false });
   load();
