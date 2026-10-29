@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carte prélèvement</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  html, body, #carte { height: 100%; margin: 0; }
+  body { font-family: system-ui, sans-serif; background: #fff; }
+  .copier {
+    display: block; width: 100%; margin-top: 10px; padding: 10px 14px;
+    font-size: 15px; font-weight: 600; color: #fff; background: #16b378;
+    border: none; border-radius: 8px; cursor: pointer;
+  }
+  .copier:hover { background: #009058; }
+  .copier.ok { background: #2e7d32; }
+  .copier.erreur { background: #d9822b; }
+  .secours { width: 100%; margin-top: 6px; font-size: 13px; padding: 4px 6px; box-sizing: border-box; }
+  #message {
+    position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 1000;
+    background: #fff; padding: 6px 12px; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.3);
+    font-size: 13px; display: none;
+  }
+</style>
+</head>
+<body>
+<div id="carte"></div>
+<div id="message"></div>
+
+<script>
+  const carte = L.map('carte').setView([48.2, -2.9], 8); // Bretagne par défaut
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap',
+  }).addTo(carte);
+
+  const groupe = L.featureGroup().addTo(carte);
+  const message = document.getElementById('message');
+  const marqueurs = new Map();
+  let premierAffichage = true;
+
+  grist.ready({
+    requiredAccess: 'read table',
+    columns: [
+      { name: 'Description', title: 'Fiche (texte ou HTML)', optional: true },
+      { name: 'Latitude', title: 'Latitude', type: 'Numeric,Text' },
+      { name: 'Longitude', title: 'Longitude', type: 'Numeric,Text' },
+    ],
+  });
+
+  // "48,1234" ou "48.1234" -> 48.1234
+  function nombre(v) {
+    if (v === null || v === undefined || v === '') return NaN;
+    return Number(String(v).trim().replace(',', '.'));
+  }
+
+  // Format accepté par la barre de recherche Google Maps : "48.123456, -2.123456"
+  function formatGoogle(lat, lon) {
+    return lat + ', ' + lon;
+  }
+
+  async function copier(texte, bouton) {
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(texte);
+      ok = true;
+    } catch (e) {
+      const zone = document.createElement('textarea');
+      zone.value = texte;
+      zone.style.position = 'fixed';
+      zone.style.opacity = '0';
+      document.body.appendChild(zone);
+      zone.select();
+      try { ok = document.execCommand('copy'); } catch (e2) { ok = false; }
+      zone.remove();
+    }
+    if (ok) {
+      bouton.textContent = '✅ Copié : ' + texte;
+      bouton.className = 'copier ok';
+      setTimeout(function () {
+        bouton.textContent = '📋 Copier pour Google Maps';
+        bouton.className = 'copier';
+      }, 2500);
+    } else {
+      // Dernier recours : champ sélectionné, l'utilisateur fait Ctrl+C
+      bouton.textContent = '⚠️ Faites Ctrl+C';
+      bouton.className = 'copier erreur';
+      let champ = bouton.nextElementSibling;
+      if (!champ) {
+        champ = document.createElement('input');
+        champ.className = 'secours';
+        champ.readOnly = true;
+        bouton.after(champ);
+      }
+      champ.value = texte;
+      champ.select();
+    }
+  }
+
+  function contenuPopup(fiche, coords) {
+    const bloc = document.createElement('div');
+    const corps = document.createElement('div');
+    corps.innerHTML = fiche ? String(fiche) : '<b>' + coords + '</b>';
+    bloc.appendChild(corps);
+    const bouton = document.createElement('button');
+    bouton.type = 'button';
+    bouton.className = 'copier';
+    bouton.textContent = '📋 Copier pour Google Maps';
+    bouton.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      copier(coords, bouton);
+    });
+    bloc.appendChild(bouton);
+    return bloc;
+  }
+
+  grist.onRecords(function (records, mappings) {
+    groupe.clearLayers();
+    marqueurs.clear();
+    let ignores = 0;
+    for (const brut of records) {
+      const r = grist.mapColumnNames(brut, mappings);
+      if (!r) continue;
+      const lat = nombre(r.Latitude), lon = nombre(r.Longitude);
+      if (!isFinite(lat) || !isFinite(lon)) { ignores++; continue; }
+      const coords = formatGoogle(lat, lon);
+      const m = L.marker([lat, lon])
+        .bindPopup(function () { return contenuPopup(r.Description, coords); }, { minWidth: 240 })
+        .on('click', function () { grist.setCursorPos({ rowId: brut.id }); });
+      m.addTo(groupe);
+      marqueurs.set(brut.id, m);
+    }
+    if (premierAffichage && groupe.getLayers().length) {
+      carte.fitBounds(groupe.getBounds(), { padding: [30, 30], maxZoom: 15 });
+      premierAffichage = false;
+    }
+    if (ignores) {
+      message.textContent = ignores + ' ligne(s) sans coordonnées valides non affichée(s)';
+      message.style.display = 'block';
+    } else {
+      message.style.display = 'none';
+    }
+  });
+
+  // Sélection d'une ligne dans Grist -> ouvre son point sur la carte
+  grist.onRecord(function (record) {
+    const m = record && marqueurs.get(record.id);
+    if (m && !m.isPopupOpen()) {
+      carte.panTo(m.getLatLng());
+      m.openPopup();
+    }
+  });
+</script>
+</body>
+</html>
