@@ -9,7 +9,7 @@
 | `rdv/index.html` | Formulaire public de prise de rendez-vous |
 | `duo.html` | **Duo** — interprète à deux écouteurs (ex. japonais ⇄ allemand) |
 | `copier-coordonnees.html` | Fiche de rendez-vous + bouton « Copier les coordonnées » (latitude, longitude) |
-| `carte-prelevement.html` | Carte des points avec bouton « Copier pour Google Maps » dans chaque infobulle |
+| `carte-prelevement.html` | Carte DSFR des prélèvements : regroupement par commune, liste des exploitations, fiche RDV complète, recherche par identifiant, copie GPS |
 
 ## ERP « façon SAP » (`erp-sap.html`)
 
