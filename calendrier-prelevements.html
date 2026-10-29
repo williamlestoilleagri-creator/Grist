@@ -90,6 +90,10 @@
   .tab{border:0;background:var(--bf-950);color:var(--title);padding:.6rem 1rem;font-weight:500;font-size:.9rem;cursor:pointer;margin-top:8px;display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
   .tab:hover{background:var(--bf-925)}
   .tab[aria-selected="true"]{background:var(--surface);color:var(--bf);box-shadow:inset 0 2px 0 var(--bf),inset 1px 0 0 var(--border),inset -1px 0 0 var(--border);margin-bottom:-1px}
+  .tab.insp-tab,.tab.insp-tab[aria-selected="true"]{background:var(--bf);color:#fff}
+  .tab.insp-tab:hover{background:var(--bf-hover)}
+  .tab.insp-tab[aria-selected="true"]{box-shadow:inset 0 -3px 0 #fff}
+  .tab.insp-tab .count{background:#fff;color:var(--bf)}
   .tab .count{font-size:.72rem;background:var(--contrast);color:var(--mention);border-radius:99px;padding:0 7px}
 
   main{padding:18px 20px 40px;max-width:1400px;margin:0 auto}
@@ -174,6 +178,8 @@
   .ev.st-report{border-color:var(--bf);background:var(--bf-950)}
   .ev.st-annule{border-color:var(--error);background:var(--error-bg);text-decoration:line-through;color:var(--mention)}
   .ev.st-none{border-color:var(--disabled);background:var(--grey-bg)}
+  .cell-evs{display:flex;flex-direction:column;gap:3px;max-height:190px;overflow-y:auto;scrollbar-width:thin}
+  .cell-evs .ev{white-space:normal;overflow:visible}
   .more{border:0;background:none;color:var(--bf);font-size:.75rem;text-align:left;padding:1px 5px;cursor:pointer;font-weight:500}
   .more:hover{text-decoration:underline}
 
@@ -258,6 +264,17 @@
 
   /* ================= Panneau jour ================= */
   .daylist{display:flex;flex-direction:column;gap:6px}
+  .farmday{border:1px solid var(--border);border-left:4px solid var(--bf);background:var(--surface)}
+  .farmday-head{display:grid;grid-template-columns:56px 1fr auto;gap:10px;align-items:start;width:100%;border:0;background:transparent;text-align:left;padding:.55rem .7rem;cursor:pointer;color:var(--title);font:inherit}
+  .farmday-head:hover{background:var(--bf-975)}
+  .farmday-head .h{font-weight:700}
+  .farmday-head .n{font-weight:700}
+  .farmday-head .s{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.8rem;color:var(--mention);margin-top:2px}
+  .farmday-parc{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:0 .7rem .55rem calc(56px + 1.3rem);font-size:.8rem}
+  .pslot{border:1px solid var(--border);background:var(--alt);border-radius:4px;padding:2px 8px;cursor:pointer;font-size:.78rem;color:var(--title)}
+  .pslot:hover{border-color:var(--bf);color:var(--bf)}
+  .pslot .t{font-weight:700;margin-right:6px}
+  @media (max-width:600px){.farmday-parc{padding-left:.7rem}}
 
 
   /* ================= Statuts d'appel ================= */
@@ -277,6 +294,12 @@
   .qhit{display:flex;flex-direction:column;align-items:flex-start;width:100%;text-align:left;border:0;background:var(--alt);padding:.4rem .6rem;cursor:pointer;font-size:.85rem;color:var(--title)}
   .qhit:hover{background:var(--bf-950)}
   .side-sec{margin-bottom:16px}
+  .side-fold>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:6px;padding:.3rem 0;border-bottom:1px solid var(--border);margin-bottom:6px}
+  .side-fold>summary::-webkit-details-marker{display:none}
+  .side-fold>summary h3{margin:0;flex:1}
+  .side-fold>summary::after{content:"";width:.5rem;height:.5rem;border-right:2px solid var(--bf);border-bottom:2px solid var(--bf);transform:rotate(45deg);margin:0 4px 4px 0;transition:transform .15s}
+  .side-fold[open]>summary::after{transform:rotate(-135deg);margin:4px 4px 0 0}
+  .side-fold>summary .cur{font-size:.75rem;color:var(--bf);font-weight:700;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .side-sec h3{font-size:.85rem;text-transform:uppercase;letter-spacing:.02em;color:var(--mention);display:flex;gap:6px;align-items:center;margin:0 0 6px}
   .side-item{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;text-align:left;padding:.4rem .5rem;cursor:pointer;font-size:.88rem;color:var(--title);position:relative}
   .side-item:hover{background:var(--alt)}
@@ -390,8 +413,8 @@
   <button class="tab" role="tab" data-tab="dash" aria-selected="false"><span class="ic ic-chart" aria-hidden="true"></span>Tableau de bord</button>
   <button class="tab" role="tab" data-tab="exp" aria-selected="false"><span class="ic ic-plant" aria-hidden="true"></span>Exploitations <span class="count" id="cntExp">0</span></button>
   <button class="tab" role="tab" data-tab="prel" aria-selected="false"><span class="ic ic-user" aria-hidden="true"></span>Préleveurs <span class="count" id="cntPrel">0</span></button>
-  <button class="tab" role="tab" data-tab="espace" aria-selected="false"><span class="ic ic-shield" aria-hidden="true"></span>Espace inspecteur</button>
-  <button class="tab" role="tab" data-tab="insp" aria-selected="false"><span class="ic ic-shield" aria-hidden="true"></span>Inspecteurs FranceAgriMer <span class="count" id="cntInsp">0</span></button>
+  <button class="tab insp-tab" role="tab" data-tab="espace" aria-selected="false"><span class="ic ic-shield" aria-hidden="true"></span>Espace inspecteur</button>
+  <button class="tab insp-tab" role="tab" data-tab="insp" aria-selected="false"><span class="ic ic-shield" aria-hidden="true"></span>Inspecteurs FranceAgriMer <span class="count" id="cntInsp">0</span></button>
 </nav>
 <main id="main"><div class="loading">Chargement…</div></main>
 <div id="modalRoot"></div>
@@ -611,8 +634,8 @@ const LocalBackend = {
       const o = Object.assign({}, r);
       t.cols.forEach(c => {
         if (c.id === 'Nom_complet') o[c.id] = [r.Prenom, r.Nom].filter(Boolean).join(' ');
-        else if (c.id === 'PACAGE' && c.isFormula) o[c.id] = r.Cle_parcelle ? r.Cle_parcelle.split('-')[0] : null;
-        else if (c.id === 'Code_dpt' && c.isFormula) o[c.id] = r.Cle_parcelle ? r.Cle_parcelle.slice(0, 3) : null;
+        else if (c.id === 'PACAGE' && c.isFormula) o[c.id] = typeof r.Cle_parcelle === 'string' ? r.Cle_parcelle.split('-')[0] : null;
+        else if (c.id === 'Code_dpt' && c.isFormula) o[c.id] = typeof r.Cle_parcelle === 'string' ? r.Cle_parcelle.slice(0, 3) : null;
         else if (!(c.id in o)) o[c.id] = c.type === 'Bool' ? false : (c.type.startsWith('Ref:') ? 0 : null);
       });
       return o;
@@ -648,7 +671,7 @@ const LocalBackend = {
 let B = null;
 const S = {
   meta: {}, cfg: Object.assign({}, DEFAULT_CFG),
-  parc: [], def: new Map(), rdv: [], prel: [], insp: [],
+  parc: [], def: new Map(), cleById: new Map(), cleByKey: new Map(), cleCol: 'CLE', rdv: [], prel: [], insp: [],
   prelById: new Map(), inspById: new Map(), rdvByKey: new Map(),
   farms: new Map(), visits: [], visitByKey: new Map(), orphans: 0,
   tab: 'cal', view: 'month', cursor: new Date(),
@@ -656,6 +679,7 @@ const S = {
   expQ: '', expStatut: '', expDpt: '',
   dashPeriod: 'all', dashDpt: '', dashOpen: 0,
   stock: [], stockById: new Map(), ctl: [], controls: [], showCtl: true,
+  fold: (() => { try { return JSON.parse(localStorage.getItem('cal-fold')) || {prel: false, insp: true}; } catch (e) { return {prel: false, insp: true}; } })(),
   me: 0, espRange: 30, espMine: true, espTaken: false, espQ: ''
 };
 const cols = t => (S.meta[t] || {cols: {}}).cols;
@@ -666,20 +690,48 @@ const prelColor = id => { const i = S.prel.findIndex(p => p.id === id); return i
 function farmKeyOfParc(r) { return clean(r.PACAGE) || clean(r[S.cfg.parcKey]).split('-')[0] || 'dossier ' + clean(r.dossier_number); }
 function farmName(r) { return clean(r.Nom_exploitation) || clean(r.Raison_sociale) || clean(r.Nom_ou_Raison_sociale) || ''; }
 
+// Cle_parcelle peut être un texte (PACAGE-îlot-parcelle) ou une référence vers DATA_Parcelles_DEF
+const cleIsRef = () => typeOf(T_RDV, 'Cle_parcelle').startsWith('Ref:');
+function rdvKey(r) {
+  const v = r.Cle_parcelle;
+  if (typeof v === 'number') { const d = S.cleById.get(v); return d ? clean(d[S.cleCol]) : ''; }
+  return clean(v);
+}
+// valeur à écrire dans Cle_parcelle : id de la ligne référencée, ou la clé texte
+function cleVal(key) {
+  if (!cleIsRef()) return key;
+  const d = S.cleByKey.get(key); return d ? d.id : key;
+}
+const txt = v => typeof v === 'string' ? clean(v) : '';
+// coordonnées de l'exploitation reprises de DATA_Parcelles_DEF quand la table des parcelles ne les a pas
+function fillFromDef(f, d) {
+  if (!d) return;
+  if (!f.name && txt(d.Nom)) f.name = txt(d.Nom);
+  if (!f.Telephone_portable && clean(d.Telephone_portable)) f.Telephone_portable = clean(d.Telephone_portable);
+  if (!f.Mail && clean(d.Mail)) f.Mail = clean(d.Mail);
+  if (!f.Ville && clean(d.Commune)) f.Ville = clean(d.Commune);
+  if (!f.Code_postal && clean(d.Code_Postal)) f.Code_postal = clean(d.Code_Postal).split('.')[0];
+  if (!f.Adresse_complete && (clean(d.Adresse) || clean(d.Commune))) f.Adresse_complete = [clean(d.Adresse), clean(d.Code_Postal).split('.')[0], clean(d.Commune)].filter(Boolean).join(' ');
+}
+
 function buildModel() {
   S.farms = new Map(); S.visits = []; S.visitByKey = new Map(); S.rdvByKey = new Map(); S.orphans = 0;
   // une ligne RDV par clé parcelle (si doublon : la plus récente)
-  for (const r of S.rdv) { const k = clean(r.Cle_parcelle); if (!k) { S.orphans++; continue; } const ex = S.rdvByKey.get(k); if (!ex || r.id > ex.id) S.rdvByKey.set(k, r); }
+  for (const r of S.rdv) { const k = rdvKey(r); if (!k) { S.orphans++; continue; } const ex = S.rdvByKey.get(k); if (!ex || r.id > ex.id) S.rdvByKey.set(k, r); }
   const farmOf = (fk, name) => { let f = S.farms.get(fk); if (!f) { f = {key: fk, pacage: fk, name: '', parcels: []}; S.farms.set(fk, f); } if (!f.name && name) f.name = name; return f; };
   const seen = new Set();
   for (const p of S.parc) {
     const key = clean(p[S.cfg.parcKey]); if (!key || seen.has(key)) continue; seen.add(key);
     const f = farmOf(farmKeyOfParc(p), farmName(p));
     for (const k of ['dossier_number', 'Telephone_portable', 'Mail', 'Adresse_complete', 'Departement', 'Code_departement', 'Code_postal', 'Ville']) if (!f[k] && clean(p[k])) f[k] = clean(p[k]);
-    f.parcels.push({key, src: p, def: S.def.get(key) || null, rdv: S.rdvByKey.get(key) || null});
+    const d = S.def.get(key) || null; fillFromDef(f, d);
+    f.parcels.push({key, src: p, def: d, rdv: S.rdvByKey.get(key) || null});
   }
   // rendez-vous dont la clé n'est pas (ou plus) dans la table des parcelles
-  for (const [k, r] of S.rdvByKey) if (!seen.has(k)) { const f = farmOf(k.split('-')[0], clean(r.Nom_exploitation)); f.parcels.push({key: k, src: null, def: S.def.get(k) || null, rdv: r}); }
+  for (const [k, r] of S.rdvByKey) if (!seen.has(k)) {
+    const d = S.def.get(k) || null, f = farmOf(k.split('-')[0], txt(r.Raison_sociale) || txt(r.Nom_exploitation2) || txt(r.Nom_exploitation));
+    fillFromDef(f, d); f.parcels.push({key: k, src: null, def: d, rdv: r});
+  }
   for (const f of S.farms.values()) {
     if (!f.name) f.name = 'PACAGE ' + f.pacage;
     f.dpt = clean(f.Code_departement) || f.pacage.slice(0, 3);
@@ -726,6 +778,12 @@ async function loadData() {
   const [parc, def, rdv, p, i] = await Promise.all([B.fetch(S.cfg.parcTable), defOk ? B.fetch(S.cfg.defTable) : [], B.fetch(T_RDV), B.fetch(T_PREL), B.fetch(T_INSP)]);
   S.parc = parc; S.rdv = rdv; S.prel = p; S.insp = i;
   S.def = new Map(); def.forEach(x => { const k = clean(x[S.cfg.defKey]); if (k && !S.def.has(k)) S.def.set(k, x); });
+  // table référencée par Cle_parcelle (normalement DATA_Parcelles_DEF)
+  const refT = cleIsRef() ? typeOf(T_RDV, 'Cle_parcelle').slice(4) : '';
+  const refRows = !refT ? [] : refT === S.cfg.defTable && defOk ? def : S.meta[refT] ? await B.fetch(refT) : [];
+  S.cleCol = refT === S.cfg.defTable ? S.cfg.defKey : ['CLE', 'CLELAB', 'Cle', 'Cle2_2'].find(c => cols(refT)[c]) || S.cfg.defKey;
+  S.cleById = new Map(refRows.map(x => [x.id, x]));
+  S.cleByKey = new Map(); refRows.forEach(x => { const k = clean(x[S.cleCol]); if (k && !S.cleByKey.has(k)) S.cleByKey.set(k, x); });
   S.prelById = new Map(p.map(x => [x.id, x])); S.inspById = new Map(i.map(x => [x.id, x]));
   const ctlOk = S.meta[T_STOCK] && S.meta[T_CTL];
   const [stock, ctl] = ctlOk ? await Promise.all([B.fetch(T_STOCK), B.fetch(T_CTL)]) : [[], []];
@@ -902,13 +960,13 @@ function sidebar() {
   return `<aside class="side">
     <div class="side-search"><label class="lbl" for="q">Rechercher une exploitation</label>
       <input class="input" id="q" type="search" placeholder="Nom, PACAGE, n° dossier, commune…" value="${esc(S.q)}" autocomplete="off"><div id="qres"></div></div>
-    <div class="side-sec"><h3>${ic('user')}Préleveurs</h3>
-      ${item('', 0, 'Tous les rendez-vous', '', S.visits.filter(inPeriod).length)}
+    ${item('', 0, 'Tous les rendez-vous', '', S.visits.filter(inPeriod).length)}
+    <details class="side-sec side-fold" data-fold="prel"${S.fold.prel ? ' open' : ''}><summary><h3>${ic('user')}Préleveurs (${people(S.prel, 'prel').length})</h3>${S.sel.kind === 'prel' ? `<span class="cur">${esc(S.sel.id === -1 ? 'Sans préleveur' : personName(S.prelById.get(S.sel.id)))}</span>` : ''}</summary>
       ${people(S.prel, 'prel').map(p => item('prel', p.id, personName(p), prelColor(p.id), count('prel', p.id))).join('')}
-      ${item('prel', -1, 'Sans préleveur', '#929292', count('prel', -1))}</div>
-    <div class="side-sec"><h3>${ic('shield')}Planning des inspecteurs</h3>
+      ${item('prel', -1, 'Sans préleveur', '#929292', count('prel', -1))}</details>
+    <details class="side-sec side-fold" data-fold="insp"${S.fold.insp ? ' open' : ''}><summary><h3>${ic('shield')}Planning des inspecteurs</h3>${S.sel.kind === 'insp' ? `<span class="cur">${esc(S.sel.id === -1 ? 'Tous les contrôles' : personName(S.inspById.get(S.sel.id)))}</span>` : ''}</summary>
       ${people(S.insp, 'insp').map(p => item('insp', p.id, personName(p), '', count('insp', p.id))).join('') || '<p class="sub">Aucun inspecteur.</p>'}
-      ${S.insp.length ? item('insp', -1, 'Tous les contrôles', '', count('insp', -1)) : ''}</div>
+      ${S.insp.length ? item('insp', -1, 'Tous les contrôles', '', count('insp', -1)) : ''}</details>
     ${S.meta[T_CTL] ? `<div class="side-sec"><h3>${ic('search')}Lieux de stockage</h3>
       <button class="side-item${S.showCtl ? ' on' : ''}" id="ctlToggle"><span class="dot" style="background:${CTL_COLOR}"></span><span class="nm">Contrôles inopinés</span><span class="n">${S.controls.filter(inPeriod).length}</span></button>
       <p style="margin:.4rem 0 0"><button class="btn ter" data-ctl-new="0" style="width:100%;justify-content:center">${ic('add')}Déclarer un contrôle inopiné</button></p></div>` : ''}
@@ -949,6 +1007,7 @@ function renderCalendar() {
   $$('[data-view]').forEach(b => b.onclick = () => { S.view = b.dataset.view; renderCalendar(); });
   $('#fdpt').onchange = e => { S.dpt = e.target.value; renderCalendar(); };
   if ($('#roadBtn')) $('#roadBtn').onclick = openRoadmap;
+  $$('[data-fold]').forEach(d => d.addEventListener('toggle', () => { S.fold[d.dataset.fold] = d.open; try { localStorage.setItem('cal-fold', JSON.stringify(S.fold)); } catch (e) { /* stockage indisponible */ } }));
   if ($('#ctlToggle')) $('#ctlToggle').onclick = () => { S.showCtl = !S.showCtl; renderCalendar(); };
 }
 function navigate(n) {
@@ -973,13 +1032,24 @@ function renderMonth(list) {
   const total = Math.ceil((off + dim) / 7) * 7, map = byDay(list), today = dkey(new Date());
   let html = '<div class="wd-row">' + WD.map(w => `<div>${w}</div>`).join('') + '</div><div class="month">';
   for (let i = 0; i < total; i++) {
-    const d = new Date(y, m, i - off + 1), k = dkey(d), evs = map[k] || [], shown = evs.slice(0, 4);
+    const d = new Date(y, m, i - off + 1), k = dkey(d), evs = groupByFarm(map[k] || []), nf = evs.filter(g => !g.ctl).length;
     html += `<div class="cell${d.getMonth() !== m ? ' out' : ''}${d.getDay() % 6 === 0 ? ' we' : ''}${k === today ? ' today' : ''}" data-day="${k}">
-      <div class="cell-top"><span class="nb">${evs.length ? evs.length + ' RDV' : ''}</span><span class="dnum">${d.getDate()}</span></div>
-      ${shown.map(v => `<button class="ev" style="${evStyle(v)}" data-visit="${esc(v.key)}" title="${esc(evTitle(v))}"><b>${hm(v.start)}</b>${v.ctl ? ic('search') + ' ' : ''}${esc(v.farm.name)}${v.insp && !v.ctl ? ' ' + ic('shield') : ''}</button>`).join('')}
-      ${evs.length > shown.length ? `<button class="more" data-day-more="${k}">+ ${evs.length - shown.length} autre(s)</button>` : ''}</div>`;
+      <div class="cell-top"><span class="nb">${nf ? nf + ' exploit.' : ''}</span><span class="dnum">${d.getDate()}</span></div>
+      ${evs.length ? `<div class="cell-evs">${evs.map(g => g.ctl ? `<button class="ev" style="${evStyle(g.ctl)}" data-visit="${esc(g.ctl.key)}" title="${esc(evTitle(g.ctl))}"><b>${hm(g.ctl.start)}</b>${ic('search')} ${esc(g.ctl.farm.name)}</button>`
+        : `<button class="ev" style="${evStyle(g.visits[0])}" data-visit="${esc(g.visits[0].key)}" title="${esc(g.visits.map(evTitle).join('\n'))}"><b>${hm(g.visits[0].start)}</b>${esc(g.farm.name)} <span class="who">${g.nParc} parc.</span>${g.visits.some(v => v.insp) ? ' ' + ic('shield') : ''}</button>`).join('')}</div>` : ''}</div>`;
   }
   $('#calBody').innerHTML = html + '</div>' + (list.some(v => v.start.getFullYear() === y && v.start.getMonth() === m) ? '' : `<p class="empty">Aucun rendez-vous ce mois-ci${nearestHint(list)}.</p>`);
+}
+// rendez-vous d'une journée regroupés par exploitation (toutes ses parcelles, même à des heures différentes)
+function groupByFarm(evs) {
+  const out = [], byFarm = new Map();
+  for (const v of evs) {
+    if (v.ctl) { out.push({ctl: v, start: v.start}); continue; }
+    let g = byFarm.get(v.farm.key);
+    if (!g) { g = {farm: v.farm, visits: [], nParc: 0, start: v.start}; byFarm.set(v.farm.key, g); out.push(g); }
+    g.visits.push(v); g.nParc += v.parcels.length;
+  }
+  return out.sort((a, b) => a.start - b.start);
 }
 function nearestHint(list) {
   if (!list.length) return '';
@@ -1049,10 +1119,26 @@ function visitRow(v) {
       ${p ? `<span>${ic('user')} ${esc(personName(p))}</span>` : '<span>Préleveur à désigner</span>'}${i ? `<span>${ic('shield')} ${esc(personName(i))}</span>` : ''}</span></span>
     <span class="badge ${stClass(v.statut)}">${esc(stLabel(v.statut))}</span></button>`;
 }
+function farmDayRow(g) {
+  const f = g.farm, vs = g.visits, last = vs[vs.length - 1], names = ids => [...new Set(ids.filter(Boolean))];
+  const prels = names(vs.map(v => v.prel)).map(id => personName(S.prelById.get(id))), insps = names(vs.map(v => v.insp)).map(id => personName(S.inspById.get(id)));
+  const pl = x => x.key.split('-').slice(1).join('-') || x.key;
+  return `<div class="farmday" style="border-left-color:${prelColor(vs[0].prel)}">
+    <button class="farmday-head" data-fiche="${esc(f.key)}">
+      <span class="h">${hm(vs[0].start)}<br><span class="sub">→ ${hm(last.end)}</span></span>
+      <span><span class="n">${esc(f.name)}</span> <span class="sub">PACAGE ${esc(f.pacage)}</span>
+        <span class="s">${f.Adresse_complete ? `<span>${ic('pin')} ${esc(f.Adresse_complete)}</span>` : ''}${f.Telephone_portable ? `<span>${esc(f.Telephone_portable)}</span>` : ''}
+        ${prels.length ? `<span>${ic('user')} ${esc(prels.join(', '))}</span>` : '<span>Préleveur à désigner</span>'}${insps.length ? `<span>${ic('shield')} ${esc(insps.join(', '))}</span>` : ''}</span></span>
+      <span class="badge ${stClass(vs[0].statut)}">${esc(stLabel(vs[0].statut))}</span></button>
+    <div class="farmday-parc"><b>${g.nParc} parcelle(s)</b>${vs.map(v => `<button class="pslot" data-visit="${esc(v.key)}" title="${esc(evTitle(v))}"><span class="t">${hm(v.start)}</span>${esc(v.parcels.map(pl).join(', '))}</button>`).join('')}</div>
+  </div>`;
+}
 function openDay(k) {
-  const evs = filteredVisits().filter(v => dkey(v.start) === k), [y, m, d] = k.split('-').map(Number), date = new Date(y, m - 1, d);
+  const evs = groupByFarm(filteredVisits().filter(v => dkey(v.start) === k)), [y, m, d] = k.split('-').map(Number), date = new Date(y, m - 1, d);
+  const nf = evs.filter(g => !g.ctl), np = nf.reduce((s, g) => s + g.nParc, 0), nc = evs.length - nf.length;
   openModal(`<h2>${ic('calendar')}<span style="text-transform:capitalize">${esc(fullDate(date))}</span></h2>
-    <p class="lead">${evs.length ? evs.length + ' rendez-vous' : 'Aucun rendez-vous ce jour'}</p><div class="daylist">${evs.map(visitRow).join('')}</div>`,
+    <p class="lead">${evs.length ? [nf.length ? `${nf.length} exploitation(s) · ${np} parcelle(s)` : '', nc ? `${nc} contrôle(s) inopiné(s)` : ''].filter(Boolean).join(' · ') : 'Aucun rendez-vous ce jour'}</p>
+    <div class="daylist">${evs.map(g => g.ctl ? ctlRow(g.ctl) : farmDayRow(g)).join('')}</div>`,
   {foot: `<button class="btn ter" id="dayView">${ic('calendar')}Vue jour</button><button class="btn" id="dayNew">${ic('add')}Planifier une exploitation ce jour</button>`, wide: true});
   $('#dayView').onclick = () => { closeModal(); S.cursor = date; S.view = 'day'; renderCalendar(); };
   $('#dayNew').onclick = () => openPicker(new Date(y, m - 1, d, Math.max(8, S.cfg.hourStart), 0));
@@ -1210,7 +1296,7 @@ function openFiche(farmKey, opts = {}) {
         Etiquette_prelevement: $('#et' + i).value.trim() || null, Commentaire: $('#co' + i).value.trim() || null});
       if (x.src && x.src.dossier_number) fields.N_dossier_DN = Number(x.src.dossier_number) || null;
       Object.keys(fields).forEach(k => { if (!cols(T_RDV)[k]) delete fields[k]; });
-      return x.rdv ? ['UpdateRecord', T_RDV, x.rdv.id, fields] : ['AddRecord', T_RDV, null, Object.assign({Cle_parcelle: x.key}, fields)];
+      return x.rdv ? ['UpdateRecord', T_RDV, x.rdv.id, fields] : ['AddRecord', T_RDV, null, Object.assign({Cle_parcelle: cleVal(x.key)}, fields)];
     });
     if (await write(acts, unplan ? 'Rendez-vous annulé' : 'Fiche enregistrée')) { if (opts.back) opts.back(); else openFiche(farmKey); }
   };
@@ -1569,7 +1655,17 @@ document.addEventListener('click', e => {
   if (qh) { const f = S.farms.get(qh.dataset.qfarm), v = f && (f.visits.find(x => x.start.getTime() >= Date.now()) || f.visits[f.visits.length - 1]);
     if (v) { S.cursor = new Date(v.start); S.view = 'day'; S.sel = {kind: '', id: 0}; renderCalendar(); } openFiche(qh.dataset.qfarm); return; }
   const sel = t.closest('[data-sel]');
-  if (sel) { e.preventDefault(); const [k, id] = sel.dataset.sel.split(':'); S.sel = {kind: k, id: Number(id)}; if (S.tab !== 'cal') { S.tab = 'cal'; if (S.view === 'month') S.view = 'week'; } render(); return; }
+  if (sel) {
+    e.preventDefault(); const [k, id] = sel.dataset.sel.split(':'); S.sel = {kind: k, id: Number(id)};
+    if (S.tab !== 'cal') { S.tab = 'cal'; if (S.view === 'month') S.view = 'week'; }
+    // se placer sur le prochain rendez-vous de la personne (ou le dernier s'il n'y en a plus)
+    if (k && sel.closest('.side')) {
+      const list = filteredVisits().filter(v => !v.ctl || k === 'insp'), t0 = new Date(); t0.setHours(0, 0, 0, 0);
+      const nx = list.find(v => v.start >= t0) || list[list.length - 1];
+      if (nx) S.cursor = new Date(nx.start);
+    }
+    render(); return;
+  }
   const more = t.closest('[data-day-more]'); if (more) { openDay(more.dataset.dayMore); return; }
   const go = t.closest('[data-goto]'); if (go) { e.preventDefault(); S.cursor = new Date(Number(go.dataset.goto)); renderCalendar(); return; }
   const ep = t.closest('[data-edit-person]'); if (ep) { const [tb, id] = ep.dataset.editPerson.split(':'); openPersonForm(tb, Number(id)); return; }
@@ -1670,7 +1766,7 @@ async function seedDemoRdv() {
   const slots = [[-6, 9, 0], [-6, 10, 30], [-2, 14, 0], [1, 9, 0], [1, 9, 30], [1, 14, 0], [2, 10, 0], [5, 8, 30], [6, 9, 0], [8, 11, 0], [12, 14, 0]];
   farms.forEach((f, i) => {
     const s = slots[i], st = s ? 'Rdv pris' : ['Injoignable', 'Refus', 'Faux numéro', null][i % 4];
-    f.parcels.forEach(x => acts.push(['AddRecord', T_RDV, null, {Cle_parcelle: x.key, N_dossier_DN: Number(x.src.dossier_number), Statut: st,
+    f.parcels.forEach(x => acts.push(['AddRecord', T_RDV, null, {Cle_parcelle: cleVal(x.key), N_dossier_DN: Number(x.src.dossier_number), Statut: st,
       Date_heure_appel_1: wallToEpoch(y, m + 1, 1, 10, 0, TZ), Presence_souhaitee_agriculteur: i % 2 ? 'Oui' : 'Non',
       Preleveur: s ? (i % 3) + 1 : 0, Inspecteur: s && i % 2 === 1 ? ((i >> 1) % 2) + 1 : 0, Date_RDV: s ? (d => wallToEpoch(d.getFullYear(), d.getMonth() + 1, d.getDate(), s[1], s[2], TZ))(addDays(now, s[0])) : null, Duree_min: 60, Culture_en_place: x.src.Culture_2026}]));
   });
