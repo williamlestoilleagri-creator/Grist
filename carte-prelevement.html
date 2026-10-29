@@ -104,6 +104,12 @@
   .sous-titre { font-size: 12px; font-weight: 700; color: var(--bleu-france); text-transform: uppercase; margin: 10px 0 2px; }
   .absent { color: var(--rouge-marianne); font-size: 13px; margin: 2px 0; }
   .vide { color: var(--gris-mention); font-style: italic; padding: 12px 0; }
+  .geo { font-size: 12.5px; }
+  .geo ul { margin: 2px 0 4px; padding-left: 18px; }
+  .geo li { margin: 1px 0; }
+  .geo .ok { color: #18753c; font-weight: 600; }
+  .geo .ecart { color: #b34000; font-weight: 600; }
+  .geo .source { font-size: 11px; color: var(--gris-mention); }
 
   /* Carte */
   .leaflet-container { font-family: Marianne, arial, sans-serif; }
@@ -561,6 +567,8 @@
         '<a class="fr-btn fr-btn--sm fr-btn--secondary fr-icon-external-link-line fr-btn--icon-left" target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(r.lat + ',' + r.lon) + '">Google Maps</a>' +
         '</div>' : '') +
       '<div class="sous-titre">Parcelle</div><table class="champs">' + infosParcelle + '</table>' +
+      (coords ? '<div class="sous-titre">Localisation d’après le GPS</div><div class="geo" data-id="' + r.id + '">' +
+        (cacheGeo.has(cleGeo(r)) && cacheGeo.get(cleGeo(r)).html ? cacheGeo.get(cleGeo(r)).html : '<span class="mention">Recherche de la commune et des lieux-dits…</span>') + '</div>' : '') +
       '<div class="sous-titre">Rendez-vous de prélèvement</div><table class="champs">' + lignesRdv + '</table>' +
       '</div></div>';
   }
@@ -591,6 +599,96 @@
     $('contenu').innerHTML = html;
     const actif = document.querySelector('.rdv.actif');
     if (actif) actif.scrollIntoView({ block: 'nearest' });
+    if (rdvActif && parId.has(rdvActif)) localiser(parId.get(rdvActif));
+  }
+
+  // ---------- Commune et lieux-dits d'après les coordonnées (services publics) ----------
+  const cacheGeo = new Map();      // "lat,lon" -> { promesse, html }
+  function cleGeo(r) { return r.lat.toFixed(6) + ',' + r.lon.toFixed(6); }
+  function distance(lat1, lon1, lat2, lon2) {
+    const rad = Math.PI / 180, R = 6371000;
+    const a = Math.sin((lat2 - lat1) * rad / 2) ** 2 +
+      Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin((lon2 - lon1) * rad / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
+  function metres(d) { return d < 1000 ? Math.round(d) + ' m' : (d / 1000).toFixed(1).replace('.', ',') + ' km'; }
+  async function json(url) {
+    const rep = await fetch(url);
+    if (!rep.ok) throw new Error(rep.status);
+    return rep.json();
+  }
+  // Lieux proches renvoyés par le géocodage inverse de l'IGN (index adresses + toponymes)
+  async function lieuxProches(lat, lon) {
+    const base = 'https://data.geopf.fr/geocodage/reverse?lat=' + lat + '&lon=' + lon;
+    const reponses = await Promise.allSettled([
+      json(base + '&index=address&limit=10'),
+      json(base + '&index=poi&limit=10'),
+    ]);
+    const vus = new Set(), lieux = [];
+    for (const rep of reponses) {
+      if (rep.status !== 'fulfilled') continue;
+      for (const f of rep.value.features || []) {
+        const p = f.properties || {};
+        const c = (f.geometry && f.geometry.coordinates) || [];
+        const nom = propre(Array.isArray(p.toponym) ? p.toponym[0] : p.toponym) || propre(p.name) || propre(p.label);
+        if (!nom) continue;
+        const ville = propre(Array.isArray(p.city) ? p.city[0] : p.city);
+        const cat = Array.isArray(p.category) ? p.category.join(', ') : propre(p.category);
+        const type = { locality: 'lieu-dit', street: 'voie', housenumber: 'adresse', municipality: 'commune' }[p.type] || cat || propre(p.type);
+        const cle = sansAccents(nom + '|' + ville);
+        if (vus.has(cle)) continue;
+        vus.add(cle);
+        lieux.push({ nom: nom, ville: ville, type: type, d: c.length ? distance(lat, lon, c[1], c[0]) : NaN, lieuDit: p.type === 'locality' || /lieu-dit|lieu dit/i.test(cat) });
+      }
+    }
+    lieux.sort(function (a, b) { return (b.lieuDit - a.lieuDit) || (a.d - b.d); });
+    return lieux.slice(0, 6);
+  }
+  async function rechercheGeo(r) {
+    const [communesGeo, lieux] = await Promise.all([
+      json('https://geo.api.gouv.fr/communes?lat=' + r.lat + '&lon=' + r.lon + '&fields=nom,code,codesPostaux,departement&format=json')
+        .catch(function () { return null; }),
+      lieuxProches(r.lat, r.lon).catch(function () { return []; }),
+    ]);
+    let html = '';
+    const c = communesGeo && communesGeo[0];
+    if (c) {
+      const memeCommune = sansAccents(c.nom).replace(/[^a-z]/g, '') === sansAccents(r.commune).replace(/[^a-z]/g, '');
+      html += '<div>Commune du point : <b>' + esc(c.nom) + '</b> <span class="mention">(' + esc((c.codesPostaux || [])[0] || '') +
+        ' – INSEE ' + esc(c.code) + (c.departement ? ' – ' + esc(c.departement.nom) : '') + ')</span></div>' +
+        (r.commune && r.commune !== 'Commune non renseignée'
+          ? (memeCommune ? '<div class="ok">✓ Identique à la commune renseignée</div>'
+            : '<div class="ecart">⚠ Différente de la commune renseignée (' + esc(r.commune) + ')</div>')
+          : '');
+    } else if (communesGeo) {
+      html += '<div class="ecart">Aucune commune française à ces coordonnées.</div>';
+    } else {
+      html += '<div class="mention">Service des communes indisponible.</div>';
+    }
+    if (lieux.length) {
+      html += '<div class="fr-mt-1v">Lieux-dits et adresses à proximité :</div><ul>' + lieux.map(function (l) {
+        return '<li><b>' + esc(l.nom) + '</b>' + (l.ville && l.ville !== l.nom ? ' – ' + esc(l.ville) : '') +
+          ' <span class="mention">(' + esc(l.type || 'lieu') + (isFinite(l.d) ? ', ' + metres(l.d) : '') + ')</span></li>';
+      }).join('') + '</ul>';
+    } else {
+      html += '<div class="mention">Aucun lieu-dit trouvé à proximité.</div>';
+    }
+    return html + '<div class="source">Sources : geo.api.gouv.fr, IGN Géoplateforme.</div>';
+  }
+  function localiser(r) {
+    if (!r.localise) return;
+    const k = cleGeo(r);
+    let entree = cacheGeo.get(k);
+    if (!entree) {
+      entree = { html: null };
+      entree.promesse = rechercheGeo(r).then(function (html) { entree.html = html; return html; })
+        .catch(function () { cacheGeo.delete(k); return '<span class="mention">Recherche impossible (pas d’accès réseau ?).</span>'; });
+      cacheGeo.set(k, entree);
+    }
+    entree.promesse.then(function (html) {
+      const el = document.querySelector('.geo[data-id="' + r.id + '"]');
+      if (el) el.innerHTML = html;
+    });
   }
 
   function toutRafraichir() {
