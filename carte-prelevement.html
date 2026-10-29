@@ -52,6 +52,9 @@
   #outils textarea.fr-input { min-height: 40px; max-height: 110px; resize: vertical; font-family: monospace; }
   .ligne-btn { display: flex; gap: 6px; margin-top: 6px; }
   .ligne-btn .fr-btn { flex: 1; justify-content: center; }
+  #passes { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 13px; cursor: pointer; }
+  #passes input { width: 16px; height: 16px; accent-color: var(--bleu-france); }
+  #passes .mention { margin-left: auto; }
   #legende { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
   #legende button {
     display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; font-size: 12px; border-radius: 12px;
@@ -156,6 +159,8 @@
         <button id="effacer" type="button" class="fr-btn fr-btn--sm fr-btn--secondary fr-icon-close-line fr-btn--icon-left">Effacer</button>
       </div>
       <input id="filtre" class="fr-input fr-mt-1w" type="search" placeholder="Filtrer : commune, exploitation, préleveur…">
+      <label id="passes"><input type="checkbox" id="masquer-passes" checked>
+        Écarter les RDV dont la date est passée <span class="mention" id="nb-passes"></span></label>
       <div id="legende"></div>
     </div>
     <div id="contenu"><p class="vide">Chargement…</p></div>
@@ -393,7 +398,13 @@
     if (rdvs.length && !tableParcelles) alerte('Colonne « ' + COL_PARCELLE + ' » introuvable : les informations de parcelle ne sont pas disponibles.');
   }
   function couleur(statut) { return couleurStatut.get(statut) || COULEUR_SANS_STATUT; }
+  // Jour J (fuseau Europe/Paris) au format AAAA-MM-JJ : recalculé à chaque appel, donc juste même après minuit
+  const formatJour = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' });
+  function jour(d) { return formatJour.format(d); }
+  // RDV daté d'un jour antérieur à aujourd'hui (les RDV sans date ne sont jamais écartés)
+  function estPasse(r) { return !!r.date && jour(r.date) < jour(new Date()); }
   function visible(r) {
+    if ($('masquer-passes').checked && estPasse(r)) return false;
     if (statutsMasques.has(r.statut)) return false;
     const f = sansAccents($('filtre').value.trim());
     if (!f) return true;
@@ -475,6 +486,8 @@
   // ---------- Panneau ----------
   function chiffres() {
     const vis = rdvs.filter(visible);
+    const nbPasses = rdvs.filter(estPasse).length;
+    $('nb-passes').textContent = nbPasses ? '(' + nbPasses + (($('masquer-passes').checked) ? ' écarté' + (nbPasses > 1 ? 's' : '') : '') + ')' : '';
     const nbExpl = new Set(vis.map(cleExploitation)).size;
     const nonLoc = vis.filter(function (r) { return !r.localise; }).length;
     $('chiffres').innerHTML =
@@ -486,7 +499,10 @@
 
   function legende() {
     const comptes = new Map();
-    for (const r of rdvs) comptes.set(r.statut, (comptes.get(r.statut) || 0) + 1);
+    for (const r of rdvs) {
+      if ($('masquer-passes').checked && estPasse(r)) continue;
+      comptes.set(r.statut, (comptes.get(r.statut) || 0) + 1);
+    }
     $('legende').innerHTML = [...comptes.keys()].sort().map(function (s) {
       return '<button type="button" data-statut="' + esc(s) + '" class="' + (statutsMasques.has(s) ? 'masque' : '') +
         '" title="Afficher / masquer"><i style="background:' + couleur(s) + '"></i>' + esc(s || 'Sans statut') +
@@ -797,6 +813,11 @@
     if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); rechercher(); }
   });
   let minuterie;
+  try { if (localStorage.getItem('carte-prelevement-passes') === '0') $('masquer-passes').checked = false; } catch (e) { /* stockage indisponible */ }
+  $('masquer-passes').addEventListener('change', function () {
+    try { localStorage.setItem('carte-prelevement-passes', this.checked ? '1' : '0'); } catch (e) { /* idem */ }
+    toutRafraichir();
+  });
   $('filtre').addEventListener('input', function () {
     clearTimeout(minuterie);
     minuterie = setTimeout(toutRafraichir, 200);
