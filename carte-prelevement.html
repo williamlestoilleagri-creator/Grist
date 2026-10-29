@@ -25,8 +25,27 @@
   }
   .gmaps:hover { background: #e8f0fe; }
   .secours { width: 100%; margin-top: 6px; font-size: 13px; padding: 4px 6px; box-sizing: border-box; }
+  #recherche {
+    position: absolute; top: 10px; right: 10px; z-index: 1000; width: 280px; max-width: calc(100% - 70px);
+    background: #fff; padding: 8px; border-radius: 8px; box-shadow: 0 1px 5px rgba(0,0,0,.35);
+    font-size: 13px; box-sizing: border-box;
+  }
+  #recherche textarea {
+    width: 100%; box-sizing: border-box; min-height: 34px; max-height: 120px; resize: vertical;
+    font: 13px monospace; padding: 6px; border: 1px solid #ccc; border-radius: 6px;
+  }
+  #recherche .actions { display: flex; gap: 6px; margin-top: 6px; }
+  #recherche button {
+    flex: 1; padding: 6px; font-size: 13px; font-weight: 600; border-radius: 6px; cursor: pointer;
+    border: 1px solid #16b378; background: #16b378; color: #fff;
+  }
+  #recherche button.secondaire { background: #fff; color: #16b378; }
+  #resultat { margin-top: 6px; max-height: 160px; overflow: auto; }
+  #resultat .trouve { color: #2e7d32; cursor: pointer; }
+  #resultat .trouve:hover { text-decoration: underline; }
+  #resultat .absent { color: #c62828; }
   #message {
-    position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 1000;
+    position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 1000;
     background: #fff; padding: 6px 12px; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.3);
     font-size: 13px; display: none;
   }
@@ -34,6 +53,15 @@
 </head>
 <body>
 <div id="carte"></div>
+<div id="recherche">
+  <textarea id="cles" rows="1" placeholder="Identifiant(s) : 029161227-151-2 …"
+    title="Une ou plusieurs clés, séparées par des espaces, virgules, points-virgules ou retours à la ligne"></textarea>
+  <div class="actions">
+    <button id="chercher" type="button">🔍 Rechercher</button>
+    <button id="effacer" type="button" class="secondaire">Effacer</button>
+  </div>
+  <div id="resultat"></div>
+</div>
 <div id="message"></div>
 
 <script>
@@ -45,13 +73,16 @@
 
   const groupe = L.featureGroup().addTo(carte);
   const message = document.getElementById('message');
+  const surbrillance = L.featureGroup().addTo(carte);
   const marqueurs = new Map();
+  let points = []; // { id, ident, marqueur }
   let premierAffichage = true;
 
   grist.ready({
     requiredAccess: 'read table',
     columns: [
       { name: 'Description', title: 'Fiche (texte ou HTML)', optional: true },
+      { name: 'Identifiant', title: 'Identifiant (ex. 029161227-151-2)', optional: true },
       { name: 'Latitude', title: 'Latitude', type: 'Numeric,Text' },
       { name: 'Longitude', title: 'Longitude', type: 'Numeric,Text' },
     ],
@@ -134,6 +165,7 @@
   grist.onRecords(function (records, mappings) {
     groupe.clearLayers();
     marqueurs.clear();
+    points = [];
     let ignores = 0;
     for (const brut of records) {
       const r = grist.mapColumnNames(brut, mappings);
@@ -146,7 +178,9 @@
         .on('click', function () { grist.setCursorPos({ rowId: brut.id }); });
       m.addTo(groupe);
       marqueurs.set(brut.id, m);
+      points.push({ id: brut.id, ident: normaliser(r.Identifiant), brut: String(r.Identifiant ?? ''), marqueur: m });
     }
+    if (champCles.value.trim()) rechercher(false);
     if (premierAffichage && groupe.getLayers().length) {
       carte.fitBounds(groupe.getBounds(), { padding: [30, 30], maxZoom: 15 });
       premierAffichage = false;
@@ -158,6 +192,79 @@
       message.style.display = 'none';
     }
   });
+
+  // ---- Recherche par identifiant ----
+  const champCles = document.getElementById('cles');
+  const resultat = document.getElementById('resultat');
+
+  function normaliser(v) {
+    return String(v ?? '').toLowerCase().replace(/\s+/g, '');
+  }
+
+  function echapper(t) {
+    return String(t).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
+  // Cherche chaque clé : correspondance exacte, sinon début ou partie de l'identifiant
+  function rechercher(zoomer) {
+    surbrillance.clearLayers();
+    const cles = [...new Set(champCles.value.split(/[\s,;]+/).map(normaliser).filter(Boolean))];
+    if (!cles.length) { resultat.innerHTML = ''; return; }
+    const trouves = [];
+    const lignes = [];
+    for (const cle of cles) {
+      let res = points.filter(function (p) { return p.ident === cle; });
+      if (!res.length) res = points.filter(function (p) { return p.ident && p.ident.includes(cle); });
+      if (!res.length) {
+        lignes.push('<div class="absent">❌ ' + echapper(cle) + ' : introuvable</div>');
+        continue;
+      }
+      for (const p of res) {
+        trouves.push(p);
+        lignes.push('<div class="trouve" data-id="' + p.id + '">📍 ' + echapper(p.brut) + '</div>');
+      }
+    }
+    const vus = new Set();
+    for (const p of trouves) {
+      if (vus.has(p.id)) continue;
+      vus.add(p.id);
+      L.circleMarker(p.marqueur.getLatLng(), {
+        radius: 18, color: '#e53935', weight: 3, fillColor: '#e53935', fillOpacity: 0.2, interactive: false,
+      }).addTo(surbrillance);
+    }
+    resultat.innerHTML = '<div><b>' + vus.size + '</b> parcelle(s) trouvée(s)</div>' + lignes.join('');
+    if (!zoomer || !vus.size) return;
+    if (vus.size === 1) {
+      const m = trouves[0].marqueur;
+      carte.setView(m.getLatLng(), Math.max(carte.getZoom(), 16));
+      m.openPopup();
+      grist.setCursorPos({ rowId: trouves[0].id });
+    } else {
+      carte.fitBounds(surbrillance.getBounds(), { padding: [40, 40], maxZoom: 16 });
+    }
+  }
+
+  document.getElementById('chercher').addEventListener('click', function () { rechercher(true); });
+  document.getElementById('effacer').addEventListener('click', function () {
+    champCles.value = '';
+    rechercher(false);
+  });
+  champCles.addEventListener('keydown', function (ev) {
+    // Entrée = rechercher, Maj+Entrée = nouvelle ligne
+    if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); rechercher(true); }
+  });
+  resultat.addEventListener('click', function (ev) {
+    const el = ev.target.closest('.trouve');
+    const m = el && marqueurs.get(Number(el.dataset.id));
+    if (!m) return;
+    carte.setView(m.getLatLng(), Math.max(carte.getZoom(), 16));
+    m.openPopup();
+    grist.setCursorPos({ rowId: Number(el.dataset.id) });
+  });
+  L.DomEvent.disableClickPropagation(document.getElementById('recherche'));
+  L.DomEvent.disableScrollPropagation(document.getElementById('recherche'));
 
   // Sélection d'une ligne dans Grist -> ouvre son point sur la carte
   grist.onRecord(function (record) {
