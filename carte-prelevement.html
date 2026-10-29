@@ -24,7 +24,7 @@
 
   /* Bandeau */
   #bandeau {
-    display: flex; align-items: center; gap: 12px; padding: 6px 12px;
+    display: flex; align-items: center; gap: 10px; padding: 4px 12px 4px 6px;
     border-bottom: 3px solid var(--bleu-france); background: #fff; flex-wrap: wrap;
   }
   #bandeau .marque { font-weight: 700; font-size: 15px; line-height: 1.1; color: #161616; display: flex; align-items: center; }
@@ -36,8 +36,9 @@
   }
   #chiffres { display: flex; gap: 14px; margin-left: auto; flex-wrap: wrap; }
   #chiffres div { text-align: center; line-height: 1.1; }
-  #chiffres b { display: block; font-size: 18px; color: var(--bleu-france); }
+  #chiffres b { display: block; font-size: 17px; color: var(--bleu-france); }
   #chiffres span { font-size: 11px; color: var(--gris-mention); }
+  #alerte { display: none; padding: 4px 12px; font-size: 12px; background: #ffe9e6; color: #b60000; }
 
   /* Corps : panneau + carte */
   #corps { flex: 1; display: flex; min-height: 0; }
@@ -45,6 +46,7 @@
     width: 380px; max-width: 45%; display: flex; flex-direction: column; border-right: 1px solid var(--gris-bordure);
     background: #fff; min-height: 0;
   }
+  body.panneau-ferme #panneau { display: none; }
   #outils { padding: 10px 12px; border-bottom: 1px solid var(--gris-bordure); }
   #outils .fr-input { font-size: 14px; }
   #outils textarea.fr-input { min-height: 40px; max-height: 110px; resize: vertical; font-family: monospace; }
@@ -65,20 +67,20 @@
   .titre-vue h2 { font-size: 17px; margin: 0; line-height: 1.3; }
   .mention { font-size: 12px; color: var(--gris-mention); }
   .item-commune {
-    display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; margin-bottom: 4px;
+    display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 10px; margin-bottom: 4px;
     border: 1px solid var(--gris-bordure); border-left: 4px solid var(--bleu-france); background: #fff;
     text-align: left; cursor: pointer; font-size: 14px;
   }
   .item-commune:hover, .item-commune.survol { background: var(--bleu-france-clair); }
   .item-commune .nom { flex: 1; font-weight: 600; }
-  .barre { display: flex; height: 6px; width: 70px; border-radius: 3px; overflow: hidden; background: #eee; }
+  .barre { display: flex; height: 6px; width: 60px; border-radius: 3px; overflow: hidden; background: #eee; }
   .compteur {
-    min-width: 26px; padding: 1px 7px; border-radius: 12px; background: var(--bleu-france); color: #fff;
-    font-size: 12px; font-weight: 700; text-align: center;
+    min-width: 24px; padding: 0 7px; border-radius: 10px; background: var(--bleu-france); color: #fff;
+    font-size: 11px; font-weight: 700; text-align: center; line-height: 18px;
   }
   details.exploitation { border: 1px solid var(--gris-bordure); margin-bottom: 6px; background: #fff; }
   details.exploitation > summary {
-    list-style: none; cursor: pointer; padding: 8px 10px; display: flex; gap: 8px; align-items: center; font-weight: 600;
+    list-style: none; cursor: pointer; padding: 7px 10px; display: flex; gap: 8px; align-items: center; font-weight: 600; font-size: 14px;
   }
   details.exploitation > summary::-webkit-details-marker { display: none; }
   details.exploitation > summary::before { content: "▸"; color: var(--bleu-france); transition: transform .15s; }
@@ -86,11 +88,12 @@
   details.exploitation[open] > summary { background: var(--bleu-france-clair); }
   details.exploitation > summary .nom { flex: 1; }
   .pacage { font-weight: 400; font-size: 12px; color: var(--gris-mention); }
-  .rdv { border-top: 1px solid var(--gris-bordure); padding: 8px 10px; }
+  .rdv { border-top: 1px solid var(--gris-bordure); padding: 7px 10px; }
   .rdv.actif { background: #fff8e6; box-shadow: inset 4px 0 0 var(--rouge-marianne); }
-  .rdv-entete { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; cursor: pointer; }
-  .rdv-entete .cle { font-family: monospace; font-weight: 700; font-size: 13px; }
-  .pastille { display: inline-block; padding: 0 8px; border-radius: 4px; font-size: 11px; font-weight: 700; color: #fff; }
+  .rdv-entete { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; cursor: pointer; font-size: 13px; }
+  .rdv-entete .cle { font-weight: 700; }
+  .rdv-entete .qui { width: 100%; font-size: 12px; color: var(--gris-mention); }
+  .pastille { display: inline-block; padding: 0 7px; border-radius: 4px; font-size: 11px; font-weight: 700; color: #fff; }
   .rdv-corps { display: none; margin-top: 8px; }
   .rdv.ouvert .rdv-corps { display: block; }
   .actions { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
@@ -104,14 +107,16 @@
 
   /* Carte */
   .leaflet-container { font-family: Marianne, arial, sans-serif; }
-  .leaflet-container a { background-image: none; }
+  .leaflet-container a:not(.leaflet-control-layers-toggle) { background-image: none; }
   .bulle-commune {
     display: flex; align-items: center; justify-content: center; border-radius: 50%;
-    background: var(--bleu-france); color: #fff; font-weight: 700; border: 3px solid #fff;
-    box-shadow: 0 2px 6px rgba(0,0,0,.35); transition: transform .15s, background .15s;
+    background: rgba(0, 0, 145, .85); color: #fff; font-weight: 700; font-size: 11px; border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,.35); transition: transform .15s, background .15s;
   }
-  .bulle-commune:hover, .bulle-commune.survol { transform: scale(1.18); background: var(--rouge-marianne); }
+  .bulle-commune:hover, .bulle-commune.survol { transform: scale(1.2); background: var(--rouge-marianne); }
   .leaflet-tooltip.etiquette { font-size: 12px; font-weight: 600; }
+  #basculer-carte { position: absolute; top: 10px; left: 54px; z-index: 1000; display: none; }
+  body.panneau-ferme #basculer-carte { display: inline-flex; }
   #chargement {
     position: absolute; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center;
     background: rgba(255,255,255,.85); font-size: 15px; color: var(--bleu-france); font-weight: 600; text-align: center; padding: 20px;
@@ -126,26 +131,32 @@
 </head>
 <body>
 <header id="bandeau">
+  <button id="basculer" type="button" class="fr-btn fr-btn--sm fr-btn--tertiary fr-icon-arrow-left-s-line fr-btn--icon-left"
+    title="Masquer la liste">Masquer la liste</button>
   <div class="marque"><div>Carte des prélèvements<small>Reliquats azotés – regroupement par commune</small></div></div>
   <div id="chiffres"></div>
 </header>
+<div id="alerte"></div>
 
 <div id="corps">
   <aside id="panneau">
     <div id="outils">
-      <label class="fr-label fr-text--sm fr-mb-1v" for="cles">Rechercher une ou plusieurs parcelles (identifiant)</label>
-      <textarea id="cles" class="fr-input" rows="1" placeholder="029161227-151-2, 029161227-151-3 …"
+      <label class="fr-label fr-text--sm fr-mb-1v" for="cles">Rechercher une ou plusieurs parcelles (PACAGE-îlot-parcelle)</label>
+      <textarea id="cles" class="fr-input" rows="1" placeholder="022000005-3-5, 022000005-8-50 …"
         title="Séparez les clés par des espaces, virgules, points-virgules ou retours à la ligne"></textarea>
       <div class="ligne-btn">
         <button id="chercher" type="button" class="fr-btn fr-btn--sm fr-icon-search-line fr-btn--icon-left">Rechercher</button>
         <button id="effacer" type="button" class="fr-btn fr-btn--sm fr-btn--secondary fr-icon-close-line fr-btn--icon-left">Effacer</button>
       </div>
-      <input id="filtre" class="fr-input fr-mt-1w" type="search" placeholder="Filtrer : commune, exploitation, PACAGE…">
+      <input id="filtre" class="fr-input fr-mt-1w" type="search" placeholder="Filtrer : commune, exploitation, préleveur…">
       <div id="legende"></div>
     </div>
     <div id="contenu"><p class="vide">Chargement…</p></div>
   </aside>
-  <div id="carte"><div id="chargement">Chargement des données…</div></div>
+  <div id="carte">
+    <button id="basculer-carte" type="button" class="fr-btn fr-btn--sm fr-icon-menu-fill fr-btn--icon-left">Liste</button>
+    <div id="chargement">Chargement des données…</div>
+  </div>
 </div>
 
 <script>
@@ -156,26 +167,31 @@
   const COL_LON = 'longitude';
   const COL_STATUT = 'Statut';
   const COL_DATE = 'Date_RDV';
+  const COL_PRELEVEUR = 'Preleveur';
+  const COL_ORGANISME = 'Organisme';
   const ZOOM_PARCELLES = 12;             // en dessous : bulles par commune ; au-dessus : parcelles
   const COLONNES_MASQUEES = new Set(['id', 'manualSort', 'Description', COL_LAT, COL_LON]);
   const COULEURS = ['#000091', '#18753c', '#b34000', '#6a6af4', '#009081', '#a558a0', '#c3992a', '#ce0500', '#7d4e5b', '#417dc4'];
-  const COULEUR_SANS_STATUT = '#929292';
+  const COULEUR_SANS_STATUT = '#7b7b7b';
+  const RAFRAICHIR_REFS_MS = 60000;
 
   // ---------- État ----------
   let tableId = TABLE_PAR_DEFAUT;
   let colonnes = [];              // colonnes de la table source (ordre Grist)
+  let colParId = new Map();       // colId -> colonne
   const tablesRef = {};           // tableId -> Map(id -> ligne)
-  const colAffichee = {};         // type "Ref:X" -> colonne affichée
+  let refsChargees = 0;
   let metaPret = null;
-  let rdvs = [];                  // lignes enrichies
+  let rdvs = [];
   let parId = new Map();
-  let communes = new Map();       // nom -> { nom, cp, rdvs: [] }
+  let communes = new Map();       // nom -> { nom, rdvs: [] }
   let couleurStatut = new Map();
   const statutsMasques = new Set();
   let vue = { type: 'communes' };
   let rdvActif = null;
   let curseurParMoi = null;
   let premierCadrage = true;
+  let enCours = null, enAttente = null;
 
   // ---------- Carte ----------
   const carte = L.map('carte', { preferCanvas: true }).setView([48.2, -2.9], 8);
@@ -211,24 +227,26 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
-  function nombre(v) {
-    if (v === null || v === undefined || v === '') return NaN;
-    return Number(String(v).trim().replace(',', '.'));
+  // Cellule en erreur dans Grist (#TypeError…) : ["E", "TypeError", …]
+  function estErreur(v) { return Array.isArray(v) && v[0] === 'E'; }
+  function propre(v) {
+    if (v === null || v === undefined || estErreur(v)) return '';
+    return String(v).trim();
   }
-  function normaliser(v) { return String(v ?? '').toLowerCase().replace(/\s+/g, ''); }
+  function nombre(v) {
+    const t = propre(v);
+    return t === '' ? NaN : Number(t.replace(',', '.'));
+  }
+  // "022000005-3-5", "022000005|3|5", " 022000005 - 3 - 5 " -> "022000005-3-5"
+  function normaliserCle(v) {
+    return propre(v).toLowerCase().replace(/\s*[|\/_;]\s*|\s*-\s*/g, '-').replace(/\s+/g, '');
+  }
   function sansAccents(v) { return String(v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
-
   function versDate(v) {
     if (v instanceof Date) return v;
-    if (typeof v === 'number') return new Date(v * 1000);
+    if (typeof v === 'number' && v) return new Date(v * 1000);
     if (Array.isArray(v) && (v[0] === 'D' || v[0] === 'd')) return new Date(v[1] * 1000);
     return null;
-  }
-  function idRef(v) {
-    if (typeof v === 'number') return v;
-    if (Array.isArray(v) && v[0] === 'R') return v[2];
-    if (v && typeof v === 'object' && 'rowId' in v) return v.rowId;
-    return v ? Number(v) : 0;
   }
   function liste(v) {
     if (Array.isArray(v)) return v[0] === 'L' ? v.slice(1) : v;
@@ -236,36 +254,6 @@
   }
   function dateHeure(d) {
     return d.toLocaleString('fr-FR', { timeZone: 'Europe/Paris', dateStyle: 'short', timeStyle: 'short' });
-  }
-
-  // Valeur lisible selon le type de colonne Grist
-  function formater(valeur, type) {
-    if (valeur === null || valeur === undefined || valeur === '') return '';
-    type = type || '';
-    if (type.startsWith('Ref:')) {
-      const id = idRef(valeur);
-      if (!id) return '';
-      const t = tablesRef[type.slice(4)];
-      const ligne = t && t.get(id);
-      const col = colAffichee[type];
-      return ligne ? String(col ? ligne[col] ?? '' : id) : '#' + id;
-    }
-    if (type.startsWith('RefList:')) {
-      return liste(valeur).map(function (id) { return formater(id, 'Ref:' + type.slice(8)); }).join(', ');
-    }
-    if (type.startsWith('DateTime')) {
-      const d = versDate(valeur);
-      return d ? dateHeure(d) : String(valeur);
-    }
-    if (type === 'Date') {
-      const d = versDate(valeur);
-      return d ? d.toLocaleDateString('fr-FR', { timeZone: 'UTC' }) : String(valeur);
-    }
-    if (type === 'Bool') return valeur ? 'Oui' : 'Non';
-    if (type === 'ChoiceList') return liste(valeur).join(', ');
-    if (type === 'Numeric' || type === 'Int') return typeof valeur === 'number' ? valeur.toLocaleString('fr-FR') : String(valeur);
-    if (Array.isArray(valeur)) return liste(valeur).join(', ');
-    return String(valeur);
   }
 
   function enLignes(colonnaire) {
@@ -280,12 +268,41 @@
     return m;
   }
 
-  // ---------- Métadonnées : colonnes, types et tables référencées ----------
+  // Valeur lisible d'une cellule (row = ligne brute issue de fetchTable)
+  function formater(row, colId) {
+    const col = colParId.get(colId);
+    const valeur = row[colId];
+    const type = col ? col.type : '';
+    if (valeur === null || valeur === undefined || valeur === '' || estErreur(valeur)) return '';
+    if (type.startsWith('Ref:') || type.startsWith('RefList:')) {
+      // Texte affiché par Grist pour la référence (colonne d'aide gristHelper_Display…)
+      if (col.displayColId && row[col.displayColId] !== undefined) {
+        const d = row[col.displayColId];
+        if (estErreur(d)) return '';
+        return Array.isArray(d) ? liste(d).join(', ') : propre(d);
+      }
+      const t = tablesRef[type.split(':')[1]];
+      return liste(valeur).map(function (id) {
+        const l = t && t.get(id);
+        return l && col.visibleColId ? propre(l[col.visibleColId]) : '#' + id;
+      }).join(', ');
+    }
+    if (type.startsWith('DateTime')) { const d = versDate(valeur); return d ? dateHeure(d) : String(valeur); }
+    if (type === 'Date') { const d = versDate(valeur); return d ? d.toLocaleDateString('fr-FR', { timeZone: 'UTC' }) : String(valeur); }
+    if (type === 'Bool') return valeur ? 'Oui' : 'Non';
+    if (type === 'ChoiceList') return liste(valeur).join(', ');
+    if (type === 'Numeric' || type === 'Int') return typeof valeur === 'number' ? valeur.toLocaleString('fr-FR') : String(valeur);
+    if (Array.isArray(valeur)) return liste(valeur).join(', ');
+    return String(valeur);
+  }
+
+  // ---------- Métadonnées : colonnes, types, tables référencées ----------
   async function chargerMeta() {
     try {
       if (grist.selectedTable && grist.selectedTable.getTableId) tableId = await grist.selectedTable.getTableId();
       else if (grist.getSelectedTableId) tableId = await grist.getSelectedTableId();
     } catch (e) { /* table par défaut */ }
+    tableId = tableId || TABLE_PAR_DEFAUT;
     const tables = enLignes(await grist.docApi.fetchTable('_grist_Tables'));
     const cols = enLignes(await grist.docApi.fetchTable('_grist_Tables_column'));
     let idTable = null;
@@ -293,53 +310,87 @@
     colonnes = [...cols.values()]
       .filter(function (c) { return c.parentId === idTable && !c.colId.startsWith('gristHelper_'); })
       .sort(function (a, b) { return a.parentPos - b.parentPos; });
+    for (const c of colonnes) {
+      const d = c.displayCol && cols.get(c.displayCol);
+      const v = c.visibleCol && cols.get(c.visibleCol);
+      c.displayColId = d ? d.colId : null;
+      c.visibleColId = v ? v.colId : null;
+    }
+    colParId = new Map(colonnes.map(function (c) { return [c.colId, c]; }));
+  }
+
+  async function chargerRefs() {
     const aCharger = new Set();
     for (const c of colonnes) {
       const m = /^Ref(?:List)?:(.+)$/.exec(c.type);
-      if (!m) continue;
-      aCharger.add(m[1]);
-      const visibleCol = c.visibleCol && cols.get(c.visibleCol);
-      colAffichee[c.type] = visibleCol ? visibleCol.colId : null;
-      if (!colAffichee['Ref:' + m[1]]) colAffichee['Ref:' + m[1]] = colAffichee[c.type];
+      if (m) aCharger.add(m[1]);
     }
+    const erreurs = [];
     await Promise.all([...aCharger].map(async function (t) {
-      try { tablesRef[t] = enLignes(await grist.docApi.fetchTable(t)); } catch (e) { tablesRef[t] = new Map(); }
+      try { tablesRef[t] = enLignes(await grist.docApi.fetchTable(t)); }
+      catch (e) { erreurs.push(t); tablesRef[t] = tablesRef[t] || new Map(); }
     }));
+    refsChargees = Date.now();
+    if (erreurs.length) alerte('Impossible de lire : ' + erreurs.join(', ') + '. Vérifiez « Accès complet au document ».');
   }
-  function typeDe(colId) {
-    const c = colonnes.find(function (x) { return x.colId === colId; });
-    return c ? c.type : '';
+
+  function alerte(texte) {
+    $('alerte').textContent = texte || '';
+    $('alerte').style.display = texte ? 'block' : 'none';
+  }
+
+  // Colonne commune de RDV_Prelevements (ex. Cle_parcelle_PACAGE_ilot_parcelle__Commune)
+  function colCommune() {
+    const c = colonnes.find(function (x) { return /^commune$/i.test(x.colId); }) ||
+      colonnes.find(function (x) { return /commune/i.test(x.colId) || /commune/i.test(x.label || ''); });
+    return c ? c.colId : null;
   }
 
   // ---------- Données ----------
-  function preparer(records) {
-    const typeParcelle = typeDe(COL_PARCELLE);
+  function preparer(ids, lignes) {
+    const typeParcelle = colParId.has(COL_PARCELLE) ? colParId.get(COL_PARCELLE).type : '';
     const tableParcelles = typeParcelle.startsWith('Ref:') ? tablesRef[typeParcelle.slice(4)] : null;
-    rdvs = records.map(function (r) {
-      const parcelle = (tableParcelles && tableParcelles.get(idRef(r[COL_PARCELLE]))) || {};
+    const typePreleveur = colParId.has(COL_PRELEVEUR) ? colParId.get(COL_PRELEVEUR).type : '';
+    const tablePreleveurs = typePreleveur.startsWith('Ref:') ? tablesRef[typePreleveur.slice(4)] : null;
+    const cCommune = colCommune();
+
+    rdvs = [];
+    for (const id of ids) {
+      const r = lignes.get(id);
+      if (!r) continue;
+      const parcelle = (tableParcelles && tableParcelles.get(r[COL_PARCELLE])) || {};
+      const preleveur = (tablePreleveurs && tablePreleveurs.get(r[COL_PRELEVEUR])) || {};
       const lat = nombre(r[COL_LAT]), lon = nombre(r[COL_LON]);
-      return {
-        id: r.id, brut: r, parcelle: parcelle,
-        cle: String(parcelle.CLE || ''),
-        commune: String(parcelle.Commune || '').trim() || 'Commune non renseignée',
-        cp: String(parcelle.Code_Postal || '').split('.')[0],
-        pacage: String(r.PACAGE || parcelle.PACAGE || ''),
-        exploitation: String(r.Raison_sociale || r.Nom_exploitation || parcelle.Nom || 'Exploitation sans nom'),
-        statut: String(r[COL_STATUT] || ''),
+      const cle = formater(r, COL_PARCELLE) || propre(parcelle.Cle2_2) || propre(parcelle.CLE);
+      const pacage = /^\d{9}$/.test(propre(r.PACAGE)) ? propre(r.PACAGE) : (propre(parcelle.PACAGE) || (cle.match(/^\d{9}/) || [''])[0]);
+      const nomPreleveur = propre(preleveur.Nom_Prenom) ||
+        [propre(preleveur.Prenom), propre(preleveur.Nom)].filter(Boolean).join(' ') || formater(r, COL_PRELEVEUR);
+      rdvs.push({
+        id: id, brut: r, parcelle: parcelle,
+        cle: cle,
+        clesRecherche: [cle, parcelle.Cle2, parcelle.Cle2_2, parcelle.CLE].map(normaliserCle).filter(Boolean),
+        commune: (cCommune && propre(r[cCommune])) || propre(parcelle.Commune) || 'Commune non renseignée',
+        cp: propre(parcelle.Code_Postal).split('.')[0],
+        pacage: pacage,
+        exploitation: propre(r.Raison_sociale) || propre(parcelle.Nom) || propre(r.Nom_exploitation) || 'Exploitation sans nom',
+        preleveur: nomPreleveur,
+        organisme: propre(r[COL_ORGANISME]) || propre(preleveur.Organisme),
+        statut: propre(r[COL_STATUT]),
         date: versDate(r[COL_DATE]),
-        lat: lat, lon: lon, localise: isFinite(lat) && isFinite(lon),
-      };
-    });
+        lat: lat, lon: lon, localise: isFinite(lat) && isFinite(lon) && !(lat === 0 && lon === 0),
+      });
+    }
     parId = new Map(rdvs.map(function (r) { return [r.id, r]; }));
     const statuts = [...new Set(rdvs.map(function (r) { return r.statut; }).filter(Boolean))].sort();
     couleurStatut = new Map(statuts.map(function (s, i) { return [s, COULEURS[i % COULEURS.length]]; }));
+    if (rdvs.length && !tableParcelles) alerte('Colonne « ' + COL_PARCELLE + ' » introuvable : les informations de parcelle ne sont pas disponibles.');
   }
   function couleur(statut) { return couleurStatut.get(statut) || COULEUR_SANS_STATUT; }
   function visible(r) {
     if (statutsMasques.has(r.statut)) return false;
     const f = sansAccents($('filtre').value.trim());
     if (!f) return true;
-    return sansAccents([r.commune, r.cp, r.exploitation, r.pacage, r.cle, formater(r.brut.Preleveur, typeDe('Preleveur'))].join(' ')).includes(f);
+    return sansAccents([r.commune, r.cp, r.exploitation, r.pacage, r.cle, r.preleveur, r.organisme].join(' ')).includes(f);
   }
   function cleExploitation(r) { return r.pacage || r.exploitation; }
 
@@ -347,7 +398,7 @@
     communes = new Map();
     for (const r of rdvs) {
       if (!visible(r)) continue;
-      if (!communes.has(r.commune)) communes.set(r.commune, { nom: r.commune, cp: r.cp, rdvs: [] });
+      if (!communes.has(r.commune)) communes.set(r.commune, { nom: r.commune, rdvs: [] });
       communes.get(r.commune).rdvs.push(r);
     }
   }
@@ -363,11 +414,11 @@
       const lat = loc.reduce(function (s, r) { return s + r.lat; }, 0) / loc.length;
       const lon = loc.reduce(function (s, r) { return s + r.lon; }, 0) / loc.length;
       const n = c.rdvs.length;
-      const taille = Math.round(26 + 7 * Math.log2(n));
+      const taille = Math.min(44, Math.round(20 + 4 * Math.log2(n)));
       const bulle = L.marker([lat, lon], {
         icon: L.divIcon({
           className: '', iconSize: [taille, taille],
-          html: '<div class="bulle-commune" style="width:' + taille + 'px;height:' + taille + 'px;font-size:' + (n > 99 ? 11 : 13) + 'px">' + n + '</div>',
+          html: '<div class="bulle-commune" style="width:' + taille + 'px;height:' + taille + 'px">' + n + '</div>',
         }),
         riseOnHover: true,
       }).bindTooltip(esc(c.nom) + ' – ' + n + ' parcelle(s)', { direction: 'top', className: 'etiquette', offset: [0, -taille / 2] })
@@ -379,7 +430,7 @@
 
       for (const r of loc) {
         L.circleMarker([r.lat, r.lon], {
-          radius: 7, color: '#fff', weight: 2, fillColor: couleur(r.statut), fillOpacity: 0.95,
+          radius: 6, color: '#fff', weight: 1.5, fillColor: couleur(r.statut), fillOpacity: 0.95,
         }).bindTooltip(esc(r.exploitation) + '<br>' + esc(r.cle), { direction: 'top', className: 'etiquette' })
           .on('click', function () { ouvrirRdv(r.id, false); })
           .addTo(coucheParcelles);
@@ -396,18 +447,19 @@
     if (li) li.classList.toggle('survol', actif);
   }
 
-  function surbrillance(liste) {
+  // Anneau rouge discret, seulement pour quelques parcelles (sélection / recherche)
+  function surbrillance(l) {
     coucheSurbrillance.clearLayers();
-    for (const r of liste) {
+    for (const r of l.slice(0, 200)) {
       if (!r.localise) continue;
       L.circleMarker([r.lat, r.lon], {
-        radius: 16, color: '#e1000f', weight: 3, fillColor: '#e1000f', fillOpacity: 0.15, interactive: false,
+        radius: 11, color: '#e1000f', weight: 2.5, fill: false, interactive: false,
       }).addTo(coucheSurbrillance);
     }
   }
 
-  function cadrer(liste, zoomMax) {
-    const pts = liste.filter(function (r) { return r.localise; }).map(function (r) { return [r.lat, r.lon]; });
+  function cadrer(l, zoomMax) {
+    const pts = l.filter(function (r) { return r.localise; }).map(function (r) { return [r.lat, r.lon]; });
     if (!pts.length) return;
     if (pts.length === 1) carte.flyTo(pts[0], Math.max(carte.getZoom(), zoomMax), { duration: 0.8 });
     else carte.flyToBounds(L.latLngBounds(pts), { padding: [40, 40], maxZoom: zoomMax, duration: 0.8 });
@@ -435,28 +487,28 @@
     }).join('');
   }
 
-  function barreStatuts(liste) {
+  function barreStatuts(l) {
     const comptes = new Map();
-    for (const r of liste) comptes.set(r.statut, (comptes.get(r.statut) || 0) + 1);
+    for (const r of l) comptes.set(r.statut, (comptes.get(r.statut) || 0) + 1);
     return '<span class="barre">' + [...comptes.entries()].map(function (e) {
-      return '<i style="width:' + (100 * e[1] / liste.length) + '%;background:' + couleur(e[0]) + '" title="' + esc(e[0] || 'Sans statut') + ' : ' + e[1] + '"></i>';
+      return '<i style="width:' + (100 * e[1] / l.length) + '%;background:' + couleur(e[0]) + '" title="' + esc(e[0] || 'Sans statut') + ' : ' + e[1] + '"></i>';
     }).join('') + '</span>';
   }
 
   function vueCommunes() {
-    const tri = [...communes.values()].sort(function (a, b) { return b.rdvs.length - a.rdvs.length || a.nom.localeCompare(b.nom, 'fr'); });
+    const tri = [...communes.values()].sort(function (a, b) { return a.nom.localeCompare(b.nom, 'fr'); });
     if (!tri.length) return '<p class="vide">Aucune parcelle à afficher.</p>';
     return '<div class="titre-vue"><h2>Communes</h2><span class="mention">(' + tri.length + ')</span></div>' +
       tri.map(function (c) {
         return '<button type="button" class="item-commune" data-commune="' + esc(c.nom) + '">' +
-          '<span class="nom">' + esc(c.nom) + (c.cp ? ' <span class="pacage">' + esc(c.cp) + '</span>' : '') + '</span>' +
+          '<span class="nom">' + esc(c.nom) + '</span>' +
           barreStatuts(c.rdvs) + '<span class="compteur">' + c.rdvs.length + '</span></button>';
       }).join('');
   }
 
-  function blocExploitations(liste, ouvrirTout) {
+  function blocExploitations(l, ouvrirTout) {
     const groupes = new Map();
-    for (const r of liste) {
+    for (const r of l) {
       const k = cleExploitation(r);
       if (!groupes.has(k)) groupes.set(k, { nom: r.exploitation, pacage: r.pacage, rdvs: [] });
       groupes.get(k).rdvs.push(r);
@@ -470,39 +522,46 @@
     }).join('');
   }
 
+  function ligne(label, valeur) {
+    return valeur === undefined || valeur === null || valeur === '' ? '' :
+      '<tr><th>' + esc(label) + '</th><td>' + esc(valeur) + '</td></tr>';
+  }
+
   function carteRdv(r) {
     const actif = r.id === rdvActif;
     // Format Google Maps, arrondi à 6 décimales (~10 cm)
     const coords = r.localise ? +r.lat.toFixed(6) + ', ' + +r.lon.toFixed(6) : '';
-    let lignes = '';
+    const p = r.parcelle;
+    const ilot = [propre(p.NUM_ILOT), propre(p.NUM_PARCEL)].filter(Boolean).join(' - ');
+    const infosParcelle =
+      ligne('Identifiant', r.cle) + ligne('Exploitation', r.exploitation) + ligne('PACAGE', r.pacage) +
+      ligne('Commune', [r.cp, r.commune].filter(Boolean).join(' ')) +
+      ligne('Préleveur', r.preleveur) + ligne('Organisme de prélèvement', r.organisme) +
+      ligne('Îlot - parcelle', ilot) + ligne('Surface (ha)', propre(p.SURF_CALC)) +
+      ligne('Culture 2026', propre(p.CULT_2026)) + ligne('Culture 2025', propre(p.CULT_2025)) +
+      ligne('Raison de la sélection', propre(p.Raison_de_la_selection)) +
+      ligne('Téléphone portable', propre(p.Telephone_portable)) + ligne('Téléphone fixe', propre(p.Telephone_Fixe)) +
+      ligne('Coordonnées GPS', coords);
+    let lignesRdv = '';
     for (const c of colonnes) {
       if (COLONNES_MASQUEES.has(c.colId)) continue;
-      const v = formater(r.brut[c.colId], c.type);
-      if (!v) continue;
-      lignes += '<tr><th>' + esc(c.label || c.colId.replace(/_/g, ' ')) + '</th><td>' + esc(v) + '</td></tr>';
+      lignesRdv += ligne(c.label || c.colId.replace(/_/g, ' '), formater(r.brut, c.colId));
     }
-    const p = r.parcelle;
-    const ilot = [p.NUM_ILOT, p.NUM_PARCEL].filter(function (x) { return x !== undefined && x !== null && x !== ''; }).join(' - ');
-    const infosParcelle = [
-      ['Identifiant', p.CLE], ['Commune', [r.cp, p.Commune].filter(Boolean).join(' ')], ['Îlot - parcelle', ilot],
-      ['Surface (ha)', p.SURF_CALC], ['Culture 2026', p.CULT_2026], ['Culture 2025', p.CULT_2025],
-      ['Raison de la sélection', p.Raison_de_la_selection], ['Téléphone portable', p.Telephone_portable],
-      ['Téléphone fixe', p.Telephone_Fixe], ['Coordonnées GPS', coords],
-    ].filter(function (x) { return x[1] !== undefined && x[1] !== null && x[1] !== ''; })
-      .map(function (x) { return '<tr><th>' + esc(x[0]) + '</th><td>' + esc(x[1]) + '</td></tr>'; }).join('');
+    const qui = [r.preleveur && '👤 ' + r.preleveur, r.organisme && '🏢 ' + r.organisme].filter(Boolean).join(' · ');
 
     return '<div class="rdv' + (actif ? ' actif ouvert' : '') + '" data-id="' + r.id + '">' +
-      '<div class="rdv-entete"><span class="cle">' + esc(r.cle || 'Parcelle #' + r.id) + '</span>' +
+      '<div class="rdv-entete"><span class="cle">' + esc(r.cle || 'Sans identifiant') + '</span>' +
       '<span class="pastille" style="background:' + couleur(r.statut) + '">' + esc(r.statut || 'Sans statut') + '</span>' +
       (r.date ? '<span class="mention">' + esc(dateHeure(r.date)) + '</span>' : '') +
       (r.localise ? '' : '<span class="mention" style="color:var(--rouge-marianne)">non localisée</span>') +
+      (qui ? '<span class="qui">' + esc(qui) + '</span>' : '') +
       '</div><div class="rdv-corps">' +
       (coords ? '<div class="actions">' +
         '<button type="button" class="fr-btn fr-btn--sm fr-icon-clipboard-line fr-btn--icon-left copier" data-coords="' + esc(coords) + '">Copier pour Google Maps</button>' +
         '<a class="fr-btn fr-btn--sm fr-btn--secondary fr-icon-external-link-line fr-btn--icon-left" target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(r.lat + ',' + r.lon) + '">Google Maps</a>' +
         '</div>' : '') +
       '<div class="sous-titre">Parcelle</div><table class="champs">' + infosParcelle + '</table>' +
-      '<div class="sous-titre">Rendez-vous de prélèvement</div><table class="champs">' + lignes + '</table>' +
+      '<div class="sous-titre">Rendez-vous de prélèvement</div><table class="champs">' + lignesRdv + '</table>' +
       '</div></div>';
   }
 
@@ -539,19 +598,21 @@
     dessinerCarte();
     chiffres();
     legende();
-    if (vue.type === 'commune') surbrillance(communes.has(vue.nom) ? communes.get(vue.nom).rdvs : []);
-    else if (vue.type === 'recherche') surbrillance(vue.trouves.filter(visible));
+    if (vue.type === 'recherche') surbrillance(vue.trouves.filter(visible));
+    else if (rdvActif && parId.has(rdvActif)) surbrillance([parId.get(rdvActif)]);
     afficher();
   }
 
   // ---------- Navigation ----------
   function ouvrirCommune(nom, cadrage) {
     vue = { type: 'commune', nom: nom };
+    rdvActif = null;
+    coucheSurbrillance.clearLayers();
     const c = communes.get(nom);
-    surbrillance(c ? c.rdvs : []);
     if (cadrage && c) cadrer(c.rdvs, 15);
     afficher();
     $('contenu').scrollTop = 0;
+    ouvrirPanneau();
   }
 
   function ouvrirRdv(id, cadrage) {
@@ -564,6 +625,7 @@
     }
     if (cadrage) cadrer([r], 16);
     afficher();
+    ouvrirPanneau();
     if (curseurParMoi !== id) {
       curseurParMoi = id;
       Promise.resolve(grist.setCursorPos({ rowId: id })).catch(function () {});
@@ -571,12 +633,12 @@
   }
 
   function rechercher() {
-    const cles = [...new Set($('cles').value.split(/[\s,;]+/).map(normaliser).filter(Boolean))];
+    const cles = [...new Set($('cles').value.split(/[\s,;]+/).map(normaliserCle).filter(Boolean))];
     if (!cles.length) { effacer(); return; }
     const trouves = [], absents = [], vus = new Set();
     for (const cle of cles) {
-      let res = rdvs.filter(function (r) { return normaliser(r.cle) === cle; });
-      if (!res.length) res = rdvs.filter(function (r) { return r.cle && normaliser(r.cle).includes(cle); });
+      let res = rdvs.filter(function (r) { return r.clesRecherche.includes(cle); });
+      if (!res.length) res = rdvs.filter(function (r) { return r.clesRecherche.some(function (k) { return k.startsWith(cle); }); });
       if (!res.length) { absents.push(cle); continue; }
       for (const r of res) if (!vus.has(r.id)) { vus.add(r.id); trouves.push(r); }
     }
@@ -594,6 +656,23 @@
     coucheSurbrillance.clearLayers();
     afficher();
   }
+
+  // ---------- Panneau latéral : afficher / masquer ----------
+  function definirPanneau(ouvert) {
+    document.body.classList.toggle('panneau-ferme', !ouvert);
+    const b = $('basculer');
+    b.textContent = ouvert ? 'Masquer la liste' : 'Afficher la liste';
+    b.title = b.textContent;
+    b.classList.toggle('fr-icon-arrow-left-s-line', ouvert);
+    b.classList.toggle('fr-icon-arrow-right-s-line', !ouvert);
+    try { localStorage.setItem('carte-prelevement-panneau', ouvert ? '1' : '0'); } catch (e) { /* stockage indisponible */ }
+    setTimeout(function () { carte.invalidateSize(); }, 50);
+  }
+  function ouvrirPanneau() { if (document.body.classList.contains('panneau-ferme')) definirPanneau(true); }
+  $('basculer').addEventListener('click', function () { definirPanneau(document.body.classList.contains('panneau-ferme')); });
+  $('basculer-carte').addEventListener('click', function () { definirPanneau(true); });
+  L.DomEvent.disableClickPropagation($('basculer-carte'));
+  try { if (localStorage.getItem('carte-prelevement-panneau') === '0') definirPanneau(false); } catch (e) { /* idem */ }
 
   // ---------- Copie ----------
   async function copier(texte, bouton) {
@@ -658,22 +737,36 @@
   // ---------- Grist ----------
   grist.ready({ requiredAccess: 'full' });
 
-  grist.onRecords(async function (records) {
-    try {
-      if (!metaPret) metaPret = chargerMeta();
-      await metaPret;
-    } catch (e) {
-      metaPret = null;
-      $('chargement').textContent = 'Réglez le niveau d’accès du widget sur « Accès complet au document ».';
-      return;
-    }
-    preparer(records);
+  // onRecords donne les lignes visibles (filtres et liens de la page) ;
+  // les valeurs brutes sont relues avec fetchTable (références = identifiants, erreurs repérables).
+  async function charger(ids) {
+    if (!metaPret) metaPret = chargerMeta();
+    await metaPret;
+    if (Date.now() - refsChargees > RAFRAICHIR_REFS_MS) await chargerRefs();
+    const lignes = enLignes(await grist.docApi.fetchTable(tableId));
+    preparer(ids, lignes);
     toutRafraichir();
     $('chargement').style.display = 'none';
     if (premierCadrage && rdvs.some(function (r) { return r.localise; })) {
       premierCadrage = false;
       const pts = rdvs.filter(function (r) { return r.localise; }).map(function (r) { return [r.lat, r.lon]; });
       carte.fitBounds(L.latLngBounds(pts), { padding: [30, 30], maxZoom: 11 });
+    }
+  }
+
+  grist.onRecords(async function (records) {
+    const ids = records.map(function (r) { return r.id; });
+    if (enCours) { enAttente = ids; return; }   // un seul chargement à la fois
+    enCours = true;
+    try {
+      await charger(ids);
+      while (enAttente) { const suivant = enAttente; enAttente = null; await charger(suivant); }
+    } catch (e) {
+      metaPret = null;
+      $('chargement').style.display = 'flex';
+      $('chargement').textContent = 'Réglez le niveau d’accès du widget sur « Accès complet au document ». (' + (e && e.message || e) + ')';
+    } finally {
+      enCours = null;
     }
   });
 
