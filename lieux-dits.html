@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="fr" data-fr-scheme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lieux-dits de la parcelle</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/dsfr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/utility/icons/icons.min.css">
+<style>
+  :root {
+    --bleu-france: #000091;
+    --bleu-france-clair: #e3e3fd;
+    --rouge-marianne: #e1000f;
+    --gris-mention: #666;
+    --gris-bordure: #ddd;
+  }
+  body { margin: 0; padding: 0 0 16px; background: #fff; color: #3a3a3a; }
+  #bandeau {
+    display: flex; align-items: center; gap: 8px; padding: 6px 12px;
+    border-bottom: 3px solid var(--bleu-france); font-weight: 700; font-size: 15px; color: #161616;
+  }
+  #bandeau::before {
+    content: ""; display: inline-block; width: 6px; height: 26px; border: 1px solid #eee;
+    background: linear-gradient(var(--bleu-france) 0 33%, #fff 33% 66%, var(--rouge-marianne) 66%);
+  }
+  main { padding: 10px 12px; }
+  #parcelle h2 { font-size: 18px; margin: 0 0 2px; color: var(--bleu-france); }
+  #parcelle .mention, .mention { font-size: 12.5px; color: var(--gris-mention); }
+  .reglages { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin: 10px 0; }
+  .reglages .fr-select-group { margin: 0; min-width: 150px; }
+  .reglages label { font-size: 13px; }
+  #chercher { font-size: 15px; }
+  #commune { margin: 8px 0; font-size: 14px; }
+  #commune b { color: var(--bleu-france); }
+  .actions-liste { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+  table.lieux { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  table.lieux th { text-align: left; font-size: 12px; color: var(--gris-mention); border-bottom: 2px solid var(--bleu-france); padding: 4px 6px; }
+  table.lieux td { padding: 6px; border-bottom: 1px solid var(--gris-bordure); vertical-align: middle; }
+  table.lieux tr:hover td { background: var(--bleu-france-clair); }
+  table.lieux .nom { font-weight: 700; color: #161616; }
+  .type { display: inline-block; padding: 0 6px; border-radius: 4px; font-size: 11px; font-weight: 700; color: #fff; background: #6a6af4; }
+  .type.lieudit { background: var(--bleu-france); }
+  .type.voie { background: #7b7b7b; }
+  .boutons { white-space: nowrap; text-align: right; }
+  .boutons button, .boutons a {
+    font-size: 12px; padding: 2px 8px; border: 1px solid var(--bleu-france); border-radius: 4px;
+    background: #fff; color: var(--bleu-france); cursor: pointer; text-decoration: none; background-image: none;
+  }
+  .boutons button:hover, .boutons a:hover { background: var(--bleu-france-clair); }
+  .vide { color: var(--gris-mention); font-style: italic; padding: 10px 0; }
+  .erreur { color: #b60000; padding: 8px 0; }
+  .source { font-size: 11px; color: var(--gris-mention); margin-top: 8px; }
+</style>
+</head>
+<body>
+<div id="bandeau">Lieux-dits de la parcelle</div>
+<main>
+  <div id="parcelle"><p class="vide">Sélectionnez une parcelle dans Grist.</p></div>
+
+  <div class="reglages">
+    <div class="fr-select-group">
+      <label class="fr-label" for="rayon">Rayon de recherche</label>
+      <select class="fr-select" id="rayon">
+        <option value="500">500 m</option>
+        <option value="1000" selected>1 km</option>
+        <option value="2000">2 km</option>
+        <option value="5000">5 km</option>
+      </select>
+    </div>
+    <div class="fr-select-group">
+      <label class="fr-label" for="quoi">Afficher</label>
+      <select class="fr-select" id="quoi">
+        <option value="lieuxdits" selected>Lieux-dits seulement</option>
+        <option value="tout">Lieux-dits, hameaux, voies…</option>
+      </select>
+    </div>
+    <button id="chercher" type="button" class="fr-btn fr-icon-search-line fr-btn--icon-left" disabled>Rechercher les lieux-dits</button>
+  </div>
+
+  <div id="resultat"></div>
+</main>
+
+<script>
+  const $ = function (id) { return document.getElementById(id); };
+  let courant = null;               // { id, titre, commune, lat, lon }
+  const cache = new Map();          // "lat,lon" -> Promise<{ commune, lieux }>
+  const DIRECTIONS = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'];
+
+  grist.ready({
+    requiredAccess: 'read table',
+    columns: [
+      { name: 'Latitude', title: 'Latitude', type: 'Numeric,Text' },
+      { name: 'Longitude', title: 'Longitude', type: 'Numeric,Text' },
+      { name: 'Identifiant', title: 'Identifiant de la parcelle (texte)', optional: true },
+      { name: 'Exploitation', title: 'Exploitation / raison sociale', optional: true },
+      { name: 'Commune', title: 'Commune renseignée', optional: true },
+    ],
+  });
+
+  // ---------- Outils ----------
+  function esc(t) {
+    return String(t ?? '').replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function propre(v) {
+    if (v === null || v === undefined || (Array.isArray(v) && v[0] === 'E')) return '';
+    if (Array.isArray(v)) return v[0] === 'L' ? v.slice(1).join(', ') : v.join(', ');
+    return String(v).trim();
+  }
+  function nombre(v) { const t = propre(v); return t === '' ? NaN : Number(t.replace(',', '.')); }
+  function sansAccents(v) { return String(v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+  function distance(lat1, lon1, lat2, lon2) {
+    const rad = Math.PI / 180, R = 6371000;
+    const a = Math.sin((lat2 - lat1) * rad / 2) ** 2 +
+      Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin((lon2 - lon1) * rad / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
+  function direction(lat1, lon1, lat2, lon2) {
+    const rad = Math.PI / 180;
+    const y = Math.sin((lon2 - lon1) * rad) * Math.cos(lat2 * rad);
+    const x = Math.cos(lat1 * rad) * Math.sin(lat2 * rad) - Math.sin(lat1 * rad) * Math.cos(lat2 * rad) * Math.cos((lon2 - lon1) * rad);
+    const deg = (Math.atan2(y, x) / rad + 360) % 360;
+    return DIRECTIONS[Math.round(deg / 45) % 8];
+  }
+  function metres(d) { return d < 1000 ? Math.round(d) + ' m' : (d / 1000).toFixed(1).replace('.', ',') + ' km'; }
+  function coordsTexte(lat, lon) { return +lat.toFixed(6) + ', ' + +lon.toFixed(6); }
+  async function json(url) {
+    const rep = await fetch(url);
+    if (!rep.ok) throw new Error('HTTP ' + rep.status);
+    return rep.json();
+  }
+
+  // ---------- Sélection Grist ----------
+  grist.onRecord(function (record, mappings) {
+    const r = grist.mapColumnNames(record, mappings);
+    if (!r) { courant = null; afficherParcelle(); return; }
+    const lat = nombre(r.Latitude), lon = nombre(r.Longitude);
+    const id = typeof r.Identifiant === 'number' ? '' : propre(r.Identifiant);
+    courant = {
+      id: record.id, titre: id, exploitation: propre(r.Exploitation), commune: propre(r.Commune),
+      lat: lat, lon: lon, ok: isFinite(lat) && isFinite(lon) && !(lat === 0 && lon === 0),
+    };
+    afficherParcelle();
+    $('resultat').innerHTML = '';
+    // Résultats déjà calculés pour cette parcelle : on les réaffiche directement
+    if (courant.ok && cache.has(cleCache(courant))) rechercher();
+  });
+
+  function afficherParcelle() {
+    const c = courant;
+    $('chercher').disabled = !(c && c.ok);
+    if (!c) { $('parcelle').innerHTML = '<p class="vide">Sélectionnez une parcelle dans Grist.</p>'; return; }
+    $('parcelle').innerHTML =
+      '<h2>' + esc(c.titre || 'Ligne n° ' + c.id) + '</h2>' +
+      '<div class="mention">' + [c.exploitation, c.commune].filter(Boolean).map(esc).join(' – ') + '</div>' +
+      (c.ok ? '<div class="mention">GPS : ' + esc(coordsTexte(c.lat, c.lon)) + '</div>'
+        : '<p class="erreur">Cette parcelle n’a pas de latitude / longitude valides.</p>');
+  }
+
+  // ---------- Recherche ----------
+  function cleCache(c) { return c.lat.toFixed(6) + ',' + c.lon.toFixed(6); }
+
+  // Géocodage inverse IGN : adresses (lieux-dits "locality", voies) + toponymes (hameaux, lieux-dits habités…)
+  async function chercherLieux(lat, lon) {
+    const base = 'https://data.geopf.fr/geocodage/reverse?lat=' + lat + '&lon=' + lon + '&limit=50';
+    const reponses = await Promise.allSettled([
+      json(base + '&index=address'),
+      json(base + '&index=poi'),
+      json('https://geo.api.gouv.fr/communes?lat=' + lat + '&lon=' + lon + '&fields=nom,code,codesPostaux,departement&format=json'),
+    ]);
+    if (reponses[0].status === 'rejected' && reponses[1].status === 'rejected') {
+      throw new Error('service de géocodage IGN inaccessible');
+    }
+    const vus = new Set(), lieux = [];
+    for (const rep of reponses.slice(0, 2)) {
+      if (rep.status !== 'fulfilled') continue;
+      for (const f of rep.value.features || []) {
+        const p = f.properties || {};
+        const g = (f.geometry && f.geometry.coordinates) || [];
+        if (g.length < 2) continue;
+        const nom = propre(Array.isArray(p.toponym) ? p.toponym[0] : p.toponym) || propre(p.name) || propre(p.label);
+        if (!nom || p.type === 'housenumber' || p.type === 'municipality') continue;
+        const categorie = Array.isArray(p.category) ? p.category.join(', ') : propre(p.category);
+        const lieuDit = p.type === 'locality' || /lieu-dit|lieu dit|hameau|ecart|écart/i.test(categorie);
+        const ville = propre(Array.isArray(p.city) ? p.city[0] : p.city);
+        const k = sansAccents(nom + '|' + ville);
+        if (vus.has(k)) continue;
+        vus.add(k);
+        lieux.push({
+          nom: nom, ville: ville, lieuDit: lieuDit,
+          type: p.type === 'locality' ? 'lieu-dit' : p.type === 'street' ? 'voie' : (categorie || propre(p.type) || 'lieu'),
+          lat: g[1], lon: g[0], d: distance(lat, lon, g[1], g[0]), dir: direction(lat, lon, g[1], g[0]),
+        });
+      }
+    }
+    lieux.sort(function (a, b) { return a.d - b.d; });
+    const communes = reponses[2].status === 'fulfilled' ? reponses[2].value : null;
+    return { commune: communes && communes[0], lieux: lieux };
+  }
+
+  async function rechercher() {
+    const c = courant;
+    if (!c || !c.ok) return;
+    const k = cleCache(c);
+    if (!cache.has(k)) cache.set(k, chercherLieux(c.lat, c.lon));
+    $('chercher').disabled = true;
+    $('resultat').innerHTML = '<p class="vide">Recherche en cours…</p>';
+    try {
+      const res = await cache.get(k);
+      if (courant !== c) return;       // une autre parcelle a été sélectionnée entre-temps
+      afficherResultat(c, res);
+    } catch (e) {
+      cache.delete(k);
+      $('resultat').innerHTML = '<p class="erreur">Recherche impossible : ' + esc(e.message || e) +
+        '. Vérifiez que data.geopf.fr et geo.api.gouv.fr sont accessibles depuis votre réseau.</p>';
+    } finally {
+      $('chercher').disabled = !(courant && courant.ok);
+    }
+  }
+
+  function afficherResultat(c, res) {
+    const rayon = Number($('rayon').value);
+    const tout = $('quoi').value === 'tout';
+    const liste = res.lieux.filter(function (l) { return l.d <= rayon && (tout || l.lieuDit); });
+    let html = '';
+    const cm = res.commune;
+    if (cm) {
+      const meme = c.commune && sansAccents(cm.nom).replace(/[^a-z]/g, '') === sansAccents(c.commune).replace(/[^a-z]/g, '');
+      html += '<div id="commune">Commune du point : <b>' + esc(cm.nom) + '</b> <span class="mention">(' +
+        esc((cm.codesPostaux || [])[0] || '') + ' – INSEE ' + esc(cm.code) + (cm.departement ? ' – ' + esc(cm.departement.nom) : '') + ')</span>' +
+        (c.commune ? (meme ? ' <span style="color:#18753c;font-weight:700">✓ conforme</span>'
+          : ' <span style="color:#b34000;font-weight:700">⚠ différente de « ' + esc(c.commune) + ' »</span>') : '') + '</div>';
+    }
+    if (!liste.length) {
+      const autres = res.lieux.filter(function (l) { return tout || l.lieuDit; });
+      html += '<p class="vide">Aucun ' + (tout ? 'lieu' : 'lieu-dit') + ' dans un rayon de ' + metres(rayon) + '.' +
+        (autres.length ? ' Le plus proche : <b>' + esc(autres[0].nom) + '</b> à ' + metres(autres[0].d) + '. Augmentez le rayon.' : '') + '</p>';
+    } else {
+      html += '<div class="actions-liste"><span class="mention" style="flex:1;align-self:center"><b>' + liste.length + '</b> ' +
+        (tout ? 'lieu(x)' : 'lieu(x)-dit(s)') + ' dans un rayon de ' + metres(rayon) + '</span>' +
+        '<button type="button" class="fr-btn fr-btn--sm fr-btn--secondary fr-icon-clipboard-line fr-btn--icon-left" id="copier-tout">Copier la liste</button></div>' +
+        '<table class="lieux"><thead><tr><th>Lieu</th><th>Type</th><th>Distance</th><th></th></tr></thead><tbody>' +
+        liste.map(function (l, i) {
+          const cls = l.lieuDit ? 'type lieudit' : l.type === 'voie' ? 'type voie' : 'type';
+          return '<tr><td><span class="nom">' + esc(l.nom) + '</span>' + (l.ville ? '<br><span class="mention">' + esc(l.ville) + '</span>' : '') + '</td>' +
+            '<td><span class="' + cls + '">' + esc(l.type) + '</span></td>' +
+            '<td>' + metres(l.d) + ' ' + l.dir + '</td>' +
+            '<td class="boutons"><button type="button" data-copier="' + i + '" title="Copier le nom">Copier</button> ' +
+            '<a target="_blank" rel="noopener noreferrer" title="Voir dans Google Maps" href="https://www.google.com/maps/search/?api=1&query=' +
+            encodeURIComponent(l.lat + ',' + l.lon) + '">Carte</a></td></tr>';
+        }).join('') + '</tbody></table>';
+    }
+    html += '<div class="source">Sources : IGN Géoplateforme (géocodage inverse), geo.api.gouv.fr. Distances à vol d’oiseau depuis le point GPS de la parcelle.</div>';
+    $('resultat').innerHTML = html;
+    $('resultat').dataset.liste = JSON.stringify(liste.map(function (l) {
+      return { texte: l.nom + (l.ville ? ' (' + l.ville + ')' : '') + ' – ' + l.type + ' – ' + metres(l.d) + ' ' + l.dir, nom: l.nom };
+    }));
+  }
+
+  // ---------- Copie ----------
+  async function copier(texte, bouton, libelle) {
+    let ok = false;
+    try { await navigator.clipboard.writeText(texte); ok = true; }
+    catch (e) {
+      const zone = document.createElement('textarea');
+      zone.value = texte; zone.style.position = 'fixed'; zone.style.opacity = '0';
+      document.body.appendChild(zone); zone.select();
+      try { ok = document.execCommand('copy'); } catch (e2) { ok = false; }
+      zone.remove();
+    }
+    if (!ok) { window.prompt('Copiez avec Ctrl+C :', texte); return; }
+    bouton.textContent = 'Copié ✓';
+    setTimeout(function () { bouton.textContent = libelle; }, 1800);
+  }
+
+  // ---------- Événements ----------
+  $('chercher').addEventListener('click', rechercher);
+  ['rayon', 'quoi'].forEach(function (id) {
+    $(id).addEventListener('change', function () {
+      if (courant && courant.ok && cache.has(cleCache(courant)) && $('resultat').innerHTML) rechercher();
+    });
+  });
+  $('resultat').addEventListener('click', function (ev) {
+    const liste = JSON.parse($('resultat').dataset.liste || '[]');
+    const b = ev.target.closest('button');
+    if (!b) return;
+    if (b.id === 'copier-tout') {
+      const entete = (courant.titre ? courant.titre + ' – ' : '') + 'GPS ' + coordsTexte(courant.lat, courant.lon);
+      copier(entete + '\n' + liste.map(function (l) { return '• ' + l.texte; }).join('\n'), b, 'Copier la liste');
+    } else if (b.dataset.copier !== undefined) {
+      copier(liste[Number(b.dataset.copier)].nom, b, 'Copier');
+    }
+  });
+</script>
+</body>
+</html>

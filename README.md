@@ -10,6 +10,7 @@
 | `duo.html` | **Duo** — interprète à deux écouteurs (ex. japonais ⇄ allemand) |
 | `copier-coordonnees.html` | Fiche de rendez-vous + bouton « Copier les coordonnées » (latitude, longitude) |
 | `carte-prelevement.html` | Carte DSFR des prélèvements : regroupement par commune, liste des exploitations, fiche RDV complète, recherche par identifiant, copie GPS |
+| `lieux-dits.html` | Lieux-dits autour de la parcelle sélectionnée (d’après latitude / longitude), sur simple bouton |
 
 ## ERP « façon SAP » (`erp-sap.html`)
 
