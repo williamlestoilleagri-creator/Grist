@@ -92,7 +92,8 @@
   .rdv.actif { background: #fff8e6; box-shadow: inset 4px 0 0 var(--rouge-marianne); }
   .rdv-entete { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; cursor: pointer; font-size: 13px; }
   .rdv-entete .cle { font-weight: 700; }
-  .rdv-entete .qui { width: 100%; font-size: 12px; color: var(--gris-mention); }
+  .rdv-entete .qui { width: 100%; display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 3px; }
+  .rdv-entete .qui span { font-size: 15px; font-weight: 700; color: var(--bleu-france); line-height: 1.3; }
   .pastille { display: inline-block; padding: 0 7px; border-radius: 4px; font-size: 11px; font-weight: 700; color: #fff; }
   .rdv-corps { display: none; margin-top: 8px; }
   .rdv.ouvert .rdv-corps { display: block; }
@@ -553,14 +554,15 @@
       if (COLONNES_MASQUEES.has(c.colId)) continue;
       lignesRdv += ligne(c.label || c.colId.replace(/_/g, ' '), formater(r.brut, c.colId));
     }
-    const qui = [r.preleveur && '👤 ' + r.preleveur, r.organisme && '🏢 ' + r.organisme].filter(Boolean).join(' · ');
+    const qui = [r.preleveur && '👤 ' + r.preleveur, r.organisme && '🏢 ' + r.organisme]
+      .filter(Boolean).map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('');
 
     return '<div class="rdv' + (actif ? ' actif ouvert' : '') + '" data-id="' + r.id + '">' +
       '<div class="rdv-entete"><span class="cle">' + esc(r.cle || 'Sans identifiant') + '</span>' +
       '<span class="pastille" style="background:' + couleur(r.statut) + '">' + esc(r.statut || 'Sans statut') + '</span>' +
       (r.date ? '<span class="mention">' + esc(dateHeure(r.date)) + '</span>' : '') +
       (r.localise ? '' : '<span class="mention" style="color:var(--rouge-marianne)">non localisée</span>') +
-      (qui ? '<span class="qui">' + esc(qui) + '</span>' : '') +
+      (qui ? '<div class="qui">' + qui + '</div>' : '') +
       '</div><div class="rdv-corps">' +
       (coords ? '<div class="actions">' +
         '<button type="button" class="fr-btn fr-btn--sm fr-icon-clipboard-line fr-btn--icon-left copier" data-coords="' + esc(coords) + '">Copier pour Google Maps</button>' +
