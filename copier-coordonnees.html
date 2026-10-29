@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fiche + copie GPS</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 12px; color: #262633; background: #fff; }
+  #fiche { margin-bottom: 12px; }
+  #copier {
+    font-size: 14px; padding: 8px 14px; border: 1px solid #16b378; border-radius: 6px;
+    background: #16b378; color: #fff; cursor: pointer;
+  }
+  #copier:hover { background: #009058; }
+  #copier:disabled { background: #ccc; border-color: #ccc; cursor: default; }
+  #coords { width: 100%; max-width: 260px; margin-top: 8px; font-size: 12px; padding: 4px 6px; display: none; }
+  #vide { color: #929299; font-style: italic; }
+</style>
+</head>
+<body>
+<div id="fiche"><span id="vide">Sélectionnez une ligne…</span></div>
+<button id="copier" type="button" disabled>📋 Copier les coordonnées</button>
+<input id="coords" type="text" readonly>
+
+<script>
+  const fiche = document.getElementById('fiche');
+  const bouton = document.getElementById('copier');
+  const champ = document.getElementById('coords');
+  let coords = '';
+
+  grist.ready({
+    requiredAccess: 'read table',
+    columns: [
+      { name: 'Fiche', title: 'Fiche (colonne HTML)', optional: true },
+      { name: 'Latitude', title: 'Latitude' },
+      { name: 'Longitude', title: 'Longitude' },
+    ],
+  });
+
+  grist.onRecord(function (record, mappings) {
+    const r = grist.mapColumnNames(record, mappings) || {};
+    fiche.innerHTML = r.Fiche ? String(r.Fiche) : '';
+    const lat = r.Latitude, lon = r.Longitude;
+    const ok = lat !== null && lat !== undefined && lat !== '' && lon !== null && lon !== undefined && lon !== '';
+    coords = ok ? lat + ', ' + lon : '';
+    bouton.disabled = !ok;
+    bouton.textContent = ok ? '📋 Copier les coordonnées' : '📋 Coordonnées non renseignées';
+    champ.style.display = 'none';
+  });
+
+  function copieSecours(texte) {
+    champ.value = texte;
+    champ.style.display = 'block';
+    champ.select();
+    try { return document.execCommand('copy'); } catch (e) { return false; }
+  }
+
+  bouton.addEventListener('click', async function () {
+    if (!coords) return;
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(coords);
+      ok = true;
+    } catch (e) {
+      ok = copieSecours(coords);
+    }
+    bouton.textContent = ok ? '✅ Copié : ' + coords : '⚠️ Faites Ctrl+C';
+    if (ok) setTimeout(function () { bouton.textContent = '📋 Copier les coordonnées'; }, 2000);
+  });
+</script>
+</body>
+</html>

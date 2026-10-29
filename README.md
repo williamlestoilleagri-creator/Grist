@@ -8,6 +8,7 @@
 | `prise-rdv-calendrier.html` | Prise de rendez-vous (calendrier) |
 | `rdv/index.html` | Formulaire public de prise de rendez-vous |
 | `duo.html` | **Duo** — interprète à deux écouteurs (ex. japonais ⇄ allemand) |
+| `copier-coordonnees.html` | Fiche de rendez-vous + bouton « Copier les coordonnées » (latitude, longitude) |
 
 ## ERP « façon SAP » (`erp-sap.html`)
 
