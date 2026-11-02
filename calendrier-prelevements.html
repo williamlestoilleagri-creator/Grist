@@ -375,6 +375,40 @@
   .adv{border-top:1px solid var(--border);padding-top:.75rem;margin-top:1rem}
   .adv summary{cursor:pointer;color:var(--bf);font-weight:500;margin-bottom:.75rem}
   code{font-size:.85em;background:var(--alt);padding:0 4px}
+  .ic-upload{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M3 19h18v2H3v-2zM13 5.828V17h-2V5.828L4.929 11.9l-1.414-1.414L12 2l8.485 8.485-1.414 1.414L13 5.83z'/></svg>")}
+
+  /* ================= Carte des parcelles ================= */
+  main.map-mode{padding:8px 8px 0;max-width:none}
+  .map-wrap{position:relative;display:flex;flex-direction:column;gap:6px}
+  .map-bar{display:flex;gap:6px;align-items:stretch;margin:0}
+  .map-bar .input{flex:1 1 auto;min-width:0}
+  .map-legend{display:flex;gap:4px 12px;flex-wrap:wrap;font-size:.75rem;color:var(--mention);align-items:center}
+  #mres{display:flex;flex-direction:column;gap:2px;max-height:40vh;overflow-y:auto}
+  #map{height:calc(100vh - 235px);height:calc(100dvh - 235px);min-height:320px;border:1px solid var(--border);position:relative;z-index:0;font-family:var(--font)}
+  .sheet{position:absolute;top:52px;right:8px;width:min(410px,calc(100% - 16px));max-height:calc(100% - 60px);overflow-y:auto;background:var(--surface);box-shadow:var(--shadow-lg);z-index:50;padding:0 1rem 1rem}
+  .sheet-head{position:sticky;top:0;background:var(--surface);display:flex;gap:8px;align-items:flex-start;padding:.7rem 0 .4rem;border-bottom:1px solid var(--border);z-index:1}
+  .sheet-head h3{font-size:1.05rem;flex:1;margin:0;word-break:break-all}
+  .sheet .acts{display:flex;gap:6px;flex-wrap:wrap;margin:.6rem 0}
+  .sheet .fgrid{grid-template-columns:1fr 1fr}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin:.2rem 0 .8rem}
+  .chip{display:inline-flex;align-items:center;gap:2px;background:var(--bf-950);color:var(--bf);border-radius:99px;padding:.15rem .25rem .15rem .7rem;font-size:.82rem}
+  .chip button{border:0;background:transparent;color:inherit;cursor:pointer;padding:0 .35rem;font-size:1rem;line-height:1}
+  .imp-list{max-height:45vh;overflow-y:auto}
+  @media (max-width:720px){
+    .hdr-in{min-height:52px;padding:6px 12px}
+    .fr-logo--sm{font-size:.62rem}
+    .tab{padding:.5rem .7rem;font-size:.82rem;margin-top:6px}
+    .overlay{padding:0}
+    .modal,.modal.wide{width:100%;min-height:100%}
+    .btn{min-height:2.5rem}
+    .toolbar{gap:8px}
+    .toolbar .period{font-size:1.1rem;min-width:0;flex:1 1 100%;order:-1}
+    .fgrid{grid-template-columns:1fr 1fr}
+    .kpi-v{font-size:1.5rem}
+    #map{height:calc(100dvh - 205px)}
+    .sheet{position:fixed;left:0;right:0;bottom:0;top:auto;width:auto;max-height:75vh;border-radius:14px 14px 0 0;padding-bottom:calc(1rem + env(safe-area-inset-bottom));box-shadow:0 -6px 24px rgba(0,0,18,.25)}
+    .sheet .fgrid{grid-template-columns:1fr}
+  }
 
   @media (max-width:720px){
     .hdr-in{padding:8px 12px}
@@ -410,6 +444,7 @@
 <div class="demo" id="demoBanner" hidden><span class="ic ic-info" aria-hidden="true"></span><span><b>Mode démonstration</b> — ouvert hors de Grist : données fictives conservées en mémoire le temps de la session.</span></div>
 <nav class="tabs" role="tablist" id="tabs" hidden>
   <button class="tab" role="tab" data-tab="cal" aria-selected="true"><span class="ic ic-calendar" aria-hidden="true"></span>Calendrier</button>
+  <button class="tab" role="tab" data-tab="carte" aria-selected="false"><span class="ic ic-pin" aria-hidden="true"></span>Carte</button>
   <button class="tab" role="tab" data-tab="dash" aria-selected="false"><span class="ic ic-chart" aria-hidden="true"></span>Tableau de bord</button>
   <button class="tab" role="tab" data-tab="exp" aria-selected="false"><span class="ic ic-plant" aria-hidden="true"></span>Exploitations <span class="count" id="cntExp">0</span></button>
   <button class="tab" role="tab" data-tab="prel" aria-selected="false"><span class="ic ic-user" aria-hidden="true"></span>Préleveurs <span class="count" id="cntPrel">0</span></button>
@@ -484,6 +519,9 @@ function rdvSchema() {
     {id: 'Commentaire', label: 'Commentaire', type: 'Text'},
     {id: 'Inspecteur', label: 'Inspecteur FranceAgriMer', type: 'Ref:' + T_INSP},
     {id: 'Duree_min', label: 'Durée (min)', type: 'Numeric'},
+    {id: 'Controle_resultat', label: 'Résultat du contrôle FranceAgriMer', type: 'Choice', widgetOptions: JSON.stringify({choices: CTL_RESULTATS,
+      choiceOptions: Object.fromEntries(CTL_RESULTATS.map(r => [r, {fillColor: CTL_STYLE[r][0], textColor: CTL_STYLE[r][1]}]))})},
+    {id: 'Controle_commentaire', label: 'Commentaire de l\'inspecteur', type: 'Text'},
     {id: 'PACAGE', type: 'Text', isFormula: true, formula: '$Cle_parcelle.split("-")[0] if $Cle_parcelle else None'},
     {id: 'Code_dpt', type: 'Text', isFormula: true, formula: '$Cle_parcelle[:3] if $Cle_parcelle else None'},
     nameCol.length && S.meta[p] && pc[k] ? {id: 'Nom_exploitation', type: 'Text', isFormula: true,
@@ -680,7 +718,8 @@ const S = {
   dashPeriod: 'all', dashDpt: '', dashOpen: 0,
   stock: [], stockById: new Map(), ctl: [], controls: [], showCtl: true,
   fold: (() => { try { return JSON.parse(localStorage.getItem('cal-fold')) || {prel: false, insp: true}; } catch (e) { return {prel: false, insp: true}; } })(),
-  me: 0, espRange: 30, espMine: true, espTaken: false, espQ: ''
+  me: 0, espRange: 30, espMine: true, espTaken: false, espQ: '', espDates: [],
+  map: null, mapView: null, mapBase: '', mapQ: '', mapHits: [], pIdx: new Map(), selMarker: null
 };
 const cols = t => (S.meta[t] || {cols: {}}).cols;
 const typeOf = (t, c) => (cols(t)[c] || {}).type || '';
@@ -746,7 +785,8 @@ function buildModel() {
     for (const [t, ps] of byTime) {
       const r0 = ps[0].rdv, start = toWall(t, typeOf(T_RDV, 'Date_RDV')), dur = Number(r0.Duree_min) || S.cfg.duree;
       const v = {key: f.key + '@' + t, farm: f, parcels: ps, start, end: new Date(start.getTime() + dur * 60000), duree: dur,
-        prel: ps.map(x => x.rdv.Preleveur).find(Boolean) || 0, insp: ps.map(x => x.rdv.Inspecteur).find(Boolean) || 0, statut: clean(r0.Statut)};
+        prel: ps.map(x => x.rdv.Preleveur).find(Boolean) || 0, insp: ps.map(x => x.rdv.Inspecteur).find(Boolean) || 0, statut: clean(r0.Statut),
+        res: ps.map(x => clean(x.rdv.Controle_resultat)).find(Boolean) || '', com: ps.map(x => clean(x.rdv.Controle_commentaire)).find(Boolean) || ''};
       f.visits.push(v); S.visits.push(v); S.visitByKey.set(v.key, v);
     }
     f.visits.sort((a, b) => a.start - b.start);
@@ -916,9 +956,11 @@ function renderSetup(errMsg) {
    ============================================================ */
 function render() {
   $$('.tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === S.tab)));
-  if (S.cfg.inspectorOnly && S.tab !== 'cal') S.tab = 'espace';
-  $$('.tab').forEach(t => { t.hidden = S.cfg.inspectorOnly && !['espace', 'cal'].includes(t.dataset.tab); t.setAttribute('aria-selected', String(t.dataset.tab === S.tab)); });
+  if (S.cfg.inspectorOnly && !['cal', 'carte'].includes(S.tab)) S.tab = 'espace';
+  $$('.tab').forEach(t => { t.hidden = S.cfg.inspectorOnly && !['espace', 'cal', 'carte'].includes(t.dataset.tab); t.setAttribute('aria-selected', String(t.dataset.tab === S.tab)); });
+  $('#main').classList.toggle('map-mode', S.tab === 'carte');
   if (S.tab === 'cal') renderCalendar();
+  else if (S.tab === 'carte') renderMap();
   else if (S.tab === 'espace') renderEspace();
   else if (S.tab === 'dash') renderDash();
   else if (S.tab === 'exp') renderFarms();
@@ -957,8 +999,7 @@ function sidebar() {
   const item = (k, id, label, color, n) => `<button class="side-item${S.sel.kind === k && S.sel.id === id ? ' on' : ''}" data-sel="${k}:${id}">
     ${color ? `<span class="dot" style="background:${color}"></span>` : ''}<span class="nm">${esc(label)}</span><span class="n">${n}</span></button>`;
   const people = (list, k) => list.filter(p => p.Actif !== false || S.visits.some(v => v[k] === p.id)).sort((x, y) => personName(x).localeCompare(personName(y)));
-  return `<aside class="side">
-    <div class="side-search"><label class="lbl" for="q">Rechercher une exploitation</label>
+  const inner = `<div class="side-search"><label class="lbl" for="q">Rechercher une exploitation</label>
       <input class="input" id="q" type="search" placeholder="Nom, PACAGE, n° dossier, commune…" value="${esc(S.q)}" autocomplete="off"><div id="qres"></div></div>
     ${item('', 0, 'Tous les rendez-vous', '', S.visits.filter(inPeriod).length)}
     <details class="side-sec side-fold" data-fold="prel"${S.fold.prel ? ' open' : ''}><summary><h3>${ic('user')}Préleveurs (${people(S.prel, 'prel').length})</h3>${S.sel.kind === 'prel' ? `<span class="cur">${esc(S.sel.id === -1 ? 'Sans préleveur' : personName(S.prelById.get(S.sel.id)))}</span>` : ''}</summary>
@@ -970,8 +1011,9 @@ function sidebar() {
     ${S.meta[T_CTL] ? `<div class="side-sec"><h3>${ic('search')}Lieux de stockage</h3>
       <button class="side-item${S.showCtl ? ' on' : ''}" id="ctlToggle"><span class="dot" style="background:${CTL_COLOR}"></span><span class="nm">Contrôles inopinés</span><span class="n">${S.controls.filter(inPeriod).length}</span></button>
       <p style="margin:.4rem 0 0"><button class="btn ter" data-ctl-new="0" style="width:100%;justify-content:center">${ic('add')}Déclarer un contrôle inopiné</button></p></div>` : ''}
-    ${S.sel.kind && S.sel.id > 0 ? `<p><button class="btn sec" id="roadBtn" style="width:100%;justify-content:center">${ic('print')}Feuille de route</button></p>` : ''}
-  </aside>`;
+    ${S.sel.kind && S.sel.id > 0 ? `<p><button class="btn sec" id="roadBtn" style="width:100%;justify-content:center">${ic('print')}Feuille de route</button></p>` : ''}`;
+  // sur téléphone : recherche et filtres repliés au-dessus du calendrier
+  return window.innerWidth <= 900 ? `<aside class="side"><details class="side-sec side-fold" data-fold="mob"${S.fold.mob ? ' open' : ''}><summary><h3>${ic('search')}Recherche et filtres</h3>${S.sel.kind ? '<span class="cur">filtre actif</span>' : ''}</summary>${inner}</details></aside>` : `<aside class="side">${inner}</aside>`;
 }
 function searchResults() {
   const q = norm(S.q.trim()); if (q.length < 2) return '';
@@ -994,6 +1036,7 @@ function renderCalendar() {
       <button class="btn ter" data-nav="0">Aujourd'hui</button>
       <div class="period">${esc(periodLabel())}</div>
       <div class="btn-group" role="group" aria-label="Vue">${[['month', 'Mois'], ['week', 'Semaine'], ['day', 'Jour'], ['list', 'Liste']].map(([v, l]) => `<button class="btn" data-view="${v}" aria-pressed="${S.view === v}">${l}</button>`).join('')}</div>
+      <button class="btn ter" id="expDay" title="Planning d'une journée, rangé par laboratoire, préleveur et exploitation">${ic('download')}Export du jour</button>
       <span class="spacer"></span>
       <select class="select mini" id="fdpt" aria-label="Département">${optList(dptList().map(d => [d, 'Dpt ' + d]), S.dpt, 'Tous départements')}</select>
     </div>
@@ -1007,6 +1050,7 @@ function renderCalendar() {
   $$('[data-view]').forEach(b => b.onclick = () => { S.view = b.dataset.view; renderCalendar(); });
   $('#fdpt').onchange = e => { S.dpt = e.target.value; renderCalendar(); };
   if ($('#roadBtn')) $('#roadBtn').onclick = openRoadmap;
+  $('#expDay').onclick = openExportDay;
   $$('[data-fold]').forEach(d => d.addEventListener('toggle', () => { S.fold[d.dataset.fold] = d.open; try { localStorage.setItem('cal-fold', JSON.stringify(S.fold)); } catch (e) { /* stockage indisponible */ } }));
   if ($('#ctlToggle')) $('#ctlToggle').onclick = () => { S.showCtl = !S.showCtl; renderCalendar(); };
 }
@@ -1139,8 +1183,9 @@ function openDay(k) {
   openModal(`<h2>${ic('calendar')}<span style="text-transform:capitalize">${esc(fullDate(date))}</span></h2>
     <p class="lead">${evs.length ? [nf.length ? `${nf.length} exploitation(s) · ${np} parcelle(s)` : '', nc ? `${nc} contrôle(s) inopiné(s)` : ''].filter(Boolean).join(' · ') : 'Aucun rendez-vous ce jour'}</p>
     <div class="daylist">${evs.map(g => g.ctl ? ctlRow(g.ctl) : farmDayRow(g)).join('')}</div>`,
-  {foot: `<button class="btn ter" id="dayView">${ic('calendar')}Vue jour</button><button class="btn" id="dayNew">${ic('add')}Planifier une exploitation ce jour</button>`, wide: true});
+  {foot: `<div class="left"><button class="btn ter" id="dayExp">${ic('download')}Télécharger le planning (Excel)</button></div><button class="btn ter" id="dayView">${ic('calendar')}Vue jour</button><button class="btn" id="dayNew">${ic('add')}Planifier une exploitation ce jour</button>`, wide: true});
   $('#dayView').onclick = () => { closeModal(); S.cursor = date; S.view = 'day'; renderCalendar(); };
+  $('#dayExp').onclick = () => exportDay(k);
   $('#dayNew').onclick = () => openPicker(new Date(y, m - 1, d, Math.max(8, S.cfg.hourStart), 0));
 }
 // Choix d'une exploitation à planifier (depuis un jour ou une plage horaire)
@@ -1327,6 +1372,347 @@ function openRoadmap() {
   {wide: true, foot: `<button class="btn ter" data-close>Fermer</button><button class="btn" id="rPrint">${ic('print')}Imprimer</button>`});
   $('#rPrint').onclick = printModal;
 }
+/* ---------- Bibliothèques chargées à la demande (Excel, carte) ---------- */
+const LIB = {xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+  leafletJs: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js', leafletCss: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css'};
+const libCache = {};
+function loadLib(url) {
+  if (!libCache[url]) libCache[url] = new Promise((res, rej) => {
+    const css = url.endsWith('.css'), el = document.createElement(css ? 'link' : 'script');
+    if (css) { el.rel = 'stylesheet'; el.href = url; } else el.src = url;
+    el.onload = () => res();
+    el.onerror = () => { delete libCache[url]; el.remove(); rej(new Error('Impossible de charger ' + url.split('/').pop() + ' (connexion internet ?)')); };
+    document.head.appendChild(el);
+  });
+  return libCache[url];
+}
+function downloadBlob(blob, name) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+const slug = s => norm(s).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+// sheets : [{name, aoa (lignes), levels (plan Excel), filter, main}] ; repli en CSV de la feuille « main » si Excel ne se charge pas
+async function downloadXlsx(fileBase, sheets) {
+  try {
+    await loadLib(LIB.xlsx);
+    const wb = XLSX.utils.book_new();
+    for (const sh of sheets) {
+      const ws = XLSX.utils.aoa_to_sheet(sh.aoa), n = Math.max(...sh.aoa.map(r => r.length));
+      ws['!cols'] = Array.from({length: n}, (_, i) => ({wch: Math.min(48, Math.max(8, ...sh.aoa.map(r => String(r[i] ?? '').length + 2)))}));
+      if (sh.levels) ws['!rows'] = sh.levels.map(l => (l ? {level: l} : {}));
+      if (sh.filter) ws['!autofilter'] = {ref: XLSX.utils.encode_range({s: {r: 0, c: 0}, e: {r: sh.aoa.length - 1, c: n - 1}})};
+      XLSX.utils.book_append_sheet(wb, ws, sh.name.slice(0, 31));
+    }
+    XLSX.writeFile(wb, fileBase + '.xlsx');
+    return true;
+  } catch (e) {
+    console.warn(e);
+    const sh = sheets.find(x => x.main) || sheets[0];
+    const csv = '﻿' + sh.aoa.map(l => l.map(x => '"' + String(x ?? '').replace(/"/g, '""') + '"').join(';')).join('\r\n');
+    downloadBlob(new Blob([csv], {type: 'text/csv;charset=utf-8'}), fileBase + '.csv');
+    toast('Excel indisponible : fichier CSV téléchargé à la place.', true);
+    return false;
+  }
+}
+const firstOf = (objs, keys) => { for (const o of objs) if (o) for (const k of keys) { const s = clean(o[k]); if (s) return s; } return ''; };
+function coordsOf(x) {
+  for (const o of [x && x.def, x && x.rdv]) { const lat = Number(o && o.latitude), lon = Number(o && o.longitude); if (lat && lon && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) return {lat, lon}; }
+  return {};
+}
+const gmaps = (lat, lon) => `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
+const geoportail = (lat, lon) => `https://www.geoportail.gouv.fr/carte?c=${lon},${lat}&z=17&l0=ORTHOIMAGERY.ORTHOPHOTOS::GEOPORTAIL:OGC:WMTS(1)&l1=CADASTRALPARCELS.PARCELLAIRE_EXPRESS::GEOPORTAIL:OGC:WMTS(1)&permalink=yes`;
+const dayOf = k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); };
+// Laboratoire = organisme du préleveur (DATA_Preleveur.Organisme), sinon colonne Organisme du rendez-vous
+const labOf = v => { const p = S.prelById.get(v.prel); return clean(p && p.Organisme) || clean(v.parcels.map(x => x.rdv && x.rdv.Organisme).find(o => clean(o))) || 'Laboratoire non renseigné'; };
+const prelNameOf = v => v.prel ? personName(S.prelById.get(v.prel)) : '';
+const byLabPrel = (a, b) => labOf(a).localeCompare(labOf(b)) || (!a.prel - !b.prel) || prelNameOf(a).localeCompare(prelNameOf(b));
+
+/* ---------- Export du planning d'une journée : laboratoire > préleveur > exploitation ---------- */
+const PREL_EXPORT_SKIP = new Set(['id', 'manualSort', 'Nom', 'Prenom', 'Organisme', 'Nom_complet', 'Actif', 'Nom_Prenom', 'PRENOMNORM']);
+function dayExport(k) {
+  const vs = S.visits.filter(v => dkey(v.start) === k && (!S.dpt || v.farm.dpt === S.dpt))
+    .sort((a, b) => byLabPrel(a, b) || a.farm.name.localeCompare(b.farm.name) || a.start - b.start);
+  const pc = cols(T_PREL), prelCols = Object.keys(pc).filter(c => !PREL_EXPORT_SKIP.has(c) && !c.startsWith('gristHelper'));
+  const H = ['Laboratoire', 'Préleveur', 'Exploitation', 'PACAGE', 'Heure RDV', 'Fin prévue', 'Statut', 'Clé parcelle', 'N° îlot', 'N° parcelle', 'Surface (ha)',
+    'Culture en place', 'Présence souhaitée de l\'agriculteur', 'Absence de fertilisation récente', 'Étiquette prélèvement', 'Commentaire RDV', 'Latitude', 'Longitude', 'Itinéraire',
+    'Inspecteur FranceAgriMer', 'N° dossier DN', 'SIRET', 'Civilité', 'Raison sociale', 'Adresse', 'Code postal', 'Commune', 'Adresse complète', 'Département',
+    'Téléphone portable', 'Téléphone fixe', 'E-mail exploitation', 'Type', 'Raison de la sélection', 'Financement',
+    'Préleveur — Nom', 'Préleveur — Prénom', 'Préleveur — Organisme'].concat(prelCols.map(c => 'Préleveur — ' + (PREL_LABELS[c] || pc[c].label || c)));
+  const rows = [];
+  for (const v of vs) {
+    const f = v.farm, p = S.prelById.get(v.prel) || {}, ins = S.inspById.get(v.insp);
+    for (const x of v.parcels.slice().sort((a, b) => a.key.localeCompare(b.key, 'fr', {numeric: true}))) {
+      const r = x.rdv || {}, d = x.def || {}, s = x.src || {}, c = coordsOf(x), parts = x.key.split('-');
+      rows.push([labOf(v), prelNameOf(v) || 'Préleveur à désigner', f.name, f.pacage, hm(v.start), hm(v.end), v.statut, x.key,
+        clean(d.NUM_ILOT) || parts[1] || '', clean(d.NUM_PARCEL) || parts[2] || '', fmtAny(d.SURF_CALC),
+        clean(r.Culture_en_place) || clean(s.Culture_2026), clean(r.Presence_souhaitee_agriculteur), clean(r.Absence_fertilisation_recente), clean(r.Etiquette_prelevement), clean(r.Commentaire),
+        c.lat || '', c.lon || '', c.lat ? gmaps(c.lat, c.lon) : '', personName(ins),
+        firstOf([s, f], ['dossier_number']), firstOf([d, s], ['SIRET', 'siret']), clean(d.Civilite), firstOf([s, d], ['Raison_sociale', 'Nom_exploitation', 'Nom']) || f.name,
+        clean(d.Adresse) || [clean(s.Adresse_Numero), clean(s.Adresse_Rue)].filter(Boolean).join(' '), firstOf([s, f], ['Code_postal']) || clean(d.Code_Postal).split('.')[0],
+        firstOf([s, f], ['Ville']) || clean(d.Commune), f.Adresse_complete || '', f.Departement || f.dpt,
+        firstOf([s, f, d], ['Telephone_portable']), clean(d.Telephone_Fixe), firstOf([s, f], ['Mail']), clean(d.Type), clean(d.Raison_de_la_selection), clean(d.Financement),
+        clean(p.Nom), clean(p.Prenom), clean(p.Organisme)].concat(prelCols.map(c2 => fmtAny(p[c2], pc[c2].type))));
+    }
+  }
+  // Synthèse hiérarchique (plan Excel repliable) : laboratoire > préleveur > exploitation
+  const syn = [['Niveau', 'Laboratoire / Préleveur / Exploitation', 'Horaire', 'Parcelles', 'Téléphone', 'Adresse', 'E-mail']], levels = [0];
+  let lab = null, pr = null;
+  for (const v of vs) {
+    const L = labOf(v), P = prelNameOf(v) || 'Préleveur à désigner', p = S.prelById.get(v.prel) || {};
+    if (L !== lab) {
+      lab = L; pr = null; const n = vs.filter(x => labOf(x) === L);
+      syn.push(['1 · Laboratoire', L, '', `${n.reduce((t, x) => t + x.parcels.length, 0)} parcelle(s) · ${new Set(n.map(x => x.farm.key)).size} exploitation(s) · ${new Set(n.map(x => x.prel)).size} préleveur(s)`, '', '', '']); levels.push(0);
+    }
+    if (P !== pr) { pr = P; syn.push(['2 · Préleveur', '    ' + P, '', '', clean(p.Telephone), clean(p.Zone_d_action), clean(p.Email)]); levels.push(1); }
+    syn.push(['3 · Exploitation', `        ${v.farm.name} (PACAGE ${v.farm.pacage})`, hm(v.start) + '–' + hm(v.end), v.parcels.map(x => x.key).join(', '),
+      v.farm.Telephone_portable || '', v.farm.Adresse_complete || '', v.farm.Mail || '']); levels.push(2);
+  }
+  return {count: vs.length, sheets: [{name: 'Synthèse', aoa: syn, levels}, {name: 'Détail par parcelle', aoa: [H].concat(rows), filter: true, main: true}]};
+}
+async function exportDay(k) {
+  const x = dayExport(k);
+  if (!x.count) { toast('Aucun rendez-vous prévu le ' + shortDate(dayOf(k)) + (S.dpt ? ' (département ' + S.dpt + ')' : '') + '.', true); return; }
+  if (await downloadXlsx('planning-prelevements-' + k + (S.dpt ? '-dpt' + S.dpt : ''), x.sheets)) toast(`Planning du ${shortDate(dayOf(k))} téléchargé (${x.count} rendez-vous)`);
+}
+function openExportDay() {
+  const d = S.view === 'day' ? S.cursor : new Date();
+  openModal(`<h2>${ic('download')}Planning d'une journée</h2>
+    <p class="lead">Fichier Excel rangé par laboratoire, puis par préleveur, puis par exploitation. Il contient toutes les informations administratives de l'exploitation et toutes celles du préleveur.${S.dpt ? ' Filtre en cours : département ' + esc(S.dpt) + '.' : ''}</p>
+    <div class="grp"><label class="lbl" for="xDay">Jour</label><input class="input" type="date" id="xDay" value="${toInputDate(d)}"></div>
+    <div id="xInfo" class="sub"></div>`,
+  {foot: `<button class="btn ter" data-close>Annuler</button><button class="btn" id="xGo">${ic('download')}Télécharger</button>`});
+  const info = () => { const k = $('#xDay').value, vs = k ? S.visits.filter(v => dkey(v.start) === k && (!S.dpt || v.farm.dpt === S.dpt)) : [];
+    $('#xInfo').textContent = k ? `${vs.length} rendez-vous · ${vs.reduce((t, v) => t + v.parcels.length, 0)} parcelle(s) · ${new Set(vs.map(labOf)).size} laboratoire(s)` : ''; };
+  $('#xDay').addEventListener('input', info); info();
+  $('#xGo').onclick = () => { const k = $('#xDay').value; if (k) exportDay(k); };
+}
+
+/* ---------- Carte des parcelles (recherche par clé, fiche au clic) ---------- */
+// « 022849239-1-2 », « 22849239 1 2 » ou « 22849239-01-02 » désignent la même parcelle
+const keyNorm = s => String(s || '').trim().replace(/[\s|/_.;]+/g, '-').split('-').filter(Boolean).map(p => p.replace(/^0+(?=\d)/, '')).join('-').toLowerCase();
+function parcelIndex() {
+  const idx = new Map(), add = (key, o) => { const k = keyNorm(key); if (k && !idx.has(k)) idx.set(k, Object.assign({key}, o)); };
+  for (const f of S.farms.values()) for (const x of f.parcels) add(x.key, {x, farm: f});
+  for (const [key, d] of S.def) add(key, {x: {key, src: null, def: d, rdv: S.rdvByKey.get(key) || null}, farm: null});
+  return idx;
+}
+const entryName = e => e.farm ? e.farm.name : txt(e.x.def && e.x.def.Nom);
+function pointInfo(e) {
+  const v = e.farm && e.farm.visits.find(w => w.parcels.includes(e.x)), st = e.x.rdv ? clean(e.x.rdv.Statut) : '';
+  return {v, st, color: v ? prelColor(v.prel) : st ? (STATUT_STYLE[st] || ['', '#929292'])[1] : '#929292'};
+}
+function mapSearch(q) {
+  const k = keyNorm(q); if (!k) return [];
+  const exact = S.pIdx.get(k); if (exact) return [exact];
+  const all = Array.from(S.pIdx.values()), byPac = all.filter(e => keyNorm(e.key).split('-')[0] === k);
+  if (byPac.length) return byPac;
+  const nq = norm(q.trim());
+  return all.filter(e => keyNorm(e.key).startsWith(k) || (nq.length > 2 && norm(entryName(e)).includes(nq)));
+}
+function adminFields(x, f) {
+  const d = x.def || {}, s = x.src || {}, ff = f || {}, tel = firstOf([s, ff, d], ['Telephone_portable']), mail = firstOf([s, ff], ['Mail']);
+  return [infoField('Raison sociale', firstOf([s, d], ['Raison_sociale', 'Nom_exploitation', 'Nom']) || ff.name, 'Text'), infoField('Civilité', d.Civilite, 'Text'),
+    infoField('SIRET', firstOf([d, s], ['SIRET', 'siret']), 'Text'), infoField('N° dossier DN', firstOf([s, ff], ['dossier_number']), 'Text'),
+    infoField('Adresse', ff.Adresse_complete || [clean(d.Adresse), clean(d.Code_Postal).split('.')[0], clean(d.Commune)].filter(Boolean).join(' '), 'Text', true),
+    tel ? `<div class="fld"><div class="k">Téléphone portable</div><div class="v"><a href="tel:${esc(tel)}">${esc(tel)}</a></div></div>` : '', infoField('Téléphone fixe', d.Telephone_Fixe, 'Text'),
+    mail ? `<div class="fld"><div class="k">E-mail</div><div class="v"><a href="mailto:${esc(mail)}">${esc(mail)}</a></div></div>` : '', infoField('Financement', d.Financement, 'Text')].join('');
+}
+function highlight(e) {
+  if (S.selMarker) { try { S.selMarker.m.setStyle({radius: 7, color: '#fff', weight: 2}); } catch (err) { /* carte détruite */ } S.selMarker = null; }
+  if (e && e.marker) { e.marker.setStyle({radius: 12, color: '#e1000f', weight: 3}); e.marker.bringToFront(); S.selMarker = {m: e.marker}; }
+}
+function closeSheet() { const sh = $('#msheet'); if (sh) sh.hidden = true; highlight(null); }
+function showParcel(e) {
+  const x = e.x, f = e.farm, d = x.def || {}, r = x.rdv || {}, c = coordsOf(x), {v, st} = pointInfo(e), p = v && S.prelById.get(v.prel), ins = v && S.inspById.get(v.insp);
+  const pacage = f ? f.pacage : clean(d.PACAGE) || x.key.split('-')[0], tel = firstOf([x.src, f, d], ['Telephone_portable']);
+  highlight(e);
+  const sh = $('#msheet'); sh.hidden = false; sh.scrollTop = 0;
+  sh.innerHTML = `<div class="sheet-head"><h3>${esc(x.key)}<div class="sub">${esc(entryName(e) || 'Exploitation inconnue')} · PACAGE ${esc(pacage)}</div></h3>
+      <button class="btn ghost icon" type="button" id="mClose">${ic('close')}<span class="sr">Fermer</span></button></div>
+    <div class="fiche-head" style="margin:.5rem 0 0"><span class="badge ${stClass(st)}">${esc(stLabel(st))}</span>${v ? `<span class="tag">${ic('calendar')} ${esc(shortDate(v.start))} ${hm(v.start)}</span>` : ''}${resBadge(v && v.res)}</div>
+    <div class="acts">${c.lat ? `<a class="btn" href="${gmaps(c.lat, c.lon)}" target="_blank" rel="noopener">${ic('pin')}Itinéraire</a><a class="btn ter" href="${geoportail(c.lat, c.lon)}" target="_blank" rel="noopener">Géoportail</a>` : '<span class="badge st-injoignable">Pas de coordonnées GPS</span>'}
+      ${tel ? `<a class="btn ter" href="tel:${esc(tel)}">Appeler l'exploitant</a>` : ''}
+      ${f && !S.cfg.inspectorOnly ? `<button class="btn sec" type="button" data-fiche="${esc(f.key)}">${ic('edit')}Fiche RDV</button>` : v ? `<button class="btn sec" type="button" data-visit="${esc(v.key)}">${ic('info')}Détail du RDV</button>` : ''}</div>
+    <section class="fsec"><h3>${ic('calendar')}Rendez-vous</h3><div class="fgrid">
+      ${v ? infoField('Date', fullDate(v.start) + ' à ' + hm(v.start), 'Text', true) : infoField('Rendez-vous', 'Non planifié', 'Text')}
+      ${p ? `<div class="fld"><div class="k">Préleveur</div><div class="v">${esc(personName(p))}${clean(p.Organisme) ? ' · ' + esc(p.Organisme) : ''}${p.Telephone ? `<br><a href="tel:${esc(p.Telephone)}">${esc(p.Telephone)}</a>` : ''}</div></div>` : ''}
+      ${ins ? infoField('Inspecteur FranceAgriMer', personName(ins), 'Text') : ''}${infoField('Culture en place', r.Culture_en_place, 'Text')}${infoField('Étiquette', r.Etiquette_prelevement, 'Text')}
+      ${infoField('Présence de l\'agriculteur', r.Presence_souhaitee_agriculteur, 'Text')}${infoField('Commentaire', r.Commentaire, 'Text', true)}
+      ${c.lat ? infoField('Coordonnées GPS', c.lat.toFixed(6) + ', ' + c.lon.toFixed(6), 'Text') : ''}</div></section>
+    <section class="fsec"><h3>${ic('plant')}Exploitation</h3><div class="fgrid">${adminFields(x, f)}</div></section>
+    <section class="fsec"><h3>${ic('info')}Parcelle</h3>${parcelInfo(x)}</section>`;
+  $('#mClose').onclick = closeSheet;
+}
+function focusParcel(e) {
+  if (!e) return;
+  const c = coordsOf(e.x);
+  if (c.lat && S.map) S.map.setView([c.lat, c.lon], Math.max(S.map.getZoom(), 16));
+  $('#mres').innerHTML = '';
+  showParcel(e);
+}
+async function renderMap() {
+  const total = S.def.size || S.parc.length;
+  $('#main').innerHTML = `<div class="map-wrap">
+    <form class="map-bar" id="mForm" autocomplete="off"><input class="input" id="mq" type="search" enterkeyhint="search" placeholder="Clé parcelle (ex. 022849239-1-2), PACAGE ou nom" value="${esc(S.mapQ)}">
+      <button class="btn" type="submit">${ic('search')}<span class="sr">Rechercher</span></button>
+      <button class="btn ter icon" type="button" id="mLoc" title="Ma position">${ic('pin')}<span class="sr">Ma position</span></button></form>
+    <div id="mres"></div>
+    <div class="map-legend"><span id="mCount"></span><span><span class="dot" style="background:#929292"></span> à appeler</span><span><span class="dot" style="background:#18753c"></span> RDV pris sans date</span>
+      <span><span class="dot" style="background:#695240"></span> injoignable</span><span><span class="dot" style="background:#ce0500"></span> refus</span><span>RDV daté : couleur du préleveur</span></div>
+    <div id="map"><p class="loading">Chargement de la carte…</p></div><div class="sheet" id="msheet" hidden></div></div>`;
+  try { await Promise.all([loadLib(LIB.leafletCss), loadLib(LIB.leafletJs)]); }
+  catch (err) { $('#map').innerHTML = `<div class="alert err"><p>${esc(err.message)}</p></div>`; return; }
+  if (S.tab !== 'carte' || !$('#map')) return;
+  if (S.map) { try { S.map.remove(); } catch (err) { /* déjà détruite */ } S.map = null; }
+  $('#map').innerHTML = '';
+  const ign = (layer, fmt, style, nat) => L.tileLayer(`https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=${layer}&STYLE=${encodeURIComponent(style)}&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=${fmt}`,
+    {maxZoom: 20, maxNativeZoom: nat, attribution: '© IGN'});
+  const base = {'Photo aérienne (IGN)': ign('ORTHOIMAGERY.ORTHOPHOTOS', 'image/jpeg', 'normal', 19), 'Plan IGN': ign('GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2', 'image/png', 'normal', 18),
+    'OpenStreetMap': L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 20, maxNativeZoom: 19, attribution: '© OpenStreetMap'})};
+  const cad = ign('CADASTRALPARCELS.PARCELLAIRE_EXPRESS', 'image/png', 'PCI vecteur', 19);
+  const map = S.map = L.map('map', {preferCanvas: true, layers: [base[S.mapBase] || base['Photo aérienne (IGN)']]});
+  L.control.layers(base, {'Cadastre': cad}, {collapsed: true}).addTo(map);
+  map.on('baselayerchange', ev => { S.mapBase = ev.name; });
+  const rnd = L.canvas({padding: .5, tolerance: 10}), pts = [];
+  S.pIdx = parcelIndex(); S.selMarker = null;
+  for (const e of S.pIdx.values()) {
+    const c = coordsOf(e.x); if (!c.lat) continue;
+    e.marker = L.circleMarker([c.lat, c.lon], {renderer: rnd, radius: 7, color: '#fff', weight: 2, fillColor: pointInfo(e).color, fillOpacity: .95, bubblingMouseEvents: false}).addTo(map);
+    e.marker.on('click', () => showParcel(e));
+    pts.push([c.lat, c.lon]);
+  }
+  $('#mCount').textContent = `${pts.length} parcelle(s) géolocalisée(s) sur ${Math.max(total, S.pIdx.size)}`;
+  if (S.mapView) map.setView(S.mapView.c, S.mapView.z);
+  else if (pts.length) map.fitBounds(pts, {padding: [20, 20], maxZoom: 14});
+  else map.setView([48.2, -2.9], 8);
+  map.on('moveend', () => { S.mapView = {c: map.getCenter(), z: map.getZoom()}; });
+  map.on('click', closeSheet);
+  const search = () => {
+    const q = $('#mq').value; S.mapQ = q; const res = S.mapHits = mapSearch(q);
+    if (!q.trim()) { $('#mres').innerHTML = ''; return; }
+    if (res.length === 1) { focusParcel(res[0]); return; }
+    $('#mres').innerHTML = res.length ? res.slice(0, 30).map((e, i) => `<button class="qhit" type="button" data-mhit="${i}"><b>${esc(e.key)}</b><span class="sub">${esc(entryName(e))}${coordsOf(e.x).lat ? '' : ' · sans coordonnées GPS'}</span></button>`).join('')
+      + (res.length > 30 ? `<p class="sub">${res.length - 30} résultat(s) de plus : précisez la recherche.</p>` : '')
+      : `<p class="sub">Aucune parcelle ne correspond à « ${esc(q)} ».</p>`;
+    const g = res.map(e => coordsOf(e.x)).filter(c => c.lat).map(c => [c.lat, c.lon]);
+    if (g.length) map.fitBounds(g, {padding: [30, 30], maxZoom: 16});
+  };
+  $('#mForm').onsubmit = ev => { ev.preventDefault(); $('#mq').blur(); search(); };
+  $('#mres').onclick = ev => { const b = ev.target.closest('[data-mhit]'); if (b) focusParcel(S.mapHits[Number(b.dataset.mhit)]); };
+  $('#mLoc').onclick = () => {
+    if (!navigator.geolocation) { toast('Géolocalisation non disponible sur cet appareil.', true); return; }
+    navigator.geolocation.getCurrentPosition(pos => {
+      const ll = [pos.coords.latitude, pos.coords.longitude];
+      if (S.meMarker) { try { S.meMarker.remove(); } catch (err) { /* ancienne carte */ } }
+      S.meMarker = L.circleMarker(ll, {radius: 8, color: '#fff', weight: 3, fillColor: '#0063cb', fillOpacity: 1}).addTo(map); map.setView(ll, 15);
+    }, () => toast('Position indisponible (autorisation refusée ou non permise dans Grist).', true), {enableHighAccuracy: true, timeout: 10000});
+  };
+  if (S.mapQ && S.mapQ.trim() && !S.mapView) search();
+}
+
+/* ---------- Espace inspecteur : déclaration groupée des contrôles de préleveurs (fichier) ---------- */
+const BULK_H = ['Réf. (ne pas modifier)', 'Date', 'Heure', 'Laboratoire', 'Préleveur', 'Téléphone préleveur', 'Exploitation', 'PACAGE', 'Commune', 'Parcelles',
+  'Contrôlé (Oui / Non)', 'Résultat (Conforme / Avec réserves / Non conforme)', 'Commentaire'];
+function bulkVisits(dates) {
+  const dpts = myDpts(S.inspById.get(S.me)), set = new Set(dates || S.espDates);
+  return S.visits.filter(v => set.has(dkey(v.start)) && (v.insp === S.me || (!v.insp && (!S.espMine || !dpts.length || dpts.includes(dptNorm(v.farm.dpt))))))
+    .sort((a, b) => dkey(a.start).localeCompare(dkey(b.start)) || byLabPrel(a, b) || a.start - b.start);
+}
+function bulkSection() {
+  const ds = S.espDates, n = ds.length ? bulkVisits().length : 0;
+  return `<section class="fsec"><h3>${ic('upload')}Déclarer mes contrôles de préleveurs (a posteriori, par fichier)</h3>
+    <p class="sub">1. Ajoutez les jours où vous étiez sur le terrain. 2. Téléchargez le fichier : il liste les rendez-vous de ces jours, rangés par laboratoire puis par préleveur.
+      3. Mettez « Oui » dans la colonne <b>Contrôlé</b> pour chaque rendez-vous contrôlé, avec le résultat et votre commentaire. 4. Importez le fichier : tout est enregistré d'un coup.</p>
+    <div class="row" style="align-items:end">
+      <div class="grp"><label class="lbl" for="bDate">Jour de contrôle</label><div class="inline"><input class="input" type="date" id="bDate" value="${toInputDate(new Date())}"><button class="btn sec" id="bAdd" type="button">${ic('add')}Ajouter</button></div></div>
+      <div class="grp"><button class="btn ter" id="bRecent" type="button" title="Jours des 14 derniers jours ayant des rendez-vous dans votre périmètre">Jours avec RDV (14 derniers jours)</button></div></div>
+    <div class="chips">${ds.length ? ds.map(k => `<span class="chip">${esc(shortDate(dayOf(k)))}<button type="button" data-bdel="${k}" aria-label="Retirer ce jour">×</button></span>`).join('') : '<span class="sub">Aucun jour choisi.</span>'}</div>
+    <p style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="btn" id="bDl" type="button" ${n ? '' : 'disabled'}>${ic('download')}Télécharger le fichier à remplir${ds.length ? ` (${n} RDV)` : ''}</button>
+      <label class="btn sec" for="bFile" style="cursor:pointer">${ic('upload')}Importer le fichier rempli</label><input type="file" id="bFile" accept=".xlsx,.xls,.ods,.csv" hidden></p></section>`;
+}
+function bindBulk() {
+  if (!$('#bAdd')) return;
+  const addDates = ks => { ks.forEach(k => { if (k && !S.espDates.includes(k)) S.espDates.push(k); }); S.espDates.sort(); renderEspace(); };
+  $('#bAdd').onclick = () => addDates([$('#bDate').value]);
+  $('#bRecent').onclick = () => {
+    const t0 = addDays(new Date(), -14), now = new Date(), ks = new Set(S.visits.filter(v => v.start >= t0 && v.start <= now).map(v => dkey(v.start)));
+    const ok = Array.from(ks).filter(k => bulkVisits([k]).length);
+    if (!ok.length) { toast('Aucun rendez-vous dans votre périmètre sur les 14 derniers jours.', true); return; }
+    addDates(ok);
+  };
+  $$('[data-bdel]').forEach(b => b.onclick = () => { S.espDates = S.espDates.filter(k => k !== b.dataset.bdel); renderEspace(); });
+  $('#bDl').onclick = downloadBulk;
+  $('#bFile').onchange = ev => { const f = ev.target.files[0]; ev.target.value = ''; if (f) importBulk(f); };
+}
+async function downloadBulk() {
+  const me = S.inspById.get(S.me), vs = bulkVisits();
+  if (!vs.length) { toast('Aucun rendez-vous à contrôler ces jours-là.', true); return; }
+  const rows = vs.map(v => { const p = S.prelById.get(v.prel) || {}, mine = v.insp === S.me;
+    return [v.parcels.map(x => x.rdv && x.rdv.id).filter(Boolean).join(';'), shortDate(v.start), hm(v.start), labOf(v), prelNameOf(v) || 'Préleveur à désigner', clean(p.Telephone),
+      v.farm.name, v.farm.pacage, v.farm.Ville || '', v.parcels.map(x => x.key).join(', '), mine ? 'Oui' : '', mine ? v.res : '', mine ? v.com : '']; });
+  const help = [['Mode d\'emploi'], [''], ['1. Feuille « Contrôles » : une ligne par rendez-vous de prélèvement (laboratoire, préleveur, exploitation).'],
+    ['2. Colonne « Contrôlé » : Oui pour chaque rendez-vous où vous avez contrôlé le préleveur ; Non pour annuler un contrôle déjà déclaré ; vide = aucun changement.'],
+    ['3. Colonne « Résultat » : Conforme, Avec réserves ou Non conforme.'], ['4. Colonne « Commentaire » : vos observations.'],
+    ['5. Ne modifiez pas la colonne « Réf. » et ne renommez pas les colonnes.'], ['6. Dans le calendrier : Espace inspecteur > Importer le fichier rempli.'],
+    [''], ['Inspecteur : ' + personName(me)], ['Jours : ' + S.espDates.map(k => shortDate(dayOf(k))).join(', ')], ['Fichier généré le ' + shortDate(new Date()) + ' à ' + hm(new Date())]];
+  const range = S.espDates.length > 1 ? S.espDates[0] + '_' + S.espDates[S.espDates.length - 1] : S.espDates[0];
+  if (await downloadXlsx(`controles-preleveurs-${slug(personName(me))}-${range}`, [{name: 'Contrôles', aoa: [BULK_H].concat(rows), filter: true, main: true}, {name: 'Mode d\'emploi', aoa: help}]))
+    toast(`Fichier téléchargé : ${vs.length} rendez-vous`);
+}
+function normRes(s) {
+  const n = norm(s).trim(); if (!n) return '';
+  if (n.startsWith('non') || n === 'nc') return 'Non conforme';
+  if (n.includes('reserve')) return 'Avec réserves';
+  if (n.startsWith('conf') || n === 'c' || n === 'ok') return 'Conforme';
+  return clean(s);
+}
+async function importBulk(file) {
+  if (!S.me) return;
+  let aoa;
+  try {
+    await loadLib(LIB.xlsx);
+    const wb = XLSX.read(await file.arrayBuffer(), {type: 'array', raw: false});
+    aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header: 1, defval: '', raw: false});
+  } catch (e) { console.error(e); toast('Lecture du fichier impossible : ' + (e.message || e), true); return; }
+  const h = aoa.findIndex(r => r.some(c => norm(c).startsWith('ref')));
+  if (h < 0) { toast('Colonne « Réf. » introuvable : utilisez le fichier téléchargé depuis le calendrier.', true); return; }
+  const col = p => aoa[h].findIndex(c => norm(c).startsWith(p)), iRef = col('ref'), iCtl = col('controle'), iRes = col('resultat'), iCom = col('commentaire');
+  if (iCtl < 0) { toast('Colonne « Contrôlé » introuvable dans le fichier.', true); return; }
+  const rdvById = new Map(S.rdv.map(r => [r.id, r])), visitOf = id => S.visits.find(v => v.parcels.some(x => x.rdv && x.rdv.id === id));
+  const add = [], del = [], skip = [];
+  for (const row of aoa.slice(h + 1)) {
+    const ref = String(row[iRef] || '').trim(); if (!ref) continue;
+    const ids = ref.split(/[;,\s]+/).map(Number).filter(n => rdvById.has(n)), c = norm(row[iCtl]).trim();
+    const yes = /^(oui|o|x|1|yes|y|vrai|true)\b/.test(c), no = /^(non|n|0|no|faux|false)\b/.test(c);
+    if (!yes && !no) continue;
+    if (!ids.length) { skip.push({label: ref, why: 'rendez-vous introuvable (supprimé ou modifié depuis ?)'}); continue; }
+    const v = visitOf(ids[0]), rs = ids.map(id => rdvById.get(id)), other = rs.find(r => r.Inspecteur && r.Inspecteur !== S.me);
+    const label = v ? `${shortDate(v.start)} ${hm(v.start)} · ${v.farm.name} · ${prelNameOf(v) || 'sans préleveur'}` : ref;
+    if (yes && other) { skip.push({label, why: 'déjà contrôlé par ' + personName(S.inspById.get(other.Inspecteur))}); continue; }
+    if (yes) add.push({ids, label, res: iRes >= 0 ? normRes(row[iRes]) : '', com: iCom >= 0 ? clean(row[iCom]) : ''});
+    else if (rs.some(r => r.Inspecteur === S.me)) del.push({ids, label});
+  }
+  const rc = cols(T_RDV), miss = ['Controle_resultat', 'Controle_commentaire'].filter(k => !rc[k]);
+  const li = (arr, f) => arr.map(x => `<li>${esc(x.label)}${f ? f(x) : ''}</li>`).join('');
+  openModal(`<h2>${ic('upload')}Import des contrôles</h2><p class="lead">${esc(file.name)} · inspecteur : ${esc(personName(S.inspById.get(S.me)))}</p>
+    ${miss.length ? `<div class="alert warn"><p>Colonnes absentes de <code>${T_RDV}</code> : ${miss.join(', ')}. Seule l'association de l'inspecteur sera enregistrée : demandez à un administrateur d'ouvrir Paramètres puis Enregistrer.</p></div>` : ''}
+    <div class="imp-list">
+    ${add.length ? `<h3 style="font-size:1rem;margin:.5rem 0">${ic('check')} ${add.length} contrôle(s) à enregistrer</h3><ul>${li(add, x => (x.res ? ' — ' + resBadge(x.res) : '') + (x.com ? `<div class="sub">${esc(x.com)}</div>` : ''))}</ul>` : ''}
+    ${del.length ? `<h3 style="font-size:1rem;margin:.5rem 0">${ic('close')} ${del.length} contrôle(s) à retirer (« Non »)</h3><ul>${li(del)}</ul>` : ''}
+    ${skip.length ? `<h3 style="font-size:1rem;margin:.5rem 0;color:var(--warning)">${ic('warning')} ${skip.length} ligne(s) ignorée(s)</h3><ul>${li(skip, x => ` — <span class="sub">${esc(x.why)}</span>`)}</ul>` : ''}
+    ${!add.length && !del.length ? '<p class="muted">Aucune ligne avec « Oui » ou « Non » dans la colonne Contrôlé : rien à enregistrer.</p>' : ''}</div>`,
+  {wide: true, foot: `<button class="btn ter" data-close>Annuler</button>${add.length || del.length ? `<button class="btn" id="bGo">${ic('check')}Intégrer ${add.length + del.length} ligne(s)</button>` : ''}`});
+  if (!$('#bGo')) return;
+  $('#bGo').onclick = async () => {
+    $('#bGo').disabled = true;
+    const stamp = rc.Modifie_le ? {Modifie_le: Math.round(Date.now() / 1000)} : {};
+    const fields = o => { Object.keys(o).forEach(k => { if (!rc[k]) delete o[k]; }); return Object.assign(o, stamp); };
+    const acts = add.flatMap(x => x.ids.map(id => ['UpdateRecord', T_RDV, id, fields({Inspecteur: S.me, Controle_resultat: x.res || null, Controle_commentaire: x.com || null})]))
+      .concat(del.flatMap(x => x.ids.map(id => ['UpdateRecord', T_RDV, id, fields({Inspecteur: 0, Controle_resultat: null, Controle_commentaire: null})])));
+    if (await write(acts, `${add.length} contrôle(s) enregistré(s)${del.length ? ', ' + del.length + ' retiré(s)' : ''}`)) closeModal();
+  };
+}
+
 function printModal() { document.body.classList.add('printing'); window.print(); setTimeout(() => document.body.classList.remove('printing'), 500); }
 
 
@@ -1392,9 +1778,9 @@ function renderDash() {
     .map(([i, b]) => `<span class="tag" title="${b.done} réalisé(s), ${b.todo} prévu(s)">${ic('shield')} ${esc(personName(S.inspById.get(i)))} × ${b.done + b.todo}</span>`).join(' ');
   const detail = r => {
     const vs = r.visits.filter(v => v.insp).sort((a, b) => b.start - a.start);
-    return `<tr class="dash-detail"><td colspan="7">${vs.length ? `<table class="tbl"><thead><tr><th>Date</th><th>Exploitation</th><th>Inspecteur</th><th>État</th></tr></thead><tbody>
+    return `<tr class="dash-detail"><td colspan="7">${vs.length ? `<table class="tbl"><thead><tr><th>Date</th><th>Exploitation</th><th>Inspecteur</th><th>État</th><th>Résultat</th></tr></thead><tbody>
       ${vs.map(v => `<tr class="click" data-visit="${esc(v.key)}"><td>${esc(shortDate(v.start))} ${hm(v.start)}</td><td>${esc(v.farm.name)} <span class="sub">${esc(v.farm.pacage)}</span></td>
-        <td>${esc(personName(S.inspById.get(v.insp)))}</td><td>${v.start < now ? '<span class="badge st-pris">Réalisée</span>' : '<span class="badge st-none">Prévue</span>'}</td></tr>`).join('')}</tbody></table>`
+        <td>${esc(personName(S.inspById.get(v.insp)))}</td><td>${v.start < now ? '<span class="badge st-pris">Réalisée</span>' : '<span class="badge st-none">Prévue</span>'}</td><td>${resBadge(v.res)}${v.com ? `<div class="sub">${esc(v.com)}</div>` : ''}</td></tr>`).join('')}</tbody></table>`
       : '<p class="sub">Aucune inspection sur la période.</p>'}</td></tr>`;
   };
   $('#main').innerHTML = `<div class="section-head"><h2>${ic('chart')} Tableau de bord des inspections</h2>
@@ -1430,8 +1816,8 @@ function renderDash() {
   $('#dDpt').onchange = e => { S.dashDpt = e.target.value; renderDash(); };
   $$('[data-dash]').forEach(tr => tr.onclick = () => { const id = Number(tr.dataset.dash); S.dashOpen = S.dashOpen === id ? 0 : id; renderDash(); });
   $('#dashCsv').onclick = () => {
-    const lines = [['Préleveur', 'Date', 'Heure', 'Exploitation', 'PACAGE', 'Inspecteur', 'État']];
-    rows.forEach(r => r.visits.filter(v => v.insp).forEach(v => lines.push([r.id ? personName(r.p) : 'Sans préleveur', shortDate(v.start), hm(v.start), v.farm.name, v.farm.pacage, personName(S.inspById.get(v.insp)), v.start < now ? 'Réalisée' : 'Prévue'])));
+    const lines = [['Préleveur', 'Date', 'Heure', 'Exploitation', 'PACAGE', 'Inspecteur', 'État', 'Résultat', 'Commentaire de l\'inspecteur']];
+    rows.forEach(r => r.visits.filter(v => v.insp).forEach(v => lines.push([r.id ? personName(r.p) : 'Sans préleveur', shortDate(v.start), hm(v.start), v.farm.name, v.farm.pacage, personName(S.inspById.get(v.insp)), v.start < now ? 'Réalisée' : 'Prévue', v.res, v.com])));
     const csv = '﻿' + lines.map(l => l.map(x => '"' + String(x).replace(/"/g, '""') + '"').join(';')).join('\r\n');
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], {type: 'text/csv;charset=utf-8'})); a.download = 'inspections-preleveurs.csv';
     document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
@@ -1557,12 +1943,14 @@ function renderEspace() {
     ${!insp.length ? `<div class="alert warn"><p>Aucun inspecteur dans <code>${T_INSP}</code> : ajoutez-les dans l'onglet « Inspecteurs FranceAgriMer ».</p></div>`
       : !S.me ? '<div class="alert"><p>Choisissez votre nom ci-dessus (une seule fois sur cet ordinateur), puis associez-vous aux rendez-vous de prélèvement que vous souhaitez contrôler.</p></div>'
       : `<section class="fsec"><h3>${ic('check')}Mes contrôles à venir (${mine.length})</h3>${mine.length ? group(mine) : '<p class="muted">Aucun pour l\'instant : choisissez un rendez-vous ci-dessous.</p>'}</section>
+         ${bulkSection()}
          <section class="fsec"><h3>${ic('calendar')}Rendez-vous ${S.espTaken ? '' : 'sans inspecteur '}(${avail.length})</h3>${avail.length ? group(avail) : '<p class="muted">Aucun rendez-vous sur la période.</p>'}</section>
          ${stockSection(dpts)}`}`;
   $('#eMe').onchange = e => { setMe(Number(e.target.value) || 0); S.espMine = true; renderEspace(); };
   $('#eRange').onchange = e => { S.espRange = Number(e.target.value); renderEspace(); };
   $('#eMine').onchange = e => { S.espMine = e.target.checked; renderEspace(); };
   $('#eTaken').onchange = e => { S.espTaken = e.target.checked; renderEspace(); };
+  bindBulk();
   $('#eQ').addEventListener('input', e => { S.espQ = e.target.value; clearTimeout(renderEspace.t); renderEspace.t = setTimeout(() => { renderEspace(); const i = $('#eQ'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); });
 }
 // Détail d'un rendez-vous en lecture, pour l'inspecteur
@@ -1579,6 +1967,7 @@ function openVisitInspect(key) {
       ${f.Telephone_portable ? `<div class="fld"><div class="k">Agriculteur</div><div class="v"><a href="tel:${esc(f.Telephone_portable)}">${esc(f.Telephone_portable)}</a></div></div>` : ''}
       ${infoField('Présence de l\'agriculteur', sharedOf(f, 'Presence_souhaitee_agriculteur'), 'Text')}
       ${p ? `<div class="fld"><div class="k">Préleveur</div><div class="v">${esc(personName(p))}${p.Telephone ? `<br><a href="tel:${esc(p.Telephone)}">${esc(p.Telephone)}</a>` : ''}</div></div>` : ''}</div></section>
+    ${v.res || v.com ? `<section class="fsec"><h3>${ic('shield')}Contrôle FranceAgriMer</h3><div class="fgrid">${v.res ? `<div class="fld"><div class="k">Résultat</div><div class="v">${resBadge(v.res)}</div></div>` : ''}${infoField('Commentaire de l\'inspecteur', v.com, 'Text', true)}</div></section>` : ''}
     <section class="fsec"><h3>${ic('plant')}Parcelles (${v.parcels.length})</h3>
       ${v.parcels.map(x => `<div class="road-p"><h4>${esc(x.key)}</h4><div class="fgrid">${infoField('Culture en place', x.rdv && x.rdv.Culture_en_place, 'Text')}${infoField('Commentaire', x.rdv && x.rdv.Commentaire, 'Text', true)}</div>${parcelInfo(x)}</div>`).join('')}</section>`,
   {wide: true, foot: `<button class="btn ter" data-close>Fermer</button>${assocButton(v)}`});
@@ -1684,7 +2073,7 @@ document.addEventListener('keydown', e => {
 $$('.tab').forEach(b => b.onclick = () => { S.tab = b.dataset.tab; render(); });
 $('#refreshBtn').onclick = async () => { if ($('#tabs').hidden) return; try { await loadData(); render(); toast('Données actualisées'); } catch (e) { toast(e.message || String(e), true); } };
 $('#settingsBtn').onclick = () => { closeModal(); renderSetup(); };
-let resizeT; window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (S.tab === 'cal' && !$('#tabs').hidden) renderCalendar(); }, 150); });
+let resizeT; window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if ($('#tabs').hidden) return; if (S.tab === 'cal') renderCalendar(); else if (S.tab === 'carte' && S.map) S.map.invalidateSize(); }, 150); });
 
 /* ============================================================
    DÉMARRAGE
@@ -1707,7 +2096,7 @@ async function boot() {
   }
 }
 let reloadT;
-function scheduleReload() { clearTimeout(reloadT); reloadT = setTimeout(async () => { if ($('#tabs').hidden) return; try { await loadData(); if (!$('#modalRoot').firstChild) render(); } catch (e) { console.warn(e); } }, 400); }
+function scheduleReload() { clearTimeout(reloadT); reloadT = setTimeout(async () => { if ($('#tabs').hidden) return; try { await loadData(); if (!$('#modalRoot').firstChild && S.tab !== 'carte') render(); } catch (e) { console.warn(e); } }, 400); }
 async function start(backend) {
   B = backend;
   try { S.me = Number(localStorage.getItem('calendrier-inspecteur')) || 0; } catch (e) { S.me = 0; }
@@ -1754,7 +2143,7 @@ function seedDemo() {
     .forEach(([Adresse, Ville, CP, Responsable, Organisme, n]) => L.db.DATA_Stockage.rows.push({id: L.db.DATA_Stockage.next++, Adresse, Ville, CP, Responsable, Organisme, Nombre_d_echantillons_stockes: n}));
   // anciennes tables, pour montrer le renommage
   L.db.Preleveurs = T([['Nom'], ['Prenom'], ['Organisme'], ['Telephone'], ['Email'], ['Departements'], ['Actif', 'Bool'], ['Nom_complet']]);
-  [['Morvan', 'Jean', 'Chambre d\'agriculture'], ['Le Bris', 'Anne', 'Laboratoire'], ['Guillou', 'Sophie', 'Chambre d\'agriculture']]
+  [['Morvan', 'Jean', 'AUREA'], ['Le Bris', 'Anne', 'LABOCEA'], ['Guillou', 'Sophie', 'AUREA']]
     .forEach(([Nom, Prenom, Organisme], i) => L.db.Preleveurs.rows.push({id: L.db.Preleveurs.next++, Nom, Prenom, Organisme, Telephone: '06 98 76 54 3' + i, Actif: true}));
   L.db.Inspecteurs_FAM = T([['Nom'], ['Prenom'], ['Service'], ['Telephone'], ['Email'], ['Departements'], ['Actif', 'Bool'], ['Nom_complet']]);
   [['Martin', 'Claire', 'FranceAgriMer — Rennes'], ['Kerdraon', 'Yann', 'FranceAgriMer — Quimper']]
