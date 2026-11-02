@@ -494,7 +494,7 @@ const STATUTS = ['Rdv pris', 'Injoignable', 'Refus', 'Faux numéro'];
 const STATUT_STYLE = {'Rdv pris': ['#b8fec9', '#18753c'], 'Injoignable': ['#feebd0', '#695240'], 'Refus': ['#ffe9e9', '#ce0500'], 'Faux numéro': ['#eeeeee', '#3a3a3a']};
 const OUI_NON = ['Oui', 'Non'];
 const DUREES = [15, 30, 45, 60, 90, 120, 180];
-const DEFAULT_CFG = {parcTable: 'DATA_RELIQUATCLEAN', parcKey: 'CLELAB', defTable: 'DATA_Parcelles_DEF', defKey: 'CLE', hourStart: 8, hourEnd: 19, duree: 45, inspectorOnly: false};
+const DEFAULT_CFG = {parcTable: 'DATA_RELIQUATCLEAN', parcKey: 'CLELAB', defTable: 'DATA_Parcelles_DEF', defKey: 'CLE', hourStart: 8, hourEnd: 19, duree: 45, inspectorOnly: false, pdfService: 'DRAAF Bretagne'};
 const PALETTE = ['#000091', '#18753c', '#b34000', '#a94645', '#6a6af4', '#009081', '#c3992a', '#7d4e5b', '#3558a2', '#e4794a', '#66673d', '#ce614a'];
 const TZ = 'Europe/Paris';
 
@@ -924,6 +924,7 @@ function renderSetup(errMsg) {
         <div class="grp"><label class="lbl" for="sH1">Fin de journée</label><input class="input" id="sH1" type="number" min="1" max="24" value="${S.cfg.hourEnd}"></div>
         <div class="grp"><label class="lbl" for="sDur">Durée d'un RDV (min)</label><select class="select" id="sDur">${optList(DUREES.map(m => [m, m]), S.cfg.duree, null)}</select></div>
       </div>
+      <div class="grp"><label class="lbl" for="sPdf">Service émetteur<span class="hint">Affiché dans l'en-tête et le pied de page des PDF</span></label><input class="input" id="sPdf" value="${esc(S.cfg.pdfService || '')}"></div>
       <label class="chk grp"><input type="checkbox" id="sInspOnly" ${S.cfg.inspectorOnly ? 'checked' : ''}> Page réservée aux inspecteurs : n'afficher que l'espace inspecteur et le calendrier (en lecture)</label>
       <div class="row">
         <div class="grp"><label class="lbl" for="sParc">Table des parcelles</label><select class="select" id="sParc">${optList(tables.map(t => [t, t]), S.cfg.parcTable, '—')}</select></div>
@@ -936,7 +937,7 @@ function renderSetup(errMsg) {
       ${ops.length ? `<p class="sub" style="margin-top:.5rem">Ce que l'installation fera dans le document (aucune donnée supprimée) :</p><ul class="sub">${ops.map(o => `<li>${o.text}</li>`).join('')}</ul>` : ''}
     </details>
   </div>`;
-  const keep = () => { S.cfg.hourStart = Math.max(0, Math.min(23, Number($('#sH0').value) || 0)); S.cfg.hourEnd = Math.max(S.cfg.hourStart + 1, Math.min(24, Number($('#sH1').value) || 24)); S.cfg.duree = Number($('#sDur').value) || 45; if ($('#sInspOnly')) S.cfg.inspectorOnly = $('#sInspOnly').checked; };
+  const keep = () => { S.cfg.hourStart = Math.max(0, Math.min(23, Number($('#sH0').value) || 0)); S.cfg.hourEnd = Math.max(S.cfg.hourStart + 1, Math.min(24, Number($('#sH1').value) || 24)); S.cfg.duree = Number($('#sDur').value) || 45; if ($('#sInspOnly')) S.cfg.inspectorOnly = $('#sInspOnly').checked; if ($('#sPdf')) S.cfg.pdfService = $('#sPdf').value.trim(); };
   $('#sParc').onchange = e => { keep(); S.cfg.parcTable = e.target.value; const c = cols(S.cfg.parcTable); S.cfg.parcKey = ['CLELAB', 'CLE', 'Cle', 'Cle_parcelle'].find(k => c[k]) || ''; renderSetup(); };
   $('#sKey').onchange = e => { keep(); S.cfg.parcKey = e.target.value; renderSetup(); };
   $('#sDef').onchange = e => { keep(); S.cfg.defTable = e.target.value; const c = cols(S.cfg.defTable); S.cfg.defKey = ['CLE', 'CLELAB'].find(k => c[k]) || ''; renderSetup(); };
@@ -1183,9 +1184,10 @@ function openDay(k) {
   openModal(`<h2>${ic('calendar')}<span style="text-transform:capitalize">${esc(fullDate(date))}</span></h2>
     <p class="lead">${evs.length ? [nf.length ? `${nf.length} exploitation(s) · ${np} parcelle(s)` : '', nc ? `${nc} contrôle(s) inopiné(s)` : ''].filter(Boolean).join(' · ') : 'Aucun rendez-vous ce jour'}</p>
     <div class="daylist">${evs.map(g => g.ctl ? ctlRow(g.ctl) : farmDayRow(g)).join('')}</div>`,
-  {foot: `<div class="left"><button class="btn ter" id="dayExp">${ic('download')}Télécharger le planning (Excel)</button></div><button class="btn ter" id="dayView">${ic('calendar')}Vue jour</button><button class="btn" id="dayNew">${ic('add')}Planifier une exploitation ce jour</button>`, wide: true});
+  {foot: `<div class="left"><button class="btn sec" id="dayPdf">${ic('download')}Planning PDF</button><button class="btn ter" id="dayExp">${ic('download')}Excel</button></div><button class="btn ter" id="dayView">${ic('calendar')}Vue jour</button><button class="btn" id="dayNew">${ic('add')}Planifier une exploitation ce jour</button>`, wide: true});
   $('#dayView').onclick = () => { closeModal(); S.cursor = date; S.view = 'day'; renderCalendar(); };
   $('#dayExp').onclick = () => exportDay(k);
+  $('#dayPdf').onclick = async () => { $('#dayPdf').disabled = true; try { await pdfDay(k); } finally { if ($('#dayPdf')) $('#dayPdf').disabled = false; } };
   $('#dayNew').onclick = () => openPicker(new Date(y, m - 1, d, Math.max(8, S.cfg.hourStart), 0));
 }
 // Choix d'une exploitation à planifier (depuis un jour ou une plage horaire)
@@ -1431,7 +1433,7 @@ const byLabPrel = (a, b) => labOf(a).localeCompare(labOf(b)) || (!a.prel - !b.pr
 const PREL_EXPORT_SKIP = new Set(['id', 'manualSort', 'Nom', 'Prenom', 'Organisme', 'Nom_complet', 'Actif', 'Nom_Prenom', 'PRENOMNORM']);
 function dayExport(k) {
   const vs = S.visits.filter(v => dkey(v.start) === k && (!S.dpt || v.farm.dpt === S.dpt))
-    .sort((a, b) => byLabPrel(a, b) || a.farm.name.localeCompare(b.farm.name) || a.start - b.start);
+    .sort((a, b) => byLabPrel(a, b) || a.start - b.start || a.farm.name.localeCompare(b.farm.name));
   const pc = cols(T_PREL), prelCols = Object.keys(pc).filter(c => !PREL_EXPORT_SKIP.has(c) && !c.startsWith('gristHelper'));
   const H = ['Laboratoire', 'Préleveur', 'Exploitation', 'PACAGE', 'Heure RDV', 'Fin prévue', 'Statut', 'Clé parcelle', 'N° îlot', 'N° parcelle', 'Surface (ha)',
     'Culture en place', 'Présence souhaitée de l\'agriculteur', 'Absence de fertilisation récente', 'Étiquette prélèvement', 'Commentaire RDV', 'Latitude', 'Longitude', 'Itinéraire',
@@ -1477,14 +1479,168 @@ async function exportDay(k) {
 function openExportDay() {
   const d = S.view === 'day' ? S.cursor : new Date();
   openModal(`<h2>${ic('download')}Planning d'une journée</h2>
-    <p class="lead">Fichier Excel rangé par laboratoire, puis par préleveur, puis par exploitation. Il contient toutes les informations administratives de l'exploitation et toutes celles du préleveur.${S.dpt ? ' Filtre en cours : département ' + esc(S.dpt) + '.' : ''}</p>
+    <p class="lead">Planning rangé par laboratoire, puis par préleveur, puis par exploitation, avec toutes les informations administratives de l'exploitation et toutes celles du préleveur. PDF aux couleurs de l'État (texte sélectionnable), ou Excel pour retravailler les données.${S.dpt ? ' Filtre en cours : département ' + esc(S.dpt) + '.' : ''}</p>
     <div class="grp"><label class="lbl" for="xDay">Jour</label><input class="input" type="date" id="xDay" value="${toInputDate(d)}"></div>
     <div id="xInfo" class="sub"></div>`,
-  {foot: `<button class="btn ter" data-close>Annuler</button><button class="btn" id="xGo">${ic('download')}Télécharger</button>`});
+  {foot: `<button class="btn ter" data-close>Annuler</button><button class="btn sec" id="xXls">${ic('download')}Excel</button><button class="btn" id="xPdf">${ic('download')}PDF</button>`});
   const info = () => { const k = $('#xDay').value, vs = k ? S.visits.filter(v => dkey(v.start) === k && (!S.dpt || v.farm.dpt === S.dpt)) : [];
     $('#xInfo').textContent = k ? `${vs.length} rendez-vous · ${vs.reduce((t, v) => t + v.parcels.length, 0)} parcelle(s) · ${new Set(vs.map(labOf)).size} laboratoire(s)` : ''; };
   $('#xDay').addEventListener('input', info); info();
-  $('#xGo').onclick = () => { const k = $('#xDay').value; if (k) exportDay(k); };
+  const go = fn => async ev => { const k = $('#xDay').value; if (!k) return; const b = ev.currentTarget; b.disabled = true; try { await fn(k); } finally { b.disabled = false; } };
+  $('#xPdf').onclick = go(pdfDay); $('#xXls').onclick = go(exportDay);
+}
+
+/* ---------- Planning du jour en PDF (charte DSFR, texte vectoriel, police Marianne intégrée) ---------- */
+LIB.pdfmake = 'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/pdfmake.min.js';
+LIB.pdfVfs = 'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/vfs_fonts.js';
+const FONT_URL = 'https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14.2/dist/fonts/';
+const PDF_FONT_FILES = {normal: 'Marianne-Regular.woff', bold: 'Marianne-Bold.woff', italics: 'Marianne-Regular_Italic.woff', bolditalics: 'Marianne-Bold_Italic.woff'};
+const PC = {bf: '#000091', title: '#161616', text: '#3a3a3a', mention: '#666666', border: '#dddddd', alt: '#f6f6f6', contrast: '#eeeeee', bf975: '#f5f5fe', bf850: '#cacafb', warn: '#b34000'};
+let pdfFontCache = null;
+function abToB64(ab) { const u = new Uint8Array(ab); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }
+async function pdfSetup() {
+  await loadLib(LIB.pdfmake);
+  if (pdfFontCache) return pdfFontCache;
+  try {
+    const vfs = {};
+    await Promise.all(Object.values(PDF_FONT_FILES).map(async n => { const r = await fetch(FONT_URL + n); if (!r.ok) throw new Error(n + ' : ' + r.status); vfs[n] = abToB64(await r.arrayBuffer()); }));
+    pdfFontCache = {vfs, fonts: {Marianne: Object.assign({}, PDF_FONT_FILES)}, font: 'Marianne'};
+  } catch (e) {
+    console.warn('Police Marianne indisponible, repli sur Roboto', e);
+    await loadLib(LIB.pdfVfs);
+    pdfFontCache = {vfs: pdfMake.vfs, fonts: {Roboto: {normal: 'Roboto-Regular.ttf', bold: 'Roboto-Medium.ttf', italics: 'Roboto-Italic.ttf', bolditalics: 'Roboto-MediumItalic.ttf'}}, font: 'Roboto'};
+  }
+  return pdfFontCache;
+}
+// Bloc-marque : drapeau et profil de Marianne repris du CSS DSFR de la page (vectoriel)
+function blocMarqueSvg() {
+  const css = Array.from(document.querySelectorAll('style')).map(s => s.textContent).join('');
+  const m = /viewBox='0 0 44 18'%3E([\s\S]*?)%3C\/svg%3E/.exec(css);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 18" width="44" height="18"><rect x="0" y="1" width="22" height="16" fill="#000091"/><rect x="22" y="1" width="22" height="16" fill="#e1000f"/>${m ? decodeURIComponent(m[1]) : ''}</svg>`;
+}
+const noLines = (pad = 0) => ({hLineWidth: () => 0, vLineWidth: () => 0, paddingLeft: () => 0, paddingRight: () => pad, paddingTop: () => 2, paddingBottom: () => 2});
+const boxLayout = (top, fill) => ({hLineWidth: i => i === 0 ? 3 : 1, vLineWidth: () => 1, hLineColor: i => i === 0 ? top : PC.border, vLineColor: () => PC.border,
+  fillColor: () => fill || null, paddingLeft: () => 9, paddingRight: () => 9, paddingTop: () => 7, paddingBottom: () => 7});
+const tblLayout = zebra => ({hLineWidth: (i, n) => i === 1 ? 1.5 : (i === 0 || i === n.table.body.length ? 0 : .5), vLineWidth: () => 0,
+  hLineColor: i => i === 1 ? PC.text : PC.border, fillColor: r => r === 0 ? PC.contrast : (zebra && r % 2 === 0 ? PC.alt : null),
+  paddingLeft: () => 5, paddingRight: () => 5, paddingTop: () => 4, paddingBottom: () => 4});
+function kvGrid(pairs, n) {
+  const ps = pairs.filter(p => clean(p[1]));
+  if (!ps.length) return {text: ''};
+  const body = [];
+  for (let i = 0; i < ps.length; i += n) body.push(Array.from({length: n}, (_, j) => { const p = ps[i + j];
+    return p ? {stack: [{text: p[0], style: 'k'}, Object.assign({text: clean(p[1]), style: 'v'}, p[2] ? {link: p[2], color: PC.bf} : {})]} : {text: ''}; }));
+  return {table: {widths: Array(n).fill('*'), body, dontBreakRows: true}, layout: noLines(10), margin: [0, 5, 0, 0]};
+}
+const telLink = t => 'tel:' + String(t).replace(/[^\d+]/g, '');
+function prelPairs(v) {
+  const p = S.prelById.get(v.prel); if (!p) return [];
+  const pc = cols(T_PREL);
+  return [['Organisme', p.Organisme]].concat(Object.keys(pc).filter(c => !PREL_EXPORT_SKIP.has(c) && !c.startsWith('gristHelper')).map(c => {
+    const val = fmtAny(p[c], pc[c].type);
+    return [PREL_LABELS[c] || pc[c].label || c, val, /mail/i.test(c) ? 'mailto:' + val : /tel|portable|mobile/i.test(c) ? telLink(val) : null];
+  }));
+}
+function farmPairs(v) {
+  const f = v.farm, xs = v.parcels, d = (xs.find(x => x.def) || {}).def || {}, s = (xs.find(x => x.src) || {}).src || {}, r = (xs.find(x => x.rdv) || {}).rdv || {};
+  const tel = firstOf([s, f, d], ['Telephone_portable']), fixe = clean(d.Telephone_Fixe), mail = firstOf([s, f], ['Mail']);
+  const addr = f.Adresse_complete || [clean(d.Adresse), clean(d.Code_Postal).split('.')[0], clean(d.Commune)].filter(Boolean).join(' ');
+  return [['Raison sociale', firstOf([s, d], ['Raison_sociale', 'Nom_exploitation', 'Nom']) || f.name], ['Civilité', d.Civilite], ['SIRET', firstOf([d, s], ['SIRET', 'siret'])],
+    ['Adresse', addr], ['Téléphone portable', tel, tel && telLink(tel)], ['Téléphone fixe', fixe, fixe && telLink(fixe)], ['E-mail', mail, mail && 'mailto:' + mail],
+    ['Présence souhaitée de l\'agriculteur', r.Presence_souhaitee_agriculteur], ['Inspecteur FranceAgriMer', personName(S.inspById.get(v.insp))],
+    ['Raison de la sélection', d.Raison_de_la_selection], ['Financement', d.Financement], ['Département', f.Departement]];
+}
+function parcelTable(v) {
+  const H = ['Parcelle', 'Surface', 'Culture en place', 'Sans ferti. récente', 'Étiquette', 'GPS', 'À savoir'].map(t => ({text: t, style: 'th'}));
+  const rows = v.parcels.slice().sort((a, b) => a.key.localeCompare(b.key, 'fr', {numeric: true})).map(x => {
+    const r = x.rdv || {}, d = x.def || {}, s = x.src || {}, c = coordsOf(x);
+    const notes = [];
+    if (s.la_parcelle_comporte_t_elle_une_ou_plusieurs_zones_a_eviter_pour_le_prelevement === true || clean(s.quelles_zones_sont_a_eviter))
+      notes.push({text: [{text: 'Zones à éviter : ', bold: true, color: PC.warn}, [clean(s.quelles_zones_sont_a_eviter), clean(s.decrivez_au_preleveur_l_emplacement_des_zones_a_eviter), clean(s.preciser_la_zone_autre_a_eviter)].filter(Boolean).join(' — ')]});
+    if (s.cette_parcelle_a_t_elle_recu_un_apport_organique_ou_ete_paturee_au_cours_des_4_dernieres_semaines === true) notes.push({text: 'Apport organique ou pâturage < 4 semaines', color: PC.warn});
+    if (clean(r.Commentaire)) notes.push({text: clean(r.Commentaire)});
+    return [{text: x.key, bold: true, color: PC.title}, {text: d.SURF_CALC != null && d.SURF_CALC !== '' ? fmtAny(d.SURF_CALC) + ' ha' : ''},
+      {text: clean(r.Culture_en_place) || clean(s.Culture_2026)}, {text: clean(r.Absence_fertilisation_recente)}, {text: clean(r.Etiquette_prelevement)},
+      c.lat ? {text: c.lat.toFixed(5) + '\n' + c.lon.toFixed(5), link: gmaps(c.lat, c.lon), color: PC.bf} : {text: '—', color: PC.mention}, {stack: notes}];
+  });
+  return {table: {headerRows: 1, dontBreakRows: true, widths: [76, 36, 62, 44, 48, 50, '*'], body: [H].concat(rows)}, layout: tblLayout(true), style: 'td', margin: [0, 8, 0, 0]};
+}
+function farmCard(v) {
+  const st = STATUT_STYLE[v.statut] || ['#e8edff', '#0063cb'], dn = firstOf(v.parcels.map(x => x.src).concat([v.farm]), ['dossier_number']);
+  return {unbreakable: v.parcels.length <= 12, table: {widths: ['*'], dontBreakRows: false, body: [[{stack: [
+    {columns: [
+      {width: 62, stack: [{text: hm(v.start), bold: true, fontSize: 14, color: PC.bf}, {text: '→ ' + hm(v.end), style: 'small'}]},
+      {width: '*', stack: [{text: v.farm.name, bold: true, fontSize: 11.5, color: PC.title}, {text: `PACAGE ${v.farm.pacage}${dn ? ' · dossier DN ' + dn : ''} · ${v.parcels.length} parcelle(s)`, style: 'small'}]},
+      {width: 'auto', table: {body: [[{text: stLabel(v.statut).toUpperCase(), fontSize: 7, bold: true, color: st[1]}]]},
+        layout: {hLineWidth: () => 0, vLineWidth: () => 0, fillColor: () => st[0], paddingLeft: () => 5, paddingRight: () => 5, paddingTop: () => 2, paddingBottom: () => 1}}]},
+    kvGrid(farmPairs(v), 3), parcelTable(v)]}]]},
+  layout: {hLineWidth: () => .75, vLineWidth: i => i === 0 ? 3 : .75, hLineColor: () => PC.border, vLineColor: i => i === 0 ? PC.bf : PC.border,
+    paddingLeft: () => 10, paddingRight: () => 10, paddingTop: () => 8, paddingBottom: () => 9}, margin: [0, 0, 0, 9]};
+}
+async function pdfDay(k) {
+  const vs = S.visits.filter(v => dkey(v.start) === k && (!S.dpt || v.farm.dpt === S.dpt)).sort((a, b) => byLabPrel(a, b) || a.start - b.start || a.farm.name.localeCompare(b.farm.name));
+  const date = dayOf(k), D = fullDate(date), Dcap = D.charAt(0).toUpperCase() + D.slice(1);
+  if (!vs.length) { toast('Aucun rendez-vous prévu le ' + shortDate(date) + (S.dpt ? ' (département ' + S.dpt + ')' : '') + '.', true); return; }
+  let F;
+  try { F = await pdfSetup(); } catch (e) { toast('Génération du PDF impossible : ' + (e.message || e), true); return; }
+  // regroupement laboratoire > préleveur > exploitations (ordre chronologique)
+  const labs = [];
+  for (const v of vs) {
+    const L = labOf(v); let lab = labs[labs.length - 1];
+    if (!lab || lab.name !== L) labs.push(lab = {name: L, prels: []});
+    let pr = lab.prels[lab.prels.length - 1];
+    if (!pr || pr.id !== (v.prel || 0)) lab.prels.push(pr = {id: v.prel || 0, name: prelNameOf(v) || 'Préleveur à désigner', visits: []});
+    pr.visits.push(v);
+  }
+  const nParc = list => list.reduce((t, v) => t + v.parcels.length, 0), nFarm = list => new Set(list.map(v => v.farm.key)).size;
+  const now = new Date(), service = clean(S.cfg.pdfService);
+  const tile = (label, value) => ({table: {widths: ['*'], body: [[{stack: [{text: label, style: 'k'}, {text: String(value), fontSize: 20, bold: true, color: PC.title, margin: [0, 1, 0, 0]}]}]]}, layout: boxLayout(PC.bf)});
+  const recap = [[{text: 'Laboratoire', style: 'th'}, {text: 'Préleveur', style: 'th'}, {text: 'Horaires', style: 'th'}, {text: 'Exploitations', style: 'th', alignment: 'right'}, {text: 'Parcelles', style: 'th', alignment: 'right'}]];
+  labs.forEach(l => l.prels.forEach((p, i) => recap.push([i ? {} : {text: l.name, bold: true, color: PC.title, rowSpan: l.prels.length}, p.name,
+    hm(p.visits[0].start) + ' – ' + hm(p.visits[p.visits.length - 1].end), {text: String(nFarm(p.visits)), alignment: 'right'}, {text: String(nParc(p.visits)), alignment: 'right'}])));
+  const content = [
+    {columns: [
+      {width: 'auto', stack: [{svg: blocMarqueSvg(), width: 38}, {text: 'RÉPUBLIQUE\nFRANÇAISE', bold: true, fontSize: 9.5, color: '#000000', lineHeight: .95, margin: [0, 4, 0, 3]},
+        {text: 'Liberté\nÉgalité\nFraternité', italics: true, fontSize: 6.5, color: '#000000', lineHeight: .95}]},
+      {width: '*', margin: [20, 4, 0, 0], stack: [service ? {text: service, bold: true, fontSize: 11, color: PC.title} : {text: ''}, {text: 'Campagne reliquats azotés · calendrier des prélèvements', style: 'small', margin: [0, 2, 0, 0]}]},
+      {width: 'auto', text: `Édité le ${shortDate(now)} à ${hm(now)}`, style: 'small', margin: [0, 4, 0, 0]}]},
+    {canvas: [{type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: .75, lineColor: PC.border}], margin: [0, 12, 0, 0]},
+    {text: 'Planning des prélèvements', style: 'h1'},
+    {text: Dcap + (S.dpt ? ' · département ' + S.dpt : ''), style: 'lead'},
+    {columns: [tile('Laboratoires', labs.length), tile('Préleveurs', labs.reduce((t, l) => t + l.prels.length, 0)), tile('Exploitations', nFarm(vs)), tile('Parcelles', nParc(vs))], columnGap: 10},
+    {text: 'Récapitulatif', style: 'h2', margin: [0, 22, 0, 8]},
+    {table: {headerRows: 1, widths: ['*', '*', 70, 62, 50], body: recap}, layout: tblLayout(false), style: 'td'},
+    {text: 'Le détail par laboratoire, préleveur et exploitation figure dans les pages suivantes (un laboratoire par page). Les coordonnées GPS sont cliquables (itinéraire).', style: 'small', margin: [0, 10, 0, 0]}
+  ];
+  for (const l of labs) {
+    const all = l.prels.flatMap(p => p.visits);
+    content.push({pageBreak: 'before', table: {widths: ['*', 'auto'], body: [[{stack: [{text: 'LABORATOIRE', fontSize: 7, bold: true, color: PC.bf850, characterSpacing: .5}, {text: l.name, bold: true, fontSize: 16, color: '#ffffff'}]},
+      {text: `${Dcap}\n${l.prels.length} préleveur(s) · ${nFarm(all)} exploitation(s) · ${nParc(all)} parcelle(s)`, fontSize: 8.5, color: '#ffffff', alignment: 'right', margin: [0, 3, 0, 0]}]]},
+      layout: {fillColor: () => PC.bf, hLineWidth: () => 0, vLineWidth: () => 0, paddingLeft: () => 12, paddingRight: () => 12, paddingTop: () => 9, paddingBottom: () => 9}, margin: [0, 0, 0, 12]});
+    for (const p of l.prels) {
+      const block = {table: {widths: ['*'], body: [[{stack: [
+        {columns: [{width: '*', text: [{text: 'PRÉLEVEUR   ', fontSize: 7, bold: true, color: PC.bf}, {text: p.name, bold: true, fontSize: 13, color: PC.title}]},
+          {width: 'auto', text: `${p.visits.length} rendez-vous · ${nParc(p.visits)} parcelle(s) · ${hm(p.visits[0].start)} – ${hm(p.visits[p.visits.length - 1].end)}`, style: 'small', margin: [0, 3, 0, 0]}]},
+        kvGrid(prelPairs(p.visits[0]), 3)]}]]},
+        layout: {fillColor: () => PC.bf975, hLineWidth: () => 0, vLineWidth: i => i === 0 ? 3 : 0, vLineColor: () => PC.bf, paddingLeft: () => 10, paddingRight: () => 10, paddingTop: () => 8, paddingBottom: () => 8},
+        margin: [0, 4, 0, 9]};
+      // le bandeau du préleveur reste sur la même page que sa première exploitation
+      const cards = p.visits.map(farmCard), first = cards.shift();
+      content.push({stack: [block, first], unbreakable: p.visits[0].parcels.length <= 8}, ...cards);
+    }
+  }
+  const dd = {
+    pageSize: 'A4', pageMargins: [40, 36, 40, 48], info: {title: 'Planning des prélèvements – ' + D, author: service || 'Calendrier des prélèvements', subject: 'Campagne reliquats azotés'},
+    defaultStyle: {font: F.font, fontSize: 9, color: PC.text, lineHeight: 1.15},
+    styles: {h1: {fontSize: 24, bold: true, color: PC.title, margin: [0, 16, 0, 2]}, lead: {fontSize: 12.5, color: PC.mention, margin: [0, 0, 0, 16]}, h2: {fontSize: 14, bold: true, color: PC.title},
+      k: {fontSize: 7, color: PC.mention}, v: {fontSize: 8.5, color: PC.title}, th: {fontSize: 7.5, bold: true, color: PC.title}, td: {fontSize: 8}, small: {fontSize: 7.5, color: PC.mention}},
+    footer: (cp, pc) => ({margin: [40, 12, 40, 0], stack: [{canvas: [{type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: .5, lineColor: PC.border}]},
+      {columns: [{text: `Planning des prélèvements · ${D}${service ? ' · ' + service : ''}`, style: 'small'}, {width: 'auto', text: `Page ${cp} / ${pc}`, style: 'small'}], margin: [0, 5, 0, 0]}]}),
+    content
+  };
+  const name = 'planning-prelevements-' + k + (S.dpt ? '-dpt' + S.dpt : '') + '.pdf';
+  await new Promise((res, rej) => { try { pdfMake.createPdf(dd, null, F.fonts, F.vfs).getBlob(b => { downloadBlob(b, name); res(); }); } catch (e) { rej(e); } })
+    .then(() => toast(`PDF du ${shortDate(date)} téléchargé (${vs.length} rendez-vous)`), e => { console.error(e); toast('Génération du PDF impossible : ' + (e.message || e), true); });
 }
 
 /* ---------- Carte des parcelles (recherche par clé, fiche au clic) ---------- */
