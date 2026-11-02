@@ -435,6 +435,7 @@
   <button class="tab" role="tab" data-tab="prel" aria-selected="false"><span class="ic ic-user" aria-hidden="true"></span>Préleveurs <span class="count" id="cntPrel">0</span></button>
   <button class="tab insp-tab" role="tab" data-tab="espace" aria-selected="false"><span class="ic ic-shield" aria-hidden="true"></span>Espace inspecteur</button>
   <button class="tab insp-tab" role="tab" data-tab="insp" aria-selected="false"><span class="ic ic-shield" aria-hidden="true"></span>Inspecteurs FranceAgriMer <span class="count" id="cntInsp">0</span></button>
+  <button class="tab insp-tab" role="tab" data-tab="res" aria-selected="false"><span class="ic ic-check" aria-hidden="true"></span>Résultats des contrôles <span class="count" id="cntRes">0</span></button>
 </nav>
 <main id="main"><div class="loading">Chargement…</div></main>
 <div id="modalRoot"></div>
@@ -451,6 +452,28 @@ const T_RDV = 'RDV_Prelevements', T_PREL = 'DATA_Preleveur', T_INSP = 'DATA_Insp
 const OLD_NAMES = {[T_PREL]: 'Preleveurs', [T_INSP]: 'Inspecteurs_FAM'};
 // Lieux de stockage des échantillons (table fournie) et contrôles inopinés déclarés par les inspecteurs
 const T_STOCK = 'DATA_Stockage', T_CTL = 'DATA_Controle_Stockage';
+// Résultats des contrôles de préleveurs importés depuis le fichier Excel des inspecteurs
+const T_RES = 'DATA_Resultat_controle';
+function resSchema() {
+  return [
+    {id: 'Date_controle', label: 'Date du contrôle', type: 'Date'},
+    {id: 'Inspecteur', label: 'Inspecteur FranceAgriMer', type: 'Ref:' + T_INSP},
+    {id: 'Preleveur', label: 'Préleveur contrôlé', type: 'Ref:' + T_PREL},
+    {id: 'Laboratoire', label: 'Laboratoire', type: 'Text'},
+    {id: 'PACAGE', label: 'PACAGE', type: 'Text'},
+    {id: 'Exploitation', label: 'Exploitation', type: 'Text'},
+    {id: 'Parcelles', label: 'Parcelles', type: 'Text'},
+    {id: 'RDV', label: 'Rendez-vous', type: 'RefList:' + T_RDV},
+    {id: 'Resultat', label: 'Résultat', type: 'Choice', widgetOptions: JSON.stringify({choices: CTL_RESULTATS,
+      choiceOptions: Object.fromEntries(CTL_RESULTATS.map(r => [r, {fillColor: CTL_STYLE[r][0], textColor: CTL_STYLE[r][1]}]))})},
+    {id: 'Commentaire', label: 'Commentaire', type: 'Text'},
+    {id: 'Code_dpt', type: 'Text', isFormula: true, formula: '$PACAGE[:3] if $PACAGE else None'},
+    {id: 'Cle_import', label: 'Clé d\'import', type: 'Text'},
+    {id: 'Fichier', label: 'Fichier importé', type: 'Text'},
+    {id: 'Importe_le', label: 'Importé le', type: 'DateTime:' + TZ, formula: 'NOW()'},
+    {id: 'Importe_par', label: 'Importé par', type: 'Text', formula: 'user.Name'}
+  ];
+}
 const CTL_RESULTATS = ['Conforme', 'Avec réserves', 'Non conforme'];
 const CTL_STYLE = {'Conforme': ['#b8fec9', '#18753c'], 'Avec réserves': ['#feebd0', '#695240'], 'Non conforme': ['#ffe9e9', '#ce0500']};
 const CTL_COLOR = '#6a6af4', CTL_DUREE = 60;
@@ -505,9 +528,6 @@ function rdvSchema() {
     {id: 'Commentaire', label: 'Commentaire', type: 'Text'},
     {id: 'Inspecteur', label: 'Inspecteur FranceAgriMer', type: 'Ref:' + T_INSP},
     {id: 'Duree_min', label: 'Durée (min)', type: 'Numeric'},
-    {id: 'Controle_resultat', label: 'Résultat du contrôle FranceAgriMer', type: 'Choice', widgetOptions: JSON.stringify({choices: CTL_RESULTATS,
-      choiceOptions: Object.fromEntries(CTL_RESULTATS.map(r => [r, {fillColor: CTL_STYLE[r][0], textColor: CTL_STYLE[r][1]}]))})},
-    {id: 'Controle_commentaire', label: 'Commentaire de l\'inspecteur', type: 'Text'},
     {id: 'PACAGE', type: 'Text', isFormula: true, formula: '$Cle_parcelle.split("-")[0] if $Cle_parcelle else None'},
     {id: 'Code_dpt', type: 'Text', isFormula: true, formula: '$Cle_parcelle[:3] if $Cle_parcelle else None'},
     nameCol.length && S.meta[p] && pc[k] ? {id: 'Nom_exploitation', type: 'Text', isFormula: true,
@@ -702,6 +722,7 @@ const S = {
   sel: {kind: '', id: 0}, q: '', statut: '', dpt: '',
   expQ: '', expStatut: '', expDpt: '',
   dashPeriod: 'all', dashDpt: '', dashOpen: 0,
+  res: [], resByRdv: new Map(), resQ: '', resInsp: 0, resRes: '',
   stock: [], stockById: new Map(), geo: new Map(), ctl: [], controls: [], showCtl: true,
   fold: (() => { try { return JSON.parse(localStorage.getItem('cal-fold')) || {prel: false, insp: true}; } catch (e) { return {prel: false, insp: true}; } })(),
   me: 0, espRange: 30, espMine: true, espTaken: false, espQ: '', espDates: []
@@ -770,8 +791,11 @@ function buildModel() {
     for (const [t, ps] of byTime) {
       const r0 = ps[0].rdv, start = toWall(t, typeOf(T_RDV, 'Date_RDV')), dur = Number(r0.Duree_min) || S.cfg.duree;
       const v = {key: f.key + '@' + t, farm: f, parcels: ps, start, end: new Date(start.getTime() + dur * 60000), duree: dur,
-        prel: ps.map(x => x.rdv.Preleveur).find(Boolean) || 0, insp: ps.map(x => x.rdv.Inspecteur).find(Boolean) || 0, statut: clean(r0.Statut),
-        res: ps.map(x => clean(x.rdv.Controle_resultat)).find(Boolean) || '', com: ps.map(x => clean(x.rdv.Controle_commentaire)).find(Boolean) || ''};
+        prel: ps.map(x => x.rdv.Preleveur).find(Boolean) || 0, insp: ps.map(x => x.rdv.Inspecteur).find(Boolean) || 0, statut: clean(r0.Statut)};
+      // résultat importé (DATA_Resultat_controle) ; son inspecteur vaut association s'il n'y en a pas
+      const rr = ps.map(x => S.resByRdv.get(x.rdv.id)).find(Boolean);
+      v.res = rr ? clean(rr.Resultat) : ''; v.com = rr ? clean(rr.Commentaire) : '';
+      if (!v.insp && rr && rr.Inspecteur) v.insp = rr.Inspecteur;
       f.visits.push(v); S.visits.push(v); S.visitByKey.set(v.key, v);
     }
     f.visits.sort((a, b) => a.start - b.start);
@@ -813,6 +837,9 @@ async function loadData() {
   const ctlOk = S.meta[T_STOCK] && S.meta[T_CTL];
   const [stock, ctl] = ctlOk ? await Promise.all([B.fetch(T_STOCK), B.fetch(T_CTL)]) : [[], []];
   S.stock = stock; S.ctl = ctl; S.stockById = new Map(stock.map(x => [x.id, x]));
+  S.res = S.meta[T_RES] ? await B.fetch(T_RES) : [];
+  S.resByRdv = new Map();
+  S.res.slice().sort((a, b) => a.id - b.id).forEach(r => refIds(r.RDV).forEach(id => S.resByRdv.set(id, r)));
   // table de géolocalisation des parcelles (source des colonnes latitude/longitude de DATA_Parcelles_DEF)
   S.geo = new Map();
   for (const [t, keys] of GEO_TABLES) {
@@ -825,6 +852,7 @@ async function loadData() {
   $('#cntExp').textContent = S.farms.size;
   $('#cntPrel').textContent = S.prel.filter(x => x.Actif !== false).length;
   $('#cntInsp').textContent = S.insp.filter(x => x.Actif !== false).length;
+  $('#cntRes').textContent = S.res.length;
 }
 
 /* ============================================================
@@ -855,6 +883,8 @@ function plan() {
     if (S.meta[T_CTL] && (typ.length || calc.length)) ops.push({text: `Préparer <code>${T_STOCK}</code> : ${typ.length ? 'colonnes de saisie typées (' + typ.join(', ') + ')' : ''}${typ.length && calc.length ? ' ; ' : ''}${calc.length ? calc.join(', ') + ' calculées à partir des contrôles déclarés' : ''}`,
       run: () => B.apply(typ.map(k => ['ModifyColumn', T_STOCK, k, {type: STOCK_TYPES[k], isFormula: false}]).concat(calc.map(k => ['ModifyColumn', T_STOCK, k, {type: STOCK_FORMULAS[k][0], isFormula: true, formula: STOCK_FORMULAS[k][1]}])))});
   }
+  if (!S.meta[T_RES]) ops.push({text: `Créer la table <code>${T_RES}</code> (résultats des contrôles de préleveurs importés depuis Excel)`, run: () => B.apply([['AddTable', T_RES, resSchema().map(c => Object.assign({id: c.id}, colInfo(c)))]])});
+  else { const miss = resSchema().filter(c => !S.meta[T_RES].cols[c.id]); if (miss.length) ops.push({text: `Ajouter à <code>${T_RES}</code> : ${miss.map(c => c.label || c.id).join(', ')}`, run: () => B.apply(miss.map(c => ['AddColumn', T_RES, c.id, colInfo(c)]))}); }
   const sc = rdvSchema(), ex = S.meta[T_RDV];
   if (!ex) ops.push({text: `Créer la table <code>${T_RDV}</code> (${sc.filter(c => !c.isFormula && !c.formula).length} champs de saisie)`, run: () => B.apply([['AddTable', T_RDV, sc.map(c => Object.assign({id: c.id}, colInfo(c)))]])});
   else {
@@ -888,7 +918,8 @@ async function fixRefs() {
       acts.push(['UpdateRecord', '_grist_Tables_column', cm.rowId, {visibleCol: show.rowId}], ['SetDisplayFormula', T_RDV, null, cm.rowId, formula]);
     }
   }
-  for (const [t, c, target, show, formula] of [[T_CTL, 'Inspecteur', T_INSP, 'Nom_complet', '$Inspecteur.Nom_complet'], [T_CTL, 'Lieu', T_STOCK, 'Organisme', '$Lieu.Organisme'], [T_STOCK, 'Inspecteur', T_INSP, 'Nom_complet', '$Inspecteur.Nom_complet']]) {
+  for (const [t, c, target, show, formula] of [[T_CTL, 'Inspecteur', T_INSP, 'Nom_complet', '$Inspecteur.Nom_complet'], [T_CTL, 'Lieu', T_STOCK, 'Organisme', '$Lieu.Organisme'], [T_STOCK, 'Inspecteur', T_INSP, 'Nom_complet', '$Inspecteur.Nom_complet'],
+    [T_RES, 'Inspecteur', T_INSP, 'Nom_complet', '$Inspecteur.Nom_complet'], [T_RES, 'Preleveur', T_PREL, 'Nom', '" ".join(x for x in [$Preleveur.Prenom, $Preleveur.Nom] if x)']]) {
     const cm = cols(t)[c], sh = cols(target)[show];
     if (cm && sh && cm.type === 'Ref:' + target && cm.visibleCol !== sh.rowId) acts.push(['UpdateRecord', '_grist_Tables_column', cm.rowId, {visibleCol: sh.rowId}], ['SetDisplayFormula', t, null, cm.rowId, formula]);
   }
@@ -954,6 +985,7 @@ function render() {
   if (S.tab === 'cal') renderCalendar();
   else if (S.tab === 'espace') renderEspace();
   else if (S.tab === 'dash') renderDash();
+  else if (S.tab === 'res') renderResults();
   else if (S.tab === 'exp') renderFarms();
   else renderPeople(S.tab === 'prel' ? T_PREL : T_INSP);
 }
@@ -1610,48 +1642,6 @@ async function exportDayStyled(k) {
   await saveWb(wb, 'planning-prelevements-' + k + (S.dpt ? '-dpt' + S.dpt : '') + '.xlsx');
   return vs.length;
 }
-// Fichier à remplir par l'inspecteur : listes déroulantes, colonnes à compléter mises en évidence
-async function bulkStyled(me, vs) {
-  await loadLib(LIB.exceljs);
-  const wb = new ExcelJS.Workbook(), now = new Date(), N = BULK_H.length;
-  const ws = wb.addWorksheet('Contrôles', {properties: {tabColor: {argb: XC.bf}}, views: [{state: 'frozen', ySplit: 3, showGridLines: false}],
-    pageSetup: {paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0}});
-  ws.columns = [14, 11, 8, 18, 22, 16, 30, 12, 18, 30, 14, 22, 44].map(width => ({width}));
-  xBand(ws, 1, N, `Contrôles de préleveurs — ${personName(me)} — ${S.espDates.map(k => shortDate(dayOf(k))).join(', ')}`, XC.white, xFont({size: 16, bold: true, color: {argb: XC.bf}}), 30);
-  xBand(ws, 2, N, 'Remplissez les 3 colonnes bleues (listes déroulantes pour « Contrôlé » et « Résultat »), puis importez le fichier dans le calendrier : Espace inspecteur > Importer le fichier rempli. Ne modifiez pas la colonne « Réf. ».',
-    XC.bf975, xFont({size: 9.5, italic: true, color: {argb: XC.bf}}), 30);
-  ws.getCell(2, 1).alignment = {vertical: 'middle', wrapText: true, indent: 1};
-  const head = xHeader(ws, 3, BULK_H, {height: 32});
-  [11, 12, 13].forEach(ci => { const c = head.getCell(ci); c.fill = xFill(XC.bf); c.font = xFont({bold: true, size: 9.5, color: {argb: XC.white}}); });
-  let r = 4, last = '';
-  vs.forEach((v, i) => {
-    const p = S.prelById.get(v.prel) || {}, mine = v.insp === S.me, grp = labOf(v) + ' · ' + (prelNameOf(v) || 'Préleveur à désigner');
-    if (grp !== last) { last = grp; xBand(ws, r, N, grp, XC.bf925, xFont({bold: true, size: 10.5, color: {argb: XC.bf}}), 20); r++; }
-    const row = ws.getRow(r);
-    row.values = [v.parcels.map(x => x.rdv && x.rdv.id).filter(Boolean).join(';'), shortDate(v.start), hm(v.start), labOf(v), prelNameOf(v) || 'Préleveur à désigner', fmtTel(p.Telephone),
-      v.farm.name, v.farm.pacage, v.farm.Ville || '', v.parcels.map(x => x.key).join(', '), mine ? 'Oui' : '', mine ? v.res : '', mine ? v.com : ''];
-    row.eachCell({includeEmpty: true}, (cell, ci) => { if (ci > N) return; cell.font = xFont({size: 9.5}); cell.alignment = {vertical: 'top', wrapText: ci >= 10};
-      cell.border = {bottom: xLine()}; cell.fill = xFill(i % 2 ? XC.alt : XC.white); });
-    row.getCell(1).font = xFont({size: 8, color: {argb: XC.mention}}); row.getCell(1).fill = xFill(XC.contrast);
-    row.getCell(7).font = xFont({size: 9.5, bold: true, color: {argb: XC.title}});
-    [11, 12, 13].forEach(ci => { const c = row.getCell(ci); c.fill = xFill(XC.bf975); c.border = {top: xLine(XC.bf), bottom: xLine(XC.bf), left: xLine(XC.bf), right: xLine(XC.bf)}; });
-    row.getCell(11).dataValidation = {type: 'list', allowBlank: true, formulae: ['"Oui,Non"'], showErrorMessage: true, errorTitle: 'Contrôlé', error: 'Choisissez Oui ou Non.'};
-    row.getCell(12).dataValidation = {type: 'list', allowBlank: true, formulae: ['"Conforme,Avec réserves,Non conforme"'], showErrorMessage: true, errorTitle: 'Résultat', error: 'Choisissez dans la liste.'};
-    r++;
-  });
-  const wh = wb.addWorksheet('Mode d\'emploi', {properties: {tabColor: {argb: 'FF6A6AF4'}}, views: [{showGridLines: false}]});
-  wh.columns = [{width: 110}];
-  const lines = [['Mode d\'emploi', 'title'], ['', ''], ['1. Feuille « Contrôles » : une ligne par rendez-vous de prélèvement, rangée par laboratoire puis par préleveur.', ''],
-    ['2. Colonne « Contrôlé » : Oui pour chaque rendez-vous où vous avez contrôlé le préleveur ; Non pour annuler un contrôle déjà déclaré ; vide = aucun changement.', ''],
-    ['3. Colonne « Résultat » : Conforme, Avec réserves ou Non conforme.', ''], ['4. Colonne « Commentaire » : vos observations.', ''],
-    ['5. Ne modifiez pas la colonne « Réf. » et ne renommez pas les colonnes.', ''], ['6. Dans le calendrier : Espace inspecteur > Importer le fichier rempli.', ''], ['', ''],
-    ['Inspecteur : ' + personName(me), 'meta'], ['Jours : ' + S.espDates.map(k => shortDate(dayOf(k))).join(', '), 'meta'], [`Fichier généré le ${shortDate(now)} à ${hm(now)}`, 'meta']];
-  lines.forEach(([t, k], i) => { const c = wh.getCell(i + 1, 1); c.value = t; c.alignment = {wrapText: true, vertical: 'middle'};
-    c.font = k === 'title' ? xFont({size: 16, bold: true, color: {argb: XC.bf}}) : k === 'meta' ? xFont({size: 9.5, italic: true, color: {argb: XC.mention}}) : xFont({size: 11}); });
-  const range = S.espDates.length > 1 ? S.espDates[0] + '_' + S.espDates[S.espDates.length - 1] : S.espDates[0];
-  await saveWb(wb, `controles-preleveurs-${slug(personName(me))}-${range}.xlsx`);
-}
-
 /* ---------- Planning du jour en PDF (charte DSFR, texte vectoriel, police Marianne intégrée) ---------- */
 LIB.pdfmake = 'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/pdfmake.min.js';
 LIB.pdfVfs = 'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/vfs_fonts.js';
@@ -1809,24 +1799,210 @@ async function pdfDay(k) {
 // « 022849239-1-2 », « 22849239 1 2 » ou « 22849239-01-02 » désignent la même parcelle
 const keyNorm = s => String(s || '').trim().replace(/[\s|/_.;]+/g, '-').split('-').filter(Boolean).map(p => p.replace(/^0+(?=\d)/, '')).join('-').toLowerCase();
 
-/* ---------- Espace inspecteur : déclaration groupée des contrôles de préleveurs (fichier) ---------- */
-const BULK_H = ['Réf. (ne pas modifier)', 'Date', 'Heure', 'Laboratoire', 'Préleveur', 'Téléphone préleveur', 'Exploitation', 'PACAGE', 'Commune', 'Parcelles',
-  'Contrôlé (Oui / Non)', 'Résultat (Conforme / Avec réserves / Non conforme)', 'Commentaire'];
-function bulkVisits(dates) {
-  const dpts = myDpts(S.inspById.get(S.me)), set = new Set(dates || S.espDates);
-  return S.visits.filter(v => set.has(dkey(v.start)) && (v.insp === S.me || (!v.insp && (!S.espMine || !dpts.length || dpts.includes(dptNorm(v.farm.dpt))))))
+/* ============================================================
+   RÉSULTATS DES CONTRÔLES DE PRÉLEVEURS (table DATA_Resultat_controle)
+   Fichier Excel à remplir par l'inspecteur -> import groupé dans Grist
+   ============================================================ */
+const RES_H = ['Réf. (ne pas modifier)', 'Date', 'Heure', 'Laboratoire', 'Préleveur', 'Téléphone préleveur', 'Exploitation', 'PACAGE', 'Commune', 'Parcelles',
+  'Inspecteur', 'Contrôlé (Oui / Non)', 'Résultat (Conforme / Avec réserves / Non conforme)', 'Commentaire'];
+const RES_LIBRES = 15;   // lignes vides pour les contrôles hors liste
+const resKey = (ids, insp) => 'rdv:' + ids.slice().sort((a, b) => a - b).join(';') + '|' + insp;
+const resKeyLibre = (date, pacage, prel, insp) => 'libre:' + date + '|' + pacage + '|' + (prel || 0) + '|' + insp;
+const refIds = v => Array.isArray(v) ? (v[0] === 'L' ? v.slice(1) : v).filter(n => typeof n === 'number' && n > 0) : (typeof v === 'number' && v > 0 ? [v] : []);
+const resDate = r => typeof r.Date_controle === 'number' ? toWall(r.Date_controle, typeOf(T_RES, 'Date_controle') || 'Date') : null;
+// résultat déjà saisi pour un rendez-vous et un inspecteur
+function resultOf(v, insp) {
+  const ids = v.parcels.map(x => x.rdv && x.rdv.id).filter(Boolean), k = resKey(ids, insp);
+  return S.res.find(r => clean(r.Cle_import) === k) || null;
+}
+function normRes(s) {
+  const n = norm(s).trim(); if (!n) return '';
+  if (n.startsWith('non') || n === 'nc') return 'Non conforme';
+  if (n.includes('reserve')) return 'Avec réserves';
+  if (n.startsWith('conf') || n === 'c' || n === 'ok') return 'Conforme';
+  return clean(s);
+}
+// rapprochement d'un nom saisi avec un préleveur / inspecteur (« Prénom Nom », « NOM Prénom », e-mail)
+function matchPerson(list, txt0) {
+  const t = norm(txt0).replace(/\s+/g, ' ').trim(); if (!t) return 0;
+  const words = s => norm(s).split(/[\s-]+/).filter(Boolean).sort().join(' ');
+  const hit = list.find(p => norm(p.Email).trim() === t) || list.find(p => norm(personName(p)) === t) || list.find(p => words(personName(p)) === words(t))
+    || list.find(p => norm(clean(p.Nom)) === t);
+  return hit ? hit.id : 0;
+}
+function parseDateFr(v) {
+  if (v instanceof Date && !isNaN(v)) { const d = new Date(v.getTime() + 12 * 3600e3); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+  const s = clean(v); let m;
+  if ((m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})/.exec(s))) return new Date(m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]), m[2] - 1, Number(m[1]));
+  if ((m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s))) return new Date(Number(m[1]), m[2] - 1, Number(m[3]));
+  return null;
+}
+const pacageOf = v => { const s = clean(v).replace(/\s/g, ''); return /^\d{8}$/.test(s) ? '0' + s : s; };
+
+// Rendez-vous proposés dans le fichier : jours choisis ; pour un inspecteur, son périmètre et les RDV libres ou déjà à lui
+function resVisits(dates, insp, mine) {
+  const set = new Set(dates), dpts = insp ? myDpts(S.inspById.get(insp)) : [];
+  return S.visits.filter(v => set.has(dkey(v.start)) && (!S.dpt || v.farm.dpt === S.dpt)
+    && (!insp || v.insp === insp || resultOf(v, insp) || (!v.insp && (!mine || !dpts.length || dpts.includes(dptNorm(v.farm.dpt))))))
     .sort((a, b) => dkey(a.start).localeCompare(dkey(b.start)) || byLabPrel(a, b) || a.start - b.start);
 }
+async function downloadResultTemplate({dates, insp = 0, mine = false}) {
+  const vs = resVisits(dates, insp, mine), me = S.inspById.get(insp), inspName = personName(me);
+  if (!vs.length && !confirm('Aucun rendez-vous ces jours-là. Télécharger quand même un fichier vide (contrôles hors liste) ?')) return;
+  const rows = vs.map(v => { const p = S.prelById.get(v.prel) || {}, r = insp ? resultOf(v, insp) : null;
+    return [v.parcels.map(x => x.rdv && x.rdv.id).filter(Boolean).join(';'), shortDate(v.start), hm(v.start), labOf(v), prelNameOf(v) || 'Préleveur à désigner', fmtTel(p.Telephone),
+      v.farm.name, v.farm.pacage, v.farm.Ville || '', v.parcels.map(x => x.key).join(', '), inspName, r ? 'Oui' : '', r ? clean(r.Resultat) : '', r ? clean(r.Commentaire) : '']; });
+  const jours = dates.map(k => shortDate(dayOf(k))).join(', '), base = `resultats-controles-${slug(inspName || 'inspecteur')}-${dates[0] || 'vierge'}${dates.length > 1 ? '_' + dates[dates.length - 1] : ''}`;
+  const help = ['1. Une ligne par rendez-vous de prélèvement (laboratoire, préleveur, exploitation) pour les jours indiqués.',
+    '2. Colonne « Contrôlé » : Oui pour chaque rendez-vous contrôlé ; Non pour supprimer un résultat déjà importé ; vide = ligne ignorée.',
+    '3. Colonne « Résultat » : Conforme, Avec réserves ou Non conforme. Colonne « Commentaire » : vos observations.',
+    '4. Colonne « Inspecteur » : votre nom (déjà rempli si le fichier vous est destiné).',
+    `5. Contrôle absent de la liste : utilisez les ${RES_LIBRES} lignes vides en bas (date, préleveur, exploitation, PACAGE au minimum), sans rien mettre en « Réf. ».`,
+    '6. Ne modifiez pas la colonne « Réf. » et ne renommez pas les colonnes.', '7. Renvoyez le fichier : il est importé en une fois dans Grist (table DATA_Resultat_controle).'];
+  try {
+    await loadLib(LIB.exceljs);
+    const wb = new ExcelJS.Workbook(), now = new Date(), N = RES_H.length;
+    const ws = wb.addWorksheet('Résultats', {properties: {tabColor: {argb: XC.bf}}, views: [{state: 'frozen', ySplit: 3, showGridLines: false}],
+      pageSetup: {paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0}});
+    ws.columns = [12, 11, 8, 16, 22, 15, 30, 12, 16, 28, 20, 13, 22, 44].map(width => ({width}));
+    xBand(ws, 1, N, `Résultats des contrôles de préleveurs${inspName ? ' — ' + inspName : ''}${jours ? ' — ' + jours : ''}`, XC.white, xFont({size: 16, bold: true, color: {argb: XC.bf}}), 30);
+    xBand(ws, 2, N, 'Remplissez les colonnes bleues (listes déroulantes), puis renvoyez le fichier pour import dans Grist. Lignes vides en bas : contrôles absents de la liste. Ne modifiez pas la colonne « Réf. ».',
+      XC.bf975, xFont({size: 9.5, italic: true, color: {argb: XC.bf}}), 30);
+    ws.getCell(2, 1).alignment = {vertical: 'middle', wrapText: true, indent: 1};
+    const head = xHeader(ws, 3, RES_H, {height: 34});
+    [11, 12, 13, 14].forEach(ci => { const c = head.getCell(ci); c.fill = xFill(XC.bf); c.font = xFont({bold: true, size: 9.5, color: {argb: XC.white}}); });
+    // listes déroulantes
+    const wl = wb.addWorksheet('Listes', {state: 'hidden'});
+    const inspList = S.insp.filter(p => p.Actif !== false).map(personName).sort(), prelList = S.prel.map(personName).filter(Boolean).sort();
+    inspList.forEach((n, i) => { wl.getCell(i + 1, 1).value = n; }); prelList.forEach((n, i) => { wl.getCell(i + 1, 2).value = n; });
+    const dv = (cell, formula, title) => { cell.dataValidation = {type: 'list', allowBlank: true, formulae: [formula], showErrorMessage: !!title, errorStyle: 'warning', errorTitle: title || '', error: 'Choisissez dans la liste.'}; };
+    const editable = (row, list) => list.forEach(ci => { const c = row.getCell(ci); c.fill = xFill(XC.bf975); c.border = {top: xLine(XC.bf), bottom: xLine(XC.bf), left: xLine(XC.bf), right: xLine(XC.bf)}; });
+    const validations = row => {
+      if (inspList.length) dv(row.getCell(11), `Listes!$A$1:$A$${inspList.length}`, 'Inspecteur');
+      dv(row.getCell(12), '"Oui,Non"', 'Contrôlé'); dv(row.getCell(13), '"Conforme,Avec réserves,Non conforme"', 'Résultat');
+    };
+    let r = 4, last = '';
+    vs.forEach((v, i) => {
+      const grp = shortDate(v.start) + ' · ' + labOf(v) + ' · ' + (prelNameOf(v) || 'Préleveur à désigner');
+      if (grp !== last) { last = grp; xBand(ws, r, N, grp, XC.bf925, xFont({bold: true, size: 10.5, color: {argb: XC.bf}}), 20); r++; }
+      const row = ws.getRow(r); row.values = rows[i];
+      row.eachCell({includeEmpty: true}, (cell, ci) => { if (ci > N) return; cell.font = xFont({size: 9.5}); cell.alignment = {vertical: 'top', wrapText: ci >= 10};
+        cell.border = {bottom: xLine()}; cell.fill = xFill(i % 2 ? XC.alt : XC.white); });
+      row.getCell(1).font = xFont({size: 8, color: {argb: XC.mention}}); row.getCell(1).fill = xFill(XC.contrast);
+      row.getCell(7).font = xFont({size: 9.5, bold: true, color: {argb: XC.title}});
+      editable(row, [11, 12, 13, 14]); validations(row); r++;
+    });
+    xBand(ws, r, N, 'Contrôles absents de la liste ci-dessus (laisser « Réf. » vide)', XC.bf925, xFont({bold: true, size: 10.5, color: {argb: XC.bf}}), 20); r++;
+    for (let i = 0; i < RES_LIBRES; i++, r++) {
+      const row = ws.getRow(r); row.getCell(11).value = inspName || null;
+      for (let ci = 1; ci <= N; ci++) { const c = row.getCell(ci); c.font = xFont({size: 9.5}); c.border = {bottom: xLine()}; }
+      row.getCell(1).fill = xFill(XC.contrast);
+      editable(row, [2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14]); validations(row);
+      if (prelList.length) dv(row.getCell(5), `Listes!$B$1:$B$${prelList.length}`);
+      row.getCell(2).numFmt = 'dd/mm/yyyy';
+    }
+    const wh = wb.addWorksheet('Mode d\'emploi', {properties: {tabColor: {argb: 'FF6A6AF4'}}, views: [{showGridLines: false}]});
+    wh.columns = [{width: 120}];
+    [['Mode d\'emploi', 't']].concat(help.map(h => [h, ''])).concat([['', ''], [`Inspecteur : ${inspName || '(à renseigner dans la colonne Inspecteur)'}`, 'm'], [`Jours : ${jours || '—'}`, 'm'], [`Fichier généré le ${shortDate(now)} à ${hm(now)}`, 'm']])
+      .forEach(([t, k], i) => { const c = wh.getCell(i + 1, 1); c.value = t; c.alignment = {wrapText: true, vertical: 'middle'};
+        c.font = k === 't' ? xFont({size: 16, bold: true, color: {argb: XC.bf}}) : k === 'm' ? xFont({size: 9.5, italic: true, color: {argb: XC.mention}}) : xFont({size: 11}); });
+    await saveWb(wb, base + '.xlsx');
+  } catch (e) {
+    console.warn('Excel mis en forme indisponible, fichier simple', e);
+    const blank = Array.from({length: RES_LIBRES}, () => ['', '', '', '', '', '', '', '', '', '', inspName, '', '', '']);
+    if (!await downloadXlsx(base, [{name: 'Résultats', aoa: [RES_H].concat(rows, blank), filter: true, main: true}, {name: 'Mode d\'emploi', aoa: help.map(h => [h])}])) return;
+  }
+  toast(`Fichier téléchargé : ${vs.length} rendez-vous${inspName ? ' pour ' + inspName : ''}`);
+}
+
+// Lecture du fichier rempli puis aperçu avant enregistrement dans DATA_Resultat_controle
+async function importResults(file, {insp = 0} = {}) {
+  if (!S.meta[T_RES]) { toast(`Table ${T_RES} absente : ouvrez Paramètres puis Enregistrer pour la créer.`, true); return; }
+  let aoa;
+  try {
+    await loadLib(LIB.xlsx);
+    const wb = XLSX.read(await file.arrayBuffer(), {type: 'array', cellDates: true});
+    const name = wb.SheetNames.find(n => /r[ée]sultat|contr[ôo]le/i.test(n)) || wb.SheetNames[0];
+    aoa = XLSX.utils.sheet_to_json(wb.Sheets[name], {header: 1, defval: '', raw: true});
+  } catch (e) { console.error(e); toast('Lecture du fichier impossible : ' + (e.message || e), true); return; }
+  const h = aoa.findIndex(r => r.some(c => norm(c).startsWith('ref')) && r.some(c => norm(c).startsWith('controle')));
+  if (h < 0) { toast('Colonnes « Réf. » et « Contrôlé » introuvables : utilisez le fichier téléchargé depuis le calendrier.', true); return; }
+  const H = aoa[h].map(c => norm(c).trim()), col = p => H.findIndex(c => c.startsWith(p));
+  const I = {ref: col('ref'), date: col('date'), lab: col('laboratoire'), prel: col('preleveur'), exp: col('exploitation'), pac: col('pacage'), parc: col('parcelles'),
+    insp: col('inspecteur'), ctl: col('controle'), res: col('resultat'), com: col('commentaire')};
+  const cell = (row, k) => I[k] >= 0 ? row[I[k]] : '';
+  const rdvById = new Map(S.rdv.map(r => [r.id, r])), visitOf = id => S.visits.find(v => v.parcels.some(x => x.rdv && x.rdv.id === id));
+  const plan = {add: [], upd: [], del: [], skip: []}, seen = new Set(), assoc = [];
+  aoa.slice(h + 1).forEach((row, i) => {
+    const line = h + i + 2, c = norm(cell(row, 'ctl')).trim(), res = normRes(cell(row, 'res')), com = clean(cell(row, 'com'));
+    const yes = /^(oui|o|x|1|yes|y|vrai|true)\b/.test(c) || (!c && !!res), no = /^(non|n|0|no|faux|false)\b/.test(c);
+    if (!yes && !no) return;
+    const ref = clean(cell(row, 'ref')), inspId = matchPerson(S.insp, cell(row, 'insp')) || insp;
+    const ids = ref ? ref.split(/[;,\s]+/).map(Number).filter(n => rdvById.has(n)) : [];
+    let f;
+    if (ref && !ids.length) { plan.skip.push({line, label: 'Réf. ' + ref, why: 'rendez-vous introuvable (supprimé depuis ?)'}); return; }
+    if (!inspId) { plan.skip.push({line, label: clean(cell(row, 'exp')) || ref, why: 'inspecteur non renseigné ou inconnu (« ' + clean(cell(row, 'insp')) + ' »)'}); return; }
+    if (ids.length) {
+      const v = visitOf(ids[0]);
+      const d = v ? v.start : parseDateFr(cell(row, 'date'));
+      f = {Date_controle: d ? fromWall(new Date(d.getFullYear(), d.getMonth(), d.getDate()), typeOf(T_RES, 'Date_controle') || 'Date') : null, Inspecteur: inspId,
+        Preleveur: v ? v.prel || 0 : matchPerson(S.prel, cell(row, 'prel')), Laboratoire: v ? labOf(v) : clean(cell(row, 'lab')), PACAGE: v ? v.farm.pacage : pacageOf(cell(row, 'pac')),
+        Exploitation: v ? v.farm.name : clean(cell(row, 'exp')), Parcelles: v ? v.parcels.map(x => x.key).join(', ') : clean(cell(row, 'parc')), RDV: ['L'].concat(ids), Cle_import: resKey(ids, inspId)};
+      if (yes) ids.forEach(id => { const r = rdvById.get(id); if (r && !r.Inspecteur) assoc.push(['UpdateRecord', T_RDV, id, {Inspecteur: inspId}]); });
+    } else {
+      const d = parseDateFr(cell(row, 'date')), pac = pacageOf(cell(row, 'pac')), prel = matchPerson(S.prel, cell(row, 'prel')), farm = S.farms.get(pac);
+      if (!d || !(pac || clean(cell(row, 'exp')))) { plan.skip.push({line, label: clean(cell(row, 'exp')) || pac || 'ligne ' + line, why: 'date et PACAGE ou exploitation obligatoires pour une ligne hors liste'}); return; }
+      const p = S.prelById.get(prel);
+      f = {Date_controle: fromWall(d, typeOf(T_RES, 'Date_controle') || 'Date'), Inspecteur: inspId, Preleveur: prel, Laboratoire: clean(cell(row, 'lab')) || clean(p && p.Organisme),
+        PACAGE: pac, Exploitation: clean(cell(row, 'exp')) || (farm ? farm.name : ''), Parcelles: clean(cell(row, 'parc')), RDV: null, Cle_import: resKeyLibre(dkey(d), pac, prel, inspId)};
+      if (!prel && clean(cell(row, 'prel'))) f.Commentaire = '[Préleveur saisi : ' + clean(cell(row, 'prel')) + '] ';
+    }
+    if (seen.has(f.Cle_import)) { plan.skip.push({line, label: f.Exploitation, why: 'ligne en double dans le fichier'}); return; }
+    seen.add(f.Cle_import);
+    const label = `${f.Date_controle ? shortDate(toWall(f.Date_controle, typeOf(T_RES, 'Date_controle') || 'Date')) : '?'} · ${f.Exploitation || f.PACAGE} · ${personName(S.prelById.get(f.Preleveur)) || clean(cell(row, 'prel')) || 'préleveur ?'} · ${personName(S.inspById.get(inspId))}`;
+    const ex = S.res.find(r => clean(r.Cle_import) === f.Cle_import);
+    if (no) { if (ex) plan.del.push({line, label, id: ex.id}); return; }
+    f.Resultat = res || null; f.Commentaire = ((f.Commentaire || '') + com) || null; f.Fichier = file.name;
+    (ex ? plan.upd : plan.add).push({line, label, f, id: ex && ex.id, res});
+  });
+  const li = (arr, extra) => arr.map(x => `<li><span class="sub">l.${x.line}</span> ${esc(x.label)}${extra ? extra(x) : ''}</li>`).join('');
+  const n = plan.add.length + plan.upd.length + plan.del.length;
+  openModal(`<h2>${ic('upload')}Import des résultats de contrôle</h2><p class="lead">${esc(file.name)} → table <code>${T_RES}</code></p>
+    <div class="kpis"><div class="kpi"><div class="kpi-l">Nouveaux résultats</div><div class="kpi-v">${plan.add.length}</div></div>
+      <div class="kpi"><div class="kpi-l">Résultats mis à jour</div><div class="kpi-v">${plan.upd.length}</div></div>
+      <div class="kpi"><div class="kpi-l">Résultats supprimés (« Non »)</div><div class="kpi-v">${plan.del.length}</div></div>
+      <div class="kpi" style="border-top-color:var(--warning)"><div class="kpi-l">Lignes ignorées</div><div class="kpi-v">${plan.skip.length}</div></div></div>
+    <div class="imp-list">
+    ${plan.add.length ? `<h3 style="font-size:1rem;margin:.5rem 0">${ic('add')} À ajouter</h3><ul>${li(plan.add, x => (x.res ? ' — ' + resBadge(x.res) : '') + (x.f.Commentaire ? `<div class="sub">${esc(x.f.Commentaire)}</div>` : ''))}</ul>` : ''}
+    ${plan.upd.length ? `<h3 style="font-size:1rem;margin:.5rem 0">${ic('edit')} À mettre à jour</h3><ul>${li(plan.upd, x => (x.res ? ' — ' + resBadge(x.res) : '') + (x.f.Commentaire ? `<div class="sub">${esc(x.f.Commentaire)}</div>` : ''))}</ul>` : ''}
+    ${plan.del.length ? `<h3 style="font-size:1rem;margin:.5rem 0">${ic('delete')} À supprimer</h3><ul>${li(plan.del)}</ul>` : ''}
+    ${plan.skip.length ? `<h3 style="font-size:1rem;margin:.5rem 0;color:var(--warning)">${ic('warning')} Ignorées</h3><ul>${li(plan.skip, x => ` — <span class="sub">${esc(x.why)}</span>`)}</ul>` : ''}
+    ${!n ? '<p class="muted">Aucune ligne avec « Oui », « Non » ou un résultat : rien à importer.</p>' : ''}</div>`,
+  {wide: true, foot: `<button class="btn ter" data-close>Annuler</button>${n ? `<button class="btn" id="rGo">${ic('check')}Importer ${n} ligne(s)</button>` : ''}`});
+  if (!$('#rGo')) return;
+  $('#rGo').onclick = async () => {
+    $('#rGo').disabled = true;
+    const rc = cols(T_RES), keep = o => { Object.keys(o).forEach(k => { if (!rc[k]) delete o[k]; }); return o; };
+    const acts = plan.add.map(x => ['AddRecord', T_RES, null, keep(x.f)]).concat(plan.upd.map(x => ['UpdateRecord', T_RES, x.id, keep(x.f)]), plan.del.map(x => ['RemoveRecord', T_RES, x.id]));
+    // rendez-vous contrôlés : l'inspecteur y est associé s'il n'y en avait pas (tableau de bord, planning)
+    if (assoc.length) { try { await B.apply(assoc); } catch (e) { console.warn('Association des rendez-vous non enregistrée', e); } }
+    if (await write(acts, `${plan.add.length + plan.upd.length} résultat(s) importé(s)${plan.del.length ? ', ' + plan.del.length + ' supprimé(s)' : ''}`)) closeModal();
+  };
+}
+
+/* ---------- Espace inspecteur : fichier à remplir / import ---------- */
+function bulkVisits(dates) { return resVisits(dates || S.espDates, S.me, S.espMine); }
 function bulkSection() {
   const ds = S.espDates, n = ds.length ? bulkVisits().length : 0;
-  return `<section class="fsec"><h3>${ic('upload')}Déclarer mes contrôles de préleveurs (a posteriori, par fichier)</h3>
+  return `<section class="fsec"><h3>${ic('upload')}Mes résultats de contrôle (fichier Excel)</h3>
     <p class="sub">1. Ajoutez les jours où vous étiez sur le terrain. 2. Téléchargez le fichier : il liste les rendez-vous de ces jours, rangés par laboratoire puis par préleveur.
-      3. Mettez « Oui » dans la colonne <b>Contrôlé</b> pour chaque rendez-vous contrôlé, avec le résultat et votre commentaire. 4. Importez le fichier : tout est enregistré d'un coup.</p>
+      3. Mettez « Oui » dans <b>Contrôlé</b> pour chaque rendez-vous contrôlé, avec le résultat et votre commentaire (lignes vides en bas pour les contrôles hors liste).
+      4. Importez le fichier : tous les résultats sont enregistrés d'un coup dans <code>${T_RES}</code>.</p>
     <div class="row" style="align-items:end">
       <div class="grp"><label class="lbl" for="bDate">Jour de contrôle</label><div class="inline"><input class="input" type="date" id="bDate" value="${toInputDate(new Date())}"><button class="btn sec" id="bAdd" type="button">${ic('add')}Ajouter</button></div></div>
       <div class="grp"><button class="btn ter" id="bRecent" type="button" title="Jours des 14 derniers jours ayant des rendez-vous dans votre périmètre">Jours avec RDV (14 derniers jours)</button></div></div>
     <div class="chips">${ds.length ? ds.map(k => `<span class="chip">${esc(shortDate(dayOf(k)))}<button type="button" data-bdel="${k}" aria-label="Retirer ce jour">×</button></span>`).join('') : '<span class="sub">Aucun jour choisi.</span>'}</div>
-    <p style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="btn" id="bDl" type="button" ${n ? '' : 'disabled'}>${ic('download')}Télécharger le fichier à remplir${ds.length ? ` (${n} RDV)` : ''}</button>
+    <p style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button class="btn" id="bDl" type="button" ${ds.length ? '' : 'disabled'}>${ic('download')}Télécharger le fichier à remplir${ds.length ? ` (${n} RDV)` : ''}</button>
       <label class="btn sec" for="bFile" style="cursor:pointer">${ic('upload')}Importer le fichier rempli</label><input type="file" id="bFile" accept=".xlsx,.xls,.ods,.csv" hidden></p></section>`;
 }
 function bindBulk() {
@@ -1840,79 +2016,76 @@ function bindBulk() {
     addDates(ok);
   };
   $$('[data-bdel]').forEach(b => b.onclick = () => { S.espDates = S.espDates.filter(k => k !== b.dataset.bdel); renderEspace(); });
-  $('#bDl').onclick = downloadBulk;
-  $('#bFile').onchange = ev => { const f = ev.target.files[0]; ev.target.value = ''; if (f) importBulk(f); };
+  $('#bDl').onclick = () => downloadResultTemplate({dates: S.espDates, insp: S.me, mine: S.espMine});
+  $('#bFile').onchange = ev => { const f = ev.target.files[0]; ev.target.value = ''; if (f) importResults(f, {insp: S.me}); };
 }
-async function downloadBulk() {
-  const me = S.inspById.get(S.me), vs = bulkVisits();
-  if (!vs.length) { toast('Aucun rendez-vous à contrôler ces jours-là.', true); return; }
-  const rows = vs.map(v => { const p = S.prelById.get(v.prel) || {}, mine = v.insp === S.me;
-    return [v.parcels.map(x => x.rdv && x.rdv.id).filter(Boolean).join(';'), shortDate(v.start), hm(v.start), labOf(v), prelNameOf(v) || 'Préleveur à désigner', clean(p.Telephone),
-      v.farm.name, v.farm.pacage, v.farm.Ville || '', v.parcels.map(x => x.key).join(', '), mine ? 'Oui' : '', mine ? v.res : '', mine ? v.com : '']; });
-  rows.forEach(r => { r[5] = fmtTel(r[5]); });
-  const help = [['Mode d\'emploi'], [''], ['1. Feuille « Contrôles » : une ligne par rendez-vous de prélèvement (laboratoire, préleveur, exploitation).'],
-    ['2. Colonne « Contrôlé » : Oui pour chaque rendez-vous où vous avez contrôlé le préleveur ; Non pour annuler un contrôle déjà déclaré ; vide = aucun changement.'],
-    ['3. Colonne « Résultat » : Conforme, Avec réserves ou Non conforme.'], ['4. Colonne « Commentaire » : vos observations.'],
-    ['5. Ne modifiez pas la colonne « Réf. » et ne renommez pas les colonnes.'], ['6. Dans le calendrier : Espace inspecteur > Importer le fichier rempli.'],
-    [''], ['Inspecteur : ' + personName(me)], ['Jours : ' + S.espDates.map(k => shortDate(dayOf(k))).join(', ')], ['Fichier généré le ' + shortDate(new Date()) + ' à ' + hm(new Date())]];
-  try { await bulkStyled(me, vs); toast(`Fichier téléchargé : ${vs.length} rendez-vous`); return; }
-  catch (e) { console.warn('Excel mis en forme indisponible, fichier simple', e); }
-  const range = S.espDates.length > 1 ? S.espDates[0] + '_' + S.espDates[S.espDates.length - 1] : S.espDates[0];
-  if (await downloadXlsx(`controles-preleveurs-${slug(personName(me))}-${range}`, [{name: 'Contrôles', aoa: [BULK_H].concat(rows), filter: true, main: true}, {name: 'Mode d\'emploi', aoa: help}]))
-    toast(`Fichier téléchargé : ${vs.length} rendez-vous`);
+
+/* ---------- Onglet « Résultats des contrôles » (vue d'ensemble, import par l'administrateur) ---------- */
+function renderResults() {
+  if (!S.meta[T_RES]) { $('#main').innerHTML = `<div class="alert warn"><p>La table <code>${T_RES}</code> n'existe pas encore : ouvrez <b>Paramètres</b> puis <b>Enregistrer</b> pour la créer.</p></div>`; return; }
+  const q = norm(S.resQ.trim()), all = S.res.map(r => ({r, d: resDate(r)})).sort((a, b) => (b.d || 0) - (a.d || 0) || b.r.id - a.r.id);
+  const rows = all.filter(({r}) => (!S.resInsp || r.Inspecteur === S.resInsp) && (!S.resRes || (S.resRes === '__none' ? !clean(r.Resultat) : clean(r.Resultat) === S.resRes))
+    && (!q || norm([r.Exploitation, r.PACAGE, r.Laboratoire, r.Parcelles, r.Commentaire, personName(S.prelById.get(r.Preleveur)), personName(S.inspById.get(r.Inspecteur))].join(' ')).includes(q)));
+  const cnt = v => rows.filter(({r}) => clean(r.Resultat) === v).length;
+  const tile = (l, v, color) => `<div class="kpi"${color ? ` style="border-top-color:${color}"` : ''}><div class="kpi-l">${l}</div><div class="kpi-v">${v}</div></div>`;
+  const inspIds = Array.from(new Set(S.res.map(r => r.Inspecteur).filter(Boolean)));
+  $('#main').innerHTML = `<div class="section-head"><h2>${ic('check')} Résultats des contrôles de préleveurs</h2><span class="muted">Table <code>${T_RES}</code></span></div>
+    <div class="exp-bar"><span class="sub">Les inspecteurs remplissent un fichier Excel (un résultat par rendez-vous contrôlé) ; vous l'importez ici en une fois.</span>
+      <button class="btn" id="resTpl" type="button">${ic('download')}Fichier à remplir</button>
+      <button class="btn sec" id="resImp" type="button">${ic('upload')}Importer un fichier rempli</button>
+      <button class="btn ter" id="resXls" type="button" ${rows.length ? '' : 'disabled'}>${ic('download')}Exporter la liste</button></div>
+    <div class="kpis">${tile('Contrôles', rows.length)}${tile('Conformes', cnt('Conforme'), '#18753c')}${tile('Avec réserves', cnt('Avec réserves'), '#695240')}${tile('Non conformes', cnt('Non conforme'), '#ce0500')}
+      ${tile('Préleveurs contrôlés', new Set(rows.map(({r}) => r.Preleveur).filter(Boolean)).size)}</div>
+    <div class="filters">
+      <div><label class="lbl" for="rq">Recherche</label><input class="input" id="rq" type="search" placeholder="Exploitation, PACAGE, préleveur, laboratoire…" value="${esc(S.resQ)}"></div>
+      <div><label class="lbl" for="ri">Inspecteur</label><select class="select" id="ri">${optList(inspIds.map(id => [id, personName(S.inspById.get(id)) || '#' + id]), S.resInsp || '', 'Tous')}</select></div>
+      <div><label class="lbl" for="rr">Résultat</label><select class="select" id="rr">${optList(CTL_RESULTATS.map(x => [x, x]).concat([['__none', 'Non renseigné']]), S.resRes, 'Tous')}</select></div>
+    </div>
+    ${rows.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Inspecteur</th><th>Laboratoire</th><th>Préleveur</th><th>Exploitation</th><th>Résultat</th><th>Commentaire</th><th>Import</th><th></th></tr></thead><tbody>
+      ${rows.slice(0, 500).map(({r, d}) => `<tr><td>${d ? esc(shortDate(d)) : '—'}</td><td>${esc(personName(S.inspById.get(r.Inspecteur)))}</td><td>${esc(clean(r.Laboratoire))}</td>
+        <td class="strong">${esc(personName(S.prelById.get(r.Preleveur)) || '—')}</td><td>${esc(clean(r.Exploitation))}<div class="sub">${esc(clean(r.PACAGE))}${clean(r.Parcelles) ? ' · ' + esc(clean(r.Parcelles)) : ''}</div></td>
+        <td>${resBadge(clean(r.Resultat)) || '<span class="sub">—</span>'}</td><td>${esc(clean(r.Commentaire))}</td>
+        <td class="sub">${esc(fmtAny(r.Importe_le, typeOf(T_RES, 'Importe_le')))}<div>${esc(clean(r.Fichier))}</div></td>
+        <td class="act"><button class="btn ter icon" data-res-del="${r.id}" title="Supprimer ce résultat">${ic('delete')}<span class="sr">Supprimer</span></button></td></tr>`).join('')}
+    </tbody></table></div>${rows.length > 500 ? `<p class="sub">${rows.length - 500} résultat(s) de plus : affinez les filtres.</p>` : ''}` : '<p class="empty">Aucun résultat importé pour l\'instant.</p>'}`;
+  $('#rq').addEventListener('input', e => { S.resQ = e.target.value; clearTimeout(renderResults.t); renderResults.t = setTimeout(() => { renderResults(); const i = $('#rq'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); });
+  $('#ri').onchange = e => { S.resInsp = Number(e.target.value) || 0; renderResults(); };
+  $('#rr').onchange = e => { S.resRes = e.target.value; renderResults(); };
+  $('#resTpl').onclick = openResultTemplate;
+  $('#resImp').onclick = openResultImport;
+  $('#resXls').onclick = () => downloadXlsx('resultats-controles-' + dkey(new Date()), [{name: 'Résultats', main: true, filter: true, aoa: [['Date', 'Inspecteur', 'Laboratoire', 'Préleveur', 'Exploitation', 'PACAGE', 'Parcelles', 'Résultat', 'Commentaire', 'Importé le', 'Fichier']]
+    .concat(rows.map(({r, d}) => [d ? shortDate(d) : '', personName(S.inspById.get(r.Inspecteur)), clean(r.Laboratoire), personName(S.prelById.get(r.Preleveur)), clean(r.Exploitation), clean(r.PACAGE), clean(r.Parcelles),
+      clean(r.Resultat), clean(r.Commentaire), fmtAny(r.Importe_le, typeOf(T_RES, 'Importe_le')), clean(r.Fichier)]))}]);
+  $$('[data-res-del]').forEach(b => b.onclick = async () => {
+    if (b.dataset.confirm !== '1') { b.dataset.confirm = '1'; b.classList.add('danger'); b.title = 'Cliquer à nouveau pour confirmer'; toast('Cliquez à nouveau pour confirmer la suppression.'); return; }
+    await write([['RemoveRecord', T_RES, Number(b.dataset.resDel)]], 'Résultat supprimé');
+  });
 }
-function normRes(s) {
-  const n = norm(s).trim(); if (!n) return '';
-  if (n.startsWith('non') || n === 'nc') return 'Non conforme';
-  if (n.includes('reserve')) return 'Avec réserves';
-  if (n.startsWith('conf') || n === 'c' || n === 'ok') return 'Conforme';
-  return clean(s);
+function openResultTemplate() {
+  const today = new Date(), insp = S.insp.filter(p => p.Actif !== false).sort((a, b) => personName(a).localeCompare(personName(b))).map(p => [p.id, personName(p)]);
+  openModal(`<h2>${ic('download')}Fichier de résultats à remplir</h2>
+    <p class="lead">Une ligne par rendez-vous de la période (rangés par jour, laboratoire et préleveur) + ${RES_LIBRES} lignes libres pour les contrôles hors liste.${S.dpt ? ' Filtre en cours : département ' + esc(S.dpt) + '.' : ''}</p>
+    <div class="row"><div class="grp"><label class="lbl" for="tFrom">Du</label><input class="input" type="date" id="tFrom" value="${toInputDate(addDays(today, -7))}"></div>
+      <div class="grp"><label class="lbl" for="tTo">Au</label><input class="input" type="date" id="tTo" value="${toInputDate(today)}"></div></div>
+    <div class="grp"><label class="lbl" for="tInsp">Inspecteur<span class="hint">Facultatif : préremplit son nom et limite aux rendez-vous libres ou déjà associés à lui</span></label>
+      <select class="select" id="tInsp">${optList(insp, '', '— Tous les rendez-vous —')}</select></div>
+    <label class="chk grp"><input type="checkbox" id="tMine" checked> Limiter aux départements de l'inspecteur</label>
+    <p class="sub" id="tInfo"></p>
+    <div class="exp-bar"><button class="btn lg" id="tGo" type="button">${ic('download')}Télécharger le fichier Excel</button></div>`, {wide: true});
+  const days = () => { const a = $('#tFrom').value, b = $('#tTo').value; if (!a || !b) return []; const out = []; for (let d = dayOf(a); d <= dayOf(b) && out.length < 400; d = addDays(d, 1)) out.push(dkey(d)); return out; };
+  const info = () => { const n = resVisits(days(), Number($('#tInsp').value) || 0, $('#tMine').checked).length; $('#tInfo').textContent = `${n} rendez-vous sur la période`; };
+  ['#tFrom', '#tTo', '#tInsp', '#tMine'].forEach(s => $(s).addEventListener('change', info)); info();
+  $('#tGo').onclick = async () => { const ds = days().filter(k => S.visits.some(v => dkey(v.start) === k)); $('#tGo').disabled = true;
+    try { await downloadResultTemplate({dates: ds, insp: Number($('#tInsp').value) || 0, mine: $('#tMine').checked}); } finally { if ($('#tGo')) $('#tGo').disabled = false; } };
 }
-async function importBulk(file) {
-  if (!S.me) return;
-  let aoa;
-  try {
-    await loadLib(LIB.xlsx);
-    const wb = XLSX.read(await file.arrayBuffer(), {type: 'array', raw: false});
-    aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header: 1, defval: '', raw: false});
-  } catch (e) { console.error(e); toast('Lecture du fichier impossible : ' + (e.message || e), true); return; }
-  const h = aoa.findIndex(r => r.some(c => norm(c).startsWith('ref')));
-  if (h < 0) { toast('Colonne « Réf. » introuvable : utilisez le fichier téléchargé depuis le calendrier.', true); return; }
-  const col = p => aoa[h].findIndex(c => norm(c).startsWith(p)), iRef = col('ref'), iCtl = col('controle'), iRes = col('resultat'), iCom = col('commentaire');
-  if (iCtl < 0) { toast('Colonne « Contrôlé » introuvable dans le fichier.', true); return; }
-  const rdvById = new Map(S.rdv.map(r => [r.id, r])), visitOf = id => S.visits.find(v => v.parcels.some(x => x.rdv && x.rdv.id === id));
-  const add = [], del = [], skip = [];
-  for (const row of aoa.slice(h + 1)) {
-    const ref = String(row[iRef] || '').trim(); if (!ref) continue;
-    const ids = ref.split(/[;,\s]+/).map(Number).filter(n => rdvById.has(n)), c = norm(row[iCtl]).trim();
-    const yes = /^(oui|o|x|1|yes|y|vrai|true)\b/.test(c), no = /^(non|n|0|no|faux|false)\b/.test(c);
-    if (!yes && !no) continue;
-    if (!ids.length) { skip.push({label: ref, why: 'rendez-vous introuvable (supprimé ou modifié depuis ?)'}); continue; }
-    const v = visitOf(ids[0]), rs = ids.map(id => rdvById.get(id)), other = rs.find(r => r.Inspecteur && r.Inspecteur !== S.me);
-    const label = v ? `${shortDate(v.start)} ${hm(v.start)} · ${v.farm.name} · ${prelNameOf(v) || 'sans préleveur'}` : ref;
-    if (yes && other) { skip.push({label, why: 'déjà contrôlé par ' + personName(S.inspById.get(other.Inspecteur))}); continue; }
-    if (yes) add.push({ids, label, res: iRes >= 0 ? normRes(row[iRes]) : '', com: iCom >= 0 ? clean(row[iCom]) : ''});
-    else if (rs.some(r => r.Inspecteur === S.me)) del.push({ids, label});
-  }
-  const rc = cols(T_RDV), miss = ['Controle_resultat', 'Controle_commentaire'].filter(k => !rc[k]);
-  const li = (arr, f) => arr.map(x => `<li>${esc(x.label)}${f ? f(x) : ''}</li>`).join('');
-  openModal(`<h2>${ic('upload')}Import des contrôles</h2><p class="lead">${esc(file.name)} · inspecteur : ${esc(personName(S.inspById.get(S.me)))}</p>
-    ${miss.length ? `<div class="alert warn"><p>Colonnes absentes de <code>${T_RDV}</code> : ${miss.join(', ')}. Seule l'association de l'inspecteur sera enregistrée : demandez à un administrateur d'ouvrir Paramètres puis Enregistrer.</p></div>` : ''}
-    <div class="imp-list">
-    ${add.length ? `<h3 style="font-size:1rem;margin:.5rem 0">${ic('check')} ${add.length} contrôle(s) à enregistrer</h3><ul>${li(add, x => (x.res ? ' — ' + resBadge(x.res) : '') + (x.com ? `<div class="sub">${esc(x.com)}</div>` : ''))}</ul>` : ''}
-    ${del.length ? `<h3 style="font-size:1rem;margin:.5rem 0">${ic('close')} ${del.length} contrôle(s) à retirer (« Non »)</h3><ul>${li(del)}</ul>` : ''}
-    ${skip.length ? `<h3 style="font-size:1rem;margin:.5rem 0;color:var(--warning)">${ic('warning')} ${skip.length} ligne(s) ignorée(s)</h3><ul>${li(skip, x => ` — <span class="sub">${esc(x.why)}</span>`)}</ul>` : ''}
-    ${!add.length && !del.length ? '<p class="muted">Aucune ligne avec « Oui » ou « Non » dans la colonne Contrôlé : rien à enregistrer.</p>' : ''}</div>`,
-  {wide: true, foot: `<button class="btn ter" data-close>Annuler</button>${add.length || del.length ? `<button class="btn" id="bGo">${ic('check')}Intégrer ${add.length + del.length} ligne(s)</button>` : ''}`});
-  if (!$('#bGo')) return;
-  $('#bGo').onclick = async () => {
-    $('#bGo').disabled = true;
-    const stamp = rc.Modifie_le ? {Modifie_le: Math.round(Date.now() / 1000)} : {};
-    const fields = o => { Object.keys(o).forEach(k => { if (!rc[k]) delete o[k]; }); return Object.assign(o, stamp); };
-    const acts = add.flatMap(x => x.ids.map(id => ['UpdateRecord', T_RDV, id, fields({Inspecteur: S.me, Controle_resultat: x.res || null, Controle_commentaire: x.com || null})]))
-      .concat(del.flatMap(x => x.ids.map(id => ['UpdateRecord', T_RDV, id, fields({Inspecteur: 0, Controle_resultat: null, Controle_commentaire: null})])));
-    if (await write(acts, `${add.length} contrôle(s) enregistré(s)${del.length ? ', ' + del.length + ' retiré(s)' : ''}`)) closeModal();
-  };
+function openResultImport() {
+  const insp = S.insp.slice().sort((a, b) => personName(a).localeCompare(personName(b))).map(p => [p.id, personName(p)]);
+  openModal(`<h2>${ic('upload')}Importer un fichier de résultats</h2>
+    <p class="lead">Fichier Excel rempli par un inspecteur. Un aperçu s'affiche avant l'enregistrement dans <code>${T_RES}</code>. Réimporter le même fichier met à jour les résultats sans doublon.</p>
+    <div class="grp"><label class="lbl" for="iInsp">Inspecteur par défaut<span class="hint">Utilisé pour les lignes dont la colonne « Inspecteur » est vide</span></label>
+      <select class="select" id="iInsp">${optList(insp, S.me || '', '— Aucun —')}</select></div>
+    <div class="exp-bar"><label class="btn lg" for="iFile" style="cursor:pointer">${ic('upload')}Choisir le fichier rempli…</label><input type="file" id="iFile" accept=".xlsx,.xls,.ods,.csv" hidden></div>`);
+  $('#iFile').onchange = ev => { const f = ev.target.files[0]; ev.target.value = ''; if (f) importResults(f, {insp: Number($('#iInsp').value) || 0}); };
 }
 
 function printModal() { document.body.classList.add('printing'); window.print(); setTimeout(() => document.body.classList.remove('printing'), 500); }
