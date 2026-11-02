@@ -54,6 +54,17 @@
   #barre-recherche textarea.fr-input { min-height: 40px; max-height: 110px; resize: vertical; font-family: monospace; }
   .ligne-btn { display: flex; gap: 6px; margin-top: 6px; }
   .ligne-btn .fr-btn { flex: 1; justify-content: center; }
+  /* Rendez-vous pris par date */
+  #barre-date { background: var(--bleu-france-clair); border-left: 4px solid var(--bleu-france); padding: 8px 10px; margin-bottom: 10px; }
+  #barre-date .titre-date { font-weight: 700; font-size: 14px; color: var(--bleu-france); margin-bottom: 6px; }
+  #barre-date .ligne-date { display: flex; gap: 4px; align-items: center; }
+  #barre-date input.fr-input { flex: 1; min-width: 9.5rem; margin: 0; font-size: 14px; background-color: #fff; }
+  #barre-date .fr-btn { flex: 0 0 auto; }
+  #jour-info { margin-top: 5px; }
+  body.mode-jour #passes { opacity: .45; pointer-events: none; }
+  .heure { font-weight: 700; color: var(--bleu-france); font-size: 14px; }
+  .expl-jour { width: 100%; font-weight: 600; color: #161616; }
+  .point-prel { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: 0 0 auto; }
   #filtres { margin-top: 8px; }
   #filtre { box-sizing: border-box; width: 100%; }
   #filtres > summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--bleu-france); list-style: none; padding: 2px 0; }
@@ -174,6 +185,17 @@
       box-shadow: 0 2px 10px rgba(0, 0, 18, .25); visibility: visible;
     }
     #barre-recherche label { display: none; }
+    /* sélection du jour, sous la recherche */
+    #barre-date {
+      position: fixed; top: calc(var(--haut-entete) + 70px); left: 8px; right: 8px; z-index: 1200; visibility: visible;
+      margin: 0; padding: 5px 6px; border-left: 0; border-radius: 10px; background: #fff; box-shadow: 0 2px 10px rgba(0, 0, 18, .25);
+    }
+    #barre-date .titre-date, #barre-date #jour-info, #jour-aujourdhui { display: none; }
+    #barre-date .ligne-date::before { content: "📅"; font-size: 18px; padding: 0 2px; }
+    #barre-date input.fr-input { font-size: 16px; height: 40px; padding: 6px 8px; background-color: var(--bleu-france-clair); }
+    #barre-date input.fr-input { min-width: 0; }
+    #barre-date .fr-btn { width: 40px; min-height: 40px; padding: 0; justify-content: center; font-size: 0; overflow: hidden; }
+    #barre-date .fr-btn::before { margin: 0 !important; --icon-size: 1.4rem; }
     #barre-recherche textarea.fr-input {
       flex: 1; min-width: 0; height: 44px; min-height: 44px; max-height: 44px; resize: none; font-size: 16px; padding: 10px; margin: 0;
       white-space: nowrap; overflow: hidden;
@@ -182,7 +204,7 @@
     #barre-recherche .ligne-btn .fr-btn { width: 44px; min-height: 44px; padding: 0; font-size: 0; justify-content: center; }
     #barre-recherche .ligne-btn .fr-btn::before { margin: 0 !important; --icon-size: 1.4rem; }
     #filtre.fr-input { font-size: 16px; }
-    .leaflet-top { top: 62px; }
+    .leaflet-top { top: 118px; }
     .leaflet-control-layers-toggle { width: 40px; height: 40px; }
     .leaflet-touch .leaflet-bar a { width: 40px; height: 40px; line-height: 40px; }
     /* éléments plus grands au doigt */
@@ -213,6 +235,17 @@
       <span class="ligne"><span id="resume">Chargement…</span><span class="fleche" id="fleche">Liste ▴</span></span>
     </button>
     <div id="outils">
+      <div id="barre-date">
+        <div class="titre-date">📅 Visualiser les rendez-vous pris par date</div>
+        <div class="ligne-date">
+          <button id="jour-prec" type="button" class="fr-btn fr-btn--sm fr-btn--tertiary fr-icon-arrow-left-s-line" title="Jour précédent avec des rendez-vous">Jour précédent</button>
+          <input id="jour" type="date" class="fr-input" aria-label="Date des rendez-vous">
+          <button id="jour-suiv" type="button" class="fr-btn fr-btn--sm fr-btn--tertiary fr-icon-arrow-right-s-line" title="Jour suivant avec des rendez-vous">Jour suivant</button>
+          <button id="jour-aujourdhui" type="button" class="fr-btn fr-btn--sm fr-btn--secondary">Aujourd’hui</button>
+          <button id="jour-effacer" type="button" class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline fr-icon-close-line" title="Revenir à tous les rendez-vous">Tous les rendez-vous</button>
+        </div>
+        <div id="jour-info" class="mention">Choisissez une date dans le calendrier : la carte n’affiche alors que les rendez-vous de ce jour.</div>
+      </div>
       <div id="barre-recherche">
         <label class="fr-label fr-text--sm fr-mb-1v" for="cles">Rechercher une ou plusieurs parcelles (PACAGE-îlot-parcelle)</label>
         <textarea id="cles" class="fr-input" rows="1" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false"
@@ -272,6 +305,8 @@
   let rdvActif = null;
   let curseurParMoi = null;
   let premierCadrage = true;
+  let jourChoisi = '';            // AAAA-MM-JJ : mode « rendez-vous pris par date »
+  let couleurPrel = new Map();
   let enCours = null, enAttente = null;
 
   // ---------- Carte ----------
@@ -298,7 +333,7 @@
 
   carte.on('zoomend', majCouches);
   function majCouches() {
-    if (carte.getZoom() >= ZOOM_PARCELLES) { carte.removeLayer(coucheCommunes); coucheParcelles.addTo(carte); }
+    if (jourChoisi || carte.getZoom() >= ZOOM_PARCELLES) { carte.removeLayer(coucheCommunes); coucheParcelles.addTo(carte); }
     else { carte.removeLayer(coucheParcelles); coucheCommunes.addTo(carte); }
   }
 
@@ -474,6 +509,8 @@
     parId = new Map(rdvs.map(function (r) { return [r.id, r]; }));
     const statuts = [...new Set(rdvs.map(function (r) { return r.statut; }).filter(Boolean))].sort();
     couleurStatut = new Map(statuts.map(function (s, i) { return [s, COULEURS[i % COULEURS.length]]; }));
+    const prels = [...new Set(rdvs.map(function (r) { return r.preleveur; }).filter(Boolean))].sort();
+    couleurPrel = new Map(prels.map(function (p, i) { return [p, COULEURS[i % COULEURS.length]]; }));
     if (rdvs.length && !tableParcelles) alerte('Colonne « ' + COL_PARCELLE + ' » introuvable : les informations de parcelle ne sont pas disponibles.');
   }
   function couleur(statut) { return couleurStatut.get(statut) || COULEUR_SANS_STATUT; }
@@ -482,8 +519,10 @@
   function jour(d) { return formatJour.format(d); }
   // RDV daté d'un jour antérieur à aujourd'hui (les RDV sans date ne sont jamais écartés)
   function estPasse(r) { return !!r.date && jour(r.date) < jour(new Date()); }
+  function couleurPoint(r) { return jourChoisi ? (couleurPrel.get(r.preleveur) || COULEUR_SANS_STATUT) : couleur(r.statut); }
   function visible(r) {
-    if ($('masquer-passes').checked && estPasse(r)) return false;
+    if (jourChoisi) { if (!r.date || jour(r.date) !== jourChoisi) return false; }   // jour choisi : seulement ses rendez-vous
+    else if ($('masquer-passes').checked && estPasse(r)) return false;
     if (statutsMasques.has(r.statut)) return false;
     const f = sansAccents($('filtre').value.trim());
     if (!f) return true;
@@ -529,9 +568,9 @@
 
       for (const r of loc) {
         const m = L.circleMarker([r.lat, r.lon], {
-          renderer: rendu, radius: tactile ? 8 : 6, color: '#fff', weight: 1.5, fillColor: couleur(r.statut), fillOpacity: 0.95,
+          renderer: rendu, radius: tactile ? 8 : 6, color: '#fff', weight: 1.5, fillColor: couleurPoint(r), fillOpacity: 0.95,
         }).on('click', function () { ouvrirRdv(r.id, true); });
-        if (!tactile) m.bindTooltip(esc(r.exploitation) + '<br>' + esc(r.cle), { direction: 'top', className: 'etiquette' });
+        if (!tactile) m.bindTooltip((jourChoisi && r.date ? '<b>' + heureDe(r.date) + '</b> · ' + esc(r.preleveur || 'préleveur ?') + '<br>' : '') + esc(r.exploitation) + '<br>' + esc(r.cle), { direction: 'top', className: 'etiquette' });
         m.addTo(coucheParcelles);
       }
     }
@@ -561,7 +600,7 @@
   function marges() {
     if (!mobile.matches) return { haut: 40, bas: 40 };
     const panneau = etatFeuille === 'bas' ? 76 : $('panneau').offsetHeight;
-    return { haut: 70, bas: Math.min(panneau, $('corps').clientHeight * 0.7) + 20 };
+    return { haut: 124, bas: Math.min(panneau, $('corps').clientHeight * 0.7) + 20 };
   }
   function cadrer(l, zoomMax) {
     const pts = l.filter(function (r) { return r.localise; }).map(function (r) { return [r.lat, r.lon]; });
@@ -600,6 +639,10 @@
     } else if (vue.type === 'commune') {
       const c = communes.get(vue.nom), n = c ? c.rdvs.length : 0;
       t = '<b>' + esc(vue.nom) + '</b> · ' + n + ' parcelle' + (n > 1 ? 's' : '');
+    } else if (jourChoisi) {
+      const n = vis.length, np = new Set(vis.map(function (r) { return r.preleveur; })).size;
+      t = '<b>' + esc(jourLong(jourChoisi)) + '</b> · ' + n + ' RDV · ' + np + ' préleveur' + (np > 1 ? 's' : '') +
+        (vis.some(function (r) { return !r.localise; }) ? ' · <span class="rouge">' + vis.filter(function (r) { return !r.localise; }).length + ' non localisé(s)</span>' : '');
     } else {
       if (nbExpl === undefined) { nbExpl = new Set(vis.map(cleExploitation)).size; nonLoc = vis.filter(function (r) { return !r.localise; }).length; }
       t = '<b>' + vis.length.toLocaleString('fr-FR') + '</b> parcelles · <b>' + nbExpl + '</b> exploitations · <b>' + communes.size + '</b> communes' +
@@ -609,6 +652,14 @@
   }
 
   function legende() {
+    if (jourChoisi) {   // couleurs par préleveur pour le jour choisi
+      const c = new Map();
+      for (const r of rdvs.filter(visible)) c.set(r.preleveur, (c.get(r.preleveur) || 0) + 1);
+      $('legende').innerHTML = [...c.keys()].sort().map(function (p) {
+        return '<button type="button" disabled style="cursor:default"><i style="background:' + (couleurPrel.get(p) || COULEUR_SANS_STATUT) + '"></i>' + esc(p || 'Préleveur non désigné') + ' (' + c.get(p) + ')</button>';
+      }).join('');
+      return;
+    }
     const comptes = new Map();
     for (const r of rdvs) {
       if ($('masquer-passes').checked && estPasse(r)) continue;
@@ -686,7 +737,8 @@
       .filter(Boolean).map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('');
 
     return '<div class="rdv' + (actif ? ' actif ouvert' : '') + '" data-id="' + r.id + '">' +
-      '<div class="rdv-entete"><span class="cle">' + esc(r.cle || 'Sans identifiant') + '</span>' +
+      '<div class="rdv-entete">' + (jourChoisi && r.date ? '<span class="heure">' + heureDe(r.date) + '</span><span class="expl-jour">' + esc(r.exploitation) + '</span>' : '') +
+      '<span class="cle">' + esc(r.cle || 'Sans identifiant') + '</span>' +
       '<span class="pastille" style="background:' + couleur(r.statut) + '">' + esc(r.statut || 'Sans statut') + '</span>' +
       (r.date ? '<span class="mention">' + esc(dateHeure(r.date)) + '</span>' : '') +
       (r.localise ? '' : '<span class="mention" style="color:var(--rouge-marianne)">non localisée</span>') +
@@ -724,11 +776,53 @@
       blocExploitations(res, true);
   }
 
+  function heureDe(d) { return d.toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' }).replace(':', 'h'); }
+  function jourLong(k) {
+    const [y, m, d] = k.split('-').map(Number);
+    const t = new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString('fr-FR', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }
+  // Liste du jour : par préleveur, rendez-vous dans l'ordre horaire
+  function vueJour() {
+    const l = rdvs.filter(visible).sort(function (a, b) { return a.date - b.date || a.exploitation.localeCompare(b.exploitation, 'fr'); });
+    const titre = '<div class="titre-vue"><h2>' + esc(jourLong(jourChoisi)) + '</h2></div>';
+    if (!l.length) return titre + '<p class="vide">Aucun rendez-vous pris ce jour-là. Utilisez ◀ ▶ pour aller au jour précédent ou suivant ayant des rendez-vous.</p>';
+    const groupes = new Map();
+    for (const r of l) { const k = r.preleveur || 'Préleveur non désigné'; if (!groupes.has(k)) groupes.set(k, []); groupes.get(k).push(r); }
+    return titre + '<p class="mention">' + l.length + ' rendez-vous · ' + new Set(l.map(cleExploitation)).size + ' exploitation(s) · ' + groupes.size + ' préleveur(s)</p>' +
+      [...groupes.entries()].sort(function (a, b) { return a[0].localeCompare(b[0], 'fr'); }).map(function (e) {
+        const org = e[1][0].organisme;
+        return '<details class="exploitation" open><summary><span class="point-prel" style="background:' + (couleurPrel.get(e[1][0].preleveur) || COULEUR_SANS_STATUT) + '"></span>' +
+          '<span class="nom">' + esc(e[0]) + (org ? ' <span class="pacage">' + esc(org) + '</span>' : '') + '</span>' +
+          '<span class="mention">' + heureDe(e[1][0].date) + ' – ' + heureDe(e[1][e[1].length - 1].date) + '</span><span class="compteur">' + e[1].length + '</span></summary>' +
+          e[1].map(carteRdv).join('') + '</details>';
+      }).join('');
+  }
+  // Jours ayant au moins un rendez-vous (pour ◀ ▶)
+  function joursAvecRdv() { return [...new Set(rdvs.filter(function (r) { return r.date; }).map(function (r) { return jour(r.date); }))].sort(); }
+  function choisirJour(k) {
+    jourChoisi = k || '';
+    $('jour').value = jourChoisi;
+    document.body.classList.toggle('mode-jour', !!jourChoisi);
+    vue = { type: 'communes' }; rdvActif = null; coucheSurbrillance.clearLayers();
+    toutRafraichir();
+    const vis = rdvs.filter(visible);
+    $('jour-info').textContent = jourChoisi
+      ? (vis.length ? vis.length + ' rendez-vous pris · ' + new Set(vis.map(function (r) { return r.preleveur; })).size + ' préleveur(s) · couleur des points = préleveur' : 'Aucun rendez-vous pris ce jour-là.')
+      : 'Choisissez une date dans le calendrier : la carte n’affiche alors que les rendez-vous de ce jour.';
+    if (jourChoisi) { ouvrirPanneau(); cadrer(vis, 15); $('contenu').scrollTop = 0; }
+  }
+  function sauterJour(sens) {
+    const j = joursAvecRdv(), ref = jourChoisi || jour(new Date());
+    const k = sens > 0 ? j.find(function (x) { return x > ref; }) : j.slice().reverse().find(function (x) { return x < ref; });
+    if (k) choisirJour(k); else alert('Aucun rendez-vous ' + (sens > 0 ? 'après' : 'avant') + ' cette date.');
+  }
+
   function afficher() {
     let html;
     if (vue.type === 'commune') html = vueCommune(vue.nom);
     else if (vue.type === 'recherche') html = vueRecherche();
-    else html = vueCommunes();
+    else html = jourChoisi ? vueJour() : vueCommunes();
     $('contenu').innerHTML = html;
     majResume();
     const actif = document.querySelector('.rdv.actif');
@@ -854,7 +948,8 @@
     const r = parId.get(id);
     if (!r) return;
     rdvActif = id;
-    if (vue.type !== 'recherche' || !vue.trouves.some(function (x) { return x.id === id; })) {
+    if (jourChoisi && vue.type === 'communes') surbrillance([r]);
+    else if (vue.type !== 'recherche' || !vue.trouves.some(function (x) { return x.id === id; })) {
       vue = { type: 'commune', nom: r.commune };
       surbrillance([r]);
     }
@@ -920,7 +1015,7 @@
   let etatFeuille = 'bas';
   function hauteurs() {
     // en plein écran, le panneau s'arrête sous la barre de recherche pour garder la poignée accessible
-    const h = $('corps').clientHeight, barre = $('barre-recherche').offsetHeight + 14;
+    const h = $('corps').clientHeight, barre = $('barre-recherche').offsetHeight + $('barre-date').offsetHeight + 20;
     return { bas: 76, mi: Math.round(h * 0.55), haut: Math.max(200, h - barre) };
   }
   function feuille(etat) {
@@ -993,6 +1088,11 @@
   // ---------- Événements ----------
   $('chercher').addEventListener('click', rechercher);
   $('effacer').addEventListener('click', effacer);
+  $('jour').addEventListener('change', function () { choisirJour(this.value); });
+  $('jour-prec').addEventListener('click', function () { sauterJour(-1); });
+  $('jour-suiv').addEventListener('click', function () { sauterJour(1); });
+  $('jour-aujourdhui').addEventListener('click', function () { choisirJour(jour(new Date())); });
+  $('jour-effacer').addEventListener('click', function () { choisirJour(''); });
   $('cles').addEventListener('keydown', function (ev) {
     if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); rechercher(); }
   });
