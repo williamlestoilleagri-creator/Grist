@@ -377,19 +377,6 @@
   code{font-size:.85em;background:var(--alt);padding:0 4px}
   .ic-upload{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M3 19h18v2H3v-2zM13 5.828V17h-2V5.828L4.929 11.9l-1.414-1.414L12 2l8.485 8.485-1.414 1.414L13 5.83z'/></svg>")}
 
-  /* ================= Carte des parcelles ================= */
-  main.map-mode{padding:8px 8px 0;max-width:none}
-  .map-wrap{position:relative;display:flex;flex-direction:column;gap:6px}
-  .map-bar{display:flex;gap:6px;align-items:stretch;margin:0}
-  .map-bar .input{flex:1 1 auto;min-width:0}
-  .map-legend{display:flex;gap:4px 12px;flex-wrap:wrap;font-size:.75rem;color:var(--mention);align-items:center}
-  #mres{display:flex;flex-direction:column;gap:2px;max-height:40vh;overflow-y:auto}
-  #map{height:calc(100vh - 235px);height:calc(100dvh - 235px);min-height:320px;border:1px solid var(--border);position:relative;z-index:0;font-family:var(--font)}
-  .sheet{position:absolute;top:52px;right:8px;width:min(410px,calc(100% - 16px));max-height:calc(100% - 60px);overflow-y:auto;background:var(--surface);box-shadow:var(--shadow-lg);z-index:50;padding:0 1rem 1rem}
-  .sheet-head{position:sticky;top:0;background:var(--surface);display:flex;gap:8px;align-items:flex-start;padding:.7rem 0 .4rem;border-bottom:1px solid var(--border);z-index:1}
-  .sheet-head h3{font-size:1.05rem;flex:1;margin:0;word-break:break-all}
-  .sheet .acts{display:flex;gap:6px;flex-wrap:wrap;margin:.6rem 0}
-  .sheet .fgrid{grid-template-columns:1fr 1fr}
   .chips{display:flex;gap:6px;flex-wrap:wrap;margin:.2rem 0 .8rem}
   .chip{display:inline-flex;align-items:center;gap:2px;background:var(--bf-950);color:var(--bf);border-radius:99px;padding:.15rem .25rem .15rem .7rem;font-size:.82rem}
   .chip button{border:0;background:transparent;color:inherit;cursor:pointer;padding:0 .35rem;font-size:1rem;line-height:1}
@@ -407,9 +394,6 @@
     .toolbar .period{font-size:1.1rem;min-width:0;flex:1 1 100%;order:-1}
     .fgrid{grid-template-columns:1fr 1fr}
     .kpi-v{font-size:1.5rem}
-    #map{height:calc(100dvh - 205px)}
-    .sheet{position:fixed;left:0;right:0;bottom:0;top:auto;width:auto;max-height:75vh;border-radius:14px 14px 0 0;padding-bottom:calc(1rem + env(safe-area-inset-bottom));box-shadow:0 -6px 24px rgba(0,0,18,.25)}
-    .sheet .fgrid{grid-template-columns:1fr}
   }
 
   @media (max-width:720px){
@@ -446,7 +430,6 @@
 <div class="demo" id="demoBanner" hidden><span class="ic ic-info" aria-hidden="true"></span><span><b>Mode démonstration</b> — ouvert hors de Grist : données fictives conservées en mémoire le temps de la session.</span></div>
 <nav class="tabs" role="tablist" id="tabs" hidden>
   <button class="tab" role="tab" data-tab="cal" aria-selected="true"><span class="ic ic-calendar" aria-hidden="true"></span>Calendrier</button>
-  <button class="tab" role="tab" data-tab="carte" aria-selected="false"><span class="ic ic-pin" aria-hidden="true"></span>Carte</button>
   <button class="tab" role="tab" data-tab="dash" aria-selected="false"><span class="ic ic-chart" aria-hidden="true"></span>Tableau de bord</button>
   <button class="tab" role="tab" data-tab="exp" aria-selected="false"><span class="ic ic-plant" aria-hidden="true"></span>Exploitations <span class="count" id="cntExp">0</span></button>
   <button class="tab" role="tab" data-tab="prel" aria-selected="false"><span class="ic ic-user" aria-hidden="true"></span>Préleveurs <span class="count" id="cntPrel">0</span></button>
@@ -721,8 +704,7 @@ const S = {
   dashPeriod: 'all', dashDpt: '', dashOpen: 0,
   stock: [], stockById: new Map(), geo: new Map(), ctl: [], controls: [], showCtl: true,
   fold: (() => { try { return JSON.parse(localStorage.getItem('cal-fold')) || {prel: false, insp: true}; } catch (e) { return {prel: false, insp: true}; } })(),
-  me: 0, espRange: 30, espMine: true, espTaken: false, espQ: '', espDates: [],
-  map: null, mapView: null, mapBase: '', mapQ: '', mapHits: [], pIdx: new Map(), selMarker: null
+  me: 0, espRange: 30, espMine: true, espTaken: false, espQ: '', espDates: []
 };
 const cols = t => (S.meta[t] || {cols: {}}).cols;
 const typeOf = (t, c) => (cols(t)[c] || {}).type || '';
@@ -967,11 +949,9 @@ function renderSetup(errMsg) {
    ============================================================ */
 function render() {
   $$('.tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === S.tab)));
-  if (S.cfg.inspectorOnly && !['cal', 'carte'].includes(S.tab)) S.tab = 'espace';
-  $$('.tab').forEach(t => { t.hidden = S.cfg.inspectorOnly && !['espace', 'cal', 'carte'].includes(t.dataset.tab); t.setAttribute('aria-selected', String(t.dataset.tab === S.tab)); });
-  $('#main').classList.toggle('map-mode', S.tab === 'carte');
+  if (S.cfg.inspectorOnly && S.tab !== 'cal') S.tab = 'espace';
+  $$('.tab').forEach(t => { t.hidden = S.cfg.inspectorOnly && !['espace', 'cal'].includes(t.dataset.tab); t.setAttribute('aria-selected', String(t.dataset.tab === S.tab)); });
   if (S.tab === 'cal') renderCalendar();
-  else if (S.tab === 'carte') renderMap();
   else if (S.tab === 'espace') renderEspace();
   else if (S.tab === 'dash') renderDash();
   else if (S.tab === 'exp') renderFarms();
@@ -1386,8 +1366,7 @@ function openRoadmap() {
   $('#rPrint').onclick = printModal;
 }
 /* ---------- Bibliothèques chargées à la demande (Excel, carte) ---------- */
-const LIB = {xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
-  leafletJs: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js', leafletCss: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css'};
+const LIB = {xlsx: 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'};
 const libCache = {};
 function loadLib(url) {
   if (!libCache[url]) libCache[url] = new Promise((res, rej) => {
@@ -1827,128 +1806,8 @@ async function pdfDay(k) {
     .then(() => toast(`PDF du ${shortDate(date)} téléchargé (${vs.length} rendez-vous)`), e => { console.error(e); toast('Génération du PDF impossible : ' + (e.message || e), true); });
 }
 
-/* ---------- Carte des parcelles (recherche par clé, fiche au clic) ---------- */
 // « 022849239-1-2 », « 22849239 1 2 » ou « 22849239-01-02 » désignent la même parcelle
 const keyNorm = s => String(s || '').trim().replace(/[\s|/_.;]+/g, '-').split('-').filter(Boolean).map(p => p.replace(/^0+(?=\d)/, '')).join('-').toLowerCase();
-function parcelIndex() {
-  const idx = new Map(), add = (key, o) => { const k = keyNorm(key); if (k && !idx.has(k)) idx.set(k, Object.assign({key}, o)); };
-  for (const f of S.farms.values()) for (const x of f.parcels) add(x.key, {x, farm: f});
-  for (const [key, d] of S.def) add(key, {x: {key, src: null, def: d, rdv: S.rdvByKey.get(key) || null}, farm: null});
-  return idx;
-}
-const entryName = e => e.farm ? e.farm.name : txt(e.x.def && e.x.def.Nom);
-function pointInfo(e) {
-  const v = e.farm && e.farm.visits.find(w => w.parcels.includes(e.x)), st = e.x.rdv ? clean(e.x.rdv.Statut) : '';
-  return {v, st, color: v ? prelColor(v.prel) : st ? (STATUT_STYLE[st] || ['', '#929292'])[1] : '#929292'};
-}
-function mapSearch(q) {
-  const k = keyNorm(q); if (!k) return [];
-  const exact = S.pIdx.get(k); if (exact) return [exact];
-  const all = Array.from(S.pIdx.values()), byPac = all.filter(e => keyNorm(e.key).split('-')[0] === k);
-  if (byPac.length) return byPac;
-  const nq = norm(q.trim());
-  return all.filter(e => keyNorm(e.key).startsWith(k) || (nq.length > 2 && norm(entryName(e)).includes(nq)));
-}
-function adminFields(x, f) {
-  const d = x.def || {}, s = x.src || {}, ff = f || {}, tel = firstOf([s, ff, d], ['Telephone_portable']), mail = firstOf([s, ff], ['Mail']);
-  return [infoField('Raison sociale', firstOf([s, d], ['Raison_sociale', 'Nom_exploitation', 'Nom']) || ff.name, 'Text'), infoField('Civilité', d.Civilite, 'Text'),
-    infoField('SIRET', firstOf([d, s], ['SIRET', 'siret']), 'Text'), infoField('N° dossier DN', firstOf([s, ff], ['dossier_number']), 'Text'),
-    infoField('Adresse', ff.Adresse_complete || [clean(d.Adresse), clean(d.Code_Postal).split('.')[0], clean(d.Commune)].filter(Boolean).join(' '), 'Text', true),
-    tel ? `<div class="fld"><div class="k">Téléphone portable</div><div class="v"><a href="tel:${esc(tel)}">${esc(tel)}</a></div></div>` : '', infoField('Téléphone fixe', d.Telephone_Fixe, 'Text'),
-    mail ? `<div class="fld"><div class="k">E-mail</div><div class="v"><a href="mailto:${esc(mail)}">${esc(mail)}</a></div></div>` : '', infoField('Financement', d.Financement, 'Text')].join('');
-}
-function highlight(e) {
-  if (S.selMarker) { try { S.selMarker.m.setStyle({radius: 7, color: '#fff', weight: 2}); } catch (err) { /* carte détruite */ } S.selMarker = null; }
-  if (e && e.marker) { e.marker.setStyle({radius: 12, color: '#e1000f', weight: 3}); e.marker.bringToFront(); S.selMarker = {m: e.marker}; }
-}
-function closeSheet() { const sh = $('#msheet'); if (sh) sh.hidden = true; highlight(null); }
-function showParcel(e) {
-  const x = e.x, f = e.farm, d = x.def || {}, r = x.rdv || {}, c = coordsOf(x), {v, st} = pointInfo(e), p = v && S.prelById.get(v.prel), ins = v && S.inspById.get(v.insp);
-  const pacage = f ? f.pacage : clean(d.PACAGE) || x.key.split('-')[0], tel = firstOf([x.src, f, d], ['Telephone_portable']);
-  highlight(e);
-  const sh = $('#msheet'); sh.hidden = false; sh.scrollTop = 0;
-  sh.innerHTML = `<div class="sheet-head"><h3>${esc(x.key)}<div class="sub">${esc(entryName(e) || 'Exploitation inconnue')} · PACAGE ${esc(pacage)}</div></h3>
-      <button class="btn ghost icon" type="button" id="mClose">${ic('close')}<span class="sr">Fermer</span></button></div>
-    <div class="fiche-head" style="margin:.5rem 0 0"><span class="badge ${stClass(st)}">${esc(stLabel(st))}</span>${v ? `<span class="tag">${ic('calendar')} ${esc(shortDate(v.start))} ${hm(v.start)}</span>` : ''}${resBadge(v && v.res)}</div>
-    <div class="acts">${c.lat ? `<a class="btn" href="${gmaps(c.lat, c.lon)}" target="_blank" rel="noopener">${ic('pin')}Itinéraire</a><a class="btn ter" href="${geoportail(c.lat, c.lon)}" target="_blank" rel="noopener">Géoportail</a>` : '<span class="badge st-injoignable">Pas de coordonnées GPS</span>'}
-      ${tel ? `<a class="btn ter" href="tel:${esc(tel)}">Appeler l'exploitant</a>` : ''}
-      ${f && !S.cfg.inspectorOnly ? `<button class="btn sec" type="button" data-fiche="${esc(f.key)}">${ic('edit')}Fiche RDV</button>` : v ? `<button class="btn sec" type="button" data-visit="${esc(v.key)}">${ic('info')}Détail du RDV</button>` : ''}</div>
-    <section class="fsec"><h3>${ic('calendar')}Rendez-vous</h3><div class="fgrid">
-      ${v ? infoField('Date', fullDate(v.start) + ' à ' + hm(v.start), 'Text', true) : infoField('Rendez-vous', 'Non planifié', 'Text')}
-      ${p ? `<div class="fld"><div class="k">Préleveur</div><div class="v">${esc(personName(p))}${clean(p.Organisme) ? ' · ' + esc(p.Organisme) : ''}${p.Telephone ? `<br><a href="tel:${esc(p.Telephone)}">${esc(p.Telephone)}</a>` : ''}</div></div>` : ''}
-      ${ins ? infoField('Inspecteur FranceAgriMer', personName(ins), 'Text') : ''}${infoField('Culture en place', r.Culture_en_place, 'Text')}${infoField('Étiquette', r.Etiquette_prelevement, 'Text')}
-      ${infoField('Présence de l\'agriculteur', r.Presence_souhaitee_agriculteur, 'Text')}${infoField('Commentaire', r.Commentaire, 'Text', true)}
-      ${c.lat ? infoField('Coordonnées GPS', c.lat.toFixed(6) + ', ' + c.lon.toFixed(6), 'Text') : ''}</div></section>
-    <section class="fsec"><h3>${ic('plant')}Exploitation</h3><div class="fgrid">${adminFields(x, f)}</div></section>
-    <section class="fsec"><h3>${ic('info')}Parcelle</h3>${parcelInfo(x)}</section>`;
-  $('#mClose').onclick = closeSheet;
-}
-function focusParcel(e) {
-  if (!e) return;
-  const c = coordsOf(e.x);
-  if (c.lat && S.map) S.map.setView([c.lat, c.lon], Math.max(S.map.getZoom(), 16));
-  $('#mres').innerHTML = '';
-  showParcel(e);
-}
-async function renderMap() {
-  const total = S.def.size || S.parc.length;
-  $('#main').innerHTML = `<div class="map-wrap">
-    <form class="map-bar" id="mForm" autocomplete="off"><input class="input" id="mq" type="search" enterkeyhint="search" placeholder="Clé parcelle (ex. 022849239-1-2), PACAGE ou nom" value="${esc(S.mapQ)}">
-      <button class="btn" type="submit">${ic('search')}<span class="sr">Rechercher</span></button>
-      <button class="btn ter icon" type="button" id="mLoc" title="Ma position">${ic('pin')}<span class="sr">Ma position</span></button></form>
-    <div id="mres"></div>
-    <div class="map-legend"><span id="mCount"></span><span><span class="dot" style="background:#929292"></span> à appeler</span><span><span class="dot" style="background:#18753c"></span> RDV pris sans date</span>
-      <span><span class="dot" style="background:#695240"></span> injoignable</span><span><span class="dot" style="background:#ce0500"></span> refus</span><span>RDV daté : couleur du préleveur</span></div>
-    <div id="map"><p class="loading">Chargement de la carte…</p></div><div class="sheet" id="msheet" hidden></div></div>`;
-  try { await Promise.all([loadLib(LIB.leafletCss), loadLib(LIB.leafletJs)]); }
-  catch (err) { $('#map').innerHTML = `<div class="alert err"><p>${esc(err.message)}</p></div>`; return; }
-  if (S.tab !== 'carte' || !$('#map')) return;
-  if (S.map) { try { S.map.remove(); } catch (err) { /* déjà détruite */ } S.map = null; }
-  $('#map').innerHTML = '';
-  const ign = (layer, fmt, style, nat) => L.tileLayer(`https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=${layer}&STYLE=${encodeURIComponent(style)}&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=${fmt}`,
-    {maxZoom: 20, maxNativeZoom: nat, attribution: '© IGN'});
-  const base = {'Photo aérienne (IGN)': ign('ORTHOIMAGERY.ORTHOPHOTOS', 'image/jpeg', 'normal', 19), 'Plan IGN': ign('GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2', 'image/png', 'normal', 18),
-    'OpenStreetMap': L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 20, maxNativeZoom: 19, attribution: '© OpenStreetMap'})};
-  const cad = ign('CADASTRALPARCELS.PARCELLAIRE_EXPRESS', 'image/png', 'PCI vecteur', 19);
-  const map = S.map = L.map('map', {preferCanvas: true, layers: [base[S.mapBase] || base['Photo aérienne (IGN)']]});
-  L.control.layers(base, {'Cadastre': cad}, {collapsed: true}).addTo(map);
-  map.on('baselayerchange', ev => { S.mapBase = ev.name; });
-  const rnd = L.canvas({padding: .5, tolerance: 10}), pts = [];
-  S.pIdx = parcelIndex(); S.selMarker = null;
-  for (const e of S.pIdx.values()) {
-    const c = coordsOf(e.x); if (!c.lat) continue;
-    e.marker = L.circleMarker([c.lat, c.lon], {renderer: rnd, radius: 7, color: '#fff', weight: 2, fillColor: pointInfo(e).color, fillOpacity: .95, bubblingMouseEvents: false}).addTo(map);
-    e.marker.on('click', () => showParcel(e));
-    pts.push([c.lat, c.lon]);
-  }
-  $('#mCount').textContent = `${pts.length} parcelle(s) géolocalisée(s) sur ${Math.max(total, S.pIdx.size)}`;
-  if (S.mapView) map.setView(S.mapView.c, S.mapView.z);
-  else if (pts.length) map.fitBounds(pts, {padding: [20, 20], maxZoom: 14});
-  else map.setView([48.2, -2.9], 8);
-  map.on('moveend', () => { S.mapView = {c: map.getCenter(), z: map.getZoom()}; });
-  map.on('click', closeSheet);
-  const search = () => {
-    const q = $('#mq').value; S.mapQ = q; const res = S.mapHits = mapSearch(q);
-    if (!q.trim()) { $('#mres').innerHTML = ''; return; }
-    if (res.length === 1) { focusParcel(res[0]); return; }
-    $('#mres').innerHTML = res.length ? res.slice(0, 30).map((e, i) => `<button class="qhit" type="button" data-mhit="${i}"><b>${esc(e.key)}</b><span class="sub">${esc(entryName(e))}${coordsOf(e.x).lat ? '' : ' · sans coordonnées GPS'}</span></button>`).join('')
-      + (res.length > 30 ? `<p class="sub">${res.length - 30} résultat(s) de plus : précisez la recherche.</p>` : '')
-      : `<p class="sub">Aucune parcelle ne correspond à « ${esc(q)} ».</p>`;
-    const g = res.map(e => coordsOf(e.x)).filter(c => c.lat).map(c => [c.lat, c.lon]);
-    if (g.length) map.fitBounds(g, {padding: [30, 30], maxZoom: 16});
-  };
-  $('#mForm').onsubmit = ev => { ev.preventDefault(); $('#mq').blur(); search(); };
-  $('#mres').onclick = ev => { const b = ev.target.closest('[data-mhit]'); if (b) focusParcel(S.mapHits[Number(b.dataset.mhit)]); };
-  $('#mLoc').onclick = () => {
-    if (!navigator.geolocation) { toast('Géolocalisation non disponible sur cet appareil.', true); return; }
-    navigator.geolocation.getCurrentPosition(pos => {
-      const ll = [pos.coords.latitude, pos.coords.longitude];
-      if (S.meMarker) { try { S.meMarker.remove(); } catch (err) { /* ancienne carte */ } }
-      S.meMarker = L.circleMarker(ll, {radius: 8, color: '#fff', weight: 3, fillColor: '#0063cb', fillOpacity: 1}).addTo(map); map.setView(ll, 15);
-    }, () => toast('Position indisponible (autorisation refusée ou non permise dans Grist).', true), {enableHighAccuracy: true, timeout: 10000});
-  };
-  if (S.mapQ && S.mapQ.trim() && !S.mapView) search();
-}
 
 /* ---------- Espace inspecteur : déclaration groupée des contrôles de préleveurs (fichier) ---------- */
 const BULK_H = ['Réf. (ne pas modifier)', 'Date', 'Heure', 'Laboratoire', 'Préleveur', 'Téléphone préleveur', 'Exploitation', 'PACAGE', 'Commune', 'Parcelles',
@@ -2416,7 +2275,7 @@ document.addEventListener('keydown', e => {
 $$('.tab').forEach(b => b.onclick = () => { S.tab = b.dataset.tab; render(); });
 $('#refreshBtn').onclick = async () => { if ($('#tabs').hidden) return; try { await loadData(); render(); toast('Données actualisées'); } catch (e) { toast(e.message || String(e), true); } };
 $('#settingsBtn').onclick = () => { closeModal(); renderSetup(); };
-let resizeT; window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if ($('#tabs').hidden) return; if (S.tab === 'cal') renderCalendar(); else if (S.tab === 'carte' && S.map) S.map.invalidateSize(); }, 150); });
+let resizeT; window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (!$('#tabs').hidden && S.tab === 'cal') renderCalendar(); }, 150); });
 
 /* ============================================================
    DÉMARRAGE
@@ -2439,7 +2298,7 @@ async function boot() {
   }
 }
 let reloadT;
-function scheduleReload() { clearTimeout(reloadT); reloadT = setTimeout(async () => { if ($('#tabs').hidden) return; try { await loadData(); if (!$('#modalRoot').firstChild && S.tab !== 'carte') render(); } catch (e) { console.warn(e); } }, 400); }
+function scheduleReload() { clearTimeout(reloadT); reloadT = setTimeout(async () => { if ($('#tabs').hidden) return; try { await loadData(); if (!$('#modalRoot').firstChild) render(); } catch (e) { console.warn(e); } }, 400); }
 async function start(backend) {
   B = backend;
   try { S.me = Number(localStorage.getItem('calendrier-inspecteur')) || 0; } catch (e) { S.me = 0; }
