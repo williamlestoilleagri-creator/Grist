@@ -497,6 +497,7 @@ const DUREES = [15, 30, 45, 60, 90, 120, 180];
 const DEFAULT_CFG = {parcTable: 'DATA_RELIQUATCLEAN', parcKey: 'CLELAB', defTable: 'DATA_Parcelles_DEF', defKey: 'CLE', hourStart: 8, hourEnd: 19, duree: 45, inspectorOnly: false, pdfService: 'DRAAF Bretagne'};
 const PALETTE = ['#000091', '#18753c', '#b34000', '#a94645', '#6a6af4', '#009081', '#c3992a', '#7d4e5b', '#3558a2', '#e4794a', '#66673d', '#ce614a'];
 const TZ = 'Europe/Paris';
+const GEO_TABLES = [['Parcelles_Reliquats', ['CLE_CALCULEE', 'CLE', 'CLELAB', 'Cle']]];
 
 const choiceOpts = list => { const o = {}; list.forEach(s => { if (STATUT_STYLE[s]) o[s] = {fillColor: STATUT_STYLE[s][0], textColor: STATUT_STYLE[s][1]}; }); return o; };
 // Table RDV_Prelevements : une ligne par parcelle (clé PACAGE-îlot-parcelle)
@@ -716,7 +717,7 @@ const S = {
   sel: {kind: '', id: 0}, q: '', statut: '', dpt: '',
   expQ: '', expStatut: '', expDpt: '',
   dashPeriod: 'all', dashDpt: '', dashOpen: 0,
-  stock: [], stockById: new Map(), ctl: [], controls: [], showCtl: true,
+  stock: [], stockById: new Map(), geo: new Map(), ctl: [], controls: [], showCtl: true,
   fold: (() => { try { return JSON.parse(localStorage.getItem('cal-fold')) || {prel: false, insp: true}; } catch (e) { return {prel: false, insp: true}; } })(),
   me: 0, espRange: 30, espMine: true, espTaken: false, espQ: '', espDates: [],
   map: null, mapView: null, mapBase: '', mapQ: '', mapHits: [], pIdx: new Map(), selMarker: null
@@ -828,6 +829,13 @@ async function loadData() {
   const ctlOk = S.meta[T_STOCK] && S.meta[T_CTL];
   const [stock, ctl] = ctlOk ? await Promise.all([B.fetch(T_STOCK), B.fetch(T_CTL)]) : [[], []];
   S.stock = stock; S.ctl = ctl; S.stockById = new Map(stock.map(x => [x.id, x]));
+  // table de géolocalisation des parcelles (source des colonnes latitude/longitude de DATA_Parcelles_DEF)
+  S.geo = new Map();
+  for (const [t, keys] of GEO_TABLES) {
+    const kc = S.meta[t] && keys.find(c => cols(t)[c]); if (!kc) continue;
+    try { (await B.fetch(t)).forEach(r => { const c = latLonOf(r), k = keyNorm(clean(r[kc])); if (c && k && !S.geo.has(k)) S.geo.set(k, c); }); }
+    catch (e) { console.warn('Lecture de ' + t + ' impossible', e); }
+  }
   buildModel();
   buildControls();
   $('#cntExp').textContent = S.farms.size;
@@ -1417,9 +1425,16 @@ async function downloadXlsx(fileBase, sheets) {
   }
 }
 const firstOf = (objs, keys) => { for (const o of objs) if (o) for (const k of keys) { const s = clean(o[k]); if (s) return s; } return ''; };
+const num = v => (v === null || v === undefined || v === '' || isErr(v)) ? NaN : Number(String(v).replace(',', '.').trim());
+function latLonOf(o) {
+  if (!o) return null;
+  const lat = num(o.latitude ?? o.Latitude ?? o.LATITUDE), lon = num(o.longitude ?? o.Longitude ?? o.LONGITUDE);
+  return lat && lon && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? {lat, lon} : null;
+}
+// coordonnées d'une parcelle : DATA_Parcelles_DEF, puis RDV_Prelevements, puis table Parcelles_Reliquats
 function coordsOf(x) {
-  for (const o of [x && x.def, x && x.rdv]) { const lat = Number(o && o.latitude), lon = Number(o && o.longitude); if (lat && lon && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) return {lat, lon}; }
-  return {};
+  if (!x) return {};
+  return latLonOf(x.def) || latLonOf(x.rdv) || S.geo.get(keyNorm(x.key)) || {};
 }
 const gmaps = (lat, lon) => `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
 const geoportail = (lat, lon) => `https://www.geoportail.gouv.fr/carte?c=${lon},${lat}&z=17&l0=ORTHOIMAGERY.ORTHOPHOTOS::GEOPORTAIL:OGC:WMTS(1)&l1=CADASTRALPARCELS.PARCELLAIRE_EXPRESS::GEOPORTAIL:OGC:WMTS(1)&permalink=yes`;
@@ -1538,24 +1553,33 @@ function prelPairs(v) {
   const p = S.prelById.get(v.prel) || {}, tel = clean(p.Telephone), mail = clean(p.Email);
   return [['Laboratoire', labOf(v)], ['Téléphone', tel || '—', tel && telLink(tel)], ['E-mail', mail || '—', mail && 'mailto:' + mail]];
 }
-const farmAddr = v => { const f = v.farm, d = (v.parcels.find(x => x.def) || {}).def || {};
+const farmAddr = g => { const f = g.farm, x = g.parcels.find(y => y.def) || {}, d = x.def || {};
   return f.Adresse_complete || [clean(d.Adresse), clean(d.Code_Postal).split('.')[0], clean(d.Commune)].filter(Boolean).join(' '); };
-// Exploitation : nom, adresse, latitude et longitude (une ligne par parcelle, coordonnées cliquables vers l'itinéraire)
-function parcelTable(v) {
-  const H = ['Parcelle', 'Latitude', 'Longitude'].map(t => ({text: t, style: 'th'}));
-  const rows = v.parcels.slice().sort((a, b) => a.key.localeCompare(b.key, 'fr', {numeric: true})).map(x => {
-    const c = coordsOf(x), cell = n => c.lat ? {text: n.toFixed(6), link: gmaps(c.lat, c.lon), color: PC.bf} : {text: 'non renseignée', color: PC.mention, italics: true};
-    return [{text: x.key, bold: true, color: PC.title}, cell(c.lat), cell(c.lon)];
-  });
-  return {table: {headerRows: 1, dontBreakRows: true, widths: [150, 90, 90], body: [H].concat(rows)}, layout: tblLayout(true), style: 'td', margin: [0, 8, 0, 0]};
+// exploitations d'un préleveur pour la journée : toutes leurs parcelles, chacune avec son créneau de rendez-vous
+function farmGroups(visits) {
+  const m = new Map();
+  for (const v of visits) { let g = m.get(v.farm.key); if (!g) m.set(v.farm.key, g = {farm: v.farm, visits: [], parcels: [], rows: []});
+    g.visits.push(v); v.parcels.forEach(x => { g.parcels.push(x); g.rows.push({x, v}); }); }
+  const out = Array.from(m.values());
+  out.forEach(g => { g.rows.sort((a, b) => a.v.start - b.v.start || a.x.key.localeCompare(b.x.key, 'fr', {numeric: true})); g.start = g.rows[0].v.start; g.end = new Date(Math.max(...g.visits.map(v => v.end.getTime()))); });
+  return out.sort((a, b) => a.start - b.start);
 }
-function farmCard(v) {
-  return {unbreakable: v.parcels.length <= 20, table: {widths: ['*'], body: [[{stack: [
+// Une ligne par parcelle : clé, rendez-vous, latitude, longitude (cliquables vers l'itinéraire)
+function parcelTable(g) {
+  const H = ['Parcelle', 'Rendez-vous', 'Latitude', 'Longitude'].map(t => ({text: t, style: 'th'}));
+  const rows = g.rows.map(({x, v}) => {
+    const c = coordsOf(x), cell = n => c.lat ? {text: n.toFixed(6), link: gmaps(c.lat, c.lon), color: PC.bf} : {text: 'À COMPLÉTER', bold: true, color: '#ce0500'};
+    return [{text: x.key, bold: true, color: PC.title}, {text: `${shortDate(v.start)}  ${hm(v.start)} – ${hm(v.end)}`}, cell(c.lat), cell(c.lon)];
+  });
+  return {table: {headerRows: 1, dontBreakRows: true, widths: [125, 120, 85, 85], body: [H].concat(rows)}, layout: tblLayout(true), style: 'td', margin: [0, 8, 0, 0]};
+}
+function farmCard(g) {
+  return {unbreakable: g.rows.length <= 20, table: {widths: ['*'], body: [[{stack: [
     {columns: [
-      {width: 62, stack: [{text: hm(v.start), bold: true, fontSize: 14, color: PC.bf}, {text: '→ ' + hm(v.end), style: 'small'}]},
-      {width: '*', stack: [{text: 'Exploitation', style: 'k'}, {text: v.farm.name, bold: true, fontSize: 11.5, color: PC.title},
-        {text: 'Adresse', style: 'k', margin: [0, 5, 0, 0]}, {text: farmAddr(v) || '—', style: 'v'}]}]},
-    parcelTable(v)]}]]},
+      {width: 62, stack: [{text: hm(g.start), bold: true, fontSize: 14, color: PC.bf}, {text: '→ ' + hm(g.end), style: 'small'}]},
+      {width: '*', stack: [{text: 'Exploitation', style: 'k'}, {text: g.farm.name, bold: true, fontSize: 11.5, color: PC.title},
+        {text: 'Adresse', style: 'k', margin: [0, 5, 0, 0]}, {text: farmAddr(g) || '—', style: 'v'}]}]},
+    parcelTable(g)]}]]},
   layout: {hLineWidth: () => .75, vLineWidth: i => i === 0 ? 3 : .75, hLineColor: () => PC.border, vLineColor: i => i === 0 ? PC.bf : PC.border,
     paddingLeft: () => 10, paddingRight: () => 10, paddingTop: () => 8, paddingBottom: () => 9}, margin: [0, 0, 0, 9]};
 }
@@ -1593,7 +1617,8 @@ async function pdfDay(k) {
     {columns: [tile('Laboratoires', labs.length), tile('Préleveurs', labs.reduce((t, l) => t + l.prels.length, 0)), tile('Exploitations', nFarm(vs)), tile('Parcelles', nParc(vs))], columnGap: 10},
     {text: 'Récapitulatif', style: 'h2', margin: [0, 22, 0, 8]},
     {table: {headerRows: 1, widths: ['*', '*', 70, 62, 50], body: recap}, layout: tblLayout(false), style: 'td'},
-    {text: 'Le détail par laboratoire, préleveur et exploitation figure dans les pages suivantes (un laboratoire par page). Les coordonnées GPS sont cliquables (itinéraire).', style: 'small', margin: [0, 10, 0, 0]}
+    {text: 'Le détail par laboratoire, préleveur et exploitation figure dans les pages suivantes (un laboratoire par page) : chaque parcelle avec son rendez-vous, sa latitude et sa longitude (cliquables pour l\'itinéraire).', style: 'small', margin: [0, 10, 0, 0]},
+    (n => n ? {text: `Attention : ${n} parcelle(s) sans coordonnées GPS (signalées « À COMPLÉTER »).`, bold: true, color: '#ce0500', fontSize: 9, margin: [0, 8, 0, 0]} : {text: ''})(vs.reduce((t, v) => t + v.parcels.filter(x => !coordsOf(x).lat).length, 0))
   ];
   for (const l of labs) {
     const all = l.prels.flatMap(p => p.visits);
@@ -1608,8 +1633,8 @@ async function pdfDay(k) {
         layout: {fillColor: () => PC.bf975, hLineWidth: () => 0, vLineWidth: i => i === 0 ? 3 : 0, vLineColor: () => PC.bf, paddingLeft: () => 10, paddingRight: () => 10, paddingTop: () => 8, paddingBottom: () => 8},
         margin: [0, 4, 0, 9]};
       // le bandeau du préleveur reste sur la même page que sa première exploitation
-      const cards = p.visits.map(farmCard), first = cards.shift();
-      content.push({stack: [block, first], unbreakable: p.visits[0].parcels.length <= 8}, ...cards);
+      const groups = farmGroups(p.visits), cards = groups.map(farmCard), first = cards.shift();
+      content.push({stack: [block, first], unbreakable: groups[0].rows.length <= 8}, ...cards);
     }
   }
   const dd = {
@@ -2257,6 +2282,7 @@ function seedDemo() {
     ['GAEC Trois Rivières', '029', 'Landerneau'], ['EARL Kerangoff', '029', 'Plouvien'], ['SARL Terres d\'Arvor', '022', 'Moncontour'], ['EARL Le Gall', '056', 'Pontivy'],
     ['GAEC de la Lande', '035', 'Fougères'], ['SCEA Mor Glaz', '029', 'Châteaulin'], ['EARL Ty Nevez', '022', 'Loudéac'], ['GAEC du Blavet', '056', 'Hennebont']];
   const cult = ['Maïs', 'Blé tendre', 'Prairie temporaire', 'Colza', 'Orge'];
+  L.db.Parcelles_Reliquats = T([['CLE_CALCULEE'], ['latitude'], ['longitude', 'Numeric']]);
   farms.forEach(([n, dpt, ville], i) => {
     const pac = dpt + String(100000 + i * 731).slice(0, 6);
     for (let j = 0; j < 1 + (i % 3); j++) {
@@ -2271,7 +2297,9 @@ function seedDemo() {
         quelle_est_la_prochaine_culture_prevue_sur_cette_parcelle: cult[(i + j + 1) % 5]});
       L.db.DATA_Parcelles_DEF.rows.push({id: L.db.DATA_Parcelles_DEF.next++, CLE: key, NUM_ILOT: String(ilot), NUM_PARCEL: parc, SURF_CALC: Math.round((1.2 + (i + j) % 4 * 0.85) * 100) / 100,
         CULT_2025: cult[(i + j + 2) % 5], CULT_2024: cult[(i + j + 3) % 5], LB_BAV: i % 3 ? 'Gouessant' : 'Lieue de Grève', Raison_de_la_selection: ['RDD', 'RPA', 'RPR'][i % 3],
-        latitude: 48.2 + i * 0.03, longitude: -3.2 + i * 0.07});
+        latitude: i % 5 === 3 ? null : 48.2 + i * 0.03 + j * 0.004, longitude: i % 5 === 3 ? null : -3.2 + i * 0.07 + j * 0.006});
+      // une partie des coordonnées n'est connue que dans Parcelles_Reliquats ; la dernière parcelle de la 4e exploitation n'en a aucune
+      if (i % 5 === 3 && !(i === 3 && j === i % 3)) (L.db.Parcelles_Reliquats.rows.push({id: L.db.Parcelles_Reliquats.next++, CLE_CALCULEE: key, latitude: String(48.2 + i * 0.03 + j * 0.004).replace('.', ','), longitude: -3.2 + i * 0.07 + j * 0.006}));
     }
   });
   // lieux de stockage : colonnes vides, comme dans le document
@@ -2294,9 +2322,9 @@ async function seedDemoRdv() {
   const slots = [[-6, 9, 0], [-6, 10, 30], [-2, 14, 0], [1, 9, 0], [1, 9, 30], [1, 14, 0], [2, 10, 0], [5, 8, 30], [6, 9, 0], [8, 11, 0], [12, 14, 0]];
   farms.forEach((f, i) => {
     const s = slots[i], st = s ? 'Rdv pris' : ['Injoignable', 'Refus', 'Faux numéro', null][i % 4];
-    f.parcels.forEach(x => acts.push(['AddRecord', T_RDV, null, {Cle_parcelle: cleVal(x.key), N_dossier_DN: Number(x.src.dossier_number), Statut: st,
+    f.parcels.forEach((x, j) => acts.push(['AddRecord', T_RDV, null, {Cle_parcelle: cleVal(x.key), N_dossier_DN: Number(x.src.dossier_number), Statut: st,
       Date_heure_appel_1: wallToEpoch(y, m + 1, 1, 10, 0, TZ), Presence_souhaitee_agriculteur: i % 2 ? 'Oui' : 'Non',
-      Preleveur: s ? (i % 3) + 1 : 0, Inspecteur: s && i % 2 === 1 ? ((i >> 1) % 2) + 1 : 0, Date_RDV: s ? (d => wallToEpoch(d.getFullYear(), d.getMonth() + 1, d.getDate(), s[1], s[2], TZ))(addDays(now, s[0])) : null, Duree_min: 60, Culture_en_place: x.src.Culture_2026}]));
+      Preleveur: s ? (i % 3) + 1 : 0, Inspecteur: s && i % 2 === 1 ? ((i >> 1) % 2) + 1 : 0, Date_RDV: s ? (d => wallToEpoch(d.getFullYear(), d.getMonth() + 1, d.getDate(), s[1], s[2] + (i === 4 ? j * 45 : 0), TZ))(addDays(now, s[0])) : null, Duree_min: 60, Culture_en_place: x.src.Culture_2026}]));
   });
   await B.apply(acts);
   if (LocalBackend.db[T_CTL]) {
