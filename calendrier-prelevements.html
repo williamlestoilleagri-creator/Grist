@@ -1745,7 +1745,7 @@ function farmCard(g) {
   return {unbreakable: g.rows.length <= 20, table: {widths: ['*'], body: [[{stack: [
     {columns: [
       {width: 62, stack: [{text: hm(g.start), bold: true, fontSize: 14, color: PC.bf}, {text: '→ ' + hm(g.end), style: 'small'}]},
-      {width: '*', stack: [{text: 'Exploitation', style: 'k'}, {text: g.farm.name, bold: true, fontSize: 11.5, color: PC.title},
+      {width: '*', stack: [{text: 'Exploitation', style: 'k'}, {text: g.farm.name, id: g.dest, bold: true, fontSize: 11.5, color: PC.title},
         {text: 'Adresse', style: 'k', margin: [0, 5, 0, 0]}, {text: farmAddr(g) || '—', style: 'v'}]}]},
     parcelTable(g)]}]]},
   layout: {hLineWidth: () => .75, vLineWidth: i => i === 0 ? 3 : .75, hLineColor: () => PC.border, vLineColor: i => i === 0 ? PC.bf : PC.border,
@@ -1769,10 +1769,16 @@ async function pdfDay(k) {
   }
   const nParc = list => list.reduce((t, v) => t + v.parcels.length, 0), nFarm = list => new Set(list.map(v => v.farm.key)).size;
   const now = new Date(), service = clean(S.cfg.pdfService);
+  // liens internes : chaque laboratoire, préleveur et exploitation a sa destination dans le PDF
+  labs.forEach((l, li) => { l.dest = 'lab' + li; l.prels.forEach((p, pi) => { p.dest = `prel${li}-${pi}`; p.groups = farmGroups(p.visits); p.groups.forEach((g, gi) => { g.dest = `${p.dest}-f${gi}`; }); }); });
+  const go = (text, dest, o = {}) => Object.assign({text, linkToDestination: dest, color: PC.bf, decoration: 'underline'}, o);
+  const back = {text: '↑ Retour au récapitulatif', linkToDestination: 'recap', color: PC.bf, fontSize: 7.5, decoration: 'underline'};
   const tile = (label, value) => ({table: {widths: ['*'], body: [[{stack: [{text: label, style: 'k'}, {text: String(value), fontSize: 20, bold: true, color: PC.title, margin: [0, 1, 0, 0]}]}]]}, layout: boxLayout(PC.bf)});
-  const recap = [[{text: 'Laboratoire', style: 'th'}, {text: 'Préleveur', style: 'th'}, {text: 'Horaires', style: 'th'}, {text: 'Exploitations', style: 'th', alignment: 'right'}, {text: 'Parcelles', style: 'th', alignment: 'right'}]];
-  labs.forEach(l => l.prels.forEach((p, i) => recap.push([i ? {} : {text: l.name, bold: true, color: PC.title, rowSpan: l.prels.length}, p.name,
-    hm(p.visits[0].start) + ' – ' + hm(p.visits[p.visits.length - 1].end), {text: String(nFarm(p.visits)), alignment: 'right'}, {text: String(nParc(p.visits)), alignment: 'right'}])));
+  const recap = [[{text: 'Laboratoire', style: 'th'}, {text: 'Préleveur', style: 'th'}, {text: 'Exploitations (heure · nom · parcelles)', style: 'th'}, {text: 'Parcelles', style: 'th', alignment: 'right'}]];
+  labs.forEach(l => l.prels.forEach((p, i) => recap.push([i ? {} : Object.assign(go(l.name, l.dest, {bold: true}), {rowSpan: l.prels.length}),
+    {stack: [go(p.name, p.dest, {bold: true}), {text: hm(p.visits[0].start) + ' – ' + hm(p.visits[p.visits.length - 1].end), style: 'small'}]},
+    {stack: p.groups.map(g => ({text: [{text: hm(g.start) + '  ', color: PC.mention}, go(g.farm.name, g.dest), {text: '  (' + g.rows.length + ')', color: PC.mention}], margin: [0, 0, 0, 1]}))},
+    {text: String(nParc(p.visits)), alignment: 'right'}])));
   const content = [
     {columns: [
       {width: 'auto', stack: [{svg: blocMarqueSvg(), width: 38}, {text: 'RÉPUBLIQUE\nFRANÇAISE', bold: true, fontSize: 9.5, color: '#000000', lineHeight: .95, margin: [0, 4, 0, 3]},
@@ -1783,25 +1789,27 @@ async function pdfDay(k) {
     {text: 'Planning des prélèvements', style: 'h1'},
     {text: Dcap + (S.dpt ? ' · département ' + S.dpt : ''), style: 'lead'},
     {columns: [tile('Laboratoires', labs.length), tile('Préleveurs', labs.reduce((t, l) => t + l.prels.length, 0)), tile('Exploitations', nFarm(vs)), tile('Parcelles', nParc(vs))], columnGap: 10},
-    {text: 'Récapitulatif', style: 'h2', margin: [0, 22, 0, 8]},
-    {table: {headerRows: 1, widths: ['*', '*', 70, 62, 50], body: recap}, layout: tblLayout(false), style: 'td'},
+    {text: 'Récapitulatif', style: 'h2', id: 'recap', margin: [0, 22, 0, 2]},
+    {text: 'Cliquez sur un laboratoire, un préleveur ou une exploitation pour aller directement à sa fiche et aux informations de ses parcelles.', style: 'small', margin: [0, 0, 0, 8]},
+    {table: {headerRows: 1, widths: [90, 110, '*', 46], body: recap}, layout: tblLayout(false), style: 'td'},
     {text: 'Le détail par laboratoire, préleveur et exploitation figure dans les pages suivantes (un laboratoire par page) : chaque parcelle avec son rendez-vous, sa latitude et sa longitude (cliquables pour l\'itinéraire).', style: 'small', margin: [0, 10, 0, 0]},
     (n => n ? {text: `Attention : ${n} parcelle(s) sans coordonnées GPS (signalées « À COMPLÉTER »).`, bold: true, color: '#ce0500', fontSize: 9, margin: [0, 8, 0, 0]} : {text: ''})(vs.reduce((t, v) => t + v.parcels.filter(x => !coordsOf(x).lat).length, 0))
   ];
   for (const l of labs) {
     const all = l.prels.flatMap(p => p.visits);
-    content.push({pageBreak: 'before', table: {widths: ['*', 'auto'], body: [[{stack: [{text: 'LABORATOIRE', fontSize: 7, bold: true, color: PC.bf850, characterSpacing: .5}, {text: l.name, bold: true, fontSize: 16, color: '#ffffff'}]},
+    content.push({pageBreak: 'before', table: {widths: ['*', 'auto'], body: [[{stack: [{text: 'LABORATOIRE', fontSize: 7, bold: true, color: PC.bf850, characterSpacing: .5}, {text: l.name, id: l.dest, bold: true, fontSize: 16, color: '#ffffff'}]},
       {text: `${Dcap}\n${l.prels.length} préleveur(s) · ${nFarm(all)} exploitation(s) · ${nParc(all)} parcelle(s)`, fontSize: 8.5, color: '#ffffff', alignment: 'right', margin: [0, 3, 0, 0]}]]},
       layout: {fillColor: () => PC.bf, hLineWidth: () => 0, vLineWidth: () => 0, paddingLeft: () => 12, paddingRight: () => 12, paddingTop: () => 9, paddingBottom: () => 9}, margin: [0, 0, 0, 12]});
     for (const p of l.prels) {
       const block = {table: {widths: ['*'], body: [[{stack: [
-        {columns: [{width: '*', text: [{text: 'PRÉLEVEUR   ', fontSize: 7, bold: true, color: PC.bf}, {text: p.name, bold: true, fontSize: 13, color: PC.title}]},
-          {width: 'auto', text: `${p.visits.length} rendez-vous · ${nParc(p.visits)} parcelle(s) · ${hm(p.visits[0].start)} – ${hm(p.visits[p.visits.length - 1].end)}`, style: 'small', margin: [0, 3, 0, 0]}]},
+        {columns: [{width: '*', id: p.dest, text: [{text: 'PRÉLEVEUR   ', fontSize: 7, bold: true, color: PC.bf}, {text: p.name, bold: true, fontSize: 13, color: PC.title}]},
+          {width: 'auto', stack: [{text: `${p.visits.length} rendez-vous · ${nParc(p.visits)} parcelle(s) · ${hm(p.visits[0].start)} – ${hm(p.visits[p.visits.length - 1].end)}`, style: 'small', margin: [0, 3, 0, 0]},
+            Object.assign({}, back, {alignment: 'right', margin: [0, 2, 0, 0]})]}]},
         kvGrid(prelPairs(p.visits[0]), 3)]}]]},
         layout: {fillColor: () => PC.bf975, hLineWidth: () => 0, vLineWidth: i => i === 0 ? 3 : 0, vLineColor: () => PC.bf, paddingLeft: () => 10, paddingRight: () => 10, paddingTop: () => 8, paddingBottom: () => 8},
         margin: [0, 4, 0, 9]};
       // le bandeau du préleveur reste sur la même page que sa première exploitation
-      const groups = farmGroups(p.visits), cards = groups.map(farmCard), first = cards.shift();
+      const groups = p.groups, cards = groups.map(farmCard), first = cards.shift();
       content.push({stack: [block, first], unbreakable: groups[0].rows.length <= 8}, ...cards);
     }
   }
