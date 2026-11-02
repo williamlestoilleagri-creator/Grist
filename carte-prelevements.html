@@ -1,0 +1,1087 @@
+<!doctype html>
+<html lang="fr" data-fr-scheme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Carte des prélèvements</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/dsfr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/utility/icons/icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  /* Couleurs DSFR */
+  :root {
+    --bleu-france: #000091;
+    --bleu-france-clair: #e3e3fd;
+    --rouge-marianne: #e1000f;
+    --gris-texte: #3a3a3a;
+    --gris-mention: #666;
+    --gris-bordure: #ddd;
+    --haut-entete: 48px;
+  }
+  html, body { height: 100%; margin: 0; }
+  body { display: flex; flex-direction: column; background: #fff; color: var(--gris-texte); }
+
+  /* Bandeau */
+  #bandeau {
+    display: flex; align-items: center; gap: 10px; padding: 4px 12px 4px 6px;
+    border-bottom: 3px solid var(--bleu-france); background: #fff; flex-wrap: wrap;
+  }
+  #bandeau .marque { font-weight: 700; font-size: 15px; line-height: 1.1; color: #161616; display: flex; align-items: center; }
+  #bandeau .marque small { display: block; font-weight: 400; font-size: 11px; color: var(--gris-mention); }
+  #bandeau .marque::before {
+    content: ""; display: inline-block; width: 6px; height: 30px; margin-right: 8px;
+    background: linear-gradient(var(--bleu-france) 0 33%, #fff 33% 66%, var(--rouge-marianne) 66%);
+    border: 1px solid #eee;
+  }
+  #chiffres { display: flex; gap: 14px; margin-left: auto; flex-wrap: wrap; }
+  #chiffres div { text-align: center; line-height: 1.1; }
+  #chiffres b { display: block; font-size: 17px; color: var(--bleu-france); }
+  #chiffres span { font-size: 11px; color: var(--gris-mention); }
+  #alerte { display: none; padding: 4px 12px; font-size: 12px; background: #ffe9e6; color: #b60000; }
+
+  /* Corps : panneau + carte */
+  #corps { flex: 1; display: flex; min-height: 0; position: relative; }
+  #panneau {
+    width: 380px; max-width: 45%; display: flex; flex-direction: column; border-right: 1px solid var(--gris-bordure);
+    background: #fff; min-height: 0;
+  }
+  body.panneau-ferme #panneau { display: none; }
+  #poignee { display: none; }
+  #outils { padding: 10px 12px; border-bottom: 1px solid var(--gris-bordure); }
+  #outils .fr-input { font-size: 14px; }
+  #barre-recherche textarea.fr-input { min-height: 40px; max-height: 110px; resize: vertical; font-family: monospace; }
+  .ligne-btn { display: flex; gap: 6px; margin-top: 6px; }
+  .ligne-btn .fr-btn { flex: 1; justify-content: center; }
+  #filtres { margin-top: 8px; }
+  #filtre { box-sizing: border-box; width: 100%; }
+  #filtres > summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--bleu-france); list-style: none; padding: 2px 0; }
+  #filtres > summary::-webkit-details-marker { display: none; }
+  #filtres > summary::before { content: "▸ "; }
+  #filtres[open] > summary::before { content: "▾ "; }
+  #passes { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 13px; cursor: pointer; }
+  #passes input { width: 16px; height: 16px; accent-color: var(--bleu-france); }
+  #passes .mention { margin-left: auto; }
+  #legende { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+  #legende button {
+    display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; font-size: 12px; border-radius: 12px;
+    border: 1px solid var(--gris-bordure); background: #fff; cursor: pointer;
+  }
+  #legende button i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  #legende button.masque { opacity: .4; text-decoration: line-through; }
+  #contenu { flex: 1; overflow: auto; padding: 8px 12px 16px; -webkit-overflow-scrolling: touch; }
+  #carte { flex: 1; min-width: 0; position: relative; }
+
+  /* Listes */
+  .titre-vue { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; }
+  .titre-vue h2 { font-size: 17px; margin: 0; line-height: 1.3; }
+  .mention { font-size: 12px; color: var(--gris-mention); }
+  .item-commune {
+    display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 10px; margin-bottom: 4px;
+    border: 1px solid var(--gris-bordure); border-left: 4px solid var(--bleu-france); background: #fff;
+    text-align: left; cursor: pointer; font-size: 14px;
+  }
+  .item-commune:hover, .item-commune.survol { background: var(--bleu-france-clair); }
+  .item-commune .nom { flex: 1; font-weight: 600; }
+  .barre { display: flex; height: 6px; width: 60px; border-radius: 3px; overflow: hidden; background: #eee; }
+  .compteur {
+    min-width: 24px; padding: 0 7px; border-radius: 10px; background: var(--bleu-france); color: #fff;
+    font-size: 11px; font-weight: 700; text-align: center; line-height: 18px;
+  }
+  details.exploitation { border: 1px solid var(--gris-bordure); margin-bottom: 6px; background: #fff; }
+  details.exploitation > summary {
+    list-style: none; cursor: pointer; padding: 7px 10px; display: flex; gap: 8px; align-items: center; font-weight: 600; font-size: 14px;
+  }
+  details.exploitation > summary::-webkit-details-marker { display: none; }
+  details.exploitation > summary::before { content: "▸"; color: var(--bleu-france); transition: transform .15s; }
+  details.exploitation[open] > summary::before { transform: rotate(90deg); }
+  details.exploitation[open] > summary { background: var(--bleu-france-clair); }
+  details.exploitation > summary .nom { flex: 1; }
+  .pacage { font-weight: 400; font-size: 12px; color: var(--gris-mention); }
+  .rdv { border-top: 1px solid var(--gris-bordure); padding: 7px 10px; }
+  .rdv.actif { background: #fff8e6; box-shadow: inset 4px 0 0 var(--rouge-marianne); }
+  .rdv-entete { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; cursor: pointer; font-size: 13px; }
+  .rdv-entete .cle { font-weight: 700; }
+  .rdv-entete .qui { width: 100%; display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 3px; }
+  .rdv-entete .qui span { font-size: 15px; font-weight: 700; color: var(--bleu-france); line-height: 1.3; }
+  .pastille { display: inline-block; padding: 0 7px; border-radius: 4px; font-size: 11px; font-weight: 700; color: #fff; }
+  .rdv-corps { display: none; margin-top: 8px; }
+  .rdv.ouvert .rdv-corps { display: block; }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  table.champs { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.champs th { text-align: left; font-weight: 600; color: var(--gris-mention); padding: 3px 6px 3px 0; vertical-align: top; width: 42%; }
+  table.champs td { padding: 3px 0; word-break: break-word; }
+  table.champs tr + tr { border-top: 1px dashed #eee; }
+  .sous-titre { font-size: 12px; font-weight: 700; color: var(--bleu-france); text-transform: uppercase; margin: 10px 0 2px; }
+  .absent { color: var(--rouge-marianne); font-size: 13px; margin: 2px 0; }
+  .vide { color: var(--gris-mention); font-style: italic; padding: 12px 0; }
+  .geo { font-size: 12.5px; }
+  .geo ul { margin: 2px 0 4px; padding-left: 18px; }
+  .geo li { margin: 1px 0; }
+  .geo .ok { color: #18753c; font-weight: 600; }
+  .geo .ecart { color: #b34000; font-weight: 600; }
+  .geo .source { font-size: 11px; color: var(--gris-mention); }
+
+  /* Carte */
+  .leaflet-container { font-family: Marianne, arial, sans-serif; }
+  .leaflet-container a:not(.leaflet-control-layers-toggle) { background-image: none; }
+  .bulle-commune {
+    display: flex; align-items: center; justify-content: center; border-radius: 50%;
+    background: rgba(0, 0, 145, .85); color: #fff; font-weight: 700; font-size: 11px; border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,.35); transition: transform .15s, background .15s;
+  }
+  .bulle-commune:hover, .bulle-commune.survol { transform: scale(1.2); background: var(--rouge-marianne); }
+  .leaflet-tooltip.etiquette { font-size: 12px; font-weight: 600; }
+  #basculer-carte { position: absolute; top: 10px; left: 54px; z-index: 1000; display: none; }
+  body.panneau-ferme #basculer-carte { display: inline-flex; }
+  #chargement {
+    position: absolute; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,.85); font-size: 15px; color: var(--bleu-france); font-weight: 600; text-align: center; padding: 20px;
+  }
+
+  /* ============ Téléphone : carte plein écran, recherche flottante, liste en panneau coulissant ============ */
+  @media (max-width: 700px) {
+    html, body { overflow: hidden; overscroll-behavior: none; }
+    #bandeau { padding: 6px 10px; gap: 8px; flex-wrap: nowrap; min-height: 44px; border-bottom-width: 2px; }
+    #bandeau .marque { font-size: 14px; }
+    #bandeau .marque small, #chiffres, #basculer, #basculer-carte { display: none !important; }
+    #bandeau .marque::before { height: 22px; }
+    #corps { display: block; flex: 1; }
+    #carte { position: absolute; inset: 0; }
+    body.panneau-ferme #panneau, #panneau {
+      display: flex; position: absolute; left: 0; right: 0; bottom: 0; width: auto; max-width: none; height: 76px;
+      border: 0; border-radius: 16px 16px 0 0; box-shadow: 0 -4px 18px rgba(0, 0, 18, .22); z-index: 1100;
+      transition: height .22s ease; padding-bottom: env(safe-area-inset-bottom); overflow: hidden;
+    }
+    #poignee {
+      display: flex; flex-direction: column; align-items: stretch; gap: 4px; width: 100%; border: 0; background: #fff;
+      padding: 6px 14px 8px; cursor: grab; touch-action: none; text-align: left; border-radius: 16px 16px 0 0; flex: 0 0 auto;
+    }
+    #poignee .grip { align-self: center; width: 42px; height: 5px; border-radius: 3px; background: #c8c8c8; }
+    #poignee .ligne { display: flex; align-items: center; gap: 8px; }
+    #resume { flex: 1; font-size: 14px; color: #161616; line-height: 1.25; }
+    #resume b { color: var(--bleu-france); }
+    #resume .rouge { color: var(--rouge-marianne); font-weight: 700; }
+    #poignee .fleche { font-size: 13px; font-weight: 700; color: var(--bleu-france); white-space: nowrap; }
+    #outils { padding: 0 12px 8px; border-bottom: 1px solid var(--gris-bordure); }
+    #filtres { margin-top: 0; }
+    body[data-feuille="bas"] #outils, body[data-feuille="bas"] #contenu { visibility: hidden; }
+    /* recherche flottante en haut de la carte */
+    #barre-recherche {
+      position: fixed; top: calc(var(--haut-entete) + 8px); left: 8px; right: 8px; z-index: 1200;
+      display: flex; gap: 6px; align-items: stretch; background: #fff; padding: 6px; border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0, 0, 18, .25); visibility: visible;
+    }
+    #barre-recherche label { display: none; }
+    #barre-recherche textarea.fr-input {
+      flex: 1; min-width: 0; height: 44px; min-height: 44px; max-height: 44px; resize: none; font-size: 16px; padding: 10px; margin: 0;
+      white-space: nowrap; overflow: hidden;
+    }
+    #barre-recherche .ligne-btn { margin: 0; flex: 0 0 auto; }
+    #barre-recherche .ligne-btn .fr-btn { width: 44px; min-height: 44px; padding: 0; font-size: 0; justify-content: center; }
+    #barre-recherche .ligne-btn .fr-btn::before { margin: 0 !important; --icon-size: 1.4rem; }
+    #filtre.fr-input { font-size: 16px; }
+    .leaflet-top { top: 62px; }
+    .leaflet-control-layers-toggle { width: 40px; height: 40px; }
+    .leaflet-touch .leaflet-bar a { width: 40px; height: 40px; line-height: 40px; }
+    /* éléments plus grands au doigt */
+    .item-commune { padding: 11px 12px; font-size: 15px; }
+    details.exploitation > summary { padding: 11px 12px; font-size: 15px; }
+    .rdv { padding: 10px 12px; }
+    .rdv-entete { font-size: 14px; }
+    .actions .fr-btn { flex: 1 1 auto; justify-content: center; min-height: 44px; }
+    table.champs { font-size: 14px; }
+    table.champs th { width: 40%; }
+    #legende button { padding: 5px 10px; font-size: 13px; }
+  }
+</style>
+</head>
+<body data-feuille="bas">
+<header id="bandeau">
+  <button id="basculer" type="button" class="fr-btn fr-btn--sm fr-btn--tertiary fr-icon-arrow-left-s-line fr-btn--icon-left"
+    title="Masquer la liste">Masquer la liste</button>
+  <div class="marque"><div>Carte des prélèvements<small>Reliquats azotés – regroupement par commune</small></div></div>
+  <div id="chiffres"></div>
+</header>
+<div id="alerte"></div>
+
+<div id="corps">
+  <aside id="panneau">
+    <button id="poignee" type="button" aria-expanded="false" aria-controls="contenu">
+      <span class="grip" aria-hidden="true"></span>
+      <span class="ligne"><span id="resume">Chargement…</span><span class="fleche" id="fleche">Liste ▴</span></span>
+    </button>
+    <div id="outils">
+      <div id="barre-recherche">
+        <label class="fr-label fr-text--sm fr-mb-1v" for="cles">Rechercher une ou plusieurs parcelles (PACAGE-îlot-parcelle)</label>
+        <textarea id="cles" class="fr-input" rows="1" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false"
+          placeholder="Clé parcelle, ex. 029151853-2-2" title="Séparez les clés par des espaces, virgules, points-virgules ou retours à la ligne"></textarea>
+        <div class="ligne-btn">
+          <button id="chercher" type="button" class="fr-btn fr-btn--sm fr-icon-search-line fr-btn--icon-left" title="Rechercher">Rechercher</button>
+          <button id="effacer" type="button" class="fr-btn fr-btn--sm fr-btn--secondary fr-icon-close-line fr-btn--icon-left" title="Effacer">Effacer</button>
+        </div>
+      </div>
+      <details id="filtres" open>
+        <summary>Filtres et légende</summary>
+        <input id="filtre" class="fr-input fr-mt-1w" type="search" placeholder="Filtrer : commune, exploitation, préleveur…">
+        <label id="passes"><input type="checkbox" id="masquer-passes" checked>
+          Écarter les RDV dont la date est passée <span class="mention" id="nb-passes"></span></label>
+        <div id="legende"></div>
+      </details>
+    </div>
+    <div id="contenu"><p class="vide">Chargement…</p></div>
+  </aside>
+  <div id="carte">
+    <button id="basculer-carte" type="button" class="fr-btn fr-btn--sm fr-icon-menu-fill fr-btn--icon-left">Liste</button>
+    <div id="chargement">Chargement des données…</div>
+  </div>
+</div>
+
+<script>
+  // ---------- Paramètres (noms des colonnes du document) ----------
+  const TABLE_PAR_DEFAUT = 'RDV_Prelevements';
+  const COL_PARCELLE = 'Cle_parcelle';   // Référence vers DATA_Parcelles_DEF
+  const COL_LAT = 'latitude';
+  const COL_LON = 'longitude';
+  const COL_STATUT = 'Statut';
+  const COL_DATE = 'Date_RDV';
+  const COL_PRELEVEUR = 'Preleveur';
+  const COL_ORGANISME = 'Organisme';
+  const ZOOM_PARCELLES = 12;             // en dessous : bulles par commune ; au-dessus : parcelles
+  const COLONNES_MASQUEES = new Set(['id', 'manualSort', 'Description', 'Description_2', COL_LAT, COL_LON]);
+  const COULEURS = ['#000091', '#18753c', '#b34000', '#6a6af4', '#009081', '#a558a0', '#c3992a', '#ce0500', '#7d4e5b', '#417dc4'];
+  const COULEUR_SANS_STATUT = '#7b7b7b';
+  const RAFRAICHIR_REFS_MS = 60000;
+  const mobile = window.matchMedia('(max-width: 700px)');
+  const tactile = window.matchMedia('(pointer: coarse)').matches;
+
+  // ---------- État ----------
+  let tableId = TABLE_PAR_DEFAUT;
+  let colonnes = [];              // colonnes de la table source (ordre Grist)
+  let colParId = new Map();       // colId -> colonne
+  const tablesRef = {};           // tableId -> Map(id -> ligne)
+  let refsChargees = 0;
+  let metaPret = null;
+  let rdvs = [];
+  let parId = new Map();
+  let communes = new Map();       // nom -> { nom, rdvs: [] }
+  let couleurStatut = new Map();
+  const statutsMasques = new Set();
+  let vue = { type: 'communes' };
+  let rdvActif = null;
+  let curseurParMoi = null;
+  let premierCadrage = true;
+  let enCours = null, enAttente = null;
+
+  // ---------- Carte ----------
+  const carte = L.map('carte', { preferCanvas: true, tap: true }).setView([48.2, -2.9], 8);
+  const rendu = L.canvas({ padding: 0.5, tolerance: tactile ? 10 : 3 });
+  const ign = function (couche, format) {
+    return L.tileLayer('https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=' + couche +
+      '&STYLE=normal&TILEMATRIXSET=PM&FORMAT=' + format + '&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}',
+      { maxZoom: 19, attribution: '&copy; IGN – Géoplateforme' });
+  };
+  const fonds = {
+    'Plan IGN': ign('GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2', 'image/png'),
+    'Photographies aériennes': ign('ORTHOIMAGERY.ORTHOPHOTOS', 'image/jpeg'),
+    'OpenStreetMap': L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }),
+  };
+  fonds['Plan IGN'].addTo(carte);
+  L.control.layers(fonds, null, { position: 'topright' }).addTo(carte);
+  L.control.scale({ imperial: false }).addTo(carte);
+
+  const coucheCommunes = L.featureGroup().addTo(carte);
+  const coucheParcelles = L.featureGroup();
+  const coucheSurbrillance = L.featureGroup().addTo(carte);
+  const bullesCommunes = new Map();
+
+  carte.on('zoomend', majCouches);
+  function majCouches() {
+    if (carte.getZoom() >= ZOOM_PARCELLES) { carte.removeLayer(coucheCommunes); coucheParcelles.addTo(carte); }
+    else { carte.removeLayer(coucheParcelles); coucheCommunes.addTo(carte); }
+  }
+
+  // ---------- Outils ----------
+  const $ = function (id) { return document.getElementById(id); };
+  function esc(t) {
+    return String(t ?? '').replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  // Cellule en erreur dans Grist (#TypeError…) : ["E", "TypeError", …]
+  function estErreur(v) { return Array.isArray(v) && v[0] === 'E'; }
+  function propre(v) {
+    if (v === null || v === undefined || estErreur(v)) return '';
+    return String(v).trim();
+  }
+  function nombre(v) {
+    const t = propre(v);
+    return t === '' ? NaN : Number(t.replace(',', '.'));
+  }
+  // "022000005-3-5", "022000005|3|5", " 022000005 - 3 - 5 " -> "022000005-3-5"
+  function normaliserCle(v) {
+    return propre(v).toLowerCase().replace(/\s*[|\/_;]\s*|\s*-\s*/g, '-').replace(/\s+/g, '');
+  }
+  // Forme de comparaison sans zéros de tête : « 29151853-2-2 », « 029151853-02-2 » et « 029151853-2-2 » sont la même parcelle
+  function cleCompacte(v) {
+    return normaliserCle(v).split('-').filter(Boolean).map(function (p) { return p.replace(/^0+(?=\d)/, ''); }).join('-');
+  }
+  function sansAccents(v) { return String(v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+  function versDate(v) {
+    if (v instanceof Date) return v;
+    if (typeof v === 'number' && v) return new Date(v * 1000);
+    if (Array.isArray(v) && (v[0] === 'D' || v[0] === 'd')) return new Date(v[1] * 1000);
+    return null;
+  }
+  function liste(v) {
+    if (Array.isArray(v)) return v[0] === 'L' ? v.slice(1) : v;
+    return v ? [v] : [];
+  }
+  function dateHeure(d) {
+    return d.toLocaleString('fr-FR', { timeZone: 'Europe/Paris', dateStyle: 'short', timeStyle: 'short' });
+  }
+  function telLien(t) { return 'tel:' + String(t).replace(/[^\d+]/g, ''); }
+
+  function enLignes(colonnaire) {
+    const m = new Map();
+    const ids = colonnaire.id || [];
+    const cles = Object.keys(colonnaire);
+    for (let i = 0; i < ids.length; i++) {
+      const l = {};
+      for (const k of cles) l[k] = colonnaire[k][i];
+      m.set(ids[i], l);
+    }
+    return m;
+  }
+
+  // Valeur lisible d'une cellule (row = ligne brute issue de fetchTable)
+  function formater(row, colId) {
+    const col = colParId.get(colId);
+    const valeur = row[colId];
+    const type = col ? col.type : '';
+    if (valeur === null || valeur === undefined || valeur === '' || estErreur(valeur)) return '';
+    if (type.startsWith('Ref:') || type.startsWith('RefList:')) {
+      // Texte affiché par Grist pour la référence (colonne d'aide gristHelper_Display…)
+      if (col.displayColId && row[col.displayColId] !== undefined) {
+        const d = row[col.displayColId];
+        if (estErreur(d)) return '';
+        return Array.isArray(d) ? liste(d).join(', ') : propre(d);
+      }
+      const t = tablesRef[type.split(':')[1]];
+      return liste(valeur).map(function (id) {
+        const l = t && t.get(id);
+        return l && col.visibleColId ? propre(l[col.visibleColId]) : '#' + id;
+      }).join(', ');
+    }
+    if (type.startsWith('DateTime')) { const d = versDate(valeur); return d ? dateHeure(d) : String(valeur); }
+    if (type === 'Date') { const d = versDate(valeur); return d ? d.toLocaleDateString('fr-FR', { timeZone: 'UTC' }) : String(valeur); }
+    if (type === 'Bool') return valeur ? 'Oui' : 'Non';
+    if (type === 'ChoiceList') return liste(valeur).join(', ');
+    if (type === 'Numeric' || type === 'Int') return typeof valeur === 'number' ? valeur.toLocaleString('fr-FR') : String(valeur);
+    if (Array.isArray(valeur)) return liste(valeur).join(', ');
+    return String(valeur);
+  }
+
+  // ---------- Métadonnées : colonnes, types, tables référencées ----------
+  async function chargerMeta() {
+    try {
+      if (grist.selectedTable && grist.selectedTable.getTableId) tableId = await grist.selectedTable.getTableId();
+      else if (grist.getSelectedTableId) tableId = await grist.getSelectedTableId();
+    } catch (e) { /* table par défaut */ }
+    tableId = tableId || TABLE_PAR_DEFAUT;
+    const tables = enLignes(await grist.docApi.fetchTable('_grist_Tables'));
+    const cols = enLignes(await grist.docApi.fetchTable('_grist_Tables_column'));
+    let idTable = null;
+    for (const [id, t] of tables) if (t.tableId === tableId) idTable = id;
+    colonnes = [...cols.values()]
+      .filter(function (c) { return c.parentId === idTable && !c.colId.startsWith('gristHelper_'); })
+      .sort(function (a, b) { return a.parentPos - b.parentPos; });
+    for (const c of colonnes) {
+      const d = c.displayCol && cols.get(c.displayCol);
+      const v = c.visibleCol && cols.get(c.visibleCol);
+      c.displayColId = d ? d.colId : null;
+      c.visibleColId = v ? v.colId : null;
+    }
+    colParId = new Map(colonnes.map(function (c) { return [c.colId, c]; }));
+  }
+
+  async function chargerRefs() {
+    const aCharger = new Set();
+    for (const c of colonnes) {
+      const m = /^Ref(?:List)?:(.+)$/.exec(c.type);
+      if (m) aCharger.add(m[1]);
+    }
+    const erreurs = [];
+    await Promise.all([...aCharger].map(async function (t) {
+      try { tablesRef[t] = enLignes(await grist.docApi.fetchTable(t)); }
+      catch (e) { erreurs.push(t); tablesRef[t] = tablesRef[t] || new Map(); }
+    }));
+    refsChargees = Date.now();
+    if (erreurs.length) alerte('Impossible de lire : ' + erreurs.join(', ') + '. Vérifiez « Accès complet au document ».');
+  }
+
+  function alerte(texte) {
+    $('alerte').textContent = texte || '';
+    $('alerte').style.display = texte ? 'block' : 'none';
+    majHautEntete();
+  }
+
+  // Colonne commune de RDV_Prelevements (ex. Cle_parcelle_PACAGE_ilot_parcelle__Commune)
+  function colCommune() {
+    const c = colonnes.find(function (x) { return /^commune$/i.test(x.colId); }) ||
+      colonnes.find(function (x) { return /commune/i.test(x.colId) || /commune/i.test(x.label || ''); });
+    return c ? c.colId : null;
+  }
+
+  // ---------- Données ----------
+  function preparer(ids, lignes) {
+    const typeParcelle = colParId.has(COL_PARCELLE) ? colParId.get(COL_PARCELLE).type : '';
+    const tableParcelles = typeParcelle.startsWith('Ref:') ? tablesRef[typeParcelle.slice(4)] : null;
+    const typePreleveur = colParId.has(COL_PRELEVEUR) ? colParId.get(COL_PRELEVEUR).type : '';
+    const tablePreleveurs = typePreleveur.startsWith('Ref:') ? tablesRef[typePreleveur.slice(4)] : null;
+    const cCommune = colCommune();
+
+    rdvs = [];
+    for (const id of ids) {
+      const r = lignes.get(id);
+      if (!r) continue;
+      const parcelle = (tableParcelles && tableParcelles.get(r[COL_PARCELLE])) || {};
+      const preleveur = (tablePreleveurs && tablePreleveurs.get(r[COL_PRELEVEUR])) || {};
+      // coordonnées du rendez-vous, sinon celles de la parcelle
+      let lat = nombre(r[COL_LAT]), lon = nombre(r[COL_LON]);
+      if (!isFinite(lat) || !isFinite(lon) || (lat === 0 && lon === 0)) { lat = nombre(parcelle.latitude); lon = nombre(parcelle.longitude); }
+      const cle = formater(r, COL_PARCELLE) || propre(parcelle.Cle2_2) || propre(parcelle.CLE);
+      const pacage = /^\d{9}$/.test(propre(r.PACAGE)) ? propre(r.PACAGE) : (propre(parcelle.PACAGE) || (cle.match(/^\d{9}/) || [''])[0]);
+      const nomPreleveur = propre(preleveur.Nom_Prenom) ||
+        [propre(preleveur.Prenom), propre(preleveur.Nom)].filter(Boolean).join(' ') || formater(r, COL_PRELEVEUR);
+      rdvs.push({
+        id: id, brut: r, parcelle: parcelle,
+        cle: cle,
+        clesRecherche: [cle, parcelle.Cle2, parcelle.Cle2_2, parcelle.CLE].map(cleCompacte).filter(Boolean),
+        commune: (cCommune && propre(r[cCommune])) || propre(parcelle.Commune) || 'Commune non renseignée',
+        cp: propre(parcelle.Code_Postal).split('.')[0],
+        pacage: pacage,
+        exploitation: propre(r.Raison_sociale) || propre(parcelle.Nom) || propre(r.Nom_exploitation) || 'Exploitation sans nom',
+        preleveur: nomPreleveur,
+        telPreleveur: propre(preleveur.Telephone),
+        organisme: propre(r[COL_ORGANISME]) || propre(preleveur.Organisme),
+        statut: propre(r[COL_STATUT]),
+        date: versDate(r[COL_DATE]),
+        lat: lat, lon: lon, localise: isFinite(lat) && isFinite(lon) && !(lat === 0 && lon === 0),
+      });
+    }
+    parId = new Map(rdvs.map(function (r) { return [r.id, r]; }));
+    const statuts = [...new Set(rdvs.map(function (r) { return r.statut; }).filter(Boolean))].sort();
+    couleurStatut = new Map(statuts.map(function (s, i) { return [s, COULEURS[i % COULEURS.length]]; }));
+    if (rdvs.length && !tableParcelles) alerte('Colonne « ' + COL_PARCELLE + ' » introuvable : les informations de parcelle ne sont pas disponibles.');
+  }
+  function couleur(statut) { return couleurStatut.get(statut) || COULEUR_SANS_STATUT; }
+  // Jour J (fuseau Europe/Paris) au format AAAA-MM-JJ : recalculé à chaque appel, donc juste même après minuit
+  const formatJour = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' });
+  function jour(d) { return formatJour.format(d); }
+  // RDV daté d'un jour antérieur à aujourd'hui (les RDV sans date ne sont jamais écartés)
+  function estPasse(r) { return !!r.date && jour(r.date) < jour(new Date()); }
+  function visible(r) {
+    if ($('masquer-passes').checked && estPasse(r)) return false;
+    if (statutsMasques.has(r.statut)) return false;
+    const f = sansAccents($('filtre').value.trim());
+    if (!f) return true;
+    return sansAccents([r.commune, r.cp, r.exploitation, r.pacage, r.cle, r.preleveur, r.organisme].join(' ')).includes(f);
+  }
+  function cleExploitation(r) { return r.pacage || r.exploitation; }
+
+  function regrouper() {
+    communes = new Map();
+    for (const r of rdvs) {
+      if (!visible(r)) continue;
+      if (!communes.has(r.commune)) communes.set(r.commune, { nom: r.commune, rdvs: [] });
+      communes.get(r.commune).rdvs.push(r);
+    }
+  }
+
+  // ---------- Dessin de la carte ----------
+  function dessinerCarte() {
+    coucheCommunes.clearLayers();
+    coucheParcelles.clearLayers();
+    bullesCommunes.clear();
+    for (const c of communes.values()) {
+      const loc = c.rdvs.filter(function (r) { return r.localise; });
+      if (!loc.length) continue;
+      const lat = loc.reduce(function (s, r) { return s + r.lat; }, 0) / loc.length;
+      const lon = loc.reduce(function (s, r) { return s + r.lon; }, 0) / loc.length;
+      const n = c.rdvs.length;
+      const taille = Math.min(44, Math.round((tactile ? 26 : 20) + 4 * Math.log2(n)));
+      const bulle = L.marker([lat, lon], {
+        icon: L.divIcon({
+          className: '', iconSize: [taille, taille],
+          html: '<div class="bulle-commune" style="width:' + taille + 'px;height:' + taille + 'px">' + n + '</div>',
+        }),
+        riseOnHover: true,
+      }).on('click', function () { ouvrirCommune(c.nom, true); });
+      if (!tactile) {
+        bulle.bindTooltip(esc(c.nom) + ' – ' + n + ' parcelle(s)', { direction: 'top', className: 'etiquette', offset: [0, -taille / 2] })
+          .on('mouseover', function () { survolCommune(c.nom, true); })
+          .on('mouseout', function () { survolCommune(c.nom, false); });
+      }
+      bulle.addTo(coucheCommunes);
+      bullesCommunes.set(c.nom, bulle);
+
+      for (const r of loc) {
+        const m = L.circleMarker([r.lat, r.lon], {
+          renderer: rendu, radius: tactile ? 8 : 6, color: '#fff', weight: 1.5, fillColor: couleur(r.statut), fillOpacity: 0.95,
+        }).on('click', function () { ouvrirRdv(r.id, true); });
+        if (!tactile) m.bindTooltip(esc(r.exploitation) + '<br>' + esc(r.cle), { direction: 'top', className: 'etiquette' });
+        m.addTo(coucheParcelles);
+      }
+    }
+    majCouches();
+  }
+
+  function survolCommune(nom, actif) {
+    const b = bullesCommunes.get(nom);
+    const el = b && b.getElement() && b.getElement().firstChild;
+    if (el) el.classList.toggle('survol', actif);
+    const li = document.querySelector('.item-commune[data-commune="' + CSS.escape(nom) + '"]');
+    if (li) li.classList.toggle('survol', actif);
+  }
+
+  // Anneau rouge discret, seulement pour quelques parcelles (sélection / recherche)
+  function surbrillance(l) {
+    coucheSurbrillance.clearLayers();
+    for (const r of l.slice(0, 200)) {
+      if (!r.localise) continue;
+      L.circleMarker([r.lat, r.lon], {
+        radius: tactile ? 13 : 11, color: '#e1000f', weight: 2.5, fill: false, interactive: false,
+      }).addTo(coucheSurbrillance);
+    }
+  }
+
+  // Sur téléphone, le panneau du bas cache une partie de la carte : on centre au-dessus
+  function marges() {
+    if (!mobile.matches) return { haut: 40, bas: 40 };
+    const panneau = etatFeuille === 'bas' ? 76 : $('panneau').offsetHeight;
+    return { haut: 70, bas: Math.min(panneau, $('corps').clientHeight * 0.7) + 20 };
+  }
+  function cadrer(l, zoomMax) {
+    const pts = l.filter(function (r) { return r.localise; }).map(function (r) { return [r.lat, r.lon]; });
+    if (!pts.length) return;
+    const m = marges();
+    if (pts.length === 1) {
+      const z = Math.max(carte.getZoom(), zoomMax);
+      const centre = carte.unproject(carte.project(pts[0], z).add([0, (m.bas - m.haut) / 2]), z);
+      carte.flyTo(centre, z, { duration: 0.8 });
+    } else {
+      carte.flyToBounds(L.latLngBounds(pts), { paddingTopLeft: [30, m.haut], paddingBottomRight: [30, m.bas], maxZoom: zoomMax, duration: 0.8 });
+    }
+  }
+
+  // ---------- Panneau ----------
+  function chiffres() {
+    const vis = rdvs.filter(visible);
+    const nbPasses = rdvs.filter(estPasse).length;
+    $('nb-passes').textContent = nbPasses ? '(' + nbPasses + (($('masquer-passes').checked) ? ' écarté' + (nbPasses > 1 ? 's' : '') : '') + ')' : '';
+    const nbExpl = new Set(vis.map(cleExploitation)).size;
+    const nonLoc = vis.filter(function (r) { return !r.localise; }).length;
+    $('chiffres').innerHTML =
+      '<div><b>' + vis.length + '</b><span>parcelles</span></div>' +
+      '<div><b>' + nbExpl + '</b><span>exploitations</span></div>' +
+      '<div><b>' + communes.size + '</b><span>communes</span></div>' +
+      (nonLoc ? '<div title="Sans latitude / longitude"><b style="color:var(--rouge-marianne)">' + nonLoc + '</b><span>non localisées</span></div>' : '');
+    majResume(vis, nbExpl, nonLoc);
+  }
+  // Ligne affichée dans la poignée du panneau (téléphone)
+  function majResume(vis, nbExpl, nonLoc) {
+    vis = vis || rdvs.filter(visible);
+    let t;
+    if (vue.type === 'recherche') {
+      const n = vue.trouves.filter(visible).length;
+      t = '<b>' + n + '</b> parcelle' + (n > 1 ? 's' : '') + ' trouvée' + (n > 1 ? 's' : '') + (vue.absents.length ? ' · <span class="rouge">' + vue.absents.length + ' introuvable(s)</span>' : '');
+    } else if (vue.type === 'commune') {
+      const c = communes.get(vue.nom), n = c ? c.rdvs.length : 0;
+      t = '<b>' + esc(vue.nom) + '</b> · ' + n + ' parcelle' + (n > 1 ? 's' : '');
+    } else {
+      if (nbExpl === undefined) { nbExpl = new Set(vis.map(cleExploitation)).size; nonLoc = vis.filter(function (r) { return !r.localise; }).length; }
+      t = '<b>' + vis.length.toLocaleString('fr-FR') + '</b> parcelles · <b>' + nbExpl + '</b> exploitations · <b>' + communes.size + '</b> communes' +
+        (nonLoc ? ' · <span class="rouge">' + nonLoc + ' non localisées</span>' : '');
+    }
+    $('resume').innerHTML = t;
+  }
+
+  function legende() {
+    const comptes = new Map();
+    for (const r of rdvs) {
+      if ($('masquer-passes').checked && estPasse(r)) continue;
+      comptes.set(r.statut, (comptes.get(r.statut) || 0) + 1);
+    }
+    $('legende').innerHTML = [...comptes.keys()].sort().map(function (s) {
+      return '<button type="button" data-statut="' + esc(s) + '" class="' + (statutsMasques.has(s) ? 'masque' : '') +
+        '" title="Afficher / masquer"><i style="background:' + couleur(s) + '"></i>' + esc(s || 'Sans statut') +
+        ' (' + comptes.get(s) + ')</button>';
+    }).join('');
+  }
+
+  function barreStatuts(l) {
+    const comptes = new Map();
+    for (const r of l) comptes.set(r.statut, (comptes.get(r.statut) || 0) + 1);
+    return '<span class="barre">' + [...comptes.entries()].map(function (e) {
+      return '<i style="width:' + (100 * e[1] / l.length) + '%;background:' + couleur(e[0]) + '" title="' + esc(e[0] || 'Sans statut') + ' : ' + e[1] + '"></i>';
+    }).join('') + '</span>';
+  }
+
+  function vueCommunes() {
+    const tri = [...communes.values()].sort(function (a, b) { return a.nom.localeCompare(b.nom, 'fr'); });
+    if (!tri.length) return '<p class="vide">Aucune parcelle à afficher.</p>';
+    return '<div class="titre-vue"><h2>Communes</h2><span class="mention">(' + tri.length + ')</span></div>' +
+      tri.map(function (c) {
+        return '<button type="button" class="item-commune" data-commune="' + esc(c.nom) + '">' +
+          '<span class="nom">' + esc(c.nom) + '</span>' +
+          barreStatuts(c.rdvs) + '<span class="compteur">' + c.rdvs.length + '</span></button>';
+      }).join('');
+  }
+
+  function blocExploitations(l, ouvrirTout) {
+    const groupes = new Map();
+    for (const r of l) {
+      const k = cleExploitation(r);
+      if (!groupes.has(k)) groupes.set(k, { nom: r.exploitation, pacage: r.pacage, rdvs: [] });
+      groupes.get(k).rdvs.push(r);
+    }
+    return [...groupes.values()].sort(function (a, b) { return a.nom.localeCompare(b.nom, 'fr'); }).map(function (g) {
+      const ouvert = ouvrirTout || g.rdvs.some(function (r) { return r.id === rdvActif; });
+      return '<details class="exploitation"' + (ouvert ? ' open' : '') + '><summary><span class="nom">' + esc(g.nom) +
+        (g.pacage ? ' <span class="pacage">PACAGE ' + esc(g.pacage) + '</span>' : '') + '</span>' +
+        '<span class="compteur">' + g.rdvs.length + '</span></summary>' +
+        g.rdvs.map(carteRdv).join('') + '</details>';
+    }).join('');
+  }
+
+  function ligne(label, valeur) {
+    return valeur === undefined || valeur === null || valeur === '' ? '' :
+      '<tr><th>' + esc(label) + '</th><td>' + esc(valeur) + '</td></tr>';
+  }
+
+  function carteRdv(r) {
+    const actif = r.id === rdvActif;
+    // Format Google Maps, arrondi à 6 décimales (~10 cm)
+    const coords = r.localise ? +r.lat.toFixed(6) + ', ' + +r.lon.toFixed(6) : '';
+    const p = r.parcelle;
+    const ilot = [propre(p.NUM_ILOT), propre(p.NUM_PARCEL)].filter(Boolean).join(' - ');
+    const telExpl = propre(p.Telephone_portable) || propre(p.Telephone_Fixe);
+    const infosParcelle =
+      ligne('Identifiant', r.cle) + ligne('Exploitation', r.exploitation) + ligne('PACAGE', r.pacage) +
+      ligne('Commune', [r.cp, r.commune].filter(Boolean).join(' ')) +
+      ligne('Préleveur', r.preleveur) + ligne('Organisme de prélèvement', r.organisme) +
+      ligne('Îlot - parcelle', ilot) + ligne('Surface (ha)', propre(p.SURF_CALC)) +
+      ligne('Culture 2026', propre(p.CULT_2026)) + ligne('Culture 2025', propre(p.CULT_2025)) +
+      ligne('Raison de la sélection', propre(p.Raison_de_la_selection)) +
+      ligne('Téléphone portable', propre(p.Telephone_portable)) + ligne('Téléphone fixe', propre(p.Telephone_Fixe)) +
+      ligne('Coordonnées GPS', coords);
+    let lignesRdv = '';
+    for (const c of colonnes) {
+      if (COLONNES_MASQUEES.has(c.colId)) continue;
+      lignesRdv += ligne(c.label || c.colId.replace(/_/g, ' '), formater(r.brut, c.colId));
+    }
+    const qui = [r.preleveur && '👤 ' + r.preleveur, r.organisme && '🏢 ' + r.organisme]
+      .filter(Boolean).map(function (t) { return '<span>' + esc(t) + '</span>'; }).join('');
+
+    return '<div class="rdv' + (actif ? ' actif ouvert' : '') + '" data-id="' + r.id + '">' +
+      '<div class="rdv-entete"><span class="cle">' + esc(r.cle || 'Sans identifiant') + '</span>' +
+      '<span class="pastille" style="background:' + couleur(r.statut) + '">' + esc(r.statut || 'Sans statut') + '</span>' +
+      (r.date ? '<span class="mention">' + esc(dateHeure(r.date)) + '</span>' : '') +
+      (r.localise ? '' : '<span class="mention" style="color:var(--rouge-marianne)">non localisée</span>') +
+      (qui ? '<div class="qui">' + qui + '</div>' : '') +
+      '</div><div class="rdv-corps">' +
+      '<div class="actions">' +
+        (coords ?
+          '<a class="fr-btn fr-btn--sm fr-icon-road-map-line fr-btn--icon-left" target="_blank" rel="noopener noreferrer" href="https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(r.lat + ',' + r.lon) + '">Itinéraire</a>' +
+          '<button type="button" class="fr-btn fr-btn--sm fr-btn--secondary fr-icon-clipboard-line fr-btn--icon-left copier" data-coords="' + esc(coords) + '">Copier GPS</button>' : '') +
+        (telExpl ? '<a class="fr-btn fr-btn--sm fr-btn--secondary fr-icon-phone-line fr-btn--icon-left" href="' + esc(telLien(telExpl)) + '">Exploitant</a>' : '') +
+        (r.telPreleveur ? '<a class="fr-btn fr-btn--sm fr-btn--secondary fr-icon-phone-line fr-btn--icon-left" href="' + esc(telLien(r.telPreleveur)) + '">Préleveur</a>' : '') +
+      '</div>' +
+      '<div class="sous-titre">Parcelle</div><table class="champs">' + infosParcelle + '</table>' +
+      (coords ? '<div class="sous-titre">Localisation d’après le GPS</div><div class="geo" data-id="' + r.id + '">' +
+        (cacheGeo.has(cleGeo(r)) && cacheGeo.get(cleGeo(r)).html ? cacheGeo.get(cleGeo(r)).html : '<span class="mention">Recherche de la commune et des lieux-dits…</span>') + '</div>' : '') +
+      '<div class="sous-titre">Rendez-vous de prélèvement</div><table class="champs">' + lignesRdv + '</table>' +
+      '</div></div>';
+  }
+
+  const BOUTON_RETOUR = '<button type="button" class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline fr-icon-arrow-left-line fr-btn--icon-left retour">Retour</button>';
+
+  function vueCommune(nom) {
+    const c = communes.get(nom);
+    const l = c ? c.rdvs : [];
+    return '<div class="titre-vue">' + BOUTON_RETOUR + '<h2>' + esc(nom) + '</h2></div>' +
+      '<p class="mention">' + l.length + ' parcelle(s) – ' + new Set(l.map(cleExploitation)).size + ' exploitation(s)</p>' +
+      (l.length ? blocExploitations(l, false) : '<p class="vide">Aucune parcelle visible dans cette commune.</p>');
+  }
+
+  function vueRecherche() {
+    const res = vue.trouves.filter(visible);
+    return '<div class="titre-vue">' + BOUTON_RETOUR + '<h2>Résultats</h2></div>' +
+      '<p class="mention">' + res.length + ' parcelle(s) trouvée(s)</p>' +
+      vue.absents.map(function (k) { return '<p class="absent">❌ ' + esc(k) + ' : introuvable</p>'; }).join('') +
+      blocExploitations(res, true);
+  }
+
+  function afficher() {
+    let html;
+    if (vue.type === 'commune') html = vueCommune(vue.nom);
+    else if (vue.type === 'recherche') html = vueRecherche();
+    else html = vueCommunes();
+    $('contenu').innerHTML = html;
+    majResume();
+    const actif = document.querySelector('.rdv.actif');
+    if (actif) {   // on fait défiler la liste seulement (scrollIntoView déplacerait toute la page sur téléphone)
+      const c = $('contenu'), d = actif.getBoundingClientRect().top - c.getBoundingClientRect().top;
+      if (mobile.matches || d < 0 || d > c.clientHeight - 40) c.scrollTop += d - 4;
+    }
+    if (rdvActif && parId.has(rdvActif)) localiser(parId.get(rdvActif));
+  }
+
+  // ---------- Commune et lieux-dits d'après les coordonnées (services publics) ----------
+  const cacheGeo = new Map();      // "lat,lon" -> { promesse, html }
+  function cleGeo(r) { return r.lat.toFixed(6) + ',' + r.lon.toFixed(6); }
+  function distance(lat1, lon1, lat2, lon2) {
+    const rad = Math.PI / 180, R = 6371000;
+    const a = Math.sin((lat2 - lat1) * rad / 2) ** 2 +
+      Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin((lon2 - lon1) * rad / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
+  function metres(d) { return d < 1000 ? Math.round(d) + ' m' : (d / 1000).toFixed(1).replace('.', ',') + ' km'; }
+  async function json(url) {
+    const rep = await fetch(url);
+    if (!rep.ok) throw new Error(rep.status);
+    return rep.json();
+  }
+  // Lieux proches renvoyés par le géocodage inverse de l'IGN (index adresses + toponymes)
+  async function lieuxProches(lat, lon) {
+    const base = 'https://data.geopf.fr/geocodage/reverse?lat=' + lat + '&lon=' + lon;
+    const reponses = await Promise.allSettled([
+      json(base + '&index=address&limit=10'),
+      json(base + '&index=poi&limit=10'),
+    ]);
+    const vus = new Set(), lieux = [];
+    for (const rep of reponses) {
+      if (rep.status !== 'fulfilled') continue;
+      for (const f of rep.value.features || []) {
+        const p = f.properties || {};
+        const c = (f.geometry && f.geometry.coordinates) || [];
+        const nom = propre(Array.isArray(p.toponym) ? p.toponym[0] : p.toponym) || propre(p.name) || propre(p.label);
+        if (!nom) continue;
+        const ville = propre(Array.isArray(p.city) ? p.city[0] : p.city);
+        const cat = Array.isArray(p.category) ? p.category.join(', ') : propre(p.category);
+        const type = { locality: 'lieu-dit', street: 'voie', housenumber: 'adresse', municipality: 'commune' }[p.type] || cat || propre(p.type);
+        const cle = sansAccents(nom + '|' + ville);
+        if (vus.has(cle)) continue;
+        vus.add(cle);
+        lieux.push({ nom: nom, ville: ville, type: type, d: c.length ? distance(lat, lon, c[1], c[0]) : NaN, lieuDit: p.type === 'locality' || /lieu-dit|lieu dit/i.test(cat) });
+      }
+    }
+    lieux.sort(function (a, b) { return (b.lieuDit - a.lieuDit) || (a.d - b.d); });
+    return lieux.slice(0, 6);
+  }
+  async function rechercheGeo(r) {
+    const [communesGeo, lieux] = await Promise.all([
+      json('https://geo.api.gouv.fr/communes?lat=' + r.lat + '&lon=' + r.lon + '&fields=nom,code,codesPostaux,departement&format=json')
+        .catch(function () { return null; }),
+      lieuxProches(r.lat, r.lon).catch(function () { return []; }),
+    ]);
+    let html = '';
+    const c = communesGeo && communesGeo[0];
+    if (c) {
+      const memeCommune = sansAccents(c.nom).replace(/[^a-z]/g, '') === sansAccents(r.commune).replace(/[^a-z]/g, '');
+      html += '<div>Commune du point : <b>' + esc(c.nom) + '</b> <span class="mention">(' + esc((c.codesPostaux || [])[0] || '') +
+        ' – INSEE ' + esc(c.code) + (c.departement ? ' – ' + esc(c.departement.nom) : '') + ')</span></div>' +
+        (r.commune && r.commune !== 'Commune non renseignée'
+          ? (memeCommune ? '<div class="ok">✓ Identique à la commune renseignée</div>'
+            : '<div class="ecart">⚠ Différente de la commune renseignée (' + esc(r.commune) + ')</div>')
+          : '');
+    } else if (communesGeo) {
+      html += '<div class="ecart">Aucune commune française à ces coordonnées.</div>';
+    } else {
+      html += '<div class="mention">Service des communes indisponible.</div>';
+    }
+    if (lieux.length) {
+      html += '<div class="fr-mt-1v">Lieux-dits et adresses à proximité :</div><ul>' + lieux.map(function (l) {
+        return '<li><b>' + esc(l.nom) + '</b>' + (l.ville && l.ville !== l.nom ? ' – ' + esc(l.ville) : '') +
+          ' <span class="mention">(' + esc(l.type || 'lieu') + (isFinite(l.d) ? ', ' + metres(l.d) : '') + ')</span></li>';
+      }).join('') + '</ul>';
+    } else {
+      html += '<div class="mention">Aucun lieu-dit trouvé à proximité.</div>';
+    }
+    return html + '<div class="source">Sources : geo.api.gouv.fr, IGN Géoplateforme.</div>';
+  }
+  function localiser(r) {
+    if (!r.localise) return;
+    const k = cleGeo(r);
+    let entree = cacheGeo.get(k);
+    if (!entree) {
+      entree = { html: null };
+      entree.promesse = rechercheGeo(r).then(function (html) { entree.html = html; return html; })
+        .catch(function () { cacheGeo.delete(k); return '<span class="mention">Recherche impossible (pas d’accès réseau ?).</span>'; });
+      cacheGeo.set(k, entree);
+    }
+    entree.promesse.then(function (html) {
+      const el = document.querySelector('.geo[data-id="' + r.id + '"]');
+      if (el) el.innerHTML = html;
+    });
+  }
+
+  function toutRafraichir() {
+    regrouper();
+    dessinerCarte();
+    chiffres();
+    legende();
+    if (vue.type === 'recherche') surbrillance(vue.trouves.filter(visible));
+    else if (rdvActif && parId.has(rdvActif)) surbrillance([parId.get(rdvActif)]);
+    afficher();
+  }
+
+  // ---------- Navigation ----------
+  function ouvrirCommune(nom, cadrage) {
+    vue = { type: 'commune', nom: nom };
+    rdvActif = null;
+    coucheSurbrillance.clearLayers();
+    ouvrirPanneau();
+    const c = communes.get(nom);
+    if (cadrage && c) cadrer(c.rdvs, 15);
+    afficher();
+    $('contenu').scrollTop = 0;
+  }
+
+  function ouvrirRdv(id, cadrage) {
+    const r = parId.get(id);
+    if (!r) return;
+    rdvActif = id;
+    if (vue.type !== 'recherche' || !vue.trouves.some(function (x) { return x.id === id; })) {
+      vue = { type: 'commune', nom: r.commune };
+      surbrillance([r]);
+    }
+    ouvrirPanneau();
+    if (cadrage) cadrer([r], 16);
+    afficher();
+    if (curseurParMoi !== id) {
+      curseurParMoi = id;
+      Promise.resolve(grist.setCursorPos({ rowId: id })).catch(function () {});
+    }
+  }
+
+  function rechercher() {
+    const saisies = [...new Set($('cles').value.split(/[\s,;]+/).map(normaliserCle).filter(Boolean))];
+    if (!saisies.length) { effacer(); return; }
+    const trouves = [], absents = [], vus = new Set();
+    for (const saisie of saisies) {
+      const cle = cleCompacte(saisie);
+      let res = rdvs.filter(function (r) { return r.clesRecherche.includes(cle); });
+      if (!res.length) res = rdvs.filter(function (r) { return r.clesRecherche.some(function (k) { return k.startsWith(cle); }); });
+      if (!res.length) { absents.push(saisie); continue; }
+      for (const r of res) if (!vus.has(r.id)) { vus.add(r.id); trouves.push(r); }
+    }
+    vue = { type: 'recherche', trouves: trouves, absents: absents };
+    rdvActif = trouves.length === 1 ? trouves[0].id : null;
+    $('cles').blur();   // referme le clavier du téléphone
+    surbrillance(trouves);
+    ouvrirPanneau();
+    cadrer(trouves, 16);
+    afficher();
+    if (rdvActif) localiser(trouves[0]);
+  }
+
+  function effacer() {
+    $('cles').value = '';
+    vue = { type: 'communes' };
+    rdvActif = null;
+    coucheSurbrillance.clearLayers();
+    afficher();
+  }
+
+  // ---------- Panneau latéral (ordinateur) : afficher / masquer ----------
+  function definirPanneau(ouvert) {
+    document.body.classList.toggle('panneau-ferme', !ouvert);
+    const b = $('basculer');
+    b.textContent = ouvert ? 'Masquer la liste' : 'Afficher la liste';
+    b.title = b.textContent;
+    b.classList.toggle('fr-icon-arrow-left-s-line', ouvert);
+    b.classList.toggle('fr-icon-arrow-right-s-line', !ouvert);
+    try { localStorage.setItem('carte-prelevement-panneau', ouvert ? '1' : '0'); } catch (e) { /* stockage indisponible */ }
+    setTimeout(function () { carte.invalidateSize(); }, 50);
+  }
+  function ouvrirPanneau() {
+    if (mobile.matches) { if (etatFeuille === 'bas') feuille('mi'); return; }
+    if (document.body.classList.contains('panneau-ferme')) definirPanneau(true);
+  }
+  $('basculer').addEventListener('click', function () { definirPanneau(document.body.classList.contains('panneau-ferme')); });
+  $('basculer-carte').addEventListener('click', function () { definirPanneau(true); });
+  L.DomEvent.disableClickPropagation($('basculer-carte'));
+  try { if (localStorage.getItem('carte-prelevement-panneau') === '0') definirPanneau(false); } catch (e) { /* idem */ }
+
+  // ---------- Panneau coulissant (téléphone) : bas (résumé) / mi-hauteur / plein écran ----------
+  let etatFeuille = 'bas';
+  function hauteurs() {
+    // en plein écran, le panneau s'arrête sous la barre de recherche pour garder la poignée accessible
+    const h = $('corps').clientHeight, barre = $('barre-recherche').offsetHeight + 14;
+    return { bas: 76, mi: Math.round(h * 0.55), haut: Math.max(200, h - barre) };
+  }
+  function feuille(etat) {
+    etatFeuille = etat;
+    document.body.dataset.feuille = etat;
+    $('panneau').style.height = mobile.matches ? hauteurs()[etat] + 'px' : '';
+    $('poignee').setAttribute('aria-expanded', String(etat !== 'bas'));
+    $('fleche').textContent = etat === 'bas' ? 'Liste ▴' : etat === 'mi' ? 'Agrandir ▴' : 'Réduire ▾';
+  }
+  function majHautEntete() {
+    document.documentElement.style.setProperty('--haut-entete', ($('bandeau').offsetHeight + $('alerte').offsetHeight) + 'px');
+  }
+  (function glisser() {
+    const p = $('poignee'), panneau = $('panneau');
+    let y0 = null, h0 = 0, bouge = false;
+    p.addEventListener('pointerdown', function (ev) {
+      if (!mobile.matches) return;
+      y0 = ev.clientY; h0 = panneau.offsetHeight; bouge = false;
+      panneau.style.transition = 'none';
+      p.setPointerCapture(ev.pointerId);
+    });
+    p.addEventListener('pointermove', function (ev) {
+      if (y0 === null) return;
+      const d = y0 - ev.clientY;
+      if (Math.abs(d) > 6) bouge = true;
+      const hs = hauteurs();
+      panneau.style.height = Math.max(hs.bas, Math.min(hs.haut, h0 + d)) + 'px';
+    });
+    function fin() {
+      if (y0 === null) return;
+      y0 = null;
+      panneau.style.transition = '';
+      if (!bouge) {   // simple appui : bas -> mi -> plein -> bas
+        feuille(etatFeuille === 'bas' ? 'mi' : etatFeuille === 'mi' ? 'haut' : 'bas');
+        return;
+      }
+      const h = panneau.offsetHeight, hs = hauteurs();
+      const proche = ['bas', 'mi', 'haut'].reduce(function (a, b) { return Math.abs(hs[b] - h) < Math.abs(hs[a] - h) ? b : a; });
+      feuille(proche);
+    }
+    p.addEventListener('pointerup', fin);
+    p.addEventListener('pointercancel', fin);
+  })();
+  function adapter() {
+    majHautEntete();
+    if (mobile.matches) $('filtres').open = false;
+    feuille(mobile.matches ? etatFeuille : 'bas');
+    setTimeout(function () { carte.invalidateSize(); }, 60);
+  }
+  if (mobile.addEventListener) mobile.addEventListener('change', adapter); else mobile.addListener(adapter);
+  window.addEventListener('resize', function () { majHautEntete(); if (mobile.matches) feuille(etatFeuille); });
+  adapter();
+
+  // ---------- Copie ----------
+  async function copier(texte, bouton) {
+    let ok = false;
+    try { await navigator.clipboard.writeText(texte); ok = true; }
+    catch (e) {
+      const zone = document.createElement('textarea');
+      zone.value = texte; zone.style.position = 'fixed'; zone.style.opacity = '0';
+      document.body.appendChild(zone); zone.select();
+      try { ok = document.execCommand('copy'); } catch (e2) { ok = false; }
+      zone.remove();
+    }
+    bouton.textContent = ok ? 'Copié : ' + texte : 'Copie refusée';
+    if (!ok) window.prompt('Copiez :', texte);
+    setTimeout(function () { bouton.textContent = 'Copier GPS'; }, 2500);
+  }
+
+  // ---------- Événements ----------
+  $('chercher').addEventListener('click', rechercher);
+  $('effacer').addEventListener('click', effacer);
+  $('cles').addEventListener('keydown', function (ev) {
+    if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); rechercher(); }
+  });
+  let minuterie;
+  try { if (localStorage.getItem('carte-prelevement-passes') === '0') $('masquer-passes').checked = false; } catch (e) { /* stockage indisponible */ }
+  $('masquer-passes').addEventListener('change', function () {
+    try { localStorage.setItem('carte-prelevement-passes', this.checked ? '1' : '0'); } catch (e) { /* idem */ }
+    toutRafraichir();
+  });
+  $('filtre').addEventListener('input', function () {
+    clearTimeout(minuterie);
+    minuterie = setTimeout(toutRafraichir, 200);
+  });
+  $('legende').addEventListener('click', function (ev) {
+    const b = ev.target.closest('button[data-statut]');
+    if (!b) return;
+    const s = b.dataset.statut;
+    if (statutsMasques.has(s)) statutsMasques.delete(s); else statutsMasques.add(s);
+    toutRafraichir();
+  });
+  $('contenu').addEventListener('click', function (ev) {
+    const t = ev.target;
+    const commune = t.closest('.item-commune');
+    if (commune) { ouvrirCommune(commune.dataset.commune, true); return; }
+    if (t.closest('.retour')) {
+      vue = { type: 'communes' }; rdvActif = null; coucheSurbrillance.clearLayers(); afficher(); return;
+    }
+    const bouton = t.closest('.copier');
+    if (bouton) { copier(bouton.dataset.coords, bouton); return; }
+    const entete = t.closest('.rdv-entete');
+    if (entete) {
+      const bloc = entete.parentElement;
+      const id = Number(bloc.dataset.id);
+      if (bloc.classList.contains('ouvert') && rdvActif === id) { bloc.classList.remove('ouvert'); return; }
+      ouvrirRdv(id, true);
+    }
+  });
+  $('contenu').addEventListener('mouseover', function (ev) {
+    const c = ev.target.closest('.item-commune');
+    if (c) survolCommune(c.dataset.commune, true);
+  });
+  $('contenu').addEventListener('mouseout', function (ev) {
+    const c = ev.target.closest('.item-commune');
+    if (c) survolCommune(c.dataset.commune, false);
+  });
+
+  // ---------- Grist ----------
+  grist.ready({ requiredAccess: 'full' });
+
+  // onRecords donne les lignes visibles (filtres et liens de la page) ;
+  // les valeurs brutes sont relues avec fetchTable (références = identifiants, erreurs repérables).
+  async function charger(ids) {
+    if (!metaPret) metaPret = chargerMeta();
+    await metaPret;
+    if (Date.now() - refsChargees > RAFRAICHIR_REFS_MS) await chargerRefs();
+    const lignes = enLignes(await grist.docApi.fetchTable(tableId));
+    preparer(ids, lignes);
+    toutRafraichir();
+    $('chargement').style.display = 'none';
+    if (premierCadrage && rdvs.some(function (r) { return r.localise; })) {
+      premierCadrage = false;
+      const pts = rdvs.filter(function (r) { return r.localise; }).map(function (r) { return [r.lat, r.lon]; });
+      const m = marges();
+      carte.fitBounds(L.latLngBounds(pts), { paddingTopLeft: [30, m.haut], paddingBottomRight: [30, m.bas], maxZoom: 11 });
+    }
+  }
+
+  grist.onRecords(async function (records) {
+    const ids = records.map(function (r) { return r.id; });
+    if (enCours) { enAttente = ids; return; }   // un seul chargement à la fois
+    enCours = true;
+    try {
+      await charger(ids);
+      while (enAttente) { const suivant = enAttente; enAttente = null; await charger(suivant); }
+    } catch (e) {
+      metaPret = null;
+      $('chargement').style.display = 'flex';
+      $('chargement').textContent = 'Réglez le niveau d’accès du widget sur « Accès complet au document ». (' + (e && e.message || e) + ')';
+    } finally {
+      enCours = null;
+    }
+  });
+
+  // Ligne sélectionnée dans une autre vue Grist -> on l'affiche
+  grist.onRecord(function (record) {
+    if (!record || record.id === curseurParMoi || !parId.has(record.id)) return;
+    curseurParMoi = record.id;
+    ouvrirRdv(record.id, true);
+  });
+</script>
+</body>
+</html>
