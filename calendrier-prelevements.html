@@ -1533,50 +1533,33 @@ function kvGrid(pairs, n) {
   return {table: {widths: Array(n).fill('*'), body, dontBreakRows: true}, layout: noLines(10), margin: [0, 5, 0, 0]};
 }
 const telLink = t => 'tel:' + String(t).replace(/[^\d+]/g, '');
+// Préleveur : laboratoire, téléphone, e-mail (le nom est dans le titre du bandeau)
 function prelPairs(v) {
-  const p = S.prelById.get(v.prel); if (!p) return [];
-  const pc = cols(T_PREL);
-  return [['Organisme', p.Organisme]].concat(Object.keys(pc).filter(c => !PREL_EXPORT_SKIP.has(c) && !c.startsWith('gristHelper')).map(c => {
-    const val = fmtAny(p[c], pc[c].type);
-    return [PREL_LABELS[c] || pc[c].label || c, val, /mail/i.test(c) ? 'mailto:' + val : /tel|portable|mobile/i.test(c) ? telLink(val) : null];
-  }));
+  const p = S.prelById.get(v.prel) || {}, tel = clean(p.Telephone), mail = clean(p.Email);
+  return [['Laboratoire', labOf(v)], ['Téléphone', tel || '—', tel && telLink(tel)], ['E-mail', mail || '—', mail && 'mailto:' + mail]];
 }
-function farmPairs(v) {
-  const f = v.farm, xs = v.parcels, d = (xs.find(x => x.def) || {}).def || {}, s = (xs.find(x => x.src) || {}).src || {}, r = (xs.find(x => x.rdv) || {}).rdv || {};
-  const tel = firstOf([s, f, d], ['Telephone_portable']), fixe = clean(d.Telephone_Fixe), mail = firstOf([s, f], ['Mail']);
-  const addr = f.Adresse_complete || [clean(d.Adresse), clean(d.Code_Postal).split('.')[0], clean(d.Commune)].filter(Boolean).join(' ');
-  return [['Raison sociale', firstOf([s, d], ['Raison_sociale', 'Nom_exploitation', 'Nom']) || f.name], ['Civilité', d.Civilite], ['SIRET', firstOf([d, s], ['SIRET', 'siret'])],
-    ['Adresse', addr], ['Téléphone portable', tel, tel && telLink(tel)], ['Téléphone fixe', fixe, fixe && telLink(fixe)], ['E-mail', mail, mail && 'mailto:' + mail],
-    ['Présence souhaitée de l\'agriculteur', r.Presence_souhaitee_agriculteur], ['Inspecteur FranceAgriMer', personName(S.inspById.get(v.insp))],
-    ['Raison de la sélection', d.Raison_de_la_selection], ['Financement', d.Financement], ['Département', f.Departement]];
-}
+const farmAddr = v => { const f = v.farm, d = (v.parcels.find(x => x.def) || {}).def || {};
+  return f.Adresse_complete || [clean(d.Adresse), clean(d.Code_Postal).split('.')[0], clean(d.Commune)].filter(Boolean).join(' '); };
+// Exploitation : nom, adresse, latitude et longitude (une ligne par parcelle, coordonnées cliquables vers l'itinéraire)
 function parcelTable(v) {
-  const H = ['Parcelle', 'Surface', 'Culture en place', 'Sans ferti. récente', 'Étiquette', 'GPS', 'À savoir'].map(t => ({text: t, style: 'th'}));
+  const H = ['Parcelle', 'Latitude', 'Longitude'].map(t => ({text: t, style: 'th'}));
   const rows = v.parcels.slice().sort((a, b) => a.key.localeCompare(b.key, 'fr', {numeric: true})).map(x => {
-    const r = x.rdv || {}, d = x.def || {}, s = x.src || {}, c = coordsOf(x);
-    const notes = [];
-    if (s.la_parcelle_comporte_t_elle_une_ou_plusieurs_zones_a_eviter_pour_le_prelevement === true || clean(s.quelles_zones_sont_a_eviter))
-      notes.push({text: [{text: 'Zones à éviter : ', bold: true, color: PC.warn}, [clean(s.quelles_zones_sont_a_eviter), clean(s.decrivez_au_preleveur_l_emplacement_des_zones_a_eviter), clean(s.preciser_la_zone_autre_a_eviter)].filter(Boolean).join(' — ')]});
-    if (s.cette_parcelle_a_t_elle_recu_un_apport_organique_ou_ete_paturee_au_cours_des_4_dernieres_semaines === true) notes.push({text: 'Apport organique ou pâturage < 4 semaines', color: PC.warn});
-    if (clean(r.Commentaire)) notes.push({text: clean(r.Commentaire)});
-    return [{text: x.key, bold: true, color: PC.title}, {text: d.SURF_CALC != null && d.SURF_CALC !== '' ? fmtAny(d.SURF_CALC) + ' ha' : ''},
-      {text: clean(r.Culture_en_place) || clean(s.Culture_2026)}, {text: clean(r.Absence_fertilisation_recente)}, {text: clean(r.Etiquette_prelevement)},
-      c.lat ? {text: c.lat.toFixed(5) + '\n' + c.lon.toFixed(5), link: gmaps(c.lat, c.lon), color: PC.bf} : {text: '—', color: PC.mention}, {stack: notes}];
+    const c = coordsOf(x), cell = n => c.lat ? {text: n.toFixed(6), link: gmaps(c.lat, c.lon), color: PC.bf} : {text: 'non renseignée', color: PC.mention, italics: true};
+    return [{text: x.key, bold: true, color: PC.title}, cell(c.lat), cell(c.lon)];
   });
-  return {table: {headerRows: 1, dontBreakRows: true, widths: [76, 36, 62, 44, 48, 50, '*'], body: [H].concat(rows)}, layout: tblLayout(true), style: 'td', margin: [0, 8, 0, 0]};
+  return {table: {headerRows: 1, dontBreakRows: true, widths: [150, 90, 90], body: [H].concat(rows)}, layout: tblLayout(true), style: 'td', margin: [0, 8, 0, 0]};
 }
 function farmCard(v) {
-  const st = STATUT_STYLE[v.statut] || ['#e8edff', '#0063cb'], dn = firstOf(v.parcels.map(x => x.src).concat([v.farm]), ['dossier_number']);
-  return {unbreakable: v.parcels.length <= 12, table: {widths: ['*'], dontBreakRows: false, body: [[{stack: [
+  return {unbreakable: v.parcels.length <= 20, table: {widths: ['*'], body: [[{stack: [
     {columns: [
       {width: 62, stack: [{text: hm(v.start), bold: true, fontSize: 14, color: PC.bf}, {text: '→ ' + hm(v.end), style: 'small'}]},
-      {width: '*', stack: [{text: v.farm.name, bold: true, fontSize: 11.5, color: PC.title}, {text: `PACAGE ${v.farm.pacage}${dn ? ' · dossier DN ' + dn : ''} · ${v.parcels.length} parcelle(s)`, style: 'small'}]},
-      {width: 'auto', table: {body: [[{text: stLabel(v.statut).toUpperCase(), fontSize: 7, bold: true, color: st[1]}]]},
-        layout: {hLineWidth: () => 0, vLineWidth: () => 0, fillColor: () => st[0], paddingLeft: () => 5, paddingRight: () => 5, paddingTop: () => 2, paddingBottom: () => 1}}]},
-    kvGrid(farmPairs(v), 3), parcelTable(v)]}]]},
+      {width: '*', stack: [{text: 'Exploitation', style: 'k'}, {text: v.farm.name, bold: true, fontSize: 11.5, color: PC.title},
+        {text: 'Adresse', style: 'k', margin: [0, 5, 0, 0]}, {text: farmAddr(v) || '—', style: 'v'}]}]},
+    parcelTable(v)]}]]},
   layout: {hLineWidth: () => .75, vLineWidth: i => i === 0 ? 3 : .75, hLineColor: () => PC.border, vLineColor: i => i === 0 ? PC.bf : PC.border,
     paddingLeft: () => 10, paddingRight: () => 10, paddingTop: () => 8, paddingBottom: () => 9}, margin: [0, 0, 0, 9]};
 }
+
 async function pdfDay(k) {
   const vs = S.visits.filter(v => dkey(v.start) === k && (!S.dpt || v.farm.dpt === S.dpt)).sort((a, b) => byLabPrel(a, b) || a.start - b.start || a.farm.name.localeCompare(b.farm.name));
   const date = dayOf(k), D = fullDate(date), Dcap = D.charAt(0).toUpperCase() + D.slice(1);
