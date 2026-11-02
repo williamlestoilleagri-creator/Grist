@@ -394,6 +394,8 @@
   .chip{display:inline-flex;align-items:center;gap:2px;background:var(--bf-950);color:var(--bf);border-radius:99px;padding:.15rem .25rem .15rem .7rem;font-size:.82rem}
   .chip button{border:0;background:transparent;color:inherit;cursor:pointer;padding:0 .35rem;font-size:1rem;line-height:1}
   .imp-list{max-height:45vh;overflow-y:auto}
+  .exp-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--bf-975);padding:.6rem .75rem;margin:.5rem 0 1rem;border-left:3px solid var(--bf)}
+  .exp-bar .sub{flex:1 1 100%}
   @media (max-width:720px){
     .hdr-in{min-height:52px;padding:6px 12px}
     .fr-logo--sm{font-size:.62rem}
@@ -1190,12 +1192,13 @@ function openDay(k) {
   const evs = groupByFarm(filteredVisits().filter(v => dkey(v.start) === k)), [y, m, d] = k.split('-').map(Number), date = new Date(y, m - 1, d);
   const nf = evs.filter(g => !g.ctl), np = nf.reduce((s, g) => s + g.nParc, 0), nc = evs.length - nf.length;
   openModal(`<h2>${ic('calendar')}<span style="text-transform:capitalize">${esc(fullDate(date))}</span></h2>
+    ${nf.length ? `<div class="exp-bar"><span class="sub">Planning du jour (laboratoire › préleveur › exploitation) :</span><button class="btn" id="dayPdf">${ic('download')}PDF</button><button class="btn sec" id="dayExp">${ic('download')}Excel</button></div>` : ''}
     <p class="lead">${evs.length ? [nf.length ? `${nf.length} exploitation(s) · ${np} parcelle(s)` : '', nc ? `${nc} contrôle(s) inopiné(s)` : ''].filter(Boolean).join(' · ') : 'Aucun rendez-vous ce jour'}</p>
     <div class="daylist">${evs.map(g => g.ctl ? ctlRow(g.ctl) : farmDayRow(g)).join('')}</div>`,
-  {foot: `<div class="left"><button class="btn sec" id="dayPdf">${ic('download')}Planning PDF</button><button class="btn ter" id="dayExp">${ic('download')}Excel</button></div><button class="btn ter" id="dayView">${ic('calendar')}Vue jour</button><button class="btn" id="dayNew">${ic('add')}Planifier une exploitation ce jour</button>`, wide: true});
+  {foot: `<button class="btn ter" id="dayView">${ic('calendar')}Vue jour</button><button class="btn" id="dayNew">${ic('add')}Planifier une exploitation ce jour</button>`, wide: true});
   $('#dayView').onclick = () => { closeModal(); S.cursor = date; S.view = 'day'; renderCalendar(); };
-  $('#dayExp').onclick = () => exportDay(k);
-  $('#dayPdf').onclick = async () => { $('#dayPdf').disabled = true; try { await pdfDay(k); } finally { if ($('#dayPdf')) $('#dayPdf').disabled = false; } };
+  const busy = (id, fn) => { if ($(id)) $(id).onclick = async () => { $(id).disabled = true; try { await fn(k); } finally { if ($(id)) $(id).disabled = false; } }; };
+  busy('#dayPdf', pdfDay); busy('#dayExp', exportDay);
   $('#dayNew').onclick = () => openPicker(new Date(y, m - 1, d, Math.max(8, S.cfg.hourStart), 0));
 }
 // Choix d'une exploitation à planifier (depuis un jour ou une plage horaire)
@@ -1467,7 +1470,7 @@ function dayExport(k) {
         firstOf([s, f], ['dossier_number']), firstOf([d, s], ['SIRET', 'siret']), clean(d.Civilite), firstOf([s, d], ['Raison_sociale', 'Nom_exploitation', 'Nom']) || f.name,
         clean(d.Adresse) || [clean(s.Adresse_Numero), clean(s.Adresse_Rue)].filter(Boolean).join(' '), firstOf([s, f], ['Code_postal']) || clean(d.Code_Postal).split('.')[0],
         firstOf([s, f], ['Ville']) || clean(d.Commune), f.Adresse_complete || '', f.Departement || f.dpt,
-        firstOf([s, f, d], ['Telephone_portable']), clean(d.Telephone_Fixe), firstOf([s, f], ['Mail']), clean(d.Type), clean(d.Raison_de_la_selection), clean(d.Financement),
+        fmtTel(firstOf([s, f, d], ['Telephone_portable'])), fmtTel(d.Telephone_Fixe), firstOf([s, f], ['Mail']), clean(d.Type), clean(d.Raison_de_la_selection), clean(d.Financement),
         clean(p.Nom), clean(p.Prenom), clean(p.Organisme)].concat(prelCols.map(c2 => fmtAny(p[c2], pc[c2].type))));
     }
   }
@@ -1480,13 +1483,15 @@ function dayExport(k) {
       lab = L; pr = null; const n = vs.filter(x => labOf(x) === L);
       syn.push(['1 · Laboratoire', L, '', `${n.reduce((t, x) => t + x.parcels.length, 0)} parcelle(s) · ${new Set(n.map(x => x.farm.key)).size} exploitation(s) · ${new Set(n.map(x => x.prel)).size} préleveur(s)`, '', '', '']); levels.push(0);
     }
-    if (P !== pr) { pr = P; syn.push(['2 · Préleveur', '    ' + P, '', '', clean(p.Telephone), clean(p.Zone_d_action), clean(p.Email)]); levels.push(1); }
+    if (P !== pr) { pr = P; syn.push(['2 · Préleveur', '    ' + P, '', '', fmtTel(p.Telephone), fmtAny(p.Zone_d_action, typeOf(T_PREL, 'Zone_d_action')), clean(p.Email)]); levels.push(1); }
     syn.push(['3 · Exploitation', `        ${v.farm.name} (PACAGE ${v.farm.pacage})`, hm(v.start) + '–' + hm(v.end), v.parcels.map(x => x.key).join(', '),
       v.farm.Telephone_portable || '', v.farm.Adresse_complete || '', v.farm.Mail || '']); levels.push(2);
   }
   return {count: vs.length, sheets: [{name: 'Synthèse', aoa: syn, levels}, {name: 'Détail par parcelle', aoa: [H].concat(rows), filter: true, main: true}]};
 }
 async function exportDay(k) {
+  try { const n = await exportDayStyled(k); if (n) { toast(`Planning du ${shortDate(dayOf(k))} téléchargé (${n} rendez-vous)`); return; } }
+  catch (e) { console.warn('Excel mis en forme indisponible, export simple', e); }
   const x = dayExport(k);
   if (!x.count) { toast('Aucun rendez-vous prévu le ' + shortDate(dayOf(k)) + (S.dpt ? ' (département ' + S.dpt + ')' : '') + '.', true); return; }
   if (await downloadXlsx('planning-prelevements-' + k + (S.dpt ? '-dpt' + S.dpt : ''), x.sheets)) toast(`Planning du ${shortDate(dayOf(k))} téléchargé (${x.count} rendez-vous)`);
@@ -1494,15 +1499,178 @@ async function exportDay(k) {
 function openExportDay() {
   const d = S.view === 'day' ? S.cursor : new Date();
   openModal(`<h2>${ic('download')}Planning d'une journée</h2>
-    <p class="lead">Planning rangé par laboratoire, puis par préleveur, puis par exploitation, avec toutes les informations administratives de l'exploitation et toutes celles du préleveur. PDF aux couleurs de l'État (texte sélectionnable), ou Excel pour retravailler les données.${S.dpt ? ' Filtre en cours : département ' + esc(S.dpt) + '.' : ''}</p>
-    <div class="grp"><label class="lbl" for="xDay">Jour</label><input class="input" type="date" id="xDay" value="${toInputDate(d)}"></div>
-    <div id="xInfo" class="sub"></div>`,
-  {foot: `<button class="btn ter" data-close>Annuler</button><button class="btn sec" id="xXls">${ic('download')}Excel</button><button class="btn" id="xPdf">${ic('download')}PDF</button>`});
+    <div class="grp" style="margin-bottom:.5rem"><label class="lbl" for="xDay">Jour</label><input class="input" type="date" id="xDay" value="${toInputDate(d)}"></div>
+    <div id="xInfo" class="sub"></div>
+    <div class="exp-bar"><button class="btn lg" id="xPdf">${ic('download')}Télécharger le PDF</button><button class="btn lg sec" id="xXls">${ic('download')}Télécharger l'Excel</button></div>
+    <p class="lead" style="margin-top:1rem">Planning rangé par laboratoire, puis par préleveur, puis par exploitation, PDF aux couleurs de l'État ; Excel coloré avec une feuille de planning et une feuille détaillée filtrable.${S.dpt ? ' Filtre en cours : département ' + esc(S.dpt) + '.' : ''}</p>`);
   const info = () => { const k = $('#xDay').value, vs = k ? S.visits.filter(v => dkey(v.start) === k && (!S.dpt || v.farm.dpt === S.dpt)) : [];
     $('#xInfo').textContent = k ? `${vs.length} rendez-vous · ${vs.reduce((t, v) => t + v.parcels.length, 0)} parcelle(s) · ${new Set(vs.map(labOf)).size} laboratoire(s)` : ''; };
   $('#xDay').addEventListener('input', info); info();
   const go = fn => async ev => { const k = $('#xDay').value; if (!k) return; const b = ev.currentTarget; b.disabled = true; try { await fn(k); } finally { b.disabled = false; } };
   $('#xPdf').onclick = go(pdfDay); $('#xXls').onclick = go(exportDay);
+}
+
+/* ---------- Excel mis en forme (couleurs DSFR, bandeaux, plan repliable) ---------- */
+LIB.exceljs = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
+const XC = {bf: 'FF000091', bf925: 'FFE3E3FD', bf975: 'FFF5F5FE', title: 'FF161616', text: 'FF3A3A3A', mention: 'FF666666', border: 'FFDDDDDD',
+  alt: 'FFF6F6F6', contrast: 'FFEEEEEE', white: 'FFFFFFFF', red: 'FFCE0500', redBg: 'FFFFE9E9', okBg: 'FFB8FEC9', ok: 'FF18753C', warnBg: 'FFFFE9E6', warn: 'FFB34000'};
+const xFill = c => ({type: 'pattern', pattern: 'solid', fgColor: {argb: c}});
+const xFont = (o = {}) => Object.assign({name: 'Arial', size: 10, color: {argb: XC.text}}, o);
+const xLine = (c = XC.border, style = 'thin') => ({style, color: {argb: c}});
+// numéros de téléphone français remis au format « 06 12 34 56 78 »
+function fmtTel(t) {
+  const raw = clean(t); if (!raw) return '';
+  let n = raw.replace(/\.0+$/, '').replace(/[^\d+]/g, '').replace(/^\+33/, '0').replace(/^0033/, '0');
+  if (/^33\d{9}$/.test(n)) n = '0' + n.slice(2);
+  if (/^[1-9]\d{8}$/.test(n)) n = '0' + n;
+  return /^0\d{9}$/.test(n) ? n.replace(/(\d{2})(?=\d)/g, '$1 ') : raw;
+}
+async function saveWb(wb, name) {
+  const buf = await wb.xlsx.writeBuffer();
+  downloadBlob(new Blob([buf], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}), name);
+}
+function xBand(ws, r, n, text, fill, font, height) {
+  ws.mergeCells(r, 1, r, n);
+  const c = ws.getCell(r, 1); c.value = text; c.fill = xFill(fill); c.font = font; c.alignment = {vertical: 'middle', indent: 1};
+  ws.getRow(r).height = height;
+}
+function xHeader(ws, r, heads, opts = {}) {
+  const row = ws.getRow(r);
+  heads.forEach((h, i) => { const c = row.getCell(i + 1); c.value = h; c.fill = xFill(opts.fill || XC.contrast); c.font = xFont({bold: true, size: 9.5, color: {argb: opts.color || XC.title}});
+    c.alignment = {vertical: 'middle', wrapText: true}; c.border = {bottom: xLine(opts.line || XC.text, 'medium')}; });
+  row.height = opts.height || 22;
+  return row;
+}
+const zonesOf = s => s && (s.la_parcelle_comporte_t_elle_une_ou_plusieurs_zones_a_eviter_pour_le_prelevement === true || clean(s.quelles_zones_sont_a_eviter))
+  ? 'Zones à éviter : ' + [clean(s.quelles_zones_sont_a_eviter), clean(s.decrivez_au_preleveur_l_emplacement_des_zones_a_eviter), clean(s.preciser_la_zone_autre_a_eviter)].filter(Boolean).join(' — ') : '';
+async function exportDayStyled(k) {
+  const vs = S.visits.filter(v => dkey(v.start) === k && (!S.dpt || v.farm.dpt === S.dpt)).sort((a, b) => byLabPrel(a, b) || a.start - b.start || a.farm.name.localeCompare(b.farm.name));
+  if (!vs.length) return 0;
+  await loadLib(LIB.exceljs);
+  const date = dayOf(k), D = fullDate(date), Dcap = D.charAt(0).toUpperCase() + D.slice(1), now = new Date(), service = clean(S.cfg.pdfService);
+  const labs = [];
+  for (const v of vs) {
+    const L = labOf(v); let lab = labs[labs.length - 1]; if (!lab || lab.name !== L) labs.push(lab = {name: L, prels: []});
+    let pr = lab.prels[lab.prels.length - 1]; if (!pr || pr.id !== (v.prel || 0)) lab.prels.push(pr = {id: v.prel || 0, name: prelNameOf(v) || 'Préleveur à désigner', visits: []});
+    pr.visits.push(v);
+  }
+  const nParc = list => list.reduce((t, v) => t + v.parcels.length, 0), nFarm = list => new Set(list.map(v => v.farm.key)).size;
+  const wb = new ExcelJS.Workbook(); wb.creator = service || 'Calendrier des prélèvements'; wb.created = now;
+
+  // ---- Feuille 1 : planning lisible, laboratoire > préleveur > exploitation > parcelles
+  const COLS = [['Rendez-vous', 14], ['Exploitation', 30], ['PACAGE', 12], ['Parcelle', 19], ['Latitude', 12], ['Longitude', 12], ['Carte', 11],
+    ['Adresse', 34], ['Tél. exploitant', 16], ['E-mail exploitant', 28], ['Culture en place', 17], ['À savoir', 40]];
+  const N = COLS.length;
+  const ws = wb.addWorksheet('Planning', {properties: {tabColor: {argb: XC.bf}, outlineProperties: {summaryBelow: false}},
+    views: [{state: 'frozen', ySplit: 4, showGridLines: false}],
+    pageSetup: {paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: {left: .4, right: .4, top: .5, bottom: .5, header: .2, footer: .2}},
+    headerFooter: {oddFooter: `&L&8Planning des prélèvements · ${D}${service ? ' · ' + service : ''}&R&8Page &P / &N`}});
+  ws.columns = COLS.map(([, w]) => ({width: w}));
+  xBand(ws, 1, N, 'Planning des prélèvements — ' + Dcap + (S.dpt ? ' — département ' + S.dpt : ''), XC.white, xFont({size: 18, bold: true, color: {argb: XC.bf}}), 32);
+  xBand(ws, 2, N, `${service ? service + ' · ' : ''}Campagne reliquats azotés · édité le ${shortDate(now)} à ${hm(now)}`, XC.white, xFont({size: 9, italic: true, color: {argb: XC.mention}}), 16);
+  xBand(ws, 3, N, `${labs.length} laboratoire(s)   ·   ${labs.reduce((t, l) => t + l.prels.length, 0)} préleveur(s)   ·   ${nFarm(vs)} exploitation(s)   ·   ${nParc(vs)} parcelle(s)`,
+    XC.bf975, xFont({size: 11, bold: true, color: {argb: XC.bf}}), 24);
+  ws.getRow(4).height = 6; for (let i = 1; i <= N; i++) ws.getCell(4, i).border = {top: xLine(XC.bf, 'medium')};
+  let r = 5;
+  for (const l of labs) {
+    const all = l.prels.flatMap(p => p.visits);
+    xBand(ws, r, N, `LABORATOIRE  ${l.name}      ${l.prels.length} préleveur(s) · ${nFarm(all)} exploitation(s) · ${nParc(all)} parcelle(s)`, XC.bf, xFont({size: 13, bold: true, color: {argb: XC.white}}), 28);
+    r++;
+    for (const p of l.prels) {
+      const pp = S.prelById.get(p.id) || {}, z = fmtAny(pp.Zone_d_action, typeOf(T_PREL, 'Zone_d_action'));
+      xBand(ws, r, N, [`Préleveur : ${p.name}`, fmtTel(pp.Telephone) && 'Tél. ' + fmtTel(pp.Telephone), clean(pp.Email), z && 'Zone : ' + z,
+        `${nFarm(p.visits)} exploitation(s) · ${nParc(p.visits)} parcelle(s) · ${hm(p.visits[0].start)} – ${hm(p.visits[p.visits.length - 1].end)}`].filter(Boolean).join('     |     '),
+        XC.bf925, xFont({size: 11, bold: true, color: {argb: XC.bf}}), 22);
+      ws.getRow(r).outlineLevel = 1; r++;
+      xHeader(ws, r, COLS.map(c => c[0])).outlineLevel = 2; r++;
+      farmGroups(p.visits).forEach((g, gi) => {
+        const f = g.farm, addr = farmAddr(g);
+        g.rows.forEach(({x, v}, ri) => {
+          const s = x.src || {}, rd = x.rdv || {}, c = coordsOf(x), tel = fmtTel(firstOf([s, f, x.def], ['Telephone_portable'])), mail = firstOf([s, f], ['Mail']);
+          const note = [zonesOf(s), s.cette_parcelle_a_t_elle_recu_un_apport_organique_ou_ete_paturee_au_cours_des_4_dernieres_semaines === true ? 'Apport organique / pâturage < 4 semaines' : '', clean(rd.Commentaire)].filter(Boolean).join('\n');
+          const row = ws.getRow(r);
+          row.values = [`${hm(v.start)} – ${hm(v.end)}`, f.name, f.pacage, x.key, c.lat || 'À compléter', c.lon || 'À compléter', c.lat ? {text: 'Itinéraire', hyperlink: gmaps(c.lat, c.lon)} : '',
+            addr, tel, mail ? {text: mail, hyperlink: 'mailto:' + mail} : '', clean(rd.Culture_en_place) || clean(s.Culture_2026), note];
+          row.outlineLevel = 2;
+          row.eachCell({includeEmpty: true}, (cell, ci) => {
+            if (ci > N) return;
+            cell.fill = xFill(gi % 2 ? XC.alt : XC.white);
+            cell.font = xFont({size: 9.5});
+            cell.alignment = {vertical: 'top', wrapText: [2, 8, 12].includes(ci)};
+            cell.border = {bottom: xLine(), top: ri === 0 ? xLine(XC.mention) : undefined};
+          });
+          row.getCell(1).font = xFont({size: 9.5, bold: true, color: {argb: XC.bf}});
+          row.getCell(2).font = xFont({size: 9.5, bold: ri === 0, color: {argb: ri === 0 ? XC.title : XC.mention}});
+          row.getCell(4).font = xFont({size: 9.5, bold: true, color: {argb: XC.title}});
+          [5, 6].forEach(ci => { const cell = row.getCell(ci);
+            if (c.lat) { cell.numFmt = '0.000000'; cell.alignment = {vertical: 'top', horizontal: 'right'}; }
+            else { cell.fill = xFill(XC.redBg); cell.font = xFont({size: 9.5, bold: true, color: {argb: XC.red}}); } });
+          [7, 10].forEach(ci => { if (row.getCell(ci).value) row.getCell(ci).font = xFont({size: 9.5, color: {argb: XC.bf}, underline: true}); });
+          if (note) row.getCell(12).font = xFont({size: 9.5, color: {argb: zonesOf(s) ? XC.warn : XC.text}});
+          r++;
+        });
+      });
+      r++;
+    }
+    r++;
+  }
+
+  // ---- Feuille 2 : toutes les colonnes, une ligne par parcelle (filtrable)
+  const det = dayExport(k).sheets.find(x => x.main).aoa, ws2 = wb.addWorksheet('Détail par parcelle', {properties: {tabColor: {argb: 'FF6A6AF4'}},
+    views: [{state: 'frozen', ySplit: 1, xSplit: 3, showGridLines: false}], pageSetup: {paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0}});
+  ws2.columns = det[0].map((h, i) => ({width: Math.min(40, Math.max(10, h.length + 2, ...det.slice(1).map(row => String(row[i] ?? '').length + 2)))}));
+  xHeader(ws2, 1, det[0], {fill: XC.bf, color: XC.white, line: XC.bf, height: 34});
+  det.slice(1).forEach((vals, i) => {
+    const row = ws2.getRow(i + 2); row.values = vals;
+    row.eachCell({includeEmpty: true}, (cell, ci) => { if (ci > det[0].length) return; cell.fill = xFill(i % 2 ? XC.alt : XC.white); cell.font = xFont({size: 9.5}); cell.border = {bottom: xLine()}; cell.alignment = {vertical: 'top'}; });
+    const it = det[0].indexOf('Itinéraire') + 1, url = it && row.getCell(it).value;
+    if (url) { row.getCell(it).value = {text: 'Itinéraire', hyperlink: url}; row.getCell(it).font = xFont({size: 9.5, color: {argb: XC.bf}, underline: true}); }
+    ['Latitude', 'Longitude'].forEach(h => { const cell = row.getCell(det[0].indexOf(h) + 1); if (typeof cell.value === 'number') cell.numFmt = '0.000000'; });
+  });
+  ws2.autoFilter = {from: {row: 1, column: 1}, to: {row: 1, column: det[0].length}};
+  await saveWb(wb, 'planning-prelevements-' + k + (S.dpt ? '-dpt' + S.dpt : '') + '.xlsx');
+  return vs.length;
+}
+// Fichier à remplir par l'inspecteur : listes déroulantes, colonnes à compléter mises en évidence
+async function bulkStyled(me, vs) {
+  await loadLib(LIB.exceljs);
+  const wb = new ExcelJS.Workbook(), now = new Date(), N = BULK_H.length;
+  const ws = wb.addWorksheet('Contrôles', {properties: {tabColor: {argb: XC.bf}}, views: [{state: 'frozen', ySplit: 3, showGridLines: false}],
+    pageSetup: {paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0}});
+  ws.columns = [14, 11, 8, 18, 22, 16, 30, 12, 18, 30, 14, 22, 44].map(width => ({width}));
+  xBand(ws, 1, N, `Contrôles de préleveurs — ${personName(me)} — ${S.espDates.map(k => shortDate(dayOf(k))).join(', ')}`, XC.white, xFont({size: 16, bold: true, color: {argb: XC.bf}}), 30);
+  xBand(ws, 2, N, 'Remplissez les 3 colonnes bleues (listes déroulantes pour « Contrôlé » et « Résultat »), puis importez le fichier dans le calendrier : Espace inspecteur > Importer le fichier rempli. Ne modifiez pas la colonne « Réf. ».',
+    XC.bf975, xFont({size: 9.5, italic: true, color: {argb: XC.bf}}), 30);
+  ws.getCell(2, 1).alignment = {vertical: 'middle', wrapText: true, indent: 1};
+  const head = xHeader(ws, 3, BULK_H, {height: 32});
+  [11, 12, 13].forEach(ci => { const c = head.getCell(ci); c.fill = xFill(XC.bf); c.font = xFont({bold: true, size: 9.5, color: {argb: XC.white}}); });
+  let r = 4, last = '';
+  vs.forEach((v, i) => {
+    const p = S.prelById.get(v.prel) || {}, mine = v.insp === S.me, grp = labOf(v) + ' · ' + (prelNameOf(v) || 'Préleveur à désigner');
+    if (grp !== last) { last = grp; xBand(ws, r, N, grp, XC.bf925, xFont({bold: true, size: 10.5, color: {argb: XC.bf}}), 20); r++; }
+    const row = ws.getRow(r);
+    row.values = [v.parcels.map(x => x.rdv && x.rdv.id).filter(Boolean).join(';'), shortDate(v.start), hm(v.start), labOf(v), prelNameOf(v) || 'Préleveur à désigner', fmtTel(p.Telephone),
+      v.farm.name, v.farm.pacage, v.farm.Ville || '', v.parcels.map(x => x.key).join(', '), mine ? 'Oui' : '', mine ? v.res : '', mine ? v.com : ''];
+    row.eachCell({includeEmpty: true}, (cell, ci) => { if (ci > N) return; cell.font = xFont({size: 9.5}); cell.alignment = {vertical: 'top', wrapText: ci >= 10};
+      cell.border = {bottom: xLine()}; cell.fill = xFill(i % 2 ? XC.alt : XC.white); });
+    row.getCell(1).font = xFont({size: 8, color: {argb: XC.mention}}); row.getCell(1).fill = xFill(XC.contrast);
+    row.getCell(7).font = xFont({size: 9.5, bold: true, color: {argb: XC.title}});
+    [11, 12, 13].forEach(ci => { const c = row.getCell(ci); c.fill = xFill(XC.bf975); c.border = {top: xLine(XC.bf), bottom: xLine(XC.bf), left: xLine(XC.bf), right: xLine(XC.bf)}; });
+    row.getCell(11).dataValidation = {type: 'list', allowBlank: true, formulae: ['"Oui,Non"'], showErrorMessage: true, errorTitle: 'Contrôlé', error: 'Choisissez Oui ou Non.'};
+    row.getCell(12).dataValidation = {type: 'list', allowBlank: true, formulae: ['"Conforme,Avec réserves,Non conforme"'], showErrorMessage: true, errorTitle: 'Résultat', error: 'Choisissez dans la liste.'};
+    r++;
+  });
+  const wh = wb.addWorksheet('Mode d\'emploi', {properties: {tabColor: {argb: 'FF6A6AF4'}}, views: [{showGridLines: false}]});
+  wh.columns = [{width: 110}];
+  const lines = [['Mode d\'emploi', 'title'], ['', ''], ['1. Feuille « Contrôles » : une ligne par rendez-vous de prélèvement, rangée par laboratoire puis par préleveur.', ''],
+    ['2. Colonne « Contrôlé » : Oui pour chaque rendez-vous où vous avez contrôlé le préleveur ; Non pour annuler un contrôle déjà déclaré ; vide = aucun changement.', ''],
+    ['3. Colonne « Résultat » : Conforme, Avec réserves ou Non conforme.', ''], ['4. Colonne « Commentaire » : vos observations.', ''],
+    ['5. Ne modifiez pas la colonne « Réf. » et ne renommez pas les colonnes.', ''], ['6. Dans le calendrier : Espace inspecteur > Importer le fichier rempli.', ''], ['', ''],
+    ['Inspecteur : ' + personName(me), 'meta'], ['Jours : ' + S.espDates.map(k => shortDate(dayOf(k))).join(', '), 'meta'], [`Fichier généré le ${shortDate(now)} à ${hm(now)}`, 'meta']];
+  lines.forEach(([t, k], i) => { const c = wh.getCell(i + 1, 1); c.value = t; c.alignment = {wrapText: true, vertical: 'middle'};
+    c.font = k === 'title' ? xFont({size: 16, bold: true, color: {argb: XC.bf}}) : k === 'meta' ? xFont({size: 9.5, italic: true, color: {argb: XC.mention}}) : xFont({size: 11}); });
+  const range = S.espDates.length > 1 ? S.espDates[0] + '_' + S.espDates[S.espDates.length - 1] : S.espDates[0];
+  await saveWb(wb, `controles-preleveurs-${slug(personName(me))}-${range}.xlsx`);
 }
 
 /* ---------- Planning du jour en PDF (charte DSFR, texte vectoriel, police Marianne intégrée) ---------- */
@@ -1814,11 +1982,14 @@ async function downloadBulk() {
   const rows = vs.map(v => { const p = S.prelById.get(v.prel) || {}, mine = v.insp === S.me;
     return [v.parcels.map(x => x.rdv && x.rdv.id).filter(Boolean).join(';'), shortDate(v.start), hm(v.start), labOf(v), prelNameOf(v) || 'Préleveur à désigner', clean(p.Telephone),
       v.farm.name, v.farm.pacage, v.farm.Ville || '', v.parcels.map(x => x.key).join(', '), mine ? 'Oui' : '', mine ? v.res : '', mine ? v.com : '']; });
+  rows.forEach(r => { r[5] = fmtTel(r[5]); });
   const help = [['Mode d\'emploi'], [''], ['1. Feuille « Contrôles » : une ligne par rendez-vous de prélèvement (laboratoire, préleveur, exploitation).'],
     ['2. Colonne « Contrôlé » : Oui pour chaque rendez-vous où vous avez contrôlé le préleveur ; Non pour annuler un contrôle déjà déclaré ; vide = aucun changement.'],
     ['3. Colonne « Résultat » : Conforme, Avec réserves ou Non conforme.'], ['4. Colonne « Commentaire » : vos observations.'],
     ['5. Ne modifiez pas la colonne « Réf. » et ne renommez pas les colonnes.'], ['6. Dans le calendrier : Espace inspecteur > Importer le fichier rempli.'],
     [''], ['Inspecteur : ' + personName(me)], ['Jours : ' + S.espDates.map(k => shortDate(dayOf(k))).join(', ')], ['Fichier généré le ' + shortDate(new Date()) + ' à ' + hm(new Date())]];
+  try { await bulkStyled(me, vs); toast(`Fichier téléchargé : ${vs.length} rendez-vous`); return; }
+  catch (e) { console.warn('Excel mis en forme indisponible, fichier simple', e); }
   const range = S.espDates.length > 1 ? S.espDates[0] + '_' + S.espDates[S.espDates.length - 1] : S.espDates[0];
   if (await downloadXlsx(`controles-preleveurs-${slug(personName(me))}-${range}`, [{name: 'Contrôles', aoa: [BULK_H].concat(rows), filter: true, main: true}, {name: 'Mode d\'emploi', aoa: help}]))
     toast(`Fichier téléchargé : ${vs.length} rendez-vous`);
