@@ -8,6 +8,8 @@
 | `prise-rdv-calendrier.html` | Prise de rendez-vous (calendrier) |
 | `rdv/index.html` | Formulaire public de prise de rendez-vous |
 | `duo.html` | **Duo** — interprète à deux écouteurs (ex. japonais ⇄ allemand) |
+| `aide-html.html` | **Aide HTML** — page d'aide en HTML, modifiable dans le widget (ex. tutoriel DUER sur `Table_Aide`) |
+| `aide-duer-contenu.html` | Contenu HTML du tutoriel de saisie du DUER, à coller dans `Table_Aide` |
 
 ## ERP « façon SAP » (`erp-sap.html`)
 
@@ -103,3 +105,28 @@ Langues proposées : japonais, allemand, français, anglais, espagnol, italien, 
 - Export par conversation en **TXT**, **CSV** (Excel) ou **JSON** ; export / import global en JSON pour sauvegarder ou changer d'appareil.
 
 > Astuce : gardez le micro du téléphone actif. Si le système bascule sur le micro des écouteurs Bluetooth, certains appareils passent en mode « appel » mono et la séparation gauche/droite est perdue.
+
+## Aide HTML modifiable (`aide-html.html`)
+
+Affiche une page d'aide stockée dans une cellule texte (par exemple la colonne `Markdown` de `Table_Aide`) et permet de la **modifier directement dans le widget**.
+
+### Installation
+
+1. Sur la page d'aide, remplacez le widget Markdown par une vue **Widget personnalisé** sur la table `Table_Aide`.
+2. URL : celle du fichier publié (GitHub Pages) — ou collez le fichier dans le **Custom Widget Builder**.
+3. **Accès** : « Accès complet au document » (nécessaire pour enregistrer).
+4. Associez la colonne **Contenu** à la colonne `Markdown` (ou à une nouvelle colonne `HTML`).
+
+### Passer du Markdown au HTML
+
+- Le Markdown existant est affiché tel quel (converti à la volée) : rien n'est perdu.
+- Cliquez **Modifier** puis **Enregistrer** : la cellule est réécrite en HTML.
+- Ou collez directement le contenu de `aide-duer-contenu.html` dans la cellule (version HTML soignée du tutoriel DUER : encadrés, pastilles de priorité, formule).
+
+### Édition
+
+- **Modifier** (ou double-clic sur le texte) : édition visuelle avec barre d'outils — titres T1/T2/T3, gras, listes, liens, encadrés, tableaux (+/− ligne), pastilles 🔴🟠🟢, sommaire régénéré automatiquement à partir des titres T2.
+- **</> HTML** : édition du code source.
+- `Ctrl+S` enregistre, `Échap` annule. Le contenu est nettoyé (DOMPurify) avant affichage et enregistrement.
+- Classes CSS disponibles dans le HTML : `encadre` (`info`, `attention`), `badge` (`rouge`, `orange`, `vert`), `niveau`, `formule`, `note`, `centre`, `sommaire`.
+- Les sommaires Markdown (`#1-unités-de-travail`) continuent de fonctionner : chaque titre reçoit automatiquement une ancre.

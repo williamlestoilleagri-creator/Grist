@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aide HTML</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-soft: #f6f6f6;
+    --ink: #161616;
+    --ink-soft: #666666;
+    --line: #dddddd;
+    --accent: #000091;          /* bleu France */
+    --accent-soft: #e3e3fd;
+    --rouge: #ce0500;  --rouge-bg: #ffe9e9;
+    --orange: #b34000; --orange-bg: #fff4e0;
+    --vert: #18753c;   --vert-bg: #e6f5ea;
+    --radius: 6px;
+    --sans: "Marianne", -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: var(--sans); font-size: 14px; line-height: 1.55;
+    color: var(--ink); background: var(--bg);
+    display: flex; flex-direction: column;
+  }
+
+  /* ---------- Barre d'outils ---------- */
+  .barre {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    padding: 6px 10px; border-bottom: 1px solid var(--line);
+    background: var(--bg-soft); flex: 0 0 auto;
+  }
+  .barre .espace { flex: 1; }
+  .barre .etat { color: var(--ink-soft); font-size: 12px; }
+  .barre .etat.modifie { color: var(--orange); font-weight: 600; }
+  button {
+    font: inherit; font-size: 12.5px; cursor: pointer;
+    border: 1px solid var(--line); background: #fff; color: var(--ink);
+    border-radius: var(--radius); padding: 4px 9px; min-height: 28px;
+  }
+  button:hover { border-color: var(--accent); }
+  button.principal { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.actif { background: var(--accent-soft); border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  .outils { display: none; gap: 4px; flex-wrap: wrap; padding: 6px 10px;
+            border-bottom: 1px solid var(--line); background: #fff; }
+  .outils .sep { width: 1px; background: var(--line); margin: 2px 4px; }
+  body.edition .outils { display: flex; }
+  body.edition.source .outils { display: none; }
+  .masque { display: none !important; }
+
+  /* ---------- Zones ---------- */
+  main { flex: 1 1 auto; overflow: auto; position: relative; }
+  #vue, #editeur { max-width: 960px; margin: 0 auto; padding: 18px 22px 40px; }
+  #editeur { outline: none; min-height: 100%; }
+  body.edition #editeur { box-shadow: inset 0 0 0 2px var(--accent-soft); }
+  #source {
+    width: 100%; height: 100%; border: 0; resize: none; padding: 14px 16px;
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.5; outline: none;
+  }
+  .vide { color: var(--ink-soft); text-align: center; padding: 40px 20px; }
+
+  /* ---------- Contenu (styles disponibles dans le HTML) ---------- */
+  .contenu h1 { font-size: 1.6em; line-height: 1.25; margin: 0 0 .8em; color: var(--accent); }
+  .contenu h2 { font-size: 1.25em; margin: 1.8em 0 .5em; padding-bottom: .25em;
+                border-bottom: 1px solid var(--line); scroll-margin-top: 10px; }
+  .contenu h3 { font-size: 1.05em; margin: 1.4em 0 .4em; scroll-margin-top: 10px; }
+  .contenu p, .contenu ul, .contenu ol { margin: .5em 0; }
+  .contenu a { color: var(--accent); }
+  .contenu hr { border: 0; border-top: 1px solid var(--line); margin: 1.5em 0; }
+  .contenu code { font-family: var(--mono); font-size: .92em; background: var(--bg-soft);
+                  padding: 1px 5px; border-radius: 4px; }
+  .contenu pre { font-family: var(--mono); background: var(--bg-soft); padding: 10px 12px;
+                 border-radius: var(--radius); overflow-x: auto; }
+  .contenu pre code { background: none; padding: 0; }
+  .contenu blockquote, .contenu .encadre {
+    margin: .8em 0; padding: 8px 12px; border-left: 4px solid var(--accent);
+    background: var(--accent-soft); border-radius: 0 var(--radius) var(--radius) 0;
+  }
+  .contenu blockquote p { margin: 0; }
+  .contenu .encadre.info::before { content: "ℹ️ "; }
+  .contenu .encadre.attention { border-color: var(--orange); background: var(--orange-bg); }
+  .contenu .encadre.attention::before { content: "⚠️ "; }
+  .contenu table { border-collapse: collapse; width: 100%; margin: .8em 0; font-size: .95em; }
+  .contenu th, .contenu td { border: 1px solid var(--line); padding: 6px 9px; text-align: left; vertical-align: top; }
+  .contenu th { background: var(--bg-soft); font-weight: 600; }
+  .contenu tbody tr:nth-child(even) td { background: #fbfbfb; }
+  .contenu .centre { text-align: center; }
+  .contenu .note { color: var(--ink-soft); font-size: .9em; font-style: italic; }
+  .contenu .niveau {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 1.8em; height: 1.8em; border-radius: 50%;
+    background: var(--accent); color: #fff; font-weight: 700;
+  }
+  .contenu .badge { display: inline-block; padding: 1px 9px; border-radius: 999px;
+                    font-weight: 600; font-size: .9em; white-space: nowrap; }
+  .contenu .badge.rouge  { color: var(--rouge);  background: var(--rouge-bg); }
+  .contenu .badge.orange { color: var(--orange); background: var(--orange-bg); }
+  .contenu .badge.vert   { color: var(--vert);   background: var(--vert-bg); }
+  .contenu .formule {
+    margin: .8em 0; padding: 12px; text-align: center; font-size: 1.1em; font-weight: 600;
+    border: 1px dashed var(--accent); border-radius: var(--radius); color: var(--accent);
+  }
+  .contenu .sommaire { background: var(--bg-soft); border-radius: var(--radius); padding: 4px 16px 10px; }
+  .contenu .sommaire h2 { border: 0; margin: .6em 0 .2em; font-size: 1.05em; }
+  .contenu .sommaire ol, .contenu .sommaire ul { columns: 2; column-gap: 24px; margin: 0; }
+  .contenu .sommaire a { text-decoration: none; }
+  .contenu .sommaire a:hover { text-decoration: underline; }
+  .contenu img { max-width: 100%; height: auto; }
+
+  @media (max-width: 560px) {
+    #vue, #editeur { padding: 14px 16px 30px; }
+    .contenu .sommaire ol, .contenu .sommaire ul { columns: 1; }
+    .contenu table { display: block; overflow-x: auto; }
+  }
+  @media print {
+    .barre, .outils { display: none !important; }
+    main { overflow: visible; }
+  }
+</style>
+</head>
+<body>
+  <div class="barre">
+    <button id="btnModifier" class="principal" title="Modifier le contenu (double-clic sur le texte)">✏️ Modifier</button>
+    <span id="groupeEdition" class="masque">
+      <button id="btnEnregistrer" class="principal" title="Enregistrer dans Grist (Ctrl+S)">💾 Enregistrer</button>
+      <button id="btnAnnuler" title="Abandonner les modifications (Échap)">Annuler</button>
+      <button id="btnVisuel" class="actif" title="Édition visuelle">Visuel</button>
+      <button id="btnSource" title="Éditer le code HTML">&lt;/&gt; HTML</button>
+    </span>
+    <span class="espace"></span>
+    <span id="etat" class="etat"></span>
+    <button id="btnImprimer" title="Imprimer">🖨️</button>
+  </div>
+
+  <div class="outils" id="outils">
+    <span style="display:contents">
+      <button data-bloc="H1" title="Titre principal">T1</button>
+      <button data-bloc="H2" title="Titre de section">T2</button>
+      <button data-bloc="H3" title="Sous-titre">T3</button>
+      <button data-bloc="P" title="Paragraphe">¶</button>
+      <span class="sep"></span>
+      <button data-cmd="bold" title="Gras (Ctrl+B)"><b>G</b></button>
+      <button data-cmd="italic" title="Italique (Ctrl+I)"><i>I</i></button>
+      <button data-cmd="underline" title="Souligné (Ctrl+U)"><u>S</u></button>
+      <button id="btnCode" title="Code / texte à saisir">&lt;code&gt;</button>
+      <span class="sep"></span>
+      <button data-cmd="insertUnorderedList" title="Liste à puces">• Liste</button>
+      <button data-cmd="insertOrderedList" title="Liste numérotée">1. Liste</button>
+      <button id="btnLien" title="Lien (vers une URL ou #ancre)">🔗 Lien</button>
+      <span class="sep"></span>
+      <button data-encadre="info" title="Encadré d'information">ℹ️ Encadré</button>
+      <button data-encadre="attention" title="Encadré d'avertissement">⚠️ Attention</button>
+      <button id="btnTableau" title="Insérer un tableau">▦ Tableau</button>
+      <button id="btnLigne" title="Ajouter une ligne sous la ligne courante du tableau">+ Ligne</button>
+      <button id="btnSupprLigne" title="Supprimer la ligne courante du tableau">− Ligne</button>
+      <span class="sep"></span>
+      <button data-badge="rouge" title="Pastille rouge">🔴</button>
+      <button data-badge="orange" title="Pastille orange">🟠</button>
+      <button data-badge="vert" title="Pastille verte">🟢</button>
+      <button id="btnSommaire" title="Régénérer le sommaire à partir des titres T2">☰ Sommaire</button>
+      <span class="sep"></span>
+      <button data-cmd="removeFormat" title="Effacer la mise en forme">⌫ Format</button>
+      <button data-cmd="undo" title="Annuler la dernière action (Ctrl+Z)">↶</button>
+      <button data-cmd="redo" title="Rétablir (Ctrl+Y)">↷</button>
+    </span>
+  </div>
+
+  <main id="zone">
+    <div id="vue" class="contenu"><p class="vide">Chargement…</p></div>
+    <div id="editeur" class="contenu masque" contenteditable="true" spellcheck="true"></div>
+    <textarea id="source" class="masque" spellcheck="false" aria-label="Code HTML"></textarea>
+  </main>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ================= État ================= */
+  const S = {
+    enGrist: false,
+    rowId: null,       // id de la ligne affichée
+    colId: null,       // id réel de la colonne associée à « Contenu »
+    brut: '',          // valeur de la cellule telle que stockée
+    edition: false,
+    modeSource: false,
+    modifie: false,
+    enAttente: null,   // valeur reçue de Grist pendant l'édition
+  };
+  const $ = (id) => document.getElementById(id);
+  const vue = $('vue'), editeur = $('editeur'), source = $('source');
+
+  /* ================= Conversion & sécurité ================= */
+  function estHtml(txt) {
+    return /^\s*<(!--|[a-z][\w-]*[\s>/])/i.test(txt || '');
+  }
+  function markdownVersHtml(md) {
+    if (window.marked && marked.parse) return marked.parse(md, { gfm: true, breaks: false });
+    const esc = md.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    return '<pre>' + esc + '</pre>';
+  }
+  function nettoyer(html) {
+    if (window.DOMPurify) {
+      return DOMPurify.sanitize(html, { ADD_ATTR: ['target'], FORBID_TAGS: ['style'] });
+    }
+    // Repli minimal si DOMPurify n'a pas pu être chargé
+    const t = document.createElement('template');
+    t.innerHTML = html;
+    t.content.querySelectorAll('script,iframe,object,embed,style,link,meta,form').forEach(n => n.remove());
+    t.content.querySelectorAll('*').forEach(el => {
+      [...el.attributes].forEach(a => {
+        if (/^on/i.test(a.name) || /^\s*javascript:/i.test(a.value)) el.removeAttribute(a.name);
+      });
+    });
+    return t.innerHTML;
+  }
+  /** Valeur de la cellule -> HTML propre (le Markdown est converti). */
+  function versHtml(brut) {
+    const txt = brut == null ? '' : String(brut);
+    return nettoyer(estHtml(txt) ? txt : markdownVersHtml(txt));
+  }
+
+  /* Ancres : identifiants automatiques sur les titres qui n'en ont pas
+     (même règle que GitHub, pour que les sommaires Markdown restent valables). */
+  function slug(t) {
+    return t.trim().toLowerCase()
+      .replace(/[^\p{L}\p{N}\s_-]/gu, '')
+      .replace(/\s/g, '-');
+  }
+  function ancrer(racine) {
+    const vus = new Set();
+    racine.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(h => {
+      if (!h.id) {
+        let base = slug(h.textContent) || 'section', id = base, i = 1;
+        while (vus.has(id)) id = base + '-' + (i++);
+        h.id = id;
+      }
+      vus.add(h.id);
+    });
+  }
+
+  /* ================= Affichage ================= */
+  function afficher() {
+    if (S.rowId == null && S.enGrist) {
+      vue.innerHTML = '<p class="vide">Aucune ligne dans la table. Cliquez sur « Modifier » pour rédiger le contenu.</p>';
+      return;
+    }
+    const html = versHtml(S.brut);
+    vue.innerHTML = html.trim() ? html : '<p class="vide">Contenu vide. Cliquez sur « Modifier » ou double-cliquez ici pour rédiger.</p>';
+    ancrer(vue);
+    majEtat();
+  }
+
+  function majEtat(msg) {
+    const e = $('etat');
+    e.classList.toggle('modifie', S.modifie && !msg);
+    if (msg) { e.textContent = msg; return; }
+    if (!S.colId && S.enGrist) e.textContent = 'Associez la colonne « Contenu » dans le panneau du widget';
+    else if (S.edition) e.textContent = S.modifie ? 'Modifications non enregistrées' : 'Mode édition';
+    else if (S.brut && !estHtml(S.brut)) e.textContent = 'Contenu Markdown — sera converti en HTML à l\'enregistrement';
+    else e.textContent = '';
+  }
+
+  /* Navigation interne (#ancres) dans l'iframe du widget */
+  document.addEventListener('click', (ev) => {
+    const a = ev.target.closest('a[href]');
+    if (!a) return;
+    const href = a.getAttribute('href');
+    if (S.edition && editeur.contains(a)) { ev.preventDefault(); return; }
+    if (href.startsWith('#')) {
+      ev.preventDefault();
+      const id = decodeURIComponent(href.slice(1));
+      const cible = vue.querySelector('[id="' + CSS.escape(id) + '"]');
+      if (cible) cible.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else if (!a.target) {
+      a.target = '_blank'; a.rel = 'noopener';
+    }
+  });
+
+  /* ================= Édition ================= */
+  function entrerEdition() {
+    if (S.edition) return;
+    if (S.enGrist && !S.colId) { majEtat(); return; }
+    S.edition = true; S.modifie = false; S.enAttente = null;
+    const html = versHtml(S.brut);
+    editeur.innerHTML = html;
+    source.value = formaterHtml(html);
+    document.body.classList.add('edition');
+    $('btnModifier').classList.add('masque');
+    $('groupeEdition').classList.remove('masque');
+    vue.classList.add('masque');
+    basculerMode(false);
+    try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch (e) {}
+    editeur.focus();
+    majEtat();
+  }
+
+  function sortirEdition() {
+    S.edition = false; S.modifie = false; S.modeSource = false;
+    document.body.classList.remove('edition', 'source');
+    $('btnModifier').classList.remove('masque');
+    $('groupeEdition').classList.add('masque');
+    editeur.classList.add('masque'); source.classList.add('masque');
+    vue.classList.remove('masque');
+    if (S.enAttente !== null) { S.brut = S.enAttente; S.enAttente = null; }
+    afficher();
+  }
+
+  function basculerMode(versSource) {
+    if (versSource) {
+      if (!S.modeSource) source.value = formaterHtml(editeur.innerHTML);
+      editeur.classList.add('masque'); source.classList.remove('masque');
+      document.body.classList.add('source');
+      source.focus();
+    } else {
+      if (S.modeSource) editeur.innerHTML = nettoyer(source.value);
+      source.classList.add('masque'); editeur.classList.remove('masque');
+      document.body.classList.remove('source');
+    }
+    S.modeSource = versSource;
+    $('btnSource').classList.toggle('actif', versSource);
+    $('btnVisuel').classList.toggle('actif', !versSource);
+  }
+
+  function contenuCourant() {
+    const html = S.modeSource ? source.value : editeur.innerHTML;
+    return formaterHtml(nettoyer(html)).trim();
+  }
+
+  async function enregistrer() {
+    if (!S.edition) return;
+    const html = contenuCourant();
+    try {
+      $('btnEnregistrer').disabled = true;
+      majEtat('Enregistrement…');
+      if (S.enGrist) {
+        if (S.rowId == null) {
+          const res = await grist.selectedTable.create({ fields: { [S.colId]: html } });
+          if (res && res.id) S.rowId = res.id;
+        } else {
+          await grist.selectedTable.update({ id: S.rowId, fields: { [S.colId]: html } });
+        }
+      } else {
+        try { localStorage.setItem('aide-html-demo', html); } catch (e) {}
+      }
+      S.brut = html; S.enAttente = null;
+      sortirEdition();
+      majEtat('✓ Enregistré');
+      setTimeout(() => majEtat(), 2500);
+    } catch (err) {
+      console.error(err);
+      majEtat('Erreur : ' + (err && err.message || err) + ' — vérifiez l\'accès « complet » du widget');
+    } finally {
+      $('btnEnregistrer').disabled = false;
+    }
+  }
+
+  function annuler() {
+    if (S.modifie && !confirm('Abandonner les modifications non enregistrées ?')) return;
+    sortirEdition();
+  }
+
+  function marquerModifie() { if (!S.modifie) { S.modifie = true; majEtat(); } }
+  editeur.addEventListener('input', marquerModifie);
+  source.addEventListener('input', marquerModifie);
+
+  /* Mise en forme légère du HTML pour qu'il reste lisible dans la cellule */
+  function formaterHtml(html) {
+    return html
+      .replace(/\s*(<\/?(h[1-6]|p|ul|ol|li|table|thead|tbody|tr|nav|div|pre|blockquote|hr)\b[^>]*>)\s*/gi, '$1')
+      .replace(/(<(h[1-6]|p|ul|ol|table|nav|div|pre|blockquote|hr)\b[^>]*>)/gi, '\n$1')
+      .replace(/(<\/(h[1-6]|p|ul|ol|table|nav|div|pre|blockquote)>)/gi, '$1\n')
+      .replace(/(<(li|tr|thead|tbody)\b[^>]*>)/gi, '\n  $1')
+      .replace(/(<\/(ul|ol|tbody|thead|table)>)/gi, '\n$1')
+      .replace(/\n(\s*)\n(<\/(ul|ol|tbody|thead|table)>)/gi, '\n$2')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  /* ---------- Barre d'outils visuelle ---------- */
+  function selectionDansEditeur() {
+    const sel = window.getSelection();
+    return sel.rangeCount && editeur.contains(sel.anchorNode) ? sel : null;
+  }
+  function elementCourant(selecteur) {
+    const sel = selectionDansEditeur();
+    if (!sel) return null;
+    let n = sel.anchorNode;
+    if (n.nodeType === 3) n = n.parentNode;
+    const el = n.closest(selecteur);
+    return el && editeur.contains(el) ? el : null;
+  }
+  function insererHtml(html) {
+    editeur.focus();
+    if (!selectionDansEditeur()) placerCurseurFin();
+    document.execCommand('insertHTML', false, html);
+    marquerModifie();
+  }
+  function placerCurseurFin() {
+    const r = document.createRange();
+    r.selectNodeContents(editeur); r.collapse(false);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+  }
+  function texteSelection(defaut) {
+    const sel = selectionDansEditeur();
+    const t = sel ? sel.toString() : '';
+    return t || defaut;
+  }
+  const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  // Empêche les boutons de voler le focus (et donc la sélection) à l'éditeur
+  $('outils').addEventListener('mousedown', (e) => { if (e.target.closest('button')) e.preventDefault(); });
+
+  $('outils').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b || S.modeSource) return;
+    if (b.dataset.cmd) {
+      editeur.focus();
+      document.execCommand(b.dataset.cmd, false, null);
+      marquerModifie();
+    } else if (b.dataset.bloc) {
+      editeur.focus();
+      document.execCommand('formatBlock', false, b.dataset.bloc);
+      marquerModifie();
+    } else if (b.dataset.encadre) {
+      insererHtml('<div class="encadre ' + b.dataset.encadre + '">' + esc(texteSelection('Texte de l\'encadré')) + '</div><p><br></p>');
+    } else if (b.dataset.badge) {
+      const libelle = { rouge: 'Priorité maximale', orange: 'Priorité moyenne', vert: 'Priorité faible' }[b.dataset.badge];
+      insererHtml('<span class="badge ' + b.dataset.badge + '">' + esc(texteSelection(libelle)) + '</span>&nbsp;');
+    }
+  });
+
+  $('btnCode').onclick = () => insererHtml('<code>' + esc(texteSelection('texte')) + '</code>&nbsp;');
+
+  $('btnLien').onclick = () => {
+    const ancres = [...editeur.querySelectorAll('h2[id],h3[id]')].map(h => '#' + h.id).slice(0, 12).join('  ');
+    const url = prompt('Adresse du lien (https://… ou #ancre d\'un titre)' + (ancres ? '\nAncres : ' + ancres : ''), 'https://');
+    if (!url) return;
+    editeur.focus();
+    if (selectionDansEditeur() && !window.getSelection().isCollapsed) document.execCommand('createLink', false, url);
+    else insererHtml('<a href="' + esc(url) + '">' + esc(url) + '</a>&nbsp;');
+    marquerModifie();
+  };
+
+  $('btnTableau').onclick = () => {
+    const rep = prompt('Taille du tableau : colonnes × lignes (hors en-tête)', '3 x 3');
+    if (!rep) return;
+    const m = rep.match(/(\d+)\D+(\d+)/);
+    const nc = Math.min(Math.max(+(m ? m[1] : 3), 1), 12), nl = Math.min(Math.max(+(m ? m[2] : 3), 1), 50);
+    let h = '<table><thead><tr>';
+    for (let c = 0; c < nc; c++) h += '<th>Titre ' + (c + 1) + '</th>';
+    h += '</tr></thead><tbody>';
+    for (let l = 0; l < nl; l++) { h += '<tr>'; for (let c = 0; c < nc; c++) h += '<td>&nbsp;</td>'; h += '</tr>'; }
+    insererHtml(h + '</tbody></table><p><br></p>');
+  };
+
+  $('btnLigne').onclick = () => {
+    const tr = elementCourant('tr');
+    if (!tr) { alert('Placez le curseur dans une ligne de tableau.'); return; }
+    const nv = document.createElement('tr');
+    [...tr.children].forEach(() => { const td = document.createElement('td'); td.innerHTML = '&nbsp;'; nv.appendChild(td); });
+    if (tr.parentNode.tagName === 'THEAD') {
+      const table = tr.closest('table');
+      let tb = table.querySelector('tbody');
+      if (!tb) { tb = document.createElement('tbody'); table.appendChild(tb); }
+      tb.insertBefore(nv, tb.firstChild);
+    } else tr.after(nv);
+    marquerModifie();
+  };
+  $('btnSupprLigne').onclick = () => {
+    const tr = elementCourant('tr');
+    if (!tr) { alert('Placez le curseur dans une ligne de tableau.'); return; }
+    const table = tr.closest('table');
+    tr.remove();
+    if (!table.querySelector('tr')) table.remove();
+    marquerModifie();
+  };
+
+  $('btnSommaire').onclick = () => {
+    ancrer(editeur);
+    const titres = [...editeur.querySelectorAll('h2')].filter(h => !h.closest('.sommaire'));
+    if (!titres.length) { alert('Aucun titre T2 dans le document.'); return; }
+    let h = '<h2>Sommaire</h2><ol>';
+    titres.forEach(t => {
+      const lib = t.textContent.replace(/^\s*\d+\s*[.)-]\s*/, '');
+      h += '<li><a href="#' + esc(t.id) + '">' + esc(lib) + '</a></li>';
+    });
+    h += '</ol>';
+    let nav = editeur.querySelector('.sommaire');
+    if (!nav) {
+      nav = document.createElement('nav'); nav.className = 'sommaire';
+      const h1 = editeur.querySelector('h1');
+      if (h1) h1.after(nav); else editeur.prepend(nav);
+    }
+    nav.innerHTML = h;
+    marquerModifie();
+  };
+
+  /* ---------- Boutons principaux & raccourcis ---------- */
+  $('btnModifier').onclick = entrerEdition;
+  $('btnEnregistrer').onclick = enregistrer;
+  $('btnAnnuler').onclick = annuler;
+  $('btnVisuel').onclick = () => basculerMode(false);
+  $('btnSource').onclick = () => basculerMode(true);
+  $('btnImprimer').onclick = () => window.print();
+  vue.addEventListener('dblclick', (e) => { if (!e.target.closest('a')) entrerEdition(); });
+
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      if (S.edition) { e.preventDefault(); enregistrer(); }
+    } else if (e.key === 'Escape' && S.edition) {
+      e.preventDefault(); annuler();
+    } else if (e.key === 'Tab' && S.edition && S.modeSource && e.target === source) {
+      e.preventDefault();
+      const d = source.selectionStart;
+      source.setRangeText('  ', d, source.selectionEnd, 'end');
+      marquerModifie();
+    }
+  });
+  window.addEventListener('beforeunload', (e) => { if (S.modifie) { e.preventDefault(); e.returnValue = ''; } });
+
+  /* ================= Connexion à Grist ================= */
+  function recevoir(record, mappings) {
+    S.colId = mappings && mappings.Contenu ? mappings.Contenu : null;
+    const nouveau = record ? record.id : null;
+    let valeur = '';
+    if (record) {
+      const m = grist.mapColumnNames(record);
+      valeur = m && m.Contenu != null ? m.Contenu : '';
+    }
+    if (S.edition) {
+      if (nouveau === S.rowId) {
+        if (valeur !== S.brut) { S.enAttente = valeur; majEtat('⚠ Contenu modifié ailleurs entre-temps'); }
+        return;
+      }
+      if (S.modifie && !confirm('Vous changez de ligne : abandonner les modifications non enregistrées ?')) return;
+      sortirEdition();
+    }
+    S.rowId = nouveau;
+    S.brut = valeur;
+    afficher();
+  }
+
+  const dansIframe = window.parent !== window;
+  if (dansIframe && window.grist) {
+    S.enGrist = true;
+    grist.ready({
+      requiredAccess: 'full',
+      allowSelectBy: false,
+      columns: [{
+        name: 'Contenu',
+        title: 'Contenu (HTML ou Markdown)',
+        type: 'Text',
+        description: 'Colonne texte contenant la page d\'aide. Le Markdown existant est converti en HTML au premier enregistrement.'
+      }]
+    });
+    let recu = false;
+    grist.onRecord((record, mappings) => { recu = true; recevoir(record, mappings); });
+    // Sans curseur (table vide ou widget non lié) : on affiche la première ligne.
+    grist.onRecords((records, mappings) => {
+      if (!recu || S.rowId == null || !records.some(r => r.id === S.rowId)) {
+        recevoir(records && records.length ? records[0] : null, mappings);
+      }
+    });
+  } else {
+    // Ouvert hors de Grist : démonstration locale (enregistrement dans le navigateur)
+    let demo = '';
+    try { demo = localStorage.getItem('aide-html-demo') || ''; } catch (e) {}
+    S.brut = demo || '# Aide\n\nWidget ouvert **hors de Grist** : les modifications sont gardées dans ce navigateur.';
+    S.rowId = 1;
+    afficher();
+  }
+})();
+</script>
+</body>
+</html>
