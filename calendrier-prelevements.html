@@ -764,7 +764,8 @@ function buildModel() {
   }
   for (const f of S.farms.values()) {
     if (!f.name) f.name = 'PACAGE ' + f.pacage;
-    f.dpt = clean(f.Code_departement) || f.pacage.slice(0, 3);
+    // « 022 » (début du PACAGE) et « 22 » (code département) désignent le même département : on garde « 22 »
+    f.dpt = dptNorm(clean(f.Code_departement) || f.pacage.slice(0, 3));
     const rows = f.parcels.map(x => x.rdv).filter(Boolean);
     const first = k => { for (const r of rows) { const v = r[k]; if (v !== null && v !== undefined && v !== '' && v !== 0 && !isErr(v)) return v; } return null; };
     f.statut = clean(first('Statut')); f.nbAppels = ['Date_heure_appel_1', 'Date_heure_appel_2', 'Date_heure_appel_3'].filter(k => first(k)).length;
