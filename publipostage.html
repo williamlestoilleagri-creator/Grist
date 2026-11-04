@@ -366,6 +366,66 @@
       </section>
     </div>
 
+    <section class="fr-accordion pp-bloc pp-accbloc" id="logoBloc">
+      <h2 class="fr-accordion__title"><button type="button" class="fr-accordion__btn" aria-expanded="false" aria-controls="logoBox">Logo du courrier (Préfet, préfecture, DRAAF…) <span class="fr-badge fr-badge--sm fr-badge--success fr-ml-1w" id="logoBadge" hidden>Actif</span></button></h2>
+      <div class="fr-collapse" id="logoBox">
+        <div class="fr-toggle fr-mb-1w">
+          <input type="checkbox" class="fr-toggle__input" id="logoEnabled">
+          <label class="fr-toggle__label" for="logoEnabled">Ajouter un logo aux documents</label>
+        </div>
+        <p class="fr-hint-text">Le logo se place sur <code>{{LOGO}}</code> (bouton « Logo » de la barre d'outils, ou dans l'en-tête d'un modèle Word), sinon en haut du courrier. Les logos sont enregistrés dans la table <code>Logo_publipostage</code> (colonnes <code>Intitule</code>, <code>Logo</code>).</p>
+        <div id="logoMsg"></div>
+        <div class="pp-sigsetup">
+          <div>
+            <div id="logoPreview" class="pp-sigtbl"><span class="fr-text--sm fr-mb-0">Aucun logo.</span></div>
+          </div>
+          <div>
+            <div class="pp-inline pp-mb">
+              <div class="fr-select-group">
+                <label class="fr-label" for="logoSelect">Logo par défaut</label>
+                <select class="fr-select" id="logoSelect"></select>
+              </div>
+              <button type="button" class="fr-btn fr-btn--tertiary fr-icon-refresh-line fr-btn--icon-left" id="logoReload">Actualiser</button>
+            </div>
+            <div class="fr-select-group">
+              <label class="fr-label" for="logoCol">Changer de logo selon une colonne <span class="fr-hint-text">Facultatif. La valeur de la colonne pour chaque dossier (ex. « Préfet », « Préfecture ») désigne l'intitulé du logo à utiliser ; à défaut, le logo par défaut est utilisé.</span></label>
+              <select class="fr-select" id="logoCol"></select>
+            </div>
+            <div class="pp-inline">
+              <div class="fr-input-group">
+                <label class="fr-label" for="logoWidth">Largeur <span id="logoWidthVal" class="fr-hint-text"></span></label>
+                <input type="range" id="logoWidth" min="60" max="400" step="10" value="150" style="width:100%">
+              </div>
+              <div class="fr-select-group">
+                <label class="fr-label" for="logoAlign">Position</label>
+                <select class="fr-select" id="logoAlign"><option value="left">À gauche</option><option value="center">Au centre</option><option value="right">À droite</option></select>
+              </div>
+            </div>
+            <div class="fr-checkbox-group fr-checkbox-group--sm">
+              <input type="checkbox" id="logoAuto" checked>
+              <label class="fr-label" for="logoAuto">Placer le logo en haut du courrier quand <code>{{LOGO}}</code> n'est ni dans le message ni dans l'en-tête du modèle</label>
+            </div>
+          </div>
+        </div>
+        <section class="fr-accordion fr-mt-2w">
+          <h3 class="fr-accordion__title"><button type="button" class="fr-accordion__btn" aria-expanded="false" aria-controls="logoAddBox">Ajouter un logo dans Logo_publipostage</button></h3>
+          <div class="fr-collapse" id="logoAddBox">
+            <div class="pp-inline">
+              <div class="fr-input-group">
+                <label class="fr-label" for="logoName">Intitulé <span class="fr-hint-text">ex : Préfet, Préfecture, DRAAF</span></label>
+                <input class="fr-input" type="text" id="logoName">
+              </div>
+              <div class="fr-upload-group">
+                <label class="fr-label" for="logoFile">Image (PNG, JPG, SVG)</label>
+                <input class="fr-upload" type="file" id="logoFile" accept="image/*">
+              </div>
+              <button type="button" class="fr-btn fr-btn--secondary fr-icon-save-line fr-btn--icon-left" id="logoAdd">Enregistrer</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
     <div class="pp-pvbar">
       <fieldset class="fr-segmented fr-segmented--sm">
         <legend class="fr-segmented__legend fr-sr-only">Mode d'affichage</legend>
@@ -424,6 +484,7 @@
             <button type="button" class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline fr-icon-image-add-line" id="tbImage" title="Insérer une image (logo, en-tête…)">Image</button>
             <button type="button" class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline fr-icon-separator" id="tbBreak" title="Insérer un saut de page">Saut de page</button>
             <button type="button" class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline fr-icon-quill-pen-line" id="tbSig" title="Insérer l'emplacement de la signature">Signature</button>
+            <button type="button" class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline fr-icon-image-line" id="tbLogo" title="Insérer l'emplacement du logo (Préfet, préfecture…)">Logo</button>
             <button type="button" class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline fr-icon-format-clear" data-cmd="removeFormat" title="Effacer la mise en forme">Effacer la mise en forme</button>
             <span class="pp-sep"></span>
             <button type="button" class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline fr-icon-arrow-go-back-line" data-cmd="undo" title="Annuler">Annuler</button>
@@ -562,7 +623,14 @@
             </div>
             <div class="fr-input-group fr-mt-1w">
               <label class="fr-label" for="sigFonction">Fonction <span class="fr-hint-text">Champs de fusion acceptés</span></label>
-              <input class="fr-input" type="text" id="sigFonction" placeholder="ex : Pour la préfète et par délégation, le directeur régional">
+              <input class="fr-input" type="text" id="sigFonction" list="sigFonctionList" placeholder="ex : Pour le préfet de la région Bretagne et par délégation, le directeur régional">
+              <datalist id="sigFonctionList">
+                <option value="Pour le préfet de la région Bretagne et par délégation, le directeur régional de l'alimentation, de l'agriculture et de la forêt">
+                <option value="Pour le préfet de la région Bretagne et par délégation, la directrice régionale de l'alimentation, de l'agriculture et de la forêt">
+                <option value="Pour le préfet de la région Bretagne et par délégation, le directeur régional adjoint de l'alimentation, de l'agriculture et de la forêt">
+                <option value="Pour le préfet de la région Bretagne et par subdélégation, le chef du service régional de l'alimentation">
+                <option value="Pour le préfet et par délégation, le directeur régional de l'alimentation, de l'agriculture et de la forêt">
+              </datalist>
             </div>
             <div class="fr-input-group">
               <label class="fr-label" for="sigNom">Nom du signataire</label>
@@ -794,6 +862,7 @@ let cfg = {
     faitA: true, lieu: '', fonction: '', nom: '', mention: true
   },
   exp: { mode: 'single', name: 'Publipostage_{{NUMERO}}', attachCol: '', message: true, font: 'Marianne' },
+  logo: { enabled: false, row: null, col: '', width: 150, align: 'left', auto: true },
   sel: { view: 0, done: 'hide', mark: '', autoMark: true, numbers: '', numCol: '', conds: [] },
   currentModel: '',
   history: {},   // { "table|modèle": { rowId: "jj/mm/aaaa (Word)" } }
@@ -835,6 +904,7 @@ function showTab(name) {
     renderFields(); if (isPreview) renderPreview();
     if (!tplList.loaded) loadTemplates().catch(e => { $('tplMsg').innerHTML = alertHTML('err', esc(e.message || e)); });
     if (cfg.tpl && !tplRt) restoreActiveTemplate();
+    if (!logoTbl.loaded) loadLogoTable().catch(e => { $('logoMsg').innerHTML = alertHTML('err', esc(e.message || e)); });
   }
   if (name === 'generer') { refreshSelection(); renderRecList(); }
   if (name === 'signature') {
@@ -869,6 +939,7 @@ function applyConfig(c) {
   cfg.history = c.history || {};
   cfg.models = c.models || {};
   cfg.links = Array.isArray(c.links) ? c.links : [];
+  cfg.logo = Object.assign({ enabled: false, row: null, col: '', width: 150, align: 'left', auto: true }, c.logo || {});
 }
 
 /* ========================================================================
@@ -1375,6 +1446,7 @@ $('tbSize').onchange = (e) => {
 $('tbColor').oninput = (e) => exec('foreColor', e.target.value);
 $('tbBreak').onclick = () => exec('insertHTML', '<hr><p><br></p>');
 $('tbSig').onclick = () => insertToken('SIGNATURE');
+$('tbLogo').onclick = () => insertToken('LOGO');
 
 $('tbImage').onclick = () => {
   const inp = document.createElement('input');
@@ -1435,7 +1507,8 @@ const SPECIAL_FIELDS = [
   { id: 'DATE_JOUR_LONGUE', label: 'Date du jour (28 septembre 2026)' },
   { id: 'NUMERO', label: 'N° d\'ordre dans le publipostage' },
   { id: 'IDENTIFIANT', label: 'Identifiant du dossier (onglet 1)' },
-  { id: 'SIGNATURE', label: 'Emplacement de la signature' }
+  { id: 'SIGNATURE', label: 'Emplacement de la signature' },
+  { id: 'LOGO', label: 'Emplacement du logo (Préfet, préfecture…)' }
 ];
 function renderFields() {
   const byId = Object.fromEntries(data.cols.map(c => [c.id, c]));
@@ -1641,6 +1714,7 @@ function makeResolver(row, index) {
     if (key === 'DATE_JOUR_LONGUE') return { v: dateLongueFR(now) };
     if (key === 'NUMERO') return { v: String(index + 1) };
     if (key === 'PAGE' || key === 'NUMPAGES') return { v: '{{' + key + '}}' };
+    if (key === 'LOGO') return { v: '' };
     if (key === 'IDENTIFIANT') return { v: row ? rowIdent(row, ' - ') || 'L' + row.id : '' };
     if (key === 'id') return { v: String(row ? row.id : '') };
     const mapped = cfg.tpl && cfg.tpl.map && cfg.tpl.map[key];
@@ -1697,19 +1771,24 @@ function signatureBlocks(resolve) {
 
 // Emplacement de la signature : {{SIGNATURE}} ou #signature# (marqueur courant des modèles Word)
 const SIG_RE = /\{\{\s*SIGNATURE\s*\}\}|#\s*signature\s*#/i;
+// Emplacement du logo : {{LOGO}}
+const LOGO_RE = /\{\{\s*LOGO\s*\}\}/i;
+const SPECIAL_SPLIT_RE = /(\{\{\s*SIGNATURE\s*\}\}|#\s*signature\s*#|\{\{\s*LOGO\s*\}\})/i;
 function mergeRecord(ir, row, index) {
   const resolve = makeResolver(row, index);
-  const state = { sigPlaced: false, sig: true };
+  const state = { sigPlaced: false, sig: true, logoPlaced: false, row };
   const out = mergeBlocks(ir, resolve, index, state);
   if (cfg.sig.enabled && !state.sigPlaced) {
     out.push({ type: 'p', style: 'normal', align: 'left', list: null, runs: [] });
     out.push(...signatureBlocks(resolve));
   }
+  // Logo en haut du courrier si son emplacement n'est ni dans le message ni dans l'en-tête du modèle
+  if (cfg.logo.enabled && cfg.logo.auto && !state.logoPlaced && !hfHasLogo()) out.unshift(...logoBlocks(row));
   return out;
 }
 // Fusion sans bloc signature (en-têtes et pieds de page des modèles)
 function mergeAux(ir, row, index) {
-  return mergeBlocks(ir || [], makeResolver(row, index), index, { sigPlaced: false, sig: false });
+  return mergeBlocks(ir || [], makeResolver(row, index), index, { sigPlaced: false, sig: false, logoPlaced: false, row });
 }
 function mergeBlocks(ir, resolve, index, state) {
   const out = [];
@@ -1720,9 +1799,9 @@ function mergeBlocks(ir, resolve, index, state) {
     }
     if (b.type !== 'p') { out.push(Object.assign({}, b)); continue; }
     const list = b.list ? Object.assign({}, b.list, { id: index * 10000 + b.list.id }) : null;
-    const hasSig = b.runs.some(r => SIG_RE.test(r.text));
+    const hasSig = b.runs.some(r => SIG_RE.test(r.text) || LOGO_RE.test(r.text));
     if (!hasSig) { out.push(Object.assign({}, b, { list, runs: mergeRuns(b.runs, resolve) })); continue; }
-    // Découpe du paragraphe autour de {{SIGNATURE}}
+    // Découpe du paragraphe autour de {{SIGNATURE}} et {{LOGO}}
     let segment = [];
     const flush = () => {
       const runs = mergeRuns(segment, resolve);
@@ -1730,11 +1809,15 @@ function mergeBlocks(ir, resolve, index, state) {
       segment = [];
     };
     for (const r of b.runs) {
-      const parts = r.text.split(new RegExp(SIG_RE.source, 'i'));
+      const parts = r.text.split(SPECIAL_SPLIT_RE);
       parts.forEach((p, k) => {
-        if (k > 0) {
+        if (k % 2 === 1) {   // séparateur : {{SIGNATURE}}, #signature# ou {{LOGO}}
           flush();
-          if (cfg.sig.enabled && state.sig) { out.push(...signatureBlocks(resolve)); state.sigPlaced = true; }
+          if (LOGO_RE.test(p)) {
+            const lb = logoBlocks(state.row);
+            if (lb.length) { out.push(...lb); state.logoPlaced = true; }
+          } else if (cfg.sig.enabled && state.sig) { out.push(...signatureBlocks(resolve)); state.sigPlaced = true; }
+          return;
         }
         if (p) segment.push(Object.assign({}, r, { text: p }));
       });
@@ -2925,17 +3008,24 @@ function replaceInWordTexts(ts, re, fn) {
   return true;
 }
 const SIG_RE_G = /\{\{\s*SIGNATURE\s*\}\}|#\s*signature\s*#/gi;
-// Remplit les {{champs}} d'un fragment Word ; makeSig() renvoie les nœuds du bloc signature
-function fillWordXml(root, resolve, makeSig) {
-  let placed = false;
+const LOGO_RE_G = /\{\{\s*LOGO\s*\}\}/gi;
+// Remplit les {{champs}} d'un fragment Word ; makeSig() / makeLogo() renvoient les nœuds de la signature / du logo
+function fillWordXml(root, resolve, makeSig, makeLogo) {
+  let placed = false, logoPlaced = false;
   for (const p of [...root.getElementsByTagNameNS(W_NS, 'p')]) {
     if (!p.parentNode) continue;
     const ts = [...p.getElementsByTagNameNS(W_NS, 't')].filter(t => closestW(t, 'p') === p);
     const txt = ts.map(t => t.textContent).join('');
     if (!ts.length || !(txt.includes('{{') || /#\s*signature\s*#/i.test(txt))) continue;
+    const hasLogo = replaceInWordTexts(ts, LOGO_RE_G, () => '');
+    if (hasLogo && makeLogo) {
+      const nodes = makeLogo();
+      nodes.forEach(n => p.parentNode.insertBefore(n, p));
+      logoPlaced = logoPlaced || nodes.length > 0;
+    }
     const hasSig = replaceInWordTexts(ts, SIG_RE_G, () => '');
-    if (hasSig && makeSig) {
-      const nodes = makeSig();
+    if ((hasSig && makeSig) || (hasLogo && !hasSig)) {
+      const nodes = hasSig && makeSig ? makeSig() : [];
       let ref = p;
       nodes.forEach(n => { ref.parentNode.insertBefore(n, ref.nextSibling); ref = n; });
       placed = placed || nodes.length > 0;
@@ -2944,7 +3034,7 @@ function fillWordXml(root, resolve, makeSig) {
     }
     replaceInWordTexts(ts, new RegExp(TOKEN_RE.source, 'g'), (name) => resolve(name).v);
   }
-  return placed;
+  return { placed, logoPlaced };
 }
 function parseWordFragment(doc, xml) {
   const wrap = xmlDoc(`<w:wrap xmlns:w="${W_NS}" xmlns:r="${R_NS}" xmlns:wp="${WP_NS}" xmlns:a="${A_NS}" xmlns:pic="${PIC_NS}">${xml}</w:wrap>`);
@@ -3000,9 +3090,14 @@ async function buildDocxFromTemplate(buf, records, edited, opts) {
     if (!opts.keepTokens) {
       const resolve = makeResolver(rec.row, rec.index);
       const sigNodes = () => cfg.sig.enabled ? parseWordFragment(doc, builder.blocksXml(signatureBlocks(resolve), maxW, 'document')) : [];
-      const placed = fillWordXml(holder, resolve, sigNodes);
+      const logoNodes = () => parseWordFragment(doc, builder.blocksXml(logoBlocks(rec.row), maxW, 'document'));
+      const { placed, logoPlaced } = fillWordXml(holder, resolve, sigNodes, logoNodes);
       if (cfg.sig.enabled && !placed) {
         parseWordFragment(doc, '<w:p/>' + builder.blocksXml(signatureBlocks(resolve), maxW, 'document')).forEach(n => holder.appendChild(n));
+      }
+      if (cfg.logo.enabled && cfg.logo.auto && !logoPlaced && !hfHasLogo()) {
+        const first = holder.firstChild;
+        logoNodes().forEach(n => holder.insertBefore(n, first));
       }
     }
     insert([...holder.childNodes]);
@@ -3020,7 +3115,21 @@ async function buildDocxFromTemplate(buf, records, edited, opts) {
     if (!/^word\/(header|footer)\d*\.xml$/.test(path)) continue;
     const d = xmlDoc(await zip.file(path).async('string'));
     normalizeMergeFields(d.documentElement);
-    if (!opts.keepTokens) fillWordXml(d.documentElement, resolve0, null);
+    if (!opts.keepTokens) {
+      // Logo de l'en-tête : image ajoutée avec ses relations propres à cette partie du document
+      for (const [pfx, ns] of Object.entries(nsDecl)) {
+        if (!d.documentElement.getAttribute('xmlns:' + pfx)) d.documentElement.setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:' + pfx, ns);
+      }
+      const logoH = () => parseWordFragment(d, builder.blocksXml(logoBlocks(first.row), maxW, 'header'));
+      const res = fillWordXml(d.documentElement, resolve0, null, logoH);
+      if (res.logoPlaced && builder.rels.header.length) {
+        const relPath = path.replace(/^word\//, 'word/_rels/') + '.rels';
+        let rx = zip.file(relPath) ? await zip.file(relPath).async('string') : builder.relsXml([]);
+        const add = builder.rels.header.filter(r => !rx.includes('Id="' + r.rId + '"'));
+        rx = rx.replace('</Relationships>', add.map(r => `<Relationship Id="${r.rId}" Type="${r.type}" Target="${r.target}"/>`).join('') + '</Relationships>');
+        zip.file(relPath, rx);
+      }
+    }
     for (const dp of d.getElementsByTagNameNS(WP_NS, 'docPr')) dp.setAttribute('id', String(id++));
     zip.file(path, new XMLSerializer().serializeToString(d));
   }
@@ -4248,6 +4357,10 @@ async function generate(kind) {
     await Promise.all([...editor.querySelectorAll('img')].map(i => i.decode ? i.decode().catch(() => {}) : null));
     const ir = htmlToIR(editor);
     await normalizeIRImages(ir);
+    if (cfg.logo.enabled) {
+      await ensureLogos();
+      if (!logoFor(null)) { genMsg('warn', 'Le logo est activé mais aucun logo n\'est disponible dans <code>Logo_publipostage</code> (onglet 2).'); return; }
+    }
 
     if (kind === 'xlsx') { await exportXlsx(rows, ir); return; }
     const fontWarn = kind === 'pdf' ? await preparePdfFont() : null;
@@ -4379,6 +4492,7 @@ $('genXlsx').onclick = () => generate('xlsx');
  * ====================================================================== */
 const TPL_TABLE = 'Modele_publipostage';
 const SIG_TABLE = 'Signature_Num';
+const LOGO_TABLE = 'Logo_publipostage';
 let tplList = { loaded: false, rows: [], cols: {}, names: {} };
 let tplRt = null;              // modèle actif chargé : { attId, buf, kind, body, header, footer, page, bgPng }
 let applyingTemplate = false;
@@ -5143,6 +5257,118 @@ $('sigTblSave').onclick = async () => {
 
 
 /* ========================================================================
+ * Logos (table Logo_publipostage) : Préfet, préfecture, DRAAF…
+ * ====================================================================== */
+let logoTbl = { loaded: false, exists: false, rows: [], cols: {}, imgs: new Map() };
+function logoTitle(r) { const c = logoTbl.cols.title; return (c && String(r[c.id] || '').trim()) || ('Logo n°' + r.id); }
+async function loadLogoTable(selectId) {
+  if (typeof grist === 'undefined') return;
+  const tables = await listDocTables();
+  logoTbl = { loaded: true, exists: tables.includes(LOGO_TABLE), rows: [], cols: {}, imgs: new Map() };
+  if (!logoTbl.exists) {
+    $('logoMsg').innerHTML = alertHTML('info', `La table <code>${LOGO_TABLE}</code> n'existe pas encore : elle sera créée au premier logo enregistré (bloc « Ajouter un logo » ci-dessous).`);
+    renderLogo();
+    return;
+  }
+  const { cols, rows } = await readGristTable(LOGO_TABLE);
+  logoTbl.rows = rows;
+  logoTbl.cols = { file: pickCol(cols, 'Logo', 'Attachments'), title: pickCol(cols, 'Intitule', 'Text', /^intitul|^nom/i), def: pickCol(cols, 'Par_defaut', 'Bool', /d[ée]faut/i) };
+  const names = await attachmentNames();
+  const errs = [];
+  for (const r of rows) {
+    const ids = logoTbl.cols.file ? attIds(r[logoTbl.cols.file.id]) : [];
+    if (!ids.length) continue;
+    const id = ids[ids.length - 1];
+    try {
+      const buf = await fetchAttachment(id);
+      logoTbl.imgs.set(r.id, await normalizeImage('data:' + sigMimeOf(buf, names[id]) + ';base64,' + bufToBase64(buf), 1600));
+    } catch (e) { errs.push(logoTitle(r) + ' : ' + (e.message || e)); }
+  }
+  if (selectId) cfg.logo.row = selectId;
+  $('logoMsg').innerHTML = !logoTbl.cols.file ? alertHTML('warn', `La table <code>${LOGO_TABLE}</code> n'a pas de colonne de type « Pièces jointes ».`)
+    : errs.length ? alertHTML('warn', 'Logo(s) illisible(s) : ' + esc(errs.join(' ; '))) : '';
+  renderLogo();
+  if (isPreview) renderPreview(); else renderHF();
+}
+async function ensureLogos() { if (!logoTbl.loaded) await loadLogoTable(); }
+// Logo d'un dossier : selon la colonne choisie (valeur = intitulé du logo), sinon le logo par défaut
+function logoFor(row) {
+  const usable = logoTbl.rows.filter(r => logoTbl.imgs.has(r.id));
+  if (!usable.length) return null;
+  const col = cfg.logo.col && data.cols.find(c => c.id === cfg.logo.col);
+  if (col && row) {
+    const v = normKey(formatValue(col, row));
+    if (v) {
+      const hit = usable.find(r => normKey(logoTitle(r)) === v) ||
+        usable.slice().sort((a, b) => logoTitle(b).length - logoTitle(a).length)
+          .find(r => { const t = normKey(logoTitle(r)); return t && (v.includes(t) || t.includes(v)); });
+      if (hit) return logoTbl.imgs.get(hit.id);
+    }
+  }
+  const def = usable.find(r => r.id === cfg.logo.row) || (logoTbl.cols.def && usable.find(r => r[logoTbl.cols.def.id] === true)) || usable[0];
+  return logoTbl.imgs.get(def.id);
+}
+function logoBlocks(row) {
+  if (!cfg.logo.enabled) return [];
+  const L = logoFor(row);
+  if (!L || !L.w) return [];
+  const w = cfg.logo.width || 150;
+  return [{ type: 'image', src: L.src, w, h: w * L.h / L.w, align: cfg.logo.align || 'left' }];
+}
+// {{LOGO}} déjà présent dans l'en-tête ou le pied de page du modèle actif ?
+function hfHasLogo() {
+  if (!tplRt || !cfg.tpl || (tplRt.kind === 'pdf' && cfg.tpl.bg)) return false;
+  return LOGO_RE.test(irToPlainText(tplRt.header || []) + ' ' + irToPlainText(tplRt.footer || []));
+}
+function renderLogo() {
+  const L = cfg.logo;
+  $('logoEnabled').checked = !!L.enabled;
+  $('logoBadge').hidden = !L.enabled;
+  $('logoWidth').value = L.width; $('logoWidthVal').textContent = '(' + L.width + ' px)';
+  $('logoAlign').value = L.align || 'left';
+  $('logoAuto').checked = L.auto !== false;
+  const usable = logoTbl.rows.filter(r => logoTbl.imgs.has(r.id));
+  $('logoSelect').innerHTML = usable.length ? usable.map(r => `<option value="${r.id}" ${r.id === L.row ? 'selected' : ''}>${esc(logoTitle(r))}</option>`).join('')
+    : '<option value="">— Aucun logo —</option>';
+  if (usable.length && !usable.some(r => r.id === L.row)) { const d = logoFor(null); const r = usable.find(x => logoTbl.imgs.get(x.id) === d); L.row = r ? r.id : null; $('logoSelect').value = L.row || ''; }
+  const cols = data.cols.filter(c => c.baseType !== 'Attachments');
+  $('logoCol').innerHTML = '<option value="">— Toujours le logo par défaut —</option>' +
+    cols.map(c => `<option value="${esc(c.id)}" ${c.id === L.col ? 'selected' : ''}>${esc(c.label)}</option>`).join('');
+  const img = L.row && logoTbl.imgs.get(L.row);
+  $('logoPreview').innerHTML = img ? `<img src="${img.src}" alt="Logo par défaut" style="width:${Math.min(L.width, 260)}px">` : '<span class="fr-text--sm fr-mb-0">Aucun logo.</span>';
+}
+function logoChanged() { renderLogo(); saveConfig(); if (isPreview) renderPreview(); else renderHF(); }
+$('logoEnabled').onchange = async (e) => { cfg.logo.enabled = e.target.checked; if (cfg.logo.enabled) await ensureLogos().catch(err => { $('logoMsg').innerHTML = alertHTML('err', esc(err.message || err)); }); logoChanged(); };
+$('logoSelect').onchange = (e) => { cfg.logo.row = +e.target.value || null; logoChanged(); };
+$('logoCol').onchange = (e) => { cfg.logo.col = e.target.value; logoChanged(); };
+$('logoWidth').oninput = (e) => { cfg.logo.width = +e.target.value; logoChanged(); };
+$('logoAlign').onchange = (e) => { cfg.logo.align = e.target.value; logoChanged(); };
+$('logoAuto').onchange = (e) => { cfg.logo.auto = e.target.checked; logoChanged(); };
+$('logoReload').onclick = () => loadLogoTable().catch(e => { $('logoMsg').innerHTML = alertHTML('err', esc(e.message || e)); });
+$('logoAdd').onclick = async () => {
+  const name = $('logoName').value.trim(), f = $('logoFile').files[0];
+  if (!name || !f) { $('logoMsg').innerHTML = alertHTML('warn', 'Indiquez l\'intitulé et choisissez une image.'); return; }
+  $('logoAdd').disabled = true;
+  try {
+    if (!(await listDocTables()).includes(LOGO_TABLE)) {
+      await grist.docApi.applyUserActions([['AddTable', LOGO_TABLE, [{ id: 'Intitule', type: 'Text' }, { id: 'Logo', type: 'Attachments' }, { id: 'Par_defaut', type: 'Bool' }]]]);
+      meta = null;
+    }
+    const img = await fileToNormalizedImage(f, 1600);
+    const blob = await (await fetch(img.src)).blob();
+    const attId = await uploadAttachment(blob, sanitizeFilename('Logo_' + name) + (/jpeg/.test(blob.type) ? '.jpg' : '.png'));
+    const fileCol = (logoTbl.cols.file && logoTbl.cols.file.id) || 'Logo', titleCol = (logoTbl.cols.title && logoTbl.cols.title.id) || 'Intitule';
+    const res = await grist.docApi.applyUserActions([['AddRecord', LOGO_TABLE, null, { [titleCol]: name, [fileCol]: ['L', attId] }]]);
+    const rowId = res && res.retValues ? res.retValues[0] : null;
+    $('logoName').value = ''; $('logoFile').value = '';
+    await loadLogoTable(logoTbl.rows.length ? null : rowId);
+    $('logoMsg').innerHTML = alertHTML('ok', 'Logo « ' + esc(name) + ' » enregistré dans <code>' + LOGO_TABLE + '</code>.');
+  } catch (e) {
+    $('logoMsg').innerHTML = alertHTML('err', 'Enregistrement impossible : ' + esc(e.message || e));
+  } finally { $('logoAdd').disabled = false; }
+};
+
+/* ========================================================================
  * Initialisation
  * ====================================================================== */
 function applyCfgToUI() {
@@ -5156,10 +5382,12 @@ function applyCfgToUI() {
   $('expFont').value = cfg.exp.font || 'Marianne';
   applyFontClass();
   renderSig();
+  renderLogo();
   renderTplState();
 }
 function renderAll() {
   renderColList();
+  renderLogo();
   renderFields();
   if (data.tableId) renderSelControls();
   if (cfg.tpl && $('tplMap')) renderTplMap();

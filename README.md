@@ -8,6 +8,10 @@
 | `prise-rdv-calendrier.html` | Prise de rendez-vous (calendrier) |
 | `rdv/index.html` | Formulaire public de prise de rendez-vous |
 | `duo.html` | **Duo** — interprète à deux écouteurs (ex. japonais ⇄ allemand) |
+| `publipostage.html` | **Publipostage** — courriers Word / PDF signés, modèles, logo Préfet / Préfecture par dossier |
+| `import-resytal.html` | **Import RESYTAL** — mise à jour des tables à partir d'un export Excel (analyse des différences, journal) |
+
+Agréments phytopharmaceutiques (DRAAF) : analyse, corrections et méthode dans [`docs/agrements-phyto.md`](docs/agrements-phyto.md), formules corrigées dans [`docs/agrements-phyto-formules.py`](docs/agrements-phyto-formules.py).
 
 ## ERP « façon SAP » (`erp-sap.html`)
 

@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Import RESYTAL</title>
+<!-- Système de Design de l'État (DSFR) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.15.3/dist/dsfr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.15.3/dist/utility/icons/icons.min.css">
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root { --bleu: var(--background-action-high-blue-france, #000091); --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  html, body { min-height: 100%; }
+  body { background: var(--background-alt-grey, #f6f6f6); }
+  [hidden] { display: none !important; }
+  .ir-header { display: flex; align-items: center; gap: 1rem; padding: .5rem 1rem; background: var(--background-default-grey, #fff); box-shadow: 0 1px 0 0 var(--border-default-grey, #ddd); }
+  .ir-header .fr-logo { margin: 0; font-size: .8rem; }
+  .ir-header__title { font-weight: 700; font-size: 1.125rem; line-height: 1.5rem; margin: 0; }
+  .ir-header__tagline { font-size: .75rem; line-height: 1.25rem; color: var(--text-mention-grey, #666); margin: 0; }
+  .ir-header .ir-status { margin-left: auto; text-align: right; }
+  .ir-main { padding: 1rem; max-width: 1200px; }
+  .ir-bloc { background: var(--background-default-grey, #fff); border: 1px solid var(--border-default-grey, #ddd); padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; }
+  .ir-bloc > h2 { font-size: 1.125rem; line-height: 1.5rem; margin-bottom: .75rem; }
+  .ir-inline { display: flex; gap: .75rem; align-items: flex-end; flex-wrap: wrap; }
+  .ir-inline > .fr-select-group, .ir-inline > .fr-input-group { flex: 1; min-width: 220px; margin-bottom: 0; }
+  .ir-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0 1.5rem; }
+  .ir-drop { border: 2px dashed var(--border-plain-grey, #929292); background: var(--background-alt-blue-france, #f5f5fe); padding: 2rem 1rem; text-align: center; cursor: pointer; }
+  .ir-drop.over { border-color: var(--bleu); background: #e3e3fd; }
+  .ir-drop p { margin: 0; }
+  .ir-map { max-height: 460px; overflow: auto; border: 1px solid var(--border-default-grey, #ddd); }
+  .ir-map table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+  .ir-map th { position: sticky; top: 0; background: var(--background-contrast-grey, #eee); text-align: left; padding: .375rem .5rem; z-index: 1; }
+  .ir-map td { padding: .25rem .5rem; border-top: 1px solid var(--border-default-grey, #ddd); vertical-align: middle; }
+  .ir-map td .fr-select { margin: 0; padding-top: .25rem; padding-bottom: .25rem; font-size: .875rem; }
+  .ir-map tr.unmapped td:first-child { box-shadow: inset 3px 0 0 #b34000; }
+  .ir-code { font-family: var(--mono); font-size: .72rem; color: var(--text-mention-grey, #666); }
+  .ir-sample { font-size: .75rem; color: var(--text-mention-grey, #666); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ir-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .75rem; margin-bottom: 1rem; }
+  .ir-tile { border: 1px solid var(--border-default-grey, #ddd); padding: .75rem 1rem; background: var(--background-default-grey, #fff); }
+  .ir-tile b { display: block; font-size: 1.75rem; line-height: 2rem; color: var(--bleu); }
+  .ir-tile.warn b { color: #b34000; } .ir-tile.err b { color: #ce0500; } .ir-tile.ok b { color: #18753c; }
+  .ir-tile span { font-size: .8rem; }
+  .ir-details { max-height: 360px; overflow: auto; font-size: .8rem; border: 1px solid var(--border-default-grey, #ddd); }
+  .ir-details table { width: 100%; border-collapse: collapse; }
+  .ir-details td, .ir-details th { padding: .2rem .5rem; border-top: 1px solid var(--border-default-grey, #ddd); text-align: left; vertical-align: top; }
+  .ir-details th { position: sticky; top: 0; background: var(--background-contrast-grey, #eee); }
+  .ir-old { color: #ce0500; text-decoration: line-through; } .ir-new { color: #18753c; }
+  .ir-progress { height: 6px; background: var(--background-contrast-grey, #eee); overflow: hidden; margin-top: 1rem; display: none; }
+  .ir-progress.show { display: block; }
+  .ir-progress div { height: 100%; width: 0; background: var(--bleu); transition: width .15s; }
+  .fr-alert { margin-bottom: 1rem; }
+  .fr-collapse--expanded { padding-bottom: 1rem; }
+  code { font-family: var(--mono); font-size: .8rem; background: var(--background-contrast-grey, #eee); padding: 0 .25rem; }
+</style>
+</head>
+<body>
+<header class="ir-header">
+  <p class="fr-logo">République<br>Française</p>
+  <div>
+    <p class="ir-header__title">Import RESYTAL</p>
+    <p class="ir-header__tagline">Mise à jour des tables Grist à partir d'un export Excel (ajouts, modifications, suppressions)</p>
+  </div>
+  <p class="ir-status fr-text--sm fr-mb-0" id="status">Connexion à Grist…</p>
+</header>
+
+<main class="ir-main">
+  <div id="accessMsg"></div>
+
+  <!-- 1. Fichier -->
+  <div class="ir-bloc">
+    <h2>1. Fichier exporté de RESYTAL</h2>
+    <div class="ir-drop" id="drop" tabindex="0" role="button" aria-label="Déposer un fichier Excel ou cliquer pour le choisir">
+      <p class="fr-icon-upload-line"><b>Déposez ici l'export RESYTAL</b> (.xlsx, .xls, .csv) ou cliquez pour le choisir</p>
+      <p class="fr-hint-text fr-mt-1w">Le fichier est lu dans le navigateur : il n'est envoyé nulle part. Les lignes d'introduction et la double ligne d'en-tête de RESYTAL sont reconnues automatiquement.</p>
+    </div>
+    <input type="file" id="file" accept=".xlsx,.xls,.xlsm,.csv" hidden>
+    <div id="fileInfo" class="fr-mt-2w"></div>
+    <div class="ir-inline fr-mt-1w" id="sheetBox" hidden>
+      <div class="fr-select-group"><label class="fr-label" for="sheet">Onglet</label><select class="fr-select" id="sheet"></select></div>
+    </div>
+  </div>
+
+  <!-- 2. Correspondance -->
+  <div class="ir-bloc" id="mapBloc" hidden>
+    <h2>2. Table de destination et correspondance des colonnes</h2>
+    <div class="ir-inline fr-mb-2w">
+      <div class="fr-select-group"><label class="fr-label" for="target">Table Grist à mettre à jour</label><select class="fr-select" id="target"></select></div>
+      <button type="button" class="fr-btn fr-btn--secondary fr-btn--sm" id="mapAuto">Associer automatiquement</button>
+      <button type="button" class="fr-btn fr-btn--tertiary fr-btn--sm" id="mapCreateAll">Créer les colonnes non associées</button>
+    </div>
+    <p class="fr-text--sm" id="mapInfo"></p>
+    <div class="fr-checkbox-group fr-checkbox-group--sm fr-mb-1w">
+      <input type="checkbox" id="mapOnlyUnmapped"><label class="fr-label" for="mapOnlyUnmapped">Afficher uniquement les colonnes non associées</label>
+    </div>
+    <div class="ir-map"><table><thead><tr><th>Colonne du fichier</th><th>Exemple</th><th>Colonne Grist</th><th title="Colonnes qui identifient une ligne de façon unique">Clé</th></tr></thead><tbody id="mapBody"></tbody></table></div>
+    <p class="fr-hint-text fr-mt-1w fr-mb-0">La <b>clé</b> identifie une ligne d'un import à l'autre. Pour RESYTAL : n° d'approbation + libellé du périmètre + identifiant de l'unité d'activité (une ligne par approbation × périmètre × UA).</p>
+  </div>
+
+  <!-- 3. Options -->
+  <div class="ir-bloc" id="optBloc" hidden>
+    <h2>3. Options</h2>
+    <div class="ir-grid">
+      <div>
+        <div class="fr-select-group">
+          <label class="fr-label" for="optAbsent">Lignes de Grist absentes du fichier</label>
+          <select class="fr-select" id="optAbsent">
+            <option value="keep">Les conserver (recommandé)</option>
+            <option value="delete">Les supprimer</option>
+          </select>
+          <p class="fr-hint-text">Une approbation archivée ou retirée reste en général dans l'export RESYTAL ; une ligne absente correspond souvent à un export partiel (autre région, autres filtres).</p>
+        </div>
+        <div class="fr-select-group">
+          <label class="fr-label" for="optDateCol">Date du dernier import <span class="fr-hint-text">Écrite sur chaque ligne présente dans le fichier : les lignes absentes gardent une date plus ancienne.</span></label>
+          <select class="fr-select" id="optDateCol"></select>
+        </div>
+      </div>
+      <div>
+        <div class="fr-select-group">
+          <label class="fr-label" for="optEnrich">Fiches Entreprises et Établissements <span class="fr-hint-text">Tables <code>DATA_Entreprise</code> (par SIREN) et <code>DATA_Etablissement</code> (par SIRET)</span></label>
+          <select class="fr-select" id="optEnrich">
+            <option value="none">Ne pas les modifier</option>
+            <option value="create">Créer les fiches manquantes</option>
+            <option value="fill" selected>Créer les fiches manquantes et compléter les champs vides</option>
+            <option value="sync">Créer et mettre à jour (RESYTAL fait foi)</option>
+          </select>
+        </div>
+        <div class="fr-checkbox-group fr-checkbox-group--sm">
+          <input type="checkbox" id="optChoices" checked><label class="fr-label" for="optChoices">Ajouter les nouvelles valeurs aux listes de choix des colonnes « Choix »</label>
+        </div>
+        <div class="fr-checkbox-group fr-checkbox-group--sm">
+          <input type="checkbox" id="optJournal" checked><label class="fr-label" for="optJournal">Tracer l'import dans la table <code>Journal_import</code> (créée si besoin)</label>
+        </div>
+        <div class="fr-checkbox-group fr-checkbox-group--sm">
+          <input type="checkbox" id="optNoKey"><label class="fr-label" for="optNoKey">Ajouter aussi les lignes du fichier dont la clé est vide</label>
+        </div>
+      </div>
+    </div>
+    <ul class="fr-btns-group fr-btns-group--inline-md fr-mt-2w">
+      <li><button type="button" class="fr-btn fr-icon-search-line fr-btn--icon-left" id="analyse">Analyser les différences</button></li>
+    </ul>
+  </div>
+
+  <!-- 4. Résultat -->
+  <div class="ir-bloc" id="resBloc" hidden>
+    <h2>4. Différences avec Grist</h2>
+    <div id="resTiles" class="ir-tiles"></div>
+    <div id="resMsg"></div>
+    <div id="resDetails"></div>
+    <div class="fr-checkbox-group fr-checkbox-group--sm fr-mt-2w" id="confirmDelBox" hidden>
+      <input type="checkbox" id="confirmDel"><label class="fr-label" for="confirmDel" id="confirmDelLbl"></label>
+    </div>
+    <ul class="fr-btns-group fr-btns-group--inline-md fr-mt-2w">
+      <li><button type="button" class="fr-btn fr-icon-check-line fr-btn--icon-left" id="apply">Importer dans Grist</button></li>
+      <li><button type="button" class="fr-btn fr-btn--secondary fr-icon-download-line fr-btn--icon-left" id="report">Télécharger le rapport (Excel)</button></li>
+    </ul>
+    <div class="ir-progress" id="progress"><div></div></div>
+    <div id="applyMsg" class="fr-mt-2w" aria-live="polite"></div>
+  </div>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const ALERT = { ok: 'success', warn: 'warning', err: 'error', info: 'info' };
+const alertHTML = (k, t) => `<div class="fr-alert fr-alert--${ALERT[k] || 'info'} fr-alert--sm"><p>${t}</p></div>`;
+const setStatus = (t) => { $('status').textContent = t; };
+const pad2 = (n) => String(n).padStart(2, '0');
+const normKey = (x) => String(x == null ? '' : x).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const clean = (s) => String(s).replace(/[  ]/g, ' ').trim();
+// Identifiant de colonne à la manière de Grist : « Entreprise :\nSIREN/NUMAGRIN (ENT) » -> Entreprise_SIREN_NUMAGRIN_ENT_
+function gristId(label) {
+  let x = String(label || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+/, '');
+  if (!x) x = 'Colonne';
+  if (/^\d/.test(x)) x = 'c' + x;
+  return x;
+}
+const tick = () => new Promise(r => setTimeout(r, 0));
+
+/* ========================================================================
+ * Fiches Entreprises / Établissements tenues à jour à partir de l'export.
+ * Chaque source accepte plusieurs noms : code court RESYTAL ou identifiant Grist du libellé long.
+ * ====================================================================== */
+const ENRICH = [
+  { table: 'DATA_Entreprise', key: 'SIREN', src: ['Ent_SIREN', 'Entreprise_SIREN_NUMAGRIN_ENT_'], label: 'entreprise', fields: {
+    Libelle: ['Ent_Raison_Sociale', 'Entreprise_Raison_Sociale_ENT'],
+    Date_de_creation: ['Ent_Date_Creation_SIREN', 'Entreprise_SIREN_Date_de_Creation_ENT'],
+    Date_de_cessation: ['Ent_Date_Cessation_SIREN', 'Entreprise_SIREN_Date_de_Cessation_ENT'],
+    Adresse: { src: ['Ent_Adr_post_Conc', 'Entreprise_RESYTAL_Adresse_postale_concatenee'], addr: true },
+    Code_Postal: ['Ent_Code_post', 'Entreprise_RESYTAL_Code_postal'],
+    Localite: ['Ent_Bure_distri', 'Entreprise_RESYTAL_Bureau_distributeur_postal']
+  } },
+  { table: 'DATA_Etablissement', key: 'SIRET', src: ['Etb_SIRET_NUMAGRIT', 'Etablissement_SIRET_NUMAGRIT_ETAB_'], label: 'établissement', fields: {
+    Libelle: ['Etb_Enseigne_Usuelle_Resytal', 'Etablissement_RESYTAL_Enseigne_usuelle'],
+    Commune: ['Etb_Commune_localisation', 'Etablissement_RESYTAL_Commune_localisation'],
+    Latitude: ['Latitude_WGS84', 'Geolocalisation_completee_Latitude'],
+    Longitude: ['Longitude_WGS84', 'Geolocalisation_completee_Longitude'],
+    Date_de_creation_ETAB: ['Etb_Date_Creation_SIRET', 'Etablissement_SIRET_Date_de_creation_ETAB'],
+    SIREN: ['Ent_SIREN', 'Entreprise_SIREN_NUMAGRIN_ENT_']
+  } }
+];
+// Clé conseillée pour la table RESYTAL (identifiants Grist normalisés)
+const RESYTAL_KEY = ['approbationnapprobation', 'perimetreapprobationlibelle', 'unitedactiviteidentifiantua'];
+const RESYTAL_KEY_SHORT = ['approbationnumero', 'etbperimetreapprolibelle', 'uaidinformatique'];
+
+/* ========================================================================
+ * État et configuration (options du widget)
+ * ====================================================================== */
+let cfg = { target: 'DATA_RESYTAL', maps: {}, keys: {}, absent: 'keep', dateCol: '', enrich: 'fill', choices: true, journal: true, noKey: false };
+let meta = null;          // { tables: [ids], cols: {table: [col]} }
+let file = null;          // { name, sheets: {name: matrix}, sheet }
+let src = null;           // { cols: [{idx, long, short, key}], rows: [[...]], extraction, headerRow }
+let plan = null;
+let busy = false;
+
+function saveConfig() {
+  try { localStorage.setItem('grist-import-resytal', JSON.stringify(cfg)); } catch (e) {}
+  try { grist.setOption('config', cfg); } catch (e) {}
+}
+function applyConfig(c) {
+  if (!c) return;
+  cfg = Object.assign({}, cfg, c);
+  cfg.maps = c.maps || {}; cfg.keys = c.keys || {};
+}
+
+/* ========================================================================
+ * Lecture du fichier
+ * ====================================================================== */
+class XDate { constructor(y, m, d, H, M, S) { Object.assign(this, { y, m, d, H: H || 0, M: M || 0, S: S || 0 }); } }
+XDate.prototype.toString = function () { return pad2(this.d) + '/' + pad2(this.m) + '/' + this.y; };
+
+function readWorkbook(buf, name) {
+  const csv = /\.csv$/i.test(name || '');
+  const wb = XLSX.read(buf, { type: 'array', cellDates: false, cellNF: true, raw: csv, codepage: 65001 });
+  const sheets = {};
+  for (const sn of wb.SheetNames) {
+    const ws = wb.Sheets[sn];
+    if (!ws || !ws['!ref']) { sheets[sn] = []; continue; }
+    const rg = XLSX.utils.decode_range(ws['!ref']);
+    const m = [];
+    for (let r = rg.s.r; r <= rg.e.r; r++) {
+      const line = [];
+      for (let c = rg.s.c; c <= rg.e.c; c++) {
+        const cell = ws[XLSX.utils.encode_cell({ r, c })];
+        let v = null;
+        if (cell) {
+          if (cell.t === 'n' && cell.z && XLSX.SSF.is_date(cell.z)) {
+            const p = XLSX.SSF.parse_date_code(cell.v);
+            v = p ? new XDate(p.y, p.m, p.d, p.H, p.M, Math.round(p.S)) : cell.v;
+          } else if (cell.t === 'd' && cell.v instanceof Date) {
+            const d = cell.v; v = new XDate(d.getFullYear(), d.getMonth() + 1, d.getDate());
+          } else if (cell.t === 'e') v = null;
+          else v = cell.v;
+        }
+        line.push(v);
+      }
+      m.push(line);
+    }
+    sheets[sn] = m;
+  }
+  return { sheets, names: wb.SheetNames };
+}
+const filled = (v) => v !== null && v !== undefined && !(typeof v === 'string' && !v.trim());
+// En-tête : 1re ligne presque entièrement remplie de textes ; RESYTAL ajoute une 2e ligne de codes courts
+function analyseSheet(m) {
+  const counts = m.map(r => r.filter(filled).length);
+  const maxCount = Math.max(0, ...counts.slice(0, 400));
+  let h = -1;
+  for (let i = 0; i < Math.min(m.length, 60); i++) {
+    const cells = m[i].filter(filled);
+    if (cells.length >= Math.max(2, maxCount * 0.6) && cells.every(v => typeof v === 'string')) { h = i; break; }
+  }
+  if (h < 0) throw new Error('Ligne d\'en-tête introuvable dans cet onglet.');
+  let short = null;
+  const next = m[h + 1] || [];
+  const nf = next.filter(filled);
+  if (nf.length >= counts[h] * 0.8 && nf.filter(v => typeof v === 'string' && /^[A-Za-z][A-Za-z0-9_]*$/.test(v.trim())).length >= nf.length * 0.9) short = h + 1;
+  const start = (short !== null ? short : h) + 1;
+  let extraction = '';
+  for (let i = 0; i < h; i++) for (const v of m[i]) {
+    const mt = typeof v === 'string' && v.match(/rafra[iî]chies?[^:]*:\s*(.+)$/im);
+    if (mt) extraction = clean(mt[1]).replace(/(\d)\s+(\d)/g, '$1$2');
+  }
+  const width = Math.max(...m.slice(h, h + 50).map(r => r.length));
+  const cols = [];
+  const seen = new Map();
+  for (let c = 0; c < width; c++) {
+    const longRaw = filled(m[h][c]) ? String(m[h][c]) : '';
+    const sh = short !== null && filled(m[short][c]) ? clean(m[short][c]) : '';
+    if (!longRaw && !sh) continue;
+    const long = clean(longRaw.replace(/\s*\n\s*/g, ' ').replace(/\s{2,}/g, ' ')) || sh;
+    let key = sh || gristId(longRaw || sh);
+    const n = (seen.get(key) || 0) + 1; seen.set(key, n);
+    if (n > 1) key += '_' + n;
+    cols.push({ idx: c, long, longRaw: longRaw || sh, short: sh, key, newId: gristId(longRaw || sh) });
+  }
+  const rows = m.slice(start).filter(r => r.some(filled));
+  return { cols, rows, extraction, headerRow: h + 1, dataRow: start + 1 };
+}
+function srcByAliases(aliases) {
+  const ks = aliases.map(normKey);
+  return src.cols.find(c => ks.includes(normKey(c.short)) || ks.includes(normKey(c.longRaw)) || ks.includes(normKey(c.newId))) || null;
+}
+
+/* ========================================================================
+ * Métadonnées Grist
+ * ====================================================================== */
+async function loadMeta() {
+  const [tables, columns] = await Promise.all([grist.docApi.fetchTable('_grist_Tables'), grist.docApi.fetchTable('_grist_Tables_column')]);
+  const tableById = {}, colById = {};
+  tables.id.forEach((id, i) => { tableById[id] = tables.tableId[i]; });
+  columns.id.forEach((id, i) => { colById[id] = columns.colId[i]; });
+  const cols = {};
+  columns.id.forEach((id, i) => {
+    const t = tableById[columns.parentId[i]];
+    if (!t) return;
+    const colId = columns.colId[i], type = columns.type[i] || 'Any';
+    let opts = {}; try { opts = columns.widgetOptions[i] ? JSON.parse(columns.widgetOptions[i]) : {}; } catch (e) {}
+    (cols[t] = cols[t] || []).push({
+      ref: id, id: colId, label: columns.label[i] || colId, type, baseType: type.split(':')[0],
+      refTable: /^Ref(List)?:/.test(type) ? type.split(':')[1] : null,
+      visibleCol: columns.visibleCol && columns.visibleCol[i] ? colById[columns.visibleCol[i]] : null,
+      isFormula: !!columns.isFormula[i] && !!columns.formula[i], opts, rawOpts: columns.widgetOptions[i] || '',
+      hidden: colId.startsWith('gristHelper_') || colId === 'manualSort'
+    });
+  });
+  meta = { tables: tables.tableId.filter(t => t && !t.startsWith('_grist') && !t.startsWith('GristHidden')), cols };
+}
+const dataCols = (t) => ((meta && meta.cols[t]) || []).filter(c => !c.hidden && !c.isFormula && c.id !== 'id');
+async function readTable(t) {
+  const raw = await grist.docApi.fetchTable(t);
+  return (raw.id || []).map((id, i) => { const r = { id }; for (const k in raw) r[k] = raw[k][i]; return r; });
+}
+
+/* ========================================================================
+ * Correspondance des colonnes
+ * ====================================================================== */
+function autoMap(t, force) {
+  const m = cfg.maps[t] = force ? {} : (cfg.maps[t] || {});
+  const cols = dataCols(t);
+  const used = new Set(Object.values(m).filter(v => v && v !== '__new__'));
+  for (const sc of src.cols) {
+    if (m[sc.key] !== undefined && !force) continue;
+    const cands = [sc.longRaw, sc.long, sc.short, sc.newId].filter(Boolean).map(normKey);
+    const hit = cols.find(c => !used.has(c.id) && (cands.includes(normKey(c.id)) || cands.includes(normKey(c.label))));
+    m[sc.key] = hit ? hit.id : '';
+    if (hit) used.add(hit.id);
+  }
+  if (!cfg.keys[t] || force) {
+    const k = [];
+    for (const [i, nk] of RESYTAL_KEY.entries()) {
+      const sc = src.cols.find(c => m[c.key] && (normKey(m[c.key]) === nk || normKey(c.short) === RESYTAL_KEY_SHORT[i]));
+      if (sc) k.push(m[sc.key]);
+    }
+    cfg.keys[t] = k;
+  }
+}
+function mapping() {
+  const t = cfg.target, m = cfg.maps[t] || {}, byId = Object.fromEntries(dataCols(t).map(c => [c.id, c]));
+  const out = [];
+  for (const sc of src.cols) {
+    const v = m[sc.key];
+    if (!v) continue;
+    if (v === '__new__') {
+      const isDate = src.rows.some(r => r[sc.idx] instanceof XDate) && src.rows.every(r => !filled(r[sc.idx]) || r[sc.idx] instanceof XDate);
+      out.push({ src: sc, col: { id: sc.newId, label: sc.long, type: isDate ? 'Date' : 'Text', baseType: isDate ? 'Date' : 'Text', opts: {}, isNew: true } });
+    } else if (byId[v]) out.push({ src: sc, col: byId[v] });
+  }
+  return out;
+}
+function keyColIds() { const ids = new Set(mapping().map(x => x.col.id)); return (cfg.keys[cfg.target] || []).filter(k => ids.has(k)); }
+
+function renderTargets() {
+  const opts = meta.tables.slice().sort((a, b) => a.localeCompare(b, 'fr'));
+  if (!opts.includes(cfg.target)) cfg.target = opts.includes('DATA_RESYTAL') ? 'DATA_RESYTAL' : (opts[0] || '');
+  $('target').innerHTML = opts.map(t => `<option value="${esc(t)}" ${t === cfg.target ? 'selected' : ''}>${esc(t)}</option>`).join('');
+}
+function sampleOf(sc) {
+  for (const r of src.rows.slice(0, 300)) if (filled(r[sc.idx])) return String(r[sc.idx]);
+  return '';
+}
+function renderMapping() {
+  const t = cfg.target, m = cfg.maps[t] || {}, cols = dataCols(t);
+  const keys = new Set(cfg.keys[t] || []);
+  const only = $('mapOnlyUnmapped').checked;
+  const taken = {};
+  Object.entries(m).forEach(([k, v]) => { if (v && v !== '__new__') taken[v] = (taken[v] || 0) + 1; });
+  const existsNew = new Set(cols.map(c => c.id));
+  $('mapBody').innerHTML = src.cols.filter(sc => !only || !m[sc.key]).map(sc => {
+    const v = m[sc.key] || '';
+    const colId = v === '__new__' ? sc.newId : v;
+    const dup = v && v !== '__new__' && taken[v] > 1;
+    return `<tr class="${v ? '' : 'unmapped'}" data-k="${esc(sc.key)}">
+      <td>${esc(sc.long)}${sc.short && sc.short !== sc.long ? `<br><span class="ir-code">${esc(sc.short)}</span>` : ''}</td>
+      <td><div class="ir-sample" title="${esc(sampleOf(sc))}">${esc(sampleOf(sc))}</div></td>
+      <td><select class="fr-select" data-f="map" aria-label="Colonne Grist pour ${esc(sc.long)}">
+        <option value="">— Ignorer —</option>
+        ${existsNew.has(sc.newId) ? '' : `<option value="__new__" ${v === '__new__' ? 'selected' : ''}>+ Créer la colonne « ${esc(sc.newId)} »</option>`}
+        ${cols.map(c => `<option value="${esc(c.id)}" ${c.id === v ? 'selected' : ''}>${esc(c.label)}${c.label !== c.id ? ' (' + esc(c.id) + ')' : ''} · ${esc(c.type)}</option>`).join('')}
+      </select>${dup ? '<p class="fr-error-text fr-mt-0">Colonne Grist déjà utilisée par une autre colonne du fichier</p>' : ''}</td>
+      <td><input type="checkbox" data-f="key" aria-label="Clé" ${colId && keys.has(colId) ? 'checked' : ''} ${v ? '' : 'disabled'}></td></tr>`;
+  }).join('') || '<tr><td colspan="4">Toutes les colonnes sont associées.</td></tr>';
+  const mp = mapping(), nNew = mp.filter(x => x.col.isNew).length;
+  const kc = keyColIds();
+  $('mapInfo').innerHTML = `${mp.length} colonne(s) sur ${src.cols.length} associée(s)${nNew ? ', dont ' + nNew + ' à créer' : ''}. ` +
+    (kc.length ? 'Clé : ' + kc.map(k => '<code>' + esc(k) + '</code>').join(' + ') + '.' : '<b class="fr-text--bold" style="color:#b34000">Aucune clé : toutes les lignes seraient ajoutées. Cochez au moins une colonne « Clé ».</b>');
+  renderDateCol();
+}
+function renderDateCol() {
+  const cols = dataCols(cfg.target).filter(c => ['Date', 'DateTime'].includes(c.baseType));
+  const has = cols.some(c => c.id === 'Date_dernier_import');
+  $('optDateCol').innerHTML = '<option value="">— Ne pas dater —</option>' +
+    (has ? '' : `<option value="__new__" ${cfg.dateCol === '__new__' ? 'selected' : ''}>+ Créer la colonne « Date_dernier_import »</option>`) +
+    cols.map(c => `<option value="${esc(c.id)}" ${c.id === cfg.dateCol ? 'selected' : ''}>${esc(c.label)}</option>`).join('');
+  if (![...$('optDateCol').options].some(o => o.value === cfg.dateCol)) cfg.dateCol = '';
+  $('optDateCol').value = cfg.dateCol;
+}
+$('mapBody').addEventListener('change', (e) => {
+  const tr = e.target.closest('tr[data-k]'); if (!tr) return;
+  const t = cfg.target, m = cfg.maps[t] = cfg.maps[t] || {}, k = tr.dataset.k;
+  const sc = src.cols.find(c => c.key === k);
+  if (e.target.dataset.f === 'map') {
+    const old = m[k] === '__new__' ? sc.newId : m[k];
+    m[k] = e.target.value;
+    cfg.keys[t] = (cfg.keys[t] || []).filter(x => x !== old);
+  } else if (e.target.dataset.f === 'key') {
+    const colId = m[k] === '__new__' ? sc.newId : m[k];
+    const s = new Set(cfg.keys[t] || []);
+    if (e.target.checked) s.add(colId); else s.delete(colId);
+    cfg.keys[t] = [...s];
+  }
+  invalidate(); saveConfig(); renderMapping();
+});
+$('mapOnlyUnmapped').onchange = renderMapping;
+$('mapAuto').onclick = () => { autoMap(cfg.target, true); invalidate(); saveConfig(); renderMapping(); };
+$('mapCreateAll').onclick = () => {
+  const m = cfg.maps[cfg.target] = cfg.maps[cfg.target] || {}, exist = new Set(dataCols(cfg.target).map(c => c.id));
+  src.cols.forEach(sc => { if (!m[sc.key] && !exist.has(sc.newId)) m[sc.key] = '__new__'; });
+  invalidate(); saveConfig(); renderMapping();
+};
+$('target').onchange = (e) => { cfg.target = e.target.value; if (!cfg.maps[cfg.target]) autoMap(cfg.target); invalidate(); saveConfig(); renderMapping(); };
+[['optAbsent', 'absent', 'value'], ['optDateCol', 'dateCol', 'value'], ['optEnrich', 'enrich', 'value'], ['optChoices', 'choices', 'checked'], ['optJournal', 'journal', 'checked'], ['optNoKey', 'noKey', 'checked']]
+  .forEach(([id, k, p]) => { $(id).onchange = (e) => { cfg[k] = e.target[p]; invalidate(); saveConfig(); }; });
+function invalidate() { plan = null; $('resBloc').hidden = true; }
+
+/* ========================================================================
+ * Conversion des valeurs
+ * ====================================================================== */
+const PENDING = 'pending';
+function dateSec(x) {
+  if (x instanceof XDate) return Date.UTC(x.y, x.m - 1, x.d) / 1000;
+  if (typeof x === 'number' && x > 0 && x < 200000) { const p = XLSX.SSF.parse_date_code(x); return p ? Date.UTC(p.y, p.m - 1, p.d) / 1000 : null; }
+  const s = clean(x);
+  let m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})/);
+  if (m) return Date.UTC(+m[3], +m[2] - 1, +m[1]) / 1000;
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return Date.UTC(+m[1], +m[2] - 1, +m[3]) / 1000;
+  return null;
+}
+const refKey = (v) => clean(v).replace(/\s+/g, '').toLowerCase();
+// Valeur Grist d'une cellule du fichier ; renvoie { v, warn? }
+function conv(col, raw, refs) {
+  const bt = col.baseType;
+  if (!filled(raw)) return { v: ['Text', 'Choice', 'Any'].includes(bt) ? '' : bt === 'Bool' ? false : null };
+  if (bt === 'Date' || bt === 'DateTime') {
+    if (raw instanceof XDate && bt === 'DateTime') return { v: Date.UTC(raw.y, raw.m - 1, raw.d, raw.H, raw.M, raw.S) / 1000 - parisOffset(raw) };
+    const s = dateSec(raw);
+    return s === null ? { v: clean(raw), warn: 'date illisible' } : { v: s };
+  }
+  if (bt === 'Numeric' || bt === 'Int') {
+    const n = typeof raw === 'number' ? raw : parseFloat(clean(raw).replace(/\s/g, '').replace(',', '.'));
+    if (isNaN(n) || (typeof raw === 'string' && !/^[-+]?[\d\s]*[.,]?\d+(e[-+]?\d+)?$/i.test(clean(raw).replace(/\s/g, '')))) return { v: clean(raw), warn: 'nombre illisible' };
+    return { v: bt === 'Int' ? Math.round(n) : n };
+  }
+  if (bt === 'Bool') return { v: /^(1|oui|o|vrai|true|x|yes)$/i.test(clean(raw)) };
+  if (bt === 'ChoiceList') return { v: ['L', ...String(raw).split(/[;,\n]/).map(clean).filter(Boolean)] };
+  if (bt === 'Ref') {
+    const k = refKey(raw instanceof XDate ? raw.toString() : raw);
+    const idx = refs && refs[col.refTable];
+    const id = idx && idx.map.get(k);
+    if (id) return { v: id };
+    return { v: { [PENDING]: clean(raw), table: col.refTable } };
+  }
+  if (raw instanceof XDate) return { v: raw.toString() };
+  if (typeof raw === 'number') return { v: Number.isInteger(raw) ? String(raw) : String(+raw.toPrecision(15)) };
+  return { v: clean(raw) };
+}
+function parisOffset(x) {
+  try {
+    const d = new Date(Date.UTC(x.y, x.m - 1, x.d, x.H, x.M));
+    const s = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', hour: '2-digit', hourCycle: 'h23' }).format(d);
+    return ((+s - d.getUTCHours() + 24) % 24) * 3600;
+  } catch (e) { return 0; }
+}
+// Forme comparable d'une valeur Grist (existante ou issue du fichier)
+function cmpOf(col, v) {
+  if (v === null || v === undefined || v === '') return '';
+  if (typeof v === 'object' && !Array.isArray(v) && v[PENDING] !== undefined) return 'pending:' + refKey(v[PENDING]);
+  if (Array.isArray(v)) return v[0] === 'L' ? v.slice(1).map(String).join('|') : JSON.stringify(v);
+  if (col.baseType === 'Ref') return v ? String(v) : '';
+  if (col.baseType === 'Bool') return v ? '1' : '';
+  if (typeof v === 'number') return String(+v.toPrecision(12));
+  if (typeof v === 'boolean') return v ? '1' : '';
+  return clean(v);
+}
+function display(col, v, refs) {
+  if (v === null || v === undefined || v === '') return '';
+  if (typeof v === 'object' && !Array.isArray(v) && v[PENDING] !== undefined) return v[PENDING] + ' (fiche à créer)';
+  if (Array.isArray(v)) return v[0] === 'L' ? v.slice(1).join(', ') : JSON.stringify(v);
+  if ((col.baseType === 'Date' || col.baseType === 'DateTime') && typeof v === 'number') {
+    const d = new Date(v * 1000); return pad2(d.getUTCDate()) + '/' + pad2(d.getUTCMonth() + 1) + '/' + d.getUTCFullYear();
+  }
+  if (col.baseType === 'Ref' && typeof v === 'number') { const idx = refs && refs[col.refTable]; return (idx && idx.rev.get(v)) || '#' + v; }
+  if (col.baseType === 'Bool') return v ? 'Oui' : 'Non';
+  return String(v);
+}
+const isBlank = (v) => v === null || v === undefined || v === '' || (Array.isArray(v) && v.length <= 1) || (typeof v === 'string' && normKey(v) === 'nonrenseigne');
+// Champ vide d'une fiche ; une référence invalide (texte au lieu d'un n° de ligne) compte comme vide
+const fieldBlank = (col, v) => col.baseType === 'Ref' ? !(typeof v === 'number' && v > 0) : isBlank(v);
+const addrClean = (s) => String(s || '').split('|').map(clean).filter(Boolean).join(', ');
+
+/* ========================================================================
+ * Index des tables référencées (SIREN -> ligne de DATA_Entreprise…)
+ * ====================================================================== */
+function refVisibleCol(table, hint) {
+  const cols = (meta.cols[table] || []).filter(c => !c.hidden);
+  return (hint && cols.find(c => c.id === hint)) || cols.find(c => /siret/i.test(c.id) && /etab/i.test(table)) ||
+    cols.find(c => /siren/i.test(c.id)) || cols.find(c => c.baseType === 'Text') || cols[0];
+}
+async function buildRefs(tables) {
+  const refs = {};
+  for (const [t, hint] of tables) {
+    if (!meta.tables.includes(t)) continue;
+    const vc = refVisibleCol(t, hint);
+    const rows = await readTable(t);
+    const map = new Map(), rev = new Map();
+    for (const r of rows) { const v = vc ? r[vc.id] : null; if (filled(v)) { const k = refKey(v); if (!map.has(k)) map.set(k, r.id); rev.set(r.id, String(v)); } }
+    refs[t] = { col: vc, rows, map, rev };
+  }
+  return refs;
+}
+function refTablesNeeded(mp) {
+  const list = new Map();
+  for (const x of mp) if (x.col.refTable) list.set(x.col.refTable, x.col.visibleCol);
+  if (cfg.enrich !== 'none') for (const E of ENRICH) {
+    if (!list.has(E.table)) list.set(E.table, E.key);
+    for (const c of dataCols(E.table)) if (c.refTable && !list.has(c.refTable)) list.set(c.refTable, c.visibleCol);
+  }
+  return [...list.entries()];
+}
+
+/* ========================================================================
+ * Plan des fiches Entreprises / Établissements
+ * ====================================================================== */
+function planEnrich(E, refs) {
+  const res = { E, adds: [], updates: [], skipped: false };
+  const idx = refs[E.table];
+  const kc = srcByAliases(E.src);
+  const keyCol = dataCols(E.table).find(c => c.id === E.key);
+  if (!idx || !kc || !keyCol) { res.skipped = true; return res; }
+  const tcols = Object.fromEntries(dataCols(E.table).map(c => [c.id, c]));
+  const fields = Object.entries(E.fields).map(([colId, spec]) => {
+    const s = Array.isArray(spec) ? { src: spec } : spec;
+    return { col: tcols[colId], sc: srcByAliases(s.src), addr: !!s.addr };
+  }).filter(f => f.col && f.sc);
+  const byKey = new Map();
+  for (const r of src.rows) { const k = refKey(r[kc.idx] == null ? '' : r[kc.idx]); if (k && !byKey.has(k)) byKey.set(k, r); }
+  const rowById = new Map(idx.rows.map(r => [r.id, r]));
+  for (const [k, r] of byKey) {
+    const vals = {};
+    for (const f of fields) {
+      let raw = r[f.sc.idx];
+      if (f.addr && filled(raw)) raw = addrClean(raw);
+      const c = conv(f.col, raw, refs);
+      if (c.warn) continue;
+      vals[f.col.id] = c.v;
+    }
+    const id = idx.map.get(k);
+    if (!id) {
+      const rec = { [E.key]: conv(keyCol, r[kc.idx], refs).v };
+      for (const [cid, v] of Object.entries(vals)) if (!isBlank(v) && cmpOf(tcols[cid], v) !== '') rec[cid] = v;
+      res.adds.push({ key: k, fields: rec });
+    } else if (cfg.enrich === 'fill' || cfg.enrich === 'sync') {
+      const ex = rowById.get(id), upd = {}, changes = [];
+      for (const [cid, v] of Object.entries(vals)) {
+        const col = tcols[cid];
+        const nv = cmpOf(col, v), ov = cmpOf(col, ex[cid]);
+        if (nv === '' || nv === ov) continue;
+        if (cfg.enrich === 'fill' && !fieldBlank(col, ex[cid])) continue;
+        upd[cid] = v; changes.push({ col, old: ex[cid], v });
+      }
+      if (changes.length) res.updates.push({ id, fields: upd, changes, label: idx.rev.get(id) });
+    }
+  }
+  return res;
+}
+
+/* ========================================================================
+ * Plan de la table principale
+ * ====================================================================== */
+async function computePlan() {
+  const t = cfg.target;
+  const mp = mapping();
+  if (!mp.length) throw new Error('Associez au moins une colonne du fichier à une colonne Grist.');
+  const refs = await buildRefs(refTablesNeeded(mp));
+  const enrich = cfg.enrich === 'none' ? [] : ENRICH.filter(E => meta.tables.includes(E.table) && E.table !== t).map(E => planEnrich(E, refs));
+  // Les fiches à créer comptent comme existantes pour la résolution des références
+  const willExist = {};
+  for (const p of enrich) willExist[p.E.table] = new Set(p.adds.map(a => a.key));
+
+  const keys = keyColIds();
+  const keyMp = keys.map(k => mp.find(x => x.col.id === k));
+  const existing = meta.tables.includes(t) ? await readTable(t) : [];
+  const exIndex = new Map(), dupExisting = [];
+  for (const r of existing) {
+    if (!keys.length) break;
+    const parts = keyMp.map(x => cmpOf(x.col, r[x.col.id]));
+    if (parts.every(p => p === '')) continue;
+    const k = parts.join('\u0001');
+    if (exIndex.has(k)) dupExisting.push(r.id); else exIndex.set(k, r);
+  }
+  const fileRows = new Map(), noKeyRows = [];
+  let dupFile = 0;
+  const warns = new Map(), missingRefs = new Map(), newChoices = new Map();
+  src.rows.forEach((raw, i) => {
+    const fields = {}, cmps = {};
+    for (const x of mp) {
+      const c = conv(x.col, raw[x.src.idx], refs);
+      if (c.warn) { const k = x.col.id + ' : ' + c.warn; warns.set(k, (warns.get(k) || 0) + 1); }
+      let v = c.v;
+      if (v && typeof v === 'object' && v[PENDING] !== undefined) {
+        const pend = willExist[v.table] && willExist[v.table].has(refKey(v[PENDING]));
+        if (!pend) { if (!missingRefs.has(v.table)) missingRefs.set(v.table, new Set()); missingRefs.get(v.table).add(v[PENDING]); }
+      }
+      if (x.col.baseType === 'Choice' && typeof v === 'string' && v && !(x.col.opts.choices || []).map(clean).includes(v)) {
+        if (!newChoices.has(x.col.id)) newChoices.set(x.col.id, new Set());
+        newChoices.get(x.col.id).add(v);
+      }
+      fields[x.col.id] = v; cmps[x.col.id] = cmpOf(x.col, v);
+    }
+    const parts = keys.map(k => cmps[k]);
+    if (!keys.length || parts.every(p => p === '')) { noKeyRows.push({ fields, line: i }); return; }
+    const k = parts.join('\u0001');
+    if (fileRows.has(k)) dupFile++;
+    fileRows.set(k, { fields, cmps, line: i });
+  });
+  const adds = [], updates = [], present = [];
+  let unchanged = 0;
+  for (const [k, fr] of fileRows) {
+    const ex = exIndex.get(k);
+    if (!ex) { adds.push({ key: k, fields: fr.fields }); continue; }
+    present.push(ex.id);
+    const upd = {}, changes = [];
+    for (const x of mp) {
+      const id = x.col.id;
+      if (!x.col.isNew && cmpOf(x.col, ex[id]) === fr.cmps[id]) continue;
+      if (x.col.isNew && fr.cmps[id] === '') continue;
+      upd[id] = fr.fields[id]; changes.push({ col: x.col, old: x.col.isNew ? null : ex[id], v: fr.fields[id] });
+    }
+    if (changes.length) updates.push({ id: ex.id, key: k, fields: upd, changes }); else unchanged++;
+  }
+  if (cfg.noKey) noKeyRows.forEach(r => adds.push({ key: '', fields: r.fields }));
+  const absent = [], dupSet = new Set(dupExisting);
+  if (keys.length) for (const r of existing) {
+    if (dupSet.has(r.id)) continue;
+    if (!fileRows.has(keyMp.map(x => cmpOf(x.col, r[x.col.id])).join('\u0001'))) absent.push(r.id);
+  }
+  const exById = new Map(existing.map(r => [r.id, r]));
+  return { t, mp, refs, enrich, keys, keyMp, adds, updates, unchanged, present, absent, dupExisting, dupFile, noKey: noKeyRows.length,
+    warns, missingRefs, newChoices, exById, existingCount: existing.length };
+}
+
+/* ========================================================================
+ * Affichage du résultat de l'analyse
+ * ====================================================================== */
+const keyLabel = (p, k) => String(k || '').split('\u0001').filter(Boolean).join(' · ') || '(sans clé)';
+function tile(n, label, cls) { return `<div class="ir-tile ${cls || ''}"><b>${n}</b><span>${label}</span></div>`; }
+function renderPlan(p) {
+  const del = cfg.absent === 'delete';
+  const enrichTiles = p.enrich.filter(e => !e.skipped).map(e =>
+    tile(e.adds.length, 'fiche(s) ' + e.E.label + ' à créer' + (e.updates.length ? ` · ${e.updates.length} à compléter` : ''), e.adds.length ? 'warn' : '')).join('');
+  $('resTiles').innerHTML =
+    tile(p.adds.length, 'ligne(s) à ajouter', p.adds.length ? 'ok' : '') +
+    tile(p.updates.length, 'ligne(s) modifiée(s)', p.updates.length ? 'warn' : '') +
+    tile(p.unchanged, 'ligne(s) inchangée(s)') +
+    tile(p.absent.length, 'ligne(s) absente(s) du fichier' + (del ? ' — supprimées' : ' — conservées'), del && p.absent.length ? 'err' : '') +
+    enrichTiles;
+  const msgs = [];
+  const newCols = p.mp.filter(x => x.col.isNew);
+  if (newCols.length) msgs.push(alertHTML('info', newCols.length + ' colonne(s) seront créées dans <code>' + esc(p.t) + '</code> : ' + newCols.map(x => '<code>' + esc(x.col.id) + '</code>').join(', ') + '.'));
+  if (!p.keys.length) msgs.push(alertHTML('err', 'Aucune clé : impossible de reconnaître les lignes déjà présentes. Toutes les lignes seraient ajoutées.'));
+  if (p.dupFile) msgs.push(alertHTML('warn', p.dupFile + ' ligne(s) du fichier ont la même clé qu\'une autre : seule la dernière est importée. Ajoutez une colonne à la clé si ce n\'est pas voulu.'));
+  if (p.dupExisting.length) msgs.push(alertHTML('warn', p.dupExisting.length + ' ligne(s) en double dans Grist (même clé). Elles ne sont pas modifiées' + (del ? ' et seront supprimées avec les lignes absentes' : '') + '.'));
+  if (p.noKey) msgs.push(alertHTML('warn', p.noKey + ' ligne(s) du fichier sans clé ' + (cfg.noKey ? 'seront ajoutées.' : 'sont ignorées (option « Ajouter aussi les lignes dont la clé est vide »).')));
+  for (const [tbl, set] of p.missingRefs) msgs.push(alertHTML('warn', set.size + ' valeur(s) introuvable(s) dans <code>' + esc(tbl) + '</code> : la référence restera vide. Ex. : ' + esc([...set].slice(0, 8).join(', '))));
+  if (p.warns.size) msgs.push(alertHTML('warn', 'Valeurs non converties (gardées en texte) : ' + [...p.warns].map(([k, n]) => esc(k) + ' (' + n + ')').join(' ; ')));
+  if (p.newChoices.size) msgs.push(alertHTML('info', 'Nouvelles valeurs de choix' + (cfg.choices ? ' ajoutées aux listes' : '') + ' : ' + [...p.newChoices].map(([c, s]) => '<code>' + esc(c) + '</code> (' + esc([...s].slice(0, 5).join(' ; ')) + ')').join(', ')));
+  if (!p.adds.length && !p.updates.length && !(del && p.absent.length) && !p.enrich.some(e => e.adds.length || e.updates.length)) msgs.push(alertHTML('ok', 'Grist est déjà à jour avec ce fichier.'));
+  $('resMsg').innerHTML = msgs.join('');
+
+  // Détail des changements par colonne
+  const byCol = new Map();
+  p.updates.forEach(u => u.changes.forEach(c => byCol.set(c.col.id, (byCol.get(c.col.id) || 0) + 1)));
+  const LIM = 300;
+  const updRows = [];
+  for (const u of p.updates) { for (const c of u.changes) { updRows.push(`<tr><td>${esc(keyLabel(p, u.key))}</td><td><code>${esc(c.col.id)}</code></td><td class="ir-old">${esc(display(c.col, c.old, p.refs))}</td><td class="ir-new">${esc(display(c.col, c.v, p.refs))}</td></tr>`); } if (updRows.length > LIM) break; }
+  const lbl = (fields) => [cfg.target === 'DATA_RESYTAL' ? fields.Entreprise_Raison_Sociale_ENT : '', fields.Approbation_Statut_Approbation].filter(Boolean).join(' · ');
+  const acc = (id, title, body) => `<section class="fr-accordion"><h3 class="fr-accordion__title"><button type="button" class="fr-accordion__btn" aria-expanded="false" aria-controls="${id}">${title}</button></h3><div class="fr-collapse" id="${id}">${body}</div></section>`;
+  let html = '';
+  if (p.updates.length) html += acc('dUpd', `Modifications (${p.updates.length} ligne(s)) — ${[...byCol].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([c, n]) => esc(c) + ' : ' + n).join(', ')}`,
+    `<div class="ir-details"><table><thead><tr><th>Clé</th><th>Colonne</th><th>Avant</th><th>Après</th></tr></thead><tbody>${updRows.join('')}</tbody></table></div>${updRows.length > LIM ? '<p class="fr-hint-text">Liste tronquée : le rapport Excel contient tout.</p>' : ''}`);
+  if (p.adds.length) html += acc('dAdd', `Ajouts (${p.adds.length})`,
+    `<div class="ir-details"><table><thead><tr><th>Clé</th><th>Détail</th></tr></thead><tbody>${p.adds.slice(0, LIM).map(a => `<tr><td>${esc(keyLabel(p, a.key))}</td><td>${esc(lbl(a.fields))}</td></tr>`).join('')}</tbody></table></div>`);
+  if (p.absent.length) html += acc('dAbs', `Lignes de Grist absentes du fichier (${p.absent.length})`,
+    `<div class="ir-details"><table><thead><tr><th>Ligne</th><th>Clé</th></tr></thead><tbody>${p.absent.slice(0, LIM).map(id => { const r = p.exById.get(id); return `<tr><td>#${id}</td><td>${esc(p.keyMp.map(x => display(x.col, r[x.col.id], p.refs)).join(' · '))}</td></tr>`; }).join('')}</tbody></table></div>`);
+  for (const e of p.enrich.filter(e => !e.skipped && (e.adds.length || e.updates.length))) {
+    html += acc('dE' + e.E.table, `<code>${esc(e.E.table)}</code> : ${e.adds.length} fiche(s) à créer, ${e.updates.length} à compléter`,
+      `<div class="ir-details"><table><thead><tr><th>${esc(e.E.key)}</th><th>Changement</th></tr></thead><tbody>` +
+      e.adds.slice(0, LIM).map(a => `<tr><td>${esc(a.fields[e.E.key])}</td><td class="ir-new">Création${a.fields.Libelle ? ' — ' + esc(a.fields.Libelle) : ''}</td></tr>`).join('') +
+      e.updates.slice(0, LIM).map(u => `<tr><td>${esc(u.label)}</td><td>${u.changes.map(c => `<code>${esc(c.col.id)}</code> : <span class="ir-old">${esc(display(c.col, c.old, p.refs))}</span> → <span class="ir-new">${esc(display(c.col, c.v, p.refs))}</span>`).join('<br>')}</td></tr>`).join('') +
+      '</tbody></table></div>');
+  }
+  $('resDetails').innerHTML = html;
+  const needConfirm = del && (p.absent.length + p.dupExisting.length) > 0;
+  $('confirmDelBox').hidden = !needConfirm; $('confirmDel').checked = false;
+  $('confirmDelLbl').textContent = `Je confirme la suppression de ${p.absent.length + p.dupExisting.length} ligne(s) de ${p.t}.`;
+  $('applyMsg').innerHTML = '';
+  $('resBloc').hidden = false;
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest && e.target.closest('button.fr-accordion__btn[aria-controls]');
+  if (!b) return;
+  const open = b.getAttribute('aria-expanded') === 'true';
+  b.setAttribute('aria-expanded', open ? 'false' : 'true');
+  const box = $(b.getAttribute('aria-controls')); if (box) box.classList.toggle('fr-collapse--expanded', !open);
+});
+
+$('analyse').onclick = async () => {
+  if (busy) return;
+  busy = true; $('analyse').disabled = true; setStatus('Analyse…');
+  try { await loadMeta(); plan = await computePlan(); renderPlan(plan); setStatus('Analyse terminée'); $('resBloc').scrollIntoView({ behavior: 'smooth' }); }
+  catch (e) { console.error(e); $('resBloc').hidden = false; $('resTiles').innerHTML = ''; $('resDetails').innerHTML = ''; $('resMsg').innerHTML = alertHTML('err', esc(e.message || e)); setStatus('Erreur'); }
+  finally { busy = false; $('analyse').disabled = false; }
+};
+
+/* ========================================================================
+ * Écriture dans Grist
+ * ====================================================================== */
+function progress(done, total, text) {
+  $('progress').classList.add('show');
+  $('progress').firstElementChild.style.width = (total ? Math.round(100 * done / total) : 0) + '%';
+  if (text) $('applyMsg').innerHTML = alertHTML('info', text);
+}
+const CHUNK = 400;
+async function bulk(kind, table, items, label) {
+  for (let i = 0; i < items.length; i += CHUNK) {
+    const part = items.slice(i, i + CHUNK);
+    const colIds = [...new Set(part.flatMap(x => Object.keys(x.fields)))];
+    if (kind === 'add') {
+      // Lignes regroupées par colonnes renseignées : les colonnes absentes gardent leur valeur par défaut Grist
+      const groups = new Map();
+      part.forEach(x => { const sig = Object.keys(x.fields).sort().join('|'); if (!groups.has(sig)) groups.set(sig, []); groups.get(sig).push(x); });
+      const list = [...groups.values()];
+      const res = await grist.docApi.applyUserActions(list.map(g => {
+        const ks = Object.keys(g[0].fields);
+        return ['BulkAddRecord', table, g.map(() => null), Object.fromEntries(ks.map(k => [k, g.map(x => x.fields[k])]))];
+      }));
+      list.forEach((g, gi) => { const ids = res && res.retValues && res.retValues[gi]; if (ids) g.forEach((x, k) => { x.newId = ids[k]; }); });
+    } else {
+      // Mise à jour colonne par colonne pour ne pas écraser les colonnes non modifiées
+      const actions = colIds.map(c => {
+        const sub = part.filter(x => x.fields[c] !== undefined);
+        return ['BulkUpdateRecord', table, sub.map(x => x.id), { [c]: sub.map(x => x.fields[c]) }];
+      });
+      await grist.docApi.applyUserActions(actions);
+    }
+    progress(Math.min(i + CHUNK, items.length), items.length, label + ' : ' + Math.min(i + CHUNK, items.length) + ' / ' + items.length);
+    await tick();
+  }
+}
+// Remplace les références « à créer » par l'identifiant de la fiche créée
+function resolvePending(fields, refs) {
+  for (const [k, v] of Object.entries(fields)) {
+    if (v && typeof v === 'object' && !Array.isArray(v) && v[PENDING] !== undefined) {
+      const idx = refs[v.table];
+      fields[k] = (idx && idx.map.get(refKey(v[PENDING]))) || 0;
+    }
+  }
+}
+async function ensureColumn(table, colId, type, label) {
+  const res = await grist.docApi.applyUserActions([['AddColumn', table, colId, { type, label: label || colId, isFormula: false }]]);
+  const rv = res && res.retValues && res.retValues[0];
+  return (rv && rv.colId) || colId;
+}
+
+$('apply').onclick = async () => {
+  if (busy || !plan) return;
+  if (!$('confirmDelBox').hidden && !$('confirmDel').checked) { $('applyMsg').innerHTML = alertHTML('warn', 'Cochez la confirmation de suppression, ou choisissez de conserver les lignes absentes.'); return; }
+  busy = true; ['apply', 'analyse'].forEach(id => $(id).disabled = true);
+  const log = [];
+  let created = 0;
+  try {
+    const t = cfg.target;
+    // 1. Colonnes à créer
+    const m = cfg.maps[t] || {};
+    for (const x of plan.mp.filter(x => x.col.isNew)) {
+      progress(0, 1, 'Création de la colonne ' + esc(x.col.id) + '…');
+      const id = await ensureColumn(t, x.col.id, x.col.type, x.src.long);
+      m[x.src.key] = id;
+      cfg.keys[t] = (cfg.keys[t] || []).map(k => k === x.col.id ? id : k);
+      log.push('colonne créée : ' + id);
+    }
+    if (cfg.dateCol === '__new__') { cfg.dateCol = await ensureColumn(t, 'Date_dernier_import', 'Date', 'Date du dernier import'); log.push('colonne créée : ' + cfg.dateCol); }
+    saveConfig();
+    await loadMeta();
+    // 2. Fiches entreprises puis établissements (les établissements référencent les entreprises)
+    let refs = await buildRefs(refTablesNeeded(mapping()));
+    if (cfg.enrich !== 'none') {
+      for (const E of ENRICH) {
+        if (!meta.tables.includes(E.table) || E.table === t) continue;
+        const ep = planEnrich(E, refs);
+        if (ep.skipped) continue;
+        ep.adds.forEach(a => resolvePending(a.fields, refs));
+        ep.updates.forEach(u => resolvePending(u.fields, refs));
+        if (ep.adds.length) await bulk('add', E.table, ep.adds, 'Création des fiches ' + E.label);
+        if (ep.updates.length) await bulk('update', E.table, ep.updates, 'Mise à jour des fiches ' + E.label);
+        created += ep.adds.length;
+        if (ep.adds.length || ep.updates.length) log.push(`${E.table} : ${ep.adds.length} créée(s), ${ep.updates.length} complétée(s)`);
+        refs = await buildRefs(refTablesNeeded(mapping()));
+      }
+    }
+    // 3. Recalcul du plan avec les fiches et colonnes désormais présentes
+    progress(0, 1, 'Calcul des modifications…');
+    const enrichSave = cfg.enrich; cfg.enrich = 'none';
+    let p;
+    try { p = await computePlan(); } finally { cfg.enrich = enrichSave; }
+    p.adds.forEach(a => resolvePending(a.fields, p.refs));
+    p.updates.forEach(u => resolvePending(u.fields, p.refs));
+    // 4. Listes de choix
+    if (cfg.choices && p.newChoices.size) {
+      const actions = [];
+      for (const [colId, set] of p.newChoices) {
+        const col = dataCols(t).find(c => c.id === colId);
+        const opts = Object.assign({}, col.opts);
+        opts.choices = [...(opts.choices || []), ...[...set].sort((a, b) => a.localeCompare(b, 'fr'))];
+        actions.push(['ModifyColumn', t, colId, { widgetOptions: JSON.stringify(opts) }]);
+      }
+      await grist.docApi.applyUserActions(actions);
+      log.push('choix ajoutés : ' + [...p.newChoices.keys()].join(', '));
+    }
+    // 5. Lignes
+    if (p.adds.length) await bulk('add', t, p.adds, 'Ajout des lignes');
+    if (p.updates.length) await bulk('update', t, p.updates, 'Mise à jour des lignes');
+    let deleted = 0;
+    if (cfg.absent === 'delete') {
+      const ids = p.absent.concat(p.dupExisting);
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        await grist.docApi.applyUserActions([['BulkRemoveRecord', t, ids.slice(i, i + CHUNK)]]);
+        progress(Math.min(i + CHUNK, ids.length), ids.length, 'Suppression : ' + Math.min(i + CHUNK, ids.length) + ' / ' + ids.length);
+      }
+      deleted = ids.length;
+    }
+    // 6. Date du dernier import
+    if (cfg.dateCol && dataCols(t).some(c => c.id === cfg.dateCol)) {
+      const dc = dataCols(t).find(c => c.id === cfg.dateCol);
+      const now = new Date();
+      const v = dc.baseType === 'Date' ? Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 1000 : Math.floor(now.getTime() / 1000);
+      const ids = p.present.concat(p.adds.map(a => a.newId).filter(Boolean));
+      await bulk('update', t, ids.map(id => ({ id, fields: { [cfg.dateCol]: v } })), 'Date du dernier import');
+    }
+    // 7. Journal
+    const byCol = new Map();
+    p.updates.forEach(u => u.changes.forEach(c => byCol.set(c.col.id, (byCol.get(c.col.id) || 0) + 1)));
+    const detail = log.concat(byCol.size ? ['colonnes modifiées : ' + [...byCol].sort((a, b) => b[1] - a[1]).map(([c, n]) => c + ' (' + n + ')').join(', ')] : []).join('\n');
+    if (cfg.journal) await writeJournal({ adds: p.adds.length, updates: p.updates.length, deleted, unchanged: p.unchanged, created, detail }).catch(e => log.push('journal impossible : ' + (e.message || e)));
+    progress(1, 1);
+    $('applyMsg').innerHTML = alertHTML('ok', `Import terminé dans <code>${esc(t)}</code> : ${p.adds.length} ajout(s), ${p.updates.length} modification(s), ${deleted} suppression(s), ${p.unchanged} ligne(s) inchangée(s)` +
+      (created ? `, ${created} fiche(s) entreprise/établissement créée(s)` : '') + '.' + (log.length ? '<br>' + log.map(esc).join('<br>') : ''));
+    setStatus('Import terminé');
+    plan = null;
+    $('confirmDelBox').hidden = true;
+  } catch (e) {
+    console.error(e);
+    $('applyMsg').innerHTML = alertHTML('err', 'Import interrompu : ' + esc(e.message || e) + (log.length ? '<br>Déjà fait : ' + log.map(esc).join(' ; ') : '') + '<br>Relancez l\'analyse : les lignes déjà importées seront reconnues.');
+    setStatus('Erreur');
+  } finally {
+    busy = false; $('analyse').disabled = false; $('apply').disabled = false;
+    setTimeout(() => $('progress').classList.remove('show'), 1500);
+  }
+};
+const JOURNAL = 'Journal_import';
+async function writeJournal(s) {
+  if (!meta.tables.includes(JOURNAL)) {
+    await grist.docApi.applyUserActions([['AddTable', JOURNAL, [
+      { id: 'Date', type: 'DateTime:Europe/Paris' }, { id: 'Fichier', type: 'Text' }, { id: 'Table_cible', type: 'Text' },
+      { id: 'Extraction', type: 'Text' }, { id: 'Ajouts', type: 'Int' }, { id: 'Modifications', type: 'Int' },
+      { id: 'Suppressions', type: 'Int' }, { id: 'Inchangees', type: 'Int' }, { id: 'Fiches_creees', type: 'Int' }, { id: 'Detail', type: 'Text' }]]]);
+    await loadMeta();
+  }
+  const cols = new Set(dataCols(JOURNAL).map(c => c.id));
+  const f = { Date: Date.now() / 1000, Fichier: file.name, Table_cible: cfg.target, Extraction: src.extraction, Ajouts: s.adds, Modifications: s.updates,
+    Suppressions: s.deleted, Inchangees: s.unchanged, Fiches_creees: s.created, Detail: s.detail };
+  for (const k of Object.keys(f)) if (!cols.has(k)) delete f[k];
+  await grist.docApi.applyUserActions([['AddRecord', JOURNAL, null, f]]);
+}
+
+/* ----- Rapport Excel ----- */
+$('report').onclick = () => {
+  const p = plan; if (!p) return;
+  const wb = XLSX.utils.book_new();
+  const upd = [['Clé', 'Ligne Grist', 'Colonne', 'Avant', 'Après']];
+  p.updates.forEach(u => u.changes.forEach(c => upd.push([keyLabel(p, u.key), u.id, c.col.id, display(c.col, c.old, p.refs), display(c.col, c.v, p.refs)])));
+  const cols = p.mp.map(x => x.col);
+  const add = [cols.map(c => c.id)].concat(p.adds.map(a => cols.map(c => display(c, a.fields[c.id], p.refs))));
+  const abs = [['Ligne Grist'].concat(p.keyMp.map(x => x.col.id))].concat(p.absent.map(id => [id].concat(p.keyMp.map(x => display(x.col, p.exById.get(id)[x.col.id], p.refs)))));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(upd), 'Modifications');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(add), 'Ajouts');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(abs), 'Absentes');
+  for (const e of p.enrich.filter(e => !e.skipped)) {
+    const rows = [[e.E.key, 'Action', 'Détail']];
+    e.adds.forEach(a => rows.push([a.fields[e.E.key], 'création', a.fields.Libelle || '']));
+    e.updates.forEach(u => rows.push([u.label, 'complément', u.changes.map(c => c.col.id + ' = ' + display(c.col, c.v, p.refs)).join(' ; ')]));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), e.E.table.slice(0, 31));
+  }
+  const d = new Date();
+  XLSX.writeFile(wb, `Rapport_import_${cfg.target}_${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}.xlsx`);
+};
+
+/* ========================================================================
+ * Chargement du fichier
+ * ====================================================================== */
+async function onFile(f) {
+  if (!f) return;
+  invalidate();
+  setStatus('Lecture de ' + f.name + '…');
+  try {
+    const buf = await f.arrayBuffer();
+    const wb = readWorkbook(buf, f.name);
+    // Onglet par défaut : celui qui contient le plus de lignes
+    const best = wb.names.slice().sort((a, b) => wb.sheets[b].length - wb.sheets[a].length)[0];
+    file = { name: f.name, sheets: wb.sheets, names: wb.names, sheet: best };
+    $('sheet').innerHTML = wb.names.map(n => `<option ${n === best ? 'selected' : ''}>${esc(n)}</option>`).join('');
+    $('sheetBox').hidden = wb.names.length < 2;
+    await loadSheet();
+  } catch (e) {
+    console.error(e);
+    $('fileInfo').innerHTML = alertHTML('err', 'Fichier illisible : ' + esc(e.message || e));
+    setStatus('Erreur');
+  }
+}
+async function loadSheet() {
+  src = analyseSheet(file.sheets[file.sheet]);
+  $('fileInfo').innerHTML = alertHTML('ok', `<b>${esc(file.name)}</b> — onglet « ${esc(file.sheet)} » : ${src.rows.length} ligne(s), ${src.cols.length} colonne(s) ` +
+    `(en-tête ligne ${src.headerRow}${src.dataRow - src.headerRow > 1 ? ' + codes courts ligne ' + (src.headerRow + 1) : ''})` +
+    (src.extraction ? `<br>Données RESYTAL rafraîchies le : <b>${esc(src.extraction)}</b>` : ''));
+  if (typeof grist === 'undefined') return;
+  if (!meta) await loadMeta();
+  renderTargets();
+  autoMap(cfg.target);
+  saveConfig();
+  $('mapBloc').hidden = false; $('optBloc').hidden = false;
+  renderMapping();
+  setStatus(src.rows.length + ' ligne(s) lues');
+}
+$('sheet').onchange = (e) => { file.sheet = e.target.value; invalidate(); loadSheet().catch(err => { $('fileInfo').innerHTML = alertHTML('err', esc(err.message || err)); }); };
+$('drop').onclick = () => $('file').click();
+$('drop').onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } };
+$('file').onchange = () => { onFile($('file').files[0]); $('file').value = ''; };
+['dragenter', 'dragover'].forEach(ev => $('drop').addEventListener(ev, (e) => { e.preventDefault(); $('drop').classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => $('drop').addEventListener(ev, (e) => { e.preventDefault(); $('drop').classList.remove('over'); }));
+$('drop').addEventListener('drop', (e) => { const f = e.dataTransfer.files[0]; if (f) onFile(f); });
+
+/* ========================================================================
+ * Initialisation
+ * ====================================================================== */
+function applyCfgToUI() {
+  $('optAbsent').value = cfg.absent; $('optEnrich').value = cfg.enrich;
+  $('optChoices').checked = !!cfg.choices; $('optJournal').checked = !!cfg.journal; $('optNoKey').checked = !!cfg.noKey;
+}
+function init() {
+  if (typeof grist === 'undefined') { setStatus('API Grist introuvable : à utiliser comme widget personnalisé dans Grist.'); return; }
+  grist.ready({ requiredAccess: 'full' });
+  let loaded = false;
+  const start = (c) => {
+    if (loaded) return; loaded = true;
+    let local = null; try { local = JSON.parse(localStorage.getItem('grist-import-resytal') || 'null'); } catch (e) {}
+    applyConfig(c || local); applyCfgToUI();
+    loadMeta().then(() => setStatus('Connecté — déposez un fichier')).catch(e => setStatus('Erreur : ' + (e.message || e)));
+  };
+  grist.onOptions((o) => start(o && o.config));
+  grist.on('message', (msg) => {
+    if (msg && msg.settings && msg.settings.accessLevel) {
+      $('accessMsg').innerHTML = msg.settings.accessLevel === 'full' ? '' :
+        alertHTML('warn', 'Ce widget a besoin de l\'accès <b>complet</b> au document pour écrire dans les tables. Accordez-le dans le panneau de configuration du widget.');
+    }
+  });
+  setTimeout(() => start(null), 2000);
+}
+init();
+</script>
+</body>
+</html>
