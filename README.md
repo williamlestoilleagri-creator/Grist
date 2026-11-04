@@ -8,6 +8,7 @@
 | `prise-rdv-calendrier.html` | Prise de rendez-vous (calendrier) |
 | `rdv/index.html` | Formulaire public de prise de rendez-vous |
 | `duo.html` | **Duo** — interprète à deux écouteurs (ex. japonais ⇄ allemand) |
+| `carte-prelevements.html` | Carte des prélèvements (RDV_Prelevements) — regroupement par commune, RDV par date |
 
 ## ERP « façon SAP » (`erp-sap.html`)
 
