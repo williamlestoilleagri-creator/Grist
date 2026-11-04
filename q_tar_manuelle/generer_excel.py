@@ -66,9 +66,7 @@ def type_grist(col):
         return fixes[col]
     if col.endswith("_Justification_observations") or col.endswith("_Commentaires"):
         return "Text"
-    if "_30_60_cm_" in col:
-        return "Text"  # Text dans Q_QUADHYDRO (sauf incohérence, voir README)
-    return "Choice"    # Qn_..., Sondage_n_0_30, Sondage_n_60_90
+    return "Choice"    # Qn_..., Sondage_n_0_30 / 30_60 / 60_90
 
 
 wb = Workbook()
