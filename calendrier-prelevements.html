@@ -918,8 +918,8 @@ function plan() {
     if (S.meta[T_CTL] && (typ.length || calc.length)) ops.push({text: `Préparer <code>${T_STOCK}</code> : ${typ.length ? 'colonnes de saisie typées (' + typ.join(', ') + ')' : ''}${typ.length && calc.length ? ' ; ' : ''}${calc.length ? calc.join(', ') + ' calculées à partir des contrôles déclarés' : ''}`,
       run: () => B.apply(typ.map(k => ['ModifyColumn', T_STOCK, k, {type: STOCK_TYPES[k], isFormula: false}]).concat(calc.map(k => ['ModifyColumn', T_STOCK, k, {type: STOCK_FORMULAS[k][0], isFormula: true, formula: STOCK_FORMULAS[k][1]}])))});
   }
-  if (!S.meta[T_RES]) ops.push({text: `Créer la table <code>${T_RES}</code> (résultats des contrôles de préleveurs importés depuis Excel)`, run: () => B.apply([['AddTable', T_RES, resSchema().map(c => Object.assign({id: c.id}, colInfo(c)))]])});
-  else { const miss = resSchema().filter(c => !S.meta[T_RES].cols[c.id]); if (miss.length) ops.push({text: `Ajouter à <code>${T_RES}</code> : ${miss.map(c => c.label || c.id).join(', ')}`, run: () => B.apply(miss.map(c => ['AddColumn', T_RES, c.id, colInfo(c)]))}); }
+  // DATA_Resultat_controle est facultative : complétée si elle existe, jamais recréée (les résultats passent par les grilles d'évaluation)
+  if (S.meta[T_RES]) { const miss = resSchema().filter(c => !S.meta[T_RES].cols[c.id]); if (miss.length) ops.push({text: `Ajouter à <code>${T_RES}</code> : ${miss.map(c => c.label || c.id).join(', ')}`, run: () => B.apply(miss.map(c => ['AddColumn', T_RES, c.id, colInfo(c)]))}); }
   const sc = rdvSchema(), ex = S.meta[T_RDV];
   if (!ex) ops.push({text: `Créer la table <code>${T_RDV}</code> (${sc.filter(c => !c.isFormula && !c.formula).length} champs de saisie)`, run: () => B.apply([['AddTable', T_RDV, sc.map(c => Object.assign({id: c.id}, colInfo(c)))]])});
   else {
@@ -2060,7 +2060,7 @@ function bindBulk() {
 
 /* ---------- Onglet « Résultats des contrôles » (vue d'ensemble, import par l'administrateur) ---------- */
 function renderResults() {
-  if (!S.meta[T_RES]) { $('#main').innerHTML = gridSection({id: 'a-res-grids', big: true}) + `<div class="alert warn" id="a-res-prel"><p>La table <code>${T_RES}</code> n'existe pas encore : ouvrez <b>Paramètres</b> puis <b>Enregistrer</b> pour la créer.</p></div>`; return; }
+  if (!S.meta[T_RES]) { $('#main').innerHTML = gridSection({id: 'a-res-grids', big: true}); return; }
   const q = norm(S.resQ.trim()), all = S.res.map(r => ({r, d: resDate(r)})).sort((a, b) => (b.d || 0) - (a.d || 0) || b.r.id - a.r.id);
   const rows = all.filter(({r}) => (!S.resInsp || r.Inspecteur === S.resInsp) && (!S.resRes || (S.resRes === '__none' ? !clean(r.Resultat) : clean(r.Resultat) === S.resRes))
     && (!q || norm([r.Exploitation, r.PACAGE, r.Laboratoire, r.Parcelles, r.Commentaire, personName(S.prelById.get(r.Preleveur)), personName(S.inspById.get(r.Inspecteur))].join(' ')).includes(q)));
@@ -2148,12 +2148,12 @@ function menuDef() {
       ['Qui a inspecté qui', '#a-dash-matrix'], st && ['Contrôles des lieux de stockage', '#a-dash-stock']]},
     {tab: 'exp', label: 'Exploitations', icon: 'plant', items: []},
     {tab: 'prel', label: 'Préleveurs', icon: 'user', items: [['Ajouter un préleveur', () => openPersonForm(T_PREL, null)]]},
-    {tab: 'espace', label: 'Espace inspecteur', icon: 'shield', items: [['Mes contrôles à venir', '#a-esp-mine'], ['Mes résultats de contrôle (fichier Excel)', '#a-esp-bulk'],
+    {tab: 'espace', label: 'Espace inspecteur', icon: 'shield', items: [['Mes contrôles à venir', '#a-esp-mine'], S.meta[T_RES] && ['Mes résultats de contrôle (fichier Excel)', '#a-esp-bulk'],
       gr && ['Grilles d\'évaluation', '#a-esp-grids'], ['Rendez-vous disponibles', '#a-esp-rdv'], st && ['Lieux de stockage', '#a-esp-stock']]},
     {tab: 'insp', label: 'Inspecteurs FranceAgriMer', icon: 'shield', items: [['Ajouter un inspecteur', () => openPersonForm(T_INSP, null)]]},
     {tab: 'res', label: 'Résultats des contrôles', icon: 'check', items: [['Grilles d\'évaluation', '#a-res-grids'],
       gr && ['Télécharger le fichier de retour des grilles', () => openGridTemplate()], gr && ['Importer les grilles remplies', () => pickGridFile()],
-      ['Résultats des contrôles de préleveurs', '#a-res-prel'], ['Fichier de résultats préleveurs à remplir', () => openResultTemplate()], ['Importer des résultats préleveurs', () => openResultImport()]]}
+      S.meta[T_RES] && ['Résultats des contrôles de préleveurs', '#a-res-prel'], S.meta[T_RES] && ['Fichier de résultats préleveurs à remplir', () => openResultTemplate()], S.meta[T_RES] && ['Importer des résultats préleveurs', () => openResultImport()]]}
   ].filter(m => !S.cfg.inspectorOnly || ['espace', 'cal'].includes(m.tab)).map(m => Object.assign(m, {items: m.items.filter(Boolean)}));
 }
 function renderMenu() {
@@ -2707,7 +2707,7 @@ function renderEspace() {
     ${!insp.length ? `<div class="alert warn"><p>Aucun inspecteur dans <code>${T_INSP}</code> : ajoutez-les dans l'onglet « Inspecteurs FranceAgriMer ».</p></div>`
       : !S.me ? '<div class="alert"><p>Choisissez votre nom ci-dessus (une seule fois sur cet ordinateur), puis associez-vous aux rendez-vous de prélèvement que vous souhaitez contrôler.</p></div>'
       : `<section class="fsec" id="a-esp-mine"><h3>${ic('check')}Mes contrôles à venir (${mine.length})</h3>${mine.length ? group(mine) : '<p class="muted">Aucun pour l\'instant : choisissez un rendez-vous ci-dessous.</p>'}</section>
-         ${bulkSection()}
+         ${S.meta[T_RES] ? bulkSection() : ''}
          ${gridSection({id: 'a-esp-grids'})}
          <section class="fsec" id="a-esp-rdv"><h3>${ic('calendar')}Rendez-vous ${S.espTaken ? '' : 'sans inspecteur '}(${avail.length})</h3>${avail.length ? group(avail) : '<p class="muted">Aucun rendez-vous sur la période.</p>'}</section>
          ${stockSection(dpts)}`}`;
