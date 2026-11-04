@@ -6,6 +6,7 @@
 | `annuaire-adresses.html` | Annuaire d'adresses géocodées (BAN) |
 | `grist-assistant-claude.html` | Assistant Claude |
 | `prise-rdv-calendrier.html` | Prise de rendez-vous (calendrier) |
+| `calendrier-prelevements.html` | Calendrier des prélèvements reliquats (préleveurs, inspecteurs FranceAgriMer, exports PDF/Excel, résultats et grilles d'évaluation des contrôles) |
 | `rdv/index.html` | Formulaire public de prise de rendez-vous |
 | `duo.html` | **Duo** — interprète à deux écouteurs (ex. japonais ⇄ allemand) |
 
