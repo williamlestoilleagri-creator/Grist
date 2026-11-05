@@ -277,6 +277,9 @@
   .pslot{border:1px solid var(--border);background:var(--alt);border-radius:4px;padding:2px 8px;cursor:pointer;font-size:.78rem;color:var(--title)}
   .pslot:hover{border-color:var(--bf);color:var(--bf)}
   .pslot .t{font-weight:700;margin-right:6px}
+  .pchip{display:inline-flex;align-items:center;gap:3px;border:1px solid var(--border);background:var(--surface);border-radius:4px;padding:0 6px;margin-left:4px;font-size:.75rem;color:var(--title)}
+  .pchip.on{border-color:var(--bf);background:var(--bf-950);color:var(--bf)}
+  .pchip .ic{--ic:.7rem}
   @media (max-width:600px){.farmday-parc{padding-left:.7rem}}
 
 
@@ -343,6 +346,9 @@
   .esp-row .h{font-weight:700;color:var(--title)}
   .esp-row .n{color:var(--title);font-weight:500}
   .esp-row .s{font-size:.8rem;color:var(--mention);display:flex;gap:12px;flex-wrap:wrap}
+  .esp-parcs{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+  .esp-parc{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:4px 8px;background:var(--alt);font-size:.82rem;color:var(--title)}
+  .esp-parc .btn{min-height:1.6rem;padding:0 .6rem;font-size:.8rem;margin-left:auto}
   @media (max-width:720px){.esp-row{grid-template-columns:60px 1fr}.esp-row .act{grid-column:2}}
 
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:0 0 1rem}
@@ -717,6 +723,10 @@ const typeOf = (t, c) => (cols(t)[c] || {}).type || '';
 function personName(p) { return p ? (clean(p.Nom_complet) || [p.Prenom, p.Nom].filter(Boolean).join(' ')) : ''; }
 const prelColor = id => { const i = S.prel.findIndex(p => p.id === id); return i < 0 ? '#929292' : PALETTE[i % PALETTE.length]; };
 
+// inspecteur FranceAgriMer associé à une parcelle (ligne RDV_Prelevements de la clé CLE)
+const pInsp = x => (x && x.rdv && Number(x.rdv.Inspecteur)) || 0;
+const inspNames = ids => ids.map(id => personName(S.inspById.get(id))).filter(Boolean).join(', ');
+const parcLabel = x => x.key.split('-').slice(1).join('-') || x.key;
 function farmKeyOfParc(r) { return clean(r.PACAGE) || clean(r[S.cfg.parcKey]).split('-')[0] || 'dossier ' + clean(r.dossier_number); }
 function farmName(r) { return clean(r.Nom_exploitation) || clean(r.Raison_sociale) || clean(r.Nom_ou_Raison_sociale) || ''; }
 
@@ -777,7 +787,9 @@ function buildModel() {
     for (const [t, ps] of byTime) {
       const r0 = ps[0].rdv, start = toWall(t, typeOf(T_RDV, 'Date_RDV')), dur = Number(r0.Duree_min) || S.cfg.duree;
       const v = {key: f.key + '@' + t, farm: f, parcels: ps, start, end: new Date(start.getTime() + dur * 60000), duree: dur,
-        prel: ps.map(x => x.rdv.Preleveur).find(Boolean) || 0, insp: ps.map(x => x.rdv.Inspecteur).find(Boolean) || 0, statut: clean(r0.Statut)};
+        prel: ps.map(x => x.rdv.Preleveur).find(Boolean) || 0, statut: clean(r0.Statut)};
+      // un inspecteur contrôle une parcelle (clé CLE) : liste des inspecteurs du rendez-vous
+      v.insps = Array.from(new Set(ps.map(pInsp).filter(Boolean))); v.insp = v.insps[0] || 0;
       f.visits.push(v); S.visits.push(v); S.visitByKey.set(v.key, v);
     }
     f.visits.sort((a, b) => a.start - b.start);
@@ -942,13 +954,15 @@ function render() {
 }
 
 function filteredVisits() {
+  const one = S.sel.kind === 'insp' && S.sel.id > 0;
   return S.visits.filter(v => {
     if (S.sel.kind === 'prel' && (S.sel.id === -1 ? v.prel : v.prel !== S.sel.id)) return false;
-    if (S.sel.kind === 'insp' && (S.sel.id === -1 ? !v.insp : v.insp !== S.sel.id)) return false;
+    if (S.sel.kind === 'insp' && (S.sel.id === -1 ? !v.insps.length : !v.insps.includes(S.sel.id))) return false;
     if (S.statut && v.statut !== S.statut) return false;
     if (S.dpt && v.farm.dpt !== S.dpt) return false;
     return true;
-  });
+  // planning d'un inspecteur : uniquement les parcelles (CLE) qu'il contrôle
+  }).map(v => one ? Object.assign({}, v, {parcels: v.parcels.filter(x => pInsp(x) === S.sel.id), insps: [S.sel.id], insp: S.sel.id}) : v);
 }
 const byDay = list => { const m = {}; list.forEach(v => { (m[dkey(v.start)] = m[dkey(v.start)] || []).push(v); }); return m; };
 const dptList = () => Array.from(new Set(Array.from(S.farms.values()).map(f => f.dpt).filter(Boolean))).sort();
@@ -968,10 +982,12 @@ function periodRange() {
 /* ---------- Barre latérale : recherche, préleveurs, inspecteurs ---------- */
 function sidebar() {
   const [a, b] = periodRange(), inPeriod = v => v.start >= a && v.start < b;
-  const count = (k, id) => S.visits.filter(v => inPeriod(v) && (id === -1 ? (k === 'prel' ? !v.prel : !!v.insp) : v[k] === id)).length;
+  const count = (k, id) => k === 'insp'
+    ? S.visits.filter(inPeriod).reduce((t, v) => t + v.parcels.filter(x => id === -1 ? pInsp(x) : pInsp(x) === id).length, 0)
+    : S.visits.filter(v => inPeriod(v) && (id === -1 ? !v.prel : v.prel === id)).length;
   const item = (k, id, label, color, n) => `<button class="side-item${S.sel.kind === k && S.sel.id === id ? ' on' : ''}" data-sel="${k}:${id}">
     ${color ? `<span class="dot" style="background:${color}"></span>` : ''}<span class="nm">${esc(label)}</span><span class="n">${n}</span></button>`;
-  const people = (list, k) => list.filter(p => p.Actif !== false || S.visits.some(v => v[k] === p.id)).sort((x, y) => personName(x).localeCompare(personName(y)));
+  const people = (list, k) => list.filter(p => p.Actif !== false || S.visits.some(v => k === 'insp' ? v.insps.includes(p.id) : v[k] === p.id)).sort((x, y) => personName(x).localeCompare(personName(y)));
   const inner = `<div class="side-search" id="a-search"><label class="lbl" for="q">Rechercher une exploitation</label>
       <input class="input" id="q" type="search" placeholder="Nom, PACAGE, n° dossier, commune…" value="${esc(S.q)}" autocomplete="off"><div id="qres"></div></div>
     ${item('', 0, 'Tous les rendez-vous', '', S.visits.filter(inPeriod).length)}
@@ -1035,7 +1051,7 @@ function evStyle(v) {
   const c = prelColor(v.prel); return `border-left-color:${c};background:${c}1a`;
 }
 function evTitle(v) {
-  return `${hm(v.start)}–${hm(v.end)} · ${v.farm.name} (${v.farm.pacage}) · ${v.parcels.length} parcelle(s)${v.prel ? ' · Préleveur : ' + personName(S.prelById.get(v.prel)) : ''}${v.insp ? ' · Inspecteur : ' + personName(S.inspById.get(v.insp)) : ''}`;
+  return `${hm(v.start)}–${hm(v.end)} · ${v.farm.name} (${v.farm.pacage}) · ${v.parcels.length} parcelle(s)${v.prel ? ' · Préleveur : ' + personName(S.prelById.get(v.prel)) : ''}${v.parcels.some(pInsp) ? ' · Contrôles : ' + v.parcels.filter(pInsp).map(x => parcLabel(x) + ' → ' + personName(S.inspById.get(pInsp(x)))).join(', ') : ''}`;
 }
 function renderMonth(list) {
   const c = S.cursor, y = c.getFullYear(), m = c.getMonth();
@@ -1046,7 +1062,7 @@ function renderMonth(list) {
     const d = new Date(y, m, i - off + 1), k = dkey(d), evs = groupByFarm(map[k] || []), nf = evs.length;
     html += `<div class="cell${d.getMonth() !== m ? ' out' : ''}${d.getDay() % 6 === 0 ? ' we' : ''}${k === today ? ' today' : ''}" data-day="${k}">
       <div class="cell-top"><span class="nb">${nf ? nf + ' exploit.' : ''}</span><span class="dnum">${d.getDate()}</span></div>
-      ${evs.length ? `<div class="cell-evs">${evs.map(g => `<button class="ev" style="${evStyle(g.visits[0])}" data-visit="${esc(g.visits[0].key)}" title="${esc(g.visits.map(evTitle).join('\n'))}"><b>${hm(g.visits[0].start)}</b>${esc(g.farm.name)} <span class="who">${g.nParc} parc.</span>${g.visits.some(v => v.insp) ? ' ' + ic('shield') : ''}</button>`).join('')}</div>` : ''}</div>`;
+      ${evs.length ? `<div class="cell-evs">${evs.map(g => `<button class="ev" style="${evStyle(g.visits[0])}" data-visit="${esc(g.visits[0].key)}" title="${esc(g.visits.map(evTitle).join('\n'))}"><b>${hm(g.visits[0].start)}</b>${esc(g.farm.name)} <span class="who">${g.nParc} parc.</span>${g.visits.some(v => v.insps.length) ? ' ' + ic('shield') : ''}</button>`).join('')}</div>` : ''}</div>`;
   }
   $('#calBody').innerHTML = html + '</div>' + (list.some(v => v.start.getFullYear() === y && v.start.getMonth() === m) ? '' : `<p class="empty">Aucun rendez-vous ce mois-ci${nearestHint(list)}.</p>`);
 }
@@ -1095,7 +1111,7 @@ function renderWeek(list, ndays) {
       const v = it.v, top = ((v.start.getHours() - h0) * 60 + v.start.getMinutes()) * ppm, hgt = Math.max(20, (it.e - it.s) / 60000 * ppm - 2), w = 100 / it.lanes;
       const p = S.prelById.get(v.prel);
       body += `<div class="wev" role="button" tabindex="0" data-visit="${esc(v.key)}" title="${esc(evTitle(v))}" style="${evStyle(v)};top:${top}px;height:${hgt}px;left:calc(${it.lane * w}% + 1px);width:calc(${w}% - 3px)">
-        <b>${hm(v.start)} ${esc(v.farm.name)}</b><span class="who">${v.parcels.length} parc.${ndays === 1 ? ' · ' + esc(v.farm.Ville || v.farm.Adresse_complete || '') : ''}${p ? ' · ' + esc(ndays === 1 ? personName(p) : initials(personName(p))) : ''}${v.insp ? ' · ' + ic('shield') : ''}</span></div>`;
+        <b>${hm(v.start)} ${esc(v.farm.name)}</b><span class="who">${v.parcels.length} parc.${ndays === 1 ? ' · ' + esc(v.farm.Ville || v.farm.Adresse_complete || '') : ''}${p ? ' · ' + esc(ndays === 1 ? personName(p) : initials(personName(p))) : ''}${v.insps.length ? ' · ' + ic('shield') : ''}</span></div>`;
     });
     if (k === today) { const n = new Date(), t = ((n.getHours() - h0) * 60 + n.getMinutes()) * ppm; if (t >= 0 && t <= height) body += `<div class="nowline" style="top:${t}px"></div>`; }
     body += '</div>';
@@ -1109,19 +1125,21 @@ function renderList(list) {
   $('#calBody').innerHTML = keys.map(k => `<section class="agenda-day"><h3><span style="text-transform:capitalize">${esc(fullDate(map[k][0].start))}</span><span class="sub">${map[k].length} rendez-vous</span></h3>${map[k].map(visitRow).join('')}</section>`).join('');
 }
 function visitRow(v) {
-  const f = v.farm, p = S.prelById.get(v.prel), i = S.inspById.get(v.insp);
+  const f = v.farm, p = S.prelById.get(v.prel);
   return `<button class="agenda-item" style="border-left-color:${prelColor(v.prel)}" data-visit="${esc(v.key)}">
     <span class="h">${hm(v.start)}<br><span class="sub">→ ${hm(v.end)}</span></span>
     <span><span class="n">${esc(f.name)}</span> <span class="sub">PACAGE ${esc(f.pacage)}</span>
       <span class="s">${f.Adresse_complete ? `<span>${ic('pin')} ${esc(f.Adresse_complete)}</span>` : ''}${f.Telephone_portable ? `<span>${esc(f.Telephone_portable)}</span>` : ''}
-      <span>${v.parcels.length} parcelle(s) : ${esc(v.parcels.map(x => x.key.split('-').slice(1).join('-')).join(', '))}</span>
-      ${p ? `<span>${ic('user')} ${esc(personName(p))}</span>` : '<span>Préleveur à désigner</span>'}${i ? `<span>${ic('shield')} ${esc(personName(i))}</span>` : ''}</span></span>
+      ${p ? `<span>${ic('user')} ${esc(personName(p))}</span>` : '<span>Préleveur à désigner</span>'}</span>
+      <span class="s">${v.parcels.length} parcelle(s) :${v.parcels.map(parcChip).join('')}</span></span>
     <span class="badge ${stClass(v.statut)}">${esc(stLabel(v.statut))}</span></button>`;
 }
+// parcelle (CLE) et son inspecteur
+const parcChip = x => { const i = pInsp(x); return `<span class="pchip${i ? ' on' : ''}" title="${esc(x.key)}${i ? ' · contrôle : ' + esc(personName(S.inspById.get(i))) : ' · sans inspecteur'}">${esc(parcLabel(x))}${i ? ` ${ic('shield')} ${esc(personName(S.inspById.get(i)))}` : ''}</span>`; };
 function farmDayRow(g) {
   const f = g.farm, vs = g.visits, last = vs[vs.length - 1], names = ids => [...new Set(ids.filter(Boolean))];
-  const prels = names(vs.map(v => v.prel)).map(id => personName(S.prelById.get(id))), insps = names(vs.map(v => v.insp)).map(id => personName(S.inspById.get(id)));
-  const pl = x => x.key.split('-').slice(1).join('-') || x.key;
+  const prels = names(vs.map(v => v.prel)).map(id => personName(S.prelById.get(id))), insps = names(vs.flatMap(v => v.insps)).map(id => personName(S.inspById.get(id)));
+  const pl = x => parcLabel(x) + (pInsp(x) ? ' 🛡 ' + initials(personName(S.inspById.get(pInsp(x)))) : '');
   return `<div class="farmday" style="border-left-color:${prelColor(vs[0].prel)}">
     <button class="farmday-head" data-fiche="${esc(f.key)}">
       <span class="h">${hm(vs[0].start)}<br><span class="sub">→ ${hm(last.end)}</span></span>
@@ -1256,7 +1274,6 @@ function openFiche(farmKey, opts = {}) {
         <div class="grp"><label class="lbl" for="fPrel">Nom prénom du préleveur</label><select class="select" id="fPrel">${optList(people(S.prel, prelId), prelId, '— À désigner —')}</select></div>
         <div class="grp"><label class="lbl" for="fDate">Date/heure du RDV</label><input class="input" type="datetime-local" id="fDate" step="300" value="${dtInput(rdvDate)}"></div>
         <div class="grp"><label class="lbl" for="fDur">Durée</label><select class="select" id="fDur">${optList(DUREES.concat(DUREES.includes(dur) ? [] : [dur]).map(m => [m, m < 60 ? m + ' min' : m / 60 + ' h']), dur, null)}</select></div>
-        <div class="grp"><label class="lbl" for="fInsp">Inspecteur FranceAgriMer<span class="hint">Facultatif (contrôle)</span></label><select class="select" id="fInsp">${optList(people(S.insp, sharedOf(f, 'Inspecteur')), sharedOf(f, 'Inspecteur') || '', '— Aucun —')}</select></div>
       </div>
       <div id="conflicts"></div>
     </section>
@@ -1269,6 +1286,7 @@ function openFiche(farmKey, opts = {}) {
           <div class="grp"><label class="lbl" for="c${i}">Culture en place</label><input class="input" id="c${i}" value="${esc(cult)}"></div>
           <div class="grp"><label class="lbl" for="af${i}">Absence de fertilisation récente</label>${yn('af' + i, r.Absence_fertilisation_recente)}</div>
           <div class="grp"><label class="lbl" for="et${i}">Étiquette prélèvement</label><input class="input" id="et${i}" value="${esc(clean(r.Etiquette_prelevement))}"></div>
+          <div class="grp"><label class="lbl" for="ins${i}">Inspecteur FranceAgriMer<span class="hint">Contrôle de cette parcelle (facultatif)</span></label><select class="select" id="ins${i}" data-ins>${optList(people(S.insp, pInsp(x)), pInsp(x) || '', '— Aucun —')}</select></div>
         </div>
         <div class="grp"><label class="lbl" for="co${i}">Commentaire</label><textarea class="input" id="co${i}" rows="2" style="min-height:2.6rem">${esc(clean(r.Commentaire))}</textarea></div>
         <div class="pinfo" id="pi${i}" hidden>${parcelInfo(x)}</div></div>`; }).join('')}
@@ -1279,11 +1297,12 @@ function openFiche(farmKey, opts = {}) {
   $$('[data-toggle]').forEach(b => b.onclick = () => { const el = $('#' + b.dataset.toggle); el.hidden = !el.hidden; });
   const checkConflicts = () => {
     const d = parseDtInput($('#fDate').value); if (!d) { $('#conflicts').innerHTML = ''; return; }
-    const s0 = d.getTime(), s1 = s0 + Number($('#fDur').value) * 60000, pr = Number($('#fPrel').value), ins = Number($('#fInsp').value);
-    const clash = S.visits.filter(v => v.farm !== f && ((pr && v.prel === pr) || (ins && v.insp === ins)) && v.start.getTime() < s1 && v.end.getTime() > s0);
-    $('#conflicts').innerHTML = clash.length ? `<div class="alert warn"><h3>Chevauchement d'horaires</h3>${clash.map(v => `<p>${hm(v.start)}–${hm(v.end)} : ${esc(v.farm.name)} (${esc(pr && v.prel === pr ? personName(S.prelById.get(pr)) : personName(S.inspById.get(ins)))})</p>`).join('')}<p class="sub">Vous pouvez enregistrer quand même.</p></div>` : '';
+    const s0 = d.getTime(), s1 = s0 + Number($('#fDur').value) * 60000, pr = Number($('#fPrel').value), insSel = $$('[data-ins]').map(e => Number(e.value)).filter(Boolean);
+    const insOf = v => v.insps.find(i => insSel.includes(i)) || 0, ins = 0;
+    const clash = S.visits.filter(v => v.farm !== f && ((pr && v.prel === pr) || insOf(v)) && v.start.getTime() < s1 && v.end.getTime() > s0);
+    $('#conflicts').innerHTML = clash.length ? `<div class="alert warn"><h3>Chevauchement d'horaires</h3>${clash.map(v => `<p>${hm(v.start)}–${hm(v.end)} : ${esc(v.farm.name)} (${esc(pr && v.prel === pr ? personName(S.prelById.get(pr)) : personName(S.inspById.get(insOf(v))))})</p>`).join('')}<p class="sub">Vous pouvez enregistrer quand même.</p></div>` : '';
   };
-  ['#fDate', '#fDur', '#fPrel', '#fInsp'].forEach(s => $(s).addEventListener('change', checkConflicts)); checkConflicts();
+  ['#fDate', '#fDur', '#fPrel'].forEach(s => $(s).addEventListener('change', checkConflicts)); $$('[data-ins]').forEach(e => e.addEventListener('change', checkConflicts)); checkConflicts();
   $('#fPrel').addEventListener('change', e => { $('#prelContact').innerHTML = prelContact(Number(e.target.value) || 0); });
   $('#fPrint').onclick = () => printModal();
   const save = async unplan => {
@@ -1291,11 +1310,11 @@ function openFiche(farmKey, opts = {}) {
     if (!unplan && date && statut && statut !== 'Rdv pris') { toast('Un rendez-vous daté doit avoir le statut « Rdv pris ».', true); return; }
     const call = n => { const d = parseDtInput($('#a' + n).value); return d ? fromWall(d, rt('Date_heure_appel_' + n)) : null; };
     const shared = {Date_heure_appel_1: call(1), Date_heure_appel_2: call(2), Date_heure_appel_3: call(3), Statut: unplan ? null : (statut || (date ? 'Rdv pris' : null)),
-      Presence_souhaitee_agriculteur: $('#fPres').value || null, Preleveur: Number($('#fPrel').value) || 0, Inspecteur: Number($('#fInsp').value) || 0,
+      Presence_souhaitee_agriculteur: $('#fPres').value || null, Preleveur: Number($('#fPrel').value) || 0,
       Date_RDV: date ? fromWall(date, rt('Date_RDV')) : null, Duree_min: Number($('#fDur').value), Modifie_le: Math.round(Date.now() / 1000)};
     const acts = f.parcels.map((x, i) => {
       const fields = Object.assign({}, shared, {Culture_en_place: $('#c' + i).value.trim() || null, Absence_fertilisation_recente: $('#af' + i).value || null,
-        Etiquette_prelevement: $('#et' + i).value.trim() || null, Commentaire: $('#co' + i).value.trim() || null});
+        Etiquette_prelevement: $('#et' + i).value.trim() || null, Commentaire: $('#co' + i).value.trim() || null, Inspecteur: Number($('#ins' + i).value) || 0});
       if (x.src && x.src.dossier_number) fields.N_dossier_DN = Number(x.src.dossier_number) || null;
       Object.keys(fields).forEach(k => { if (!cols(T_RDV)[k]) delete fields[k]; });
       return x.rdv ? ['UpdateRecord', T_RDV, x.rdv.id, fields] : ['AddRecord', T_RDV, null, Object.assign({Cle_parcelle: cleVal(x.key)}, fields)];
@@ -1316,13 +1335,13 @@ function openRoadmap() {
   const map = byDay(list), keys = Object.keys(map).sort();
   openModal(`<h2>${ic('user')}Feuille de route — ${esc(who)}</h2><p class="lead">${esc(periodLabel())} · ${list.length} rendez-vous</p>
     ${keys.map(k => `<section class="road-day"><h3 style="text-transform:capitalize">${esc(fullDate(map[k][0].start))}</h3>
-      ${map[k].map(v => { const f = v.farm, i = S.inspById.get(v.insp), p = S.prelById.get(v.prel);
+      ${map[k].map(v => { const f = v.farm, p = S.prelById.get(v.prel);
         return `<article class="road"><div class="road-h"><b>${hm(v.start)}–${hm(v.end)} · ${esc(f.name)}</b><span class="sub">PACAGE ${esc(f.pacage)}${f.dossier_number ? ' · DN ' + esc(f.dossier_number) : ''}</span></div>
           <div class="fgrid">${f.Telephone_portable ? `<div class="fld"><div class="k">Téléphone</div><div class="v"><a href="tel:${esc(f.Telephone_portable)}">${esc(f.Telephone_portable)}</a></div></div>` : ''}
             ${infoField('Adresse', f.Adresse_complete, 'Text', true)}${infoField('Présence de l\'agriculteur', sharedOf(f, 'Presence_souhaitee_agriculteur'), 'Text')}
-            ${p ? infoField('Préleveur', personName(p), 'Text') : ''}${i ? infoField('Inspecteur FranceAgriMer', personName(i), 'Text') : ''}</div>
+            ${p ? infoField('Préleveur', personName(p), 'Text') : ''}</div>
           ${v.parcels.map(x => `<div class="road-p"><h4>${esc(x.key)}${x.rdv && x.rdv.Etiquette_prelevement ? ' · étiquette ' + esc(x.rdv.Etiquette_prelevement) : ''}</h4>
-            <div class="fgrid">${infoField('Culture en place', x.rdv && x.rdv.Culture_en_place, 'Text')}${infoField('Absence de fertilisation récente', x.rdv && x.rdv.Absence_fertilisation_recente, 'Text')}${infoField('Commentaire', x.rdv && x.rdv.Commentaire, 'Text', true)}</div>
+            <div class="fgrid">${infoField('Inspecteur FranceAgriMer', personName(S.inspById.get(pInsp(x))), 'Text')}${infoField('Culture en place', x.rdv && x.rdv.Culture_en_place, 'Text')}${infoField('Absence de fertilisation récente', x.rdv && x.rdv.Absence_fertilisation_recente, 'Text')}${infoField('Commentaire', x.rdv && x.rdv.Commentaire, 'Text', true)}</div>
             ${parcelInfo(x)}</div>`).join('')}</article>`; }).join('')}</section>`).join('') || '<p class="empty">Aucun rendez-vous sur la période.</p>'}`,
   {wide: true, foot: `<button class="btn ter" data-close>Fermer</button><button class="btn" id="rPrint">${ic('print')}Imprimer</button>`});
   $('#rPrint').onclick = printModal;
@@ -1401,13 +1420,13 @@ function dayExport(k) {
     'Préleveur — Nom', 'Préleveur — Prénom', 'Préleveur — Organisme'].concat(prelCols.map(c => 'Préleveur — ' + (PREL_LABELS[c] || pc[c].label || c)));
   const rows = [];
   for (const v of vs) {
-    const f = v.farm, p = S.prelById.get(v.prel) || {}, ins = S.inspById.get(v.insp);
+    const f = v.farm, p = S.prelById.get(v.prel) || {};
     for (const x of v.parcels.slice().sort((a, b) => a.key.localeCompare(b.key, 'fr', {numeric: true}))) {
       const r = x.rdv || {}, d = x.def || {}, s = x.src || {}, c = coordsOf(x), parts = x.key.split('-');
       rows.push([labOf(v), prelNameOf(v) || 'Préleveur à désigner', f.name, f.pacage, hm(v.start), hm(v.end), v.statut, x.key,
         clean(d.NUM_ILOT) || parts[1] || '', clean(d.NUM_PARCEL) || parts[2] || '', fmtAny(d.SURF_CALC),
         clean(r.Culture_en_place) || clean(s.Culture_2026), clean(r.Presence_souhaitee_agriculteur), clean(r.Absence_fertilisation_recente), clean(r.Etiquette_prelevement), clean(r.Commentaire),
-        c.lat || '', c.lon || '', c.lat ? gmaps(c.lat, c.lon) : '', personName(ins),
+        c.lat || '', c.lon || '', c.lat ? gmaps(c.lat, c.lon) : '', personName(S.inspById.get(pInsp(x))),
         firstOf([s, f], ['dossier_number']), firstOf([d, s], ['SIRET', 'siret']), clean(d.Civilite), firstOf([s, d], ['Raison_sociale', 'Nom_exploitation', 'Nom']) || f.name,
         clean(d.Adresse) || [clean(s.Adresse_Numero), clean(s.Adresse_Rue)].filter(Boolean).join(' '), firstOf([s, f], ['Code_postal']) || clean(d.Code_Postal).split('.')[0],
         firstOf([s, f], ['Ville']) || clean(d.Commune), f.Adresse_complete || '', f.Departement || f.dpt,
@@ -1769,8 +1788,8 @@ function menuDef() {
       ['Qui a inspecté qui', '#a-dash-matrix']]},
     {tab: 'exp', label: 'Exploitations', icon: 'plant', items: []},
     {tab: 'prel', label: 'Préleveurs', icon: 'user', items: [['Ajouter un préleveur', () => openPersonForm(T_PREL, null)]]},
-    {tab: 'espace', label: 'Espace inspecteur', icon: 'shield', items: [['Mes contrôles à venir', '#a-esp-mine'],
-      gr && ['Grilles d\'évaluation', '#a-esp-grids'], ['Rendez-vous disponibles', '#a-esp-rdv']]},
+    {tab: 'espace', label: 'Espace inspecteur', icon: 'shield', items: [['Mes contrôles à faire', '#a-esp-mine'], ['Historique de mes contrôles', '#a-esp-hist'],
+      gr && ['Grilles d\'évaluation', '#a-esp-grids'], ['Parcelles à contrôler', '#a-esp-rdv']]},
     {tab: 'insp', label: 'Inspecteurs FranceAgriMer', icon: 'shield', items: [['Ajouter un inspecteur', () => openPersonForm(T_INSP, null)]]},
     {tab: 'res', label: 'Résultats des contrôles', icon: 'check', items: [['Grilles d\'évaluation', '#a-res-grids'],
       gr && ['Télécharger le fichier de retour des grilles', () => openGridTemplate()], gr && ['Importer les grilles remplies', () => pickGridFile()]]}
@@ -2116,9 +2135,9 @@ function dashStats() {
   S.prel.filter(p => p.Actif !== false).forEach(p => rowOf(p.id));
   for (const v of list) {
     const r = rowOf(v.prel || 0); r.rdv++; r.visits.push(v);
-    if (!v.insp) continue;
+    if (!v.insps.length) continue;
     const past = v.start < now; if (past) r.done++; else r.todo++;
-    const b = r.byInsp.get(v.insp) || {done: 0, todo: 0}; past ? b.done++ : b.todo++; r.byInsp.set(v.insp, b);
+    v.insps.forEach(i => { const b = r.byInsp.get(i) || {done: 0, todo: 0}; past ? b.done++ : b.todo++; r.byInsp.set(i, b); });
     if (past && (!r.last || v.start > r.last.start)) r.last = v;
   }
   const out = Array.from(rows.values()).filter(r => r.id || r.rdv);
@@ -2129,17 +2148,17 @@ function dashStats() {
 const pct = x => Math.round(x * 100) + ' %';
 function renderDash() {
   const {list, rows, now} = dashStats(), named = rows.filter(r => r.id);
-  const inspected = list.filter(v => v.insp), done = inspected.filter(v => v.start < now).length, never = named.filter(r => !r.done);
-  const inspIds = Array.from(new Set(inspected.map(v => v.insp))).sort((a, b) => personName(S.inspById.get(a)).localeCompare(personName(S.inspById.get(b))));
+  const inspected = list.filter(v => v.insps.length), done = inspected.filter(v => v.start < now).length, never = named.filter(r => !r.done);
+  const inspIds = Array.from(new Set(inspected.flatMap(v => v.insps))).sort((a, b) => personName(S.inspById.get(a)).localeCompare(personName(S.inspById.get(b))));
   const maxCell = Math.max(1, ...named.flatMap(r => inspIds.map(i => { const b = r.byInsp.get(i); return b ? b.done + b.todo : 0; })));
   const tile = (label, value, sub) => `<div class="kpi"><div class="kpi-l">${esc(label)}</div><div class="kpi-v">${value}</div>${sub ? `<div class="kpi-s">${sub}</div>` : ''}</div>`;
   const inspList = r => Array.from(r.byInsp.entries()).sort((a, b) => (b[1].done + b[1].todo) - (a[1].done + a[1].todo))
     .map(([i, b]) => `<span class="tag" title="${b.done} réalisé(s), ${b.todo} prévu(s)">${ic('shield')} ${esc(personName(S.inspById.get(i)))} × ${b.done + b.todo}</span>`).join(' ');
   const detail = r => {
-    const vs = r.visits.filter(v => v.insp).sort((a, b) => b.start - a.start);
-    return `<tr class="dash-detail"><td colspan="7">${vs.length ? `<table class="tbl"><thead><tr><th>Date</th><th>Exploitation</th><th>Inspecteur</th><th>État</th></tr></thead><tbody>
+    const vs = r.visits.filter(v => v.insps.length).sort((a, b) => b.start - a.start);
+    return `<tr class="dash-detail"><td colspan="7">${vs.length ? `<table class="tbl"><thead><tr><th>Date</th><th>Exploitation</th><th>Parcelles contrôlées</th><th>État</th></tr></thead><tbody>
       ${vs.map(v => `<tr class="click" data-visit="${esc(v.key)}"><td>${esc(shortDate(v.start))} ${hm(v.start)}</td><td>${esc(v.farm.name)} <span class="sub">${esc(v.farm.pacage)}</span></td>
-        <td>${esc(personName(S.inspById.get(v.insp)))}</td><td>${v.start < now ? '<span class="badge st-pris">Réalisée</span>' : '<span class="badge st-none">Prévue</span>'}</td></tr>`).join('')}</tbody></table>`
+        <td>${v.parcels.filter(pInsp).map(parcChip).join(' ')}</td><td>${v.start < now ? '<span class="badge st-pris">Réalisée</span>' : '<span class="badge st-none">Prévue</span>'}</td></tr>`).join('')}</tbody></table>`
       : '<p class="sub">Aucune inspection sur la période.</p>'}</td></tr>`;
   };
   $('#main').innerHTML = `<div class="section-head"><h2>${ic('chart')} Tableau de bord des inspections</h2>
@@ -2162,13 +2181,13 @@ function renderDash() {
         <td class="num">${r.rdv}</td><td class="num strong">${r.done}</td><td class="num">${r.todo}</td>
         <td><div class="bar" title="${n} inspection(s) sur ${r.rdv} rendez-vous"><span style="width:${r.rdv ? Math.max(n ? 3 : 0, r.rate * 100) : 0}%"></span></div><span class="sub">${r.rdv ? pct(r.rate) : '—'}</span></td>
         <td>${inspList(r)}${!r.done && r.rdv ? ' <span class="badge st-injoignable">Jamais inspecté</span>' : ''}${!r.rdv ? '<span class="sub">Aucun RDV</span>' : ''}</td>
-        <td>${r.last ? `${esc(shortDate(r.last.start))}<div class="sub">${esc(personName(S.inspById.get(r.last.insp)))}</div>` : '<span class="sub">—</span>'}</td></tr>${open ? detail(r) : ''}`; }).join('')}
+        <td>${r.last ? `${esc(shortDate(r.last.start))}<div class="sub">${esc(inspNames(r.last.insps))}</div>` : '<span class="sub">—</span>'}</td></tr>${open ? detail(r) : ''}`; }).join('')}
       </tbody></table></div><p class="sub">Cliquez sur un préleveur pour voir le détail de ses inspections (date, exploitation, inspecteur).</p></section>
     ${inspIds.length ? `<section class="fsec" id="a-dash-matrix"><h3>${ic('shield')}Qui a inspecté qui</h3><p class="sub">Nombre de rendez-vous du préleveur (ligne) suivis par l'inspecteur (colonne), réalisés et prévus.</p>
       <div class="tbl-wrap"><table class="tbl matrix"><thead><tr><th>Préleveur</th>${inspIds.map(i => `<th class="num">${esc(personName(S.inspById.get(i)))}</th>`).join('')}<th class="num">Total</th></tr></thead><tbody>
       ${named.map(r => `<tr><td class="strong">${esc(personName(r.p))}</td>${inspIds.map(i => { const b = r.byInsp.get(i), n = b ? b.done + b.todo : 0;
         return `<td class="num heat${n / maxCell > .6 ? ' dark' : ''}" style="--h:${n / maxCell}" title="${esc(personName(r.p))} / ${esc(personName(S.inspById.get(i)))} : ${b ? b.done : 0} réalisé(s), ${b ? b.todo : 0} prévu(s)">${n || ''}</td>`; }).join('')}<td class="num strong">${r.done + r.todo}</td></tr>`).join('')}
-      <tr class="tot"><td>Total</td>${inspIds.map(i => `<td class="num">${inspected.filter(v => v.insp === i).length}</td>`).join('')}<td class="num">${inspected.length}</td></tr>
+      <tr class="tot"><td>Total</td>${inspIds.map(i => `<td class="num">${inspected.filter(v => v.insps.includes(i)).length}</td>`).join('')}<td class="num">${inspected.length}</td></tr>
       </tbody></table></div></section>` : '<p class="muted">Aucun rendez-vous inspecté sur la période.</p>'}
 `;
   $('#dPer').onchange = e => { S.dashPeriod = e.target.value; renderDash(); };
@@ -2176,7 +2195,7 @@ function renderDash() {
   $$('[data-dash]').forEach(tr => tr.onclick = () => { const id = Number(tr.dataset.dash); S.dashOpen = S.dashOpen === id ? 0 : id; renderDash(); });
   $('#dashCsv').onclick = () => {
     const lines = [['Préleveur', 'Date', 'Heure', 'Exploitation', 'PACAGE', 'Inspecteur', 'État']];
-    rows.forEach(r => r.visits.filter(v => v.insp).forEach(v => lines.push([r.id ? personName(r.p) : 'Sans préleveur', shortDate(v.start), hm(v.start), v.farm.name, v.farm.pacage, personName(S.inspById.get(v.insp)), v.start < now ? 'Réalisée' : 'Prévue'])));
+    rows.forEach(r => r.visits.filter(v => v.insps.length).forEach(v => lines.push([r.id ? personName(r.p) : 'Sans préleveur', shortDate(v.start), hm(v.start), v.farm.name, v.farm.pacage, v.parcels.filter(pInsp).map(x => x.key + ' : ' + personName(S.inspById.get(pInsp(x)))).join(' ; '), v.start < now ? 'Réalisée' : 'Prévue'])));
     const csv = '﻿' + lines.map(l => l.map(x => '"' + String(x).replace(/"/g, '""') + '"').join(';')).join('\r\n');
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], {type: 'text/csv;charset=utf-8'})); a.download = 'inspections-preleveurs.csv';
     document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
@@ -2188,83 +2207,149 @@ function renderDash() {
 const dptNorm = s => String(s || '').replace(/\D/g, '').replace(/^0+/, '');
 function myDpts(p) { return String(p && p.Departements || '').split(/[,;\s/]+/).map(dptNorm).filter(Boolean); }
 function setMe(id) { S.me = id; try { localStorage.setItem('calendrier-inspecteur', String(id || '')); } catch (e) { /* stockage indisponible */ } }
-const meClash = v => S.visits.filter(x => x !== v && x.insp === S.me && x.start < v.end && x.end > v.start);
-function assocButton(v) {
-  if (!S.me) return '';
-  if (v.insp === S.me) return `<button class="btn danger" data-assoc="${esc(v.key)}">${ic('close')}Me retirer</button>`;
-  if (v.insp) return `<span class="badge">Pris par ${esc(personName(S.inspById.get(v.insp)))}</span>`;
-  return `<button class="btn" data-assoc="${esc(v.key)}">${ic('add')}M'associer</button>`;
+// parcelles (clés CLE) de tous les rendez-vous : {v, x, insp}
+const parcelItems = () => S.visits.flatMap(v => v.parcels.map(x => ({v, x, insp: pInsp(x)})));
+// mes autres parcelles sur un créneau qui chevauche ce rendez-vous
+const meClash = v => S.visits.filter(o => o !== v && o.insps.includes(S.me) && o.start < v.end && o.end > v.start);
+function assocButton(x) {
+  if (!S.me || !x.rdv) return '';
+  const i = pInsp(x);
+  if (i === S.me) return `<button class="btn danger" data-assoc="${x.rdv.id}" title="Ne plus contrôler ${esc(x.key)}">${ic('close')}Me retirer</button>`;
+  if (i) return `<span class="badge">Pris par ${esc(personName(S.inspById.get(i)))}</span>`;
+  return `<button class="btn" data-assoc="${x.rdv.id}" title="Contrôler la parcelle ${esc(x.key)}">${ic('add')}M'associer</button>`;
 }
-async function toggleAssoc(key, btn) {
-  const v = S.visitByKey.get(key); if (!v || !S.me) return;
-  const leaving = v.insp === S.me;
-  if (!leaving && v.insp) { toast('Ce rendez-vous a déjà un inspecteur : ' + personName(S.inspById.get(v.insp)) + '.', true); return; }
-  if (!leaving && meClash(v).length && btn.dataset.confirm !== '1') {
-    btn.dataset.confirm = '1'; btn.innerHTML = ic('warning') + 'Chevauchement : confirmer'; btn.title = meClash(v).map(x => hm(x.start) + ' ' + x.farm.name).join(', '); return;
+// association de l'inspecteur à une parcelle (une ligne RDV_Prelevements) ou à toutes les parcelles libres d'un rendez-vous
+async function toggleAssoc(ref, btn) {
+  if (!S.me) return;
+  const all = ref.startsWith('all:'), items = parcelItems();
+  const targets = all ? items.filter(it => it.v.key === ref.slice(4) && !it.insp) : items.filter(it => it.x.rdv && String(it.x.rdv.id) === ref);
+  if (!targets.length) return;
+  const it = targets[0], leaving = !all && it.insp === S.me;
+  if (!leaving && !all && it.insp) { toast('Cette parcelle a déjà un inspecteur : ' + personName(S.inspById.get(it.insp)) + '.', true); return; }
+  if (!leaving && meClash(it.v).length && btn.dataset.confirm !== '1') {
+    btn.dataset.confirm = '1'; btn.innerHTML = ic('warning') + 'Chevauchement : confirmer'; btn.title = meClash(it.v).map(o => hm(o.start) + ' ' + o.farm.name).join(', '); return;
   }
-  const ids = v.parcels.map(x => x.rdv && x.rdv.id).filter(Boolean);
-  const wasOpen = !!$('#modalRoot').firstChild;
-  if (await write(ids.map(id => ['UpdateRecord', T_RDV, id, Object.assign({Inspecteur: leaving ? 0 : S.me}, cols(T_RDV).Modifie_le ? {Modifie_le: Math.round(Date.now() / 1000)} : {})]),
-    leaving ? 'Vous êtes retiré de ce rendez-vous' : 'Vous êtes associé à ce rendez-vous') && wasOpen) {
-    const nv = S.visitByKey.get(key); if (nv) openVisitInspect(key); else closeModal();
+  const wasOpen = !!$('#modalRoot').firstChild, key = it.v.key;
+  const stamp = cols(T_RDV).Modifie_le ? {Modifie_le: Math.round(Date.now() / 1000)} : {};
+  if (await write(targets.map(t => ['UpdateRecord', T_RDV, t.x.rdv.id, Object.assign({Inspecteur: leaving ? 0 : S.me}, stamp)]),
+    leaving ? `Vous ne contrôlez plus la parcelle ${it.x.key}` : `Vous contrôlez ${targets.length > 1 ? targets.length + ' parcelles' : 'la parcelle ' + it.x.key}`) && wasOpen) {
+    if (S.visitByKey.get(key)) openVisitInspect(key); else closeModal();
   }
 }
-function espRow(v) {
-  const f = v.farm, p = S.prelById.get(v.prel), mine = v.insp === S.me;
-  return `<div class="esp-row${mine ? ' mine' : ''}${v.insp && !mine ? ' taken' : ''}" data-visit="${esc(v.key)}" role="button" tabindex="0">
+
+/* ---------- Historique : contrôles saisis dans les grilles d'évaluation ---------- */
+// une ligne de grille -> {g, row, date, insp, key, lieu, prel, nc}
+function gridEntries() {
+  const parcById = new Map(S.parc.map(r => [r.id, r])), out = [];
+  const val = (cm, row, ids) => { const id = ids.find(k => cm[k]); return id ? {c: cm[id], v: row[id]} : {c: null, v: null}; };
+  for (const g of gridTables()) {
+    const cm = cols(g.t);
+    for (const row of S.grids[g.t] || []) {
+      const d = val(cm, row, ['Date', 'Date_du_controle']), ins = val(cm, row, ['Controleur', 'Nom_du_controleur']);
+      const cle = val(cm, row, ['Cle_PACAGE_ilot_parcelle']), pr = val(cm, row, ['Preleveur']), li = val(cm, row, ['Lieu_de_stockage']);
+      let date = null;
+      if (typeof d.v === 'number') date = toWall(d.v, d.c && /^Date/.test(d.c.type) ? d.c.type : 'Date'); else if (clean(d.v)) date = parseDateFr(d.v);
+      const insp = typeof ins.v === 'number' ? ins.v : matchPerson(S.insp, ins.v);
+      let key = '';
+      if (typeof cle.v === 'number' && cle.c && cle.c.type.startsWith('Ref:')) { const r = cle.c.type.slice(4) === S.cfg.parcTable ? parcById.get(cle.v) : S.cleById.get(cle.v); key = r ? clean(r[S.cfg.parcKey] ?? r[S.cleCol]) : ''; }
+      else key = clean(cle.v);
+      const prel = typeof pr.v === 'number' ? personName(S.prelById.get(pr.v)) : clean(pr.v);
+      const nc = Object.entries(row).filter(([k, v]) => cm[k] && typeof v === 'string' && /^non conforme/.test(norm(v).trim())).length;
+      out.push({g, row, date, insp, key, keyN: keyNorm(key), lieu: clean(li.v), prel, nc});
+    }
+  }
+  return out;
+}
+const farmOfKey = key => { const f = S.farms.get(String(key).split('-')[0]); return f && f.parcels.some(x => keyNorm(x.key) === keyNorm(key)) ? f : f || null; };
+function histTable(list) {
+  return `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Grille</th><th>Parcelle (CLE) / lieu</th><th>Exploitation</th><th>Préleveur</th><th>Constat</th></tr></thead><tbody>
+    ${list.map(e => { const f = e.key ? farmOfKey(e.key) : null;
+      return `<tr${f ? ` class="click" data-fiche-insp="${esc(f.key)}"` : ''}><td>${e.date ? esc(shortDate(e.date)) : '<span class="sub">—</span>'}</td><td>${esc(e.g.name)}</td>
+        <td class="strong">${esc(e.key || e.lieu || '—')}</td><td>${f ? esc(f.name) : '<span class="sub">—</span>'}</td><td>${esc(e.prel || '—')}</td>
+        <td>${e.nc ? `<span class="badge st-refus">${e.nc} non-conformité(s)</span>` : '<span class="badge st-pris">Aucune non-conformité</span>'}</td></tr>`; }).join('')}
+  </tbody></table></div>`;
+}
+
+function espRow(v, opts = {}) {
+  const f = v.farm, p = S.prelById.get(v.prel), mineAll = v.parcels.length && v.parcels.every(x => pInsp(x) === S.me);
+  const free = v.parcels.filter(x => !pInsp(x) && x.rdv).length;
+  return `<div class="esp-row${mineAll ? ' mine' : ''}" data-visit="${esc(v.key)}" role="button" tabindex="0">
     <span class="h">${hm(v.start)}<br><span class="sub">→ ${hm(v.end)}</span></span>
     <span><span class="n">${esc(f.name)}</span> <span class="sub">PACAGE ${esc(f.pacage)} · ${esc(f.Ville || f.Departement || 'dpt ' + f.dpt)}</span>
-      <span class="s">${f.Adresse_complete ? `<span>${ic('pin')} ${esc(f.Adresse_complete)}</span>` : ''}<span>${v.parcels.length} parcelle(s)</span>${p ? `<span>${ic('user')} Préleveur : ${esc(personName(p))}</span>` : ''}</span></span>
-    <span class="act">${assocButton(v)}</span></div>`;
+      <span class="s">${f.Adresse_complete ? `<span>${ic('pin')} ${esc(f.Adresse_complete)}</span>` : ''}${p ? `<span>${ic('user')} Préleveur : ${esc(personName(p))}</span>` : ''}</span>
+      <span class="esp-parcs">${v.parcels.map(x => { const done = opts.done && opts.done.has(keyNorm(x.key));
+        return `<span class="esp-parc"><b>${esc(x.key)}</b>${x.rdv && clean(x.rdv.Culture_en_place) ? `<span class="sub">${esc(clean(x.rdv.Culture_en_place))}</span>` : ''}
+          ${opts.grid ? (done ? '<span class="badge st-pris">Grille saisie</span>' : v.end < new Date() ? '<span class="badge st-refus">Grille à saisir</span>' : '<span class="badge st-none">À contrôler</span>') : ''}
+          ${assocButton(x)}</span>`; }).join('')}</span></span>
+    <span class="act">${opts.takeAll && free > 1 ? `<button class="btn sec" data-assoc="all:${esc(v.key)}">${ic('add')}Prendre les ${free} parcelles</button>` : ''}</span></div>`;
 }
 function renderEspace() {
   const insp = S.insp.filter(p => p.Actif !== false || p.id === S.me).sort((a, b) => personName(a).localeCompare(personName(b)));
   if (S.me && !S.inspById.has(S.me)) setMe(0);
   const me = S.inspById.get(S.me), dpts = myDpts(me), now = new Date(), until = S.espRange ? addDays(now, S.espRange) : null, q = norm(S.espQ.trim());
-  const base = S.visits.filter(v => v.end >= now && (!until || v.start < until) && v.statut === 'Rdv pris' || (S.me && v.insp === S.me && v.end >= now));
-  const mine = base.filter(v => S.me && v.insp === S.me);
-  const avail = base.filter(v => v.insp !== S.me && (S.espTaken || !v.insp) && (!S.espMine || !dpts.length || dpts.includes(dptNorm(v.farm.dpt)))
-    && (!q || norm([v.farm.name, v.farm.pacage, v.farm.Ville, v.farm.Adresse_complete].join(' ')).includes(q)));
-  const group = list => { const m = byDay(list), ks = Object.keys(m).sort(); return ks.map(k => `<section class="agenda-day"><h3><span style="text-transform:capitalize">${esc(fullDate(m[k][0].start))}</span><span class="sub">${m[k].length} rendez-vous</span></h3>${m[k].map(espRow).join('')}</section>`).join(''); };
+  const match = v => !q || norm([v.farm.name, v.farm.pacage, v.farm.Ville, v.farm.Adresse_complete].concat(v.parcels.map(x => x.key)).join(' ')).includes(q);
+  // historique : grilles saisies par l'inspecteur ; une parcelle est « faite » quand une grille la concerne
+  const hist = gridEntries().filter(e => S.me && e.insp === S.me).sort((a, b) => (b.date || 0) - (a.date || 0));
+  const done = new Set(hist.map(e => e.keyN).filter(Boolean));
+  const mineOf = v => Object.assign({}, v, {parcels: v.parcels.filter(x => pInsp(x) === S.me)});
+  const mineAll = S.visits.filter(v => S.me && v.insps.includes(S.me)).map(mineOf);
+  const todo = mineAll.filter(v => (v.end >= now || v.parcels.some(x => !done.has(keyNorm(x.key)))) && match(v));
+  const late = todo.filter(v => v.end < now), next = todo.filter(v => v.end >= now);
+  const histF = hist.filter(e => !q || norm([e.key, e.lieu, e.prel, e.g.name, (farmOfKey(e.key) || {}).name].join(' ')).includes(q));
+  const avail = S.visits.filter(v => v.end >= now && (!until || v.start < until) && v.statut === 'Rdv pris' && v.parcels.some(x => !pInsp(x) || S.espTaken)
+    && (!S.espMine || !dpts.length || dpts.includes(dptNorm(v.farm.dpt))) && match(v));
+  const group = (list, opts) => { const m = byDay(list), ks = Object.keys(m).sort(); return ks.map(k => `<section class="agenda-day"><h3><span style="text-transform:capitalize">${esc(fullDate(m[k][0].start))}</span><span class="sub">${m[k].reduce((t, v) => t + v.parcels.length, 0)} parcelle(s)</span></h3>${m[k].map(v => espRow(v, opts)).join('')}</section>`).join(''); };
+  const nParc = list => list.reduce((t, v) => t + v.parcels.length, 0);
   $('#main').innerHTML = `<div class="section-head"><h2>${ic('shield')} Espace inspecteur FranceAgriMer</h2>
       ${S.me ? `<button class="btn ter" data-sel="insp:${S.me}">${ic('calendar')}Mon planning dans le calendrier</button>` : ''}</div>
     <div class="filters">
       <div><label class="lbl" for="eMe">Je suis</label><select class="select" id="eMe">${optList(insp.map(p => [p.id, personName(p)]), S.me || '', '— Choisir mon nom —')}</select></div>
-      <div><label class="lbl" for="eRange">Période</label><select class="select" id="eRange">${optList([[7, '7 prochains jours'], [30, '30 prochains jours'], [90, '3 prochains mois'], [0, 'Tous les RDV à venir']], S.espRange, null)}</select></div>
-      <div><label class="lbl" for="eQ">Recherche</label><input class="input" id="eQ" type="search" placeholder="Exploitation, commune…" value="${esc(S.espQ)}"></div>
+      <div><label class="lbl" for="eRange">Rendez-vous disponibles</label><select class="select" id="eRange">${optList([[7, '7 prochains jours'], [30, '30 prochains jours'], [90, '3 prochains mois'], [0, 'Tous les RDV à venir']], S.espRange, null)}</select></div>
+      <div><label class="lbl" for="eQ">Recherche</label><input class="input" id="eQ" type="search" placeholder="Exploitation, commune, clé parcelle…" value="${esc(S.espQ)}"></div>
       <div style="display:flex;flex-direction:column;justify-content:flex-end;gap:4px">
         <label class="chk"><input type="checkbox" id="eMine" ${S.espMine ? 'checked' : ''} ${dpts.length ? '' : 'disabled'}> Mes départements${dpts.length ? ' (' + esc(me.Departements) + ')' : ''}</label>
-        <label class="chk"><input type="checkbox" id="eTaken" ${S.espTaken ? 'checked' : ''}> Voir aussi les RDV déjà pris</label></div>
+        <label class="chk"><input type="checkbox" id="eTaken" ${S.espTaken ? 'checked' : ''}> Voir aussi les parcelles déjà prises</label></div>
     </div>
     ${!insp.length ? `<div class="alert warn"><p>Aucun inspecteur dans <code>${T_INSP}</code> : ajoutez-les dans l'onglet « Inspecteurs FranceAgriMer ».</p></div>`
-      : !S.me ? '<div class="alert"><p>Choisissez votre nom ci-dessus (une seule fois sur cet ordinateur), puis associez-vous aux rendez-vous de prélèvement que vous souhaitez contrôler.</p></div>'
-      : `<section class="fsec" id="a-esp-mine"><h3>${ic('check')}Mes contrôles à venir (${mine.length})</h3>${mine.length ? group(mine) : '<p class="muted">Aucun pour l\'instant : choisissez un rendez-vous ci-dessous.</p>'}</section>
-         ${gridSection({id: 'a-esp-grids'})}
-         <section class="fsec" id="a-esp-rdv"><h3>${ic('calendar')}Rendez-vous ${S.espTaken ? '' : 'sans inspecteur '}(${avail.length})</h3>${avail.length ? group(avail) : '<p class="muted">Aucun rendez-vous sur la période.</p>'}</section>
-`}`;
+      : !S.me ? '<div class="alert"><p>Choisissez votre nom ci-dessus (une seule fois sur cet ordinateur), puis associez-vous aux parcelles (clés CLE) que vous souhaitez contrôler.</p></div>'
+      : `<div class="kpis">
+          <div class="kpi"><div class="kpi-l">Contrôles à venir</div><div class="kpi-v">${nParc(next)}</div><div class="kpi-s">parcelle(s) sur ${next.length} rendez-vous</div></div>
+          <div class="kpi" style="border-top-color:var(--error)"><div class="kpi-l">Grilles à saisir</div><div class="kpi-v">${late.reduce((t, v) => t + v.parcels.filter(x => !done.has(keyNorm(x.key))).length, 0)}</div><div class="kpi-s">contrôles passés sans grille d'évaluation</div></div>
+          <div class="kpi" style="border-top-color:var(--success)"><div class="kpi-l">Contrôles réalisés</div><div class="kpi-v">${hist.length}</div><div class="kpi-s">grilles saisies à mon nom</div></div></div>
+        <section class="fsec" id="a-esp-mine"><h3>${ic('check')}Mes contrôles à faire (${nParc(todo)} parcelle(s))</h3>
+          ${late.length ? `<h4 class="stock-h" style="color:var(--error)">${ic('warning')} Contrôles passés : grille d'évaluation à saisir</h4>${group(late, {grid: true, done})}` : ''}
+          ${next.length ? `<h4 class="stock-h">À venir</h4>${group(next, {grid: true, done})}` : ''}
+          ${!todo.length ? '<p class="muted">Rien à faire pour l\'instant : associez-vous à des parcelles ci-dessous.</p>' : ''}</section>
+        <section class="fsec" id="a-esp-hist"><h3>${ic('time')}Historique de mes contrôles (${histF.length})</h3>
+          ${histF.length ? histTable(histF.slice(0, 300)) + (histF.length > 300 ? `<p class="sub">${histF.length - 300} contrôle(s) de plus : affinez la recherche.</p>` : '')
+            : '<p class="muted">Aucune grille d\'évaluation saisie à votre nom pour l\'instant. Elles apparaissent ici après l\'import du fichier de retour (contrôleur = votre nom).</p>'}</section>
+        ${gridSection({id: 'a-esp-grids'})}
+        <section class="fsec" id="a-esp-rdv"><h3>${ic('calendar')}Parcelles à contrôler ${S.espTaken ? '' : 'sans inspecteur '}(${avail.length} rendez-vous)</h3>
+          ${avail.length ? group(avail, {takeAll: true}) : '<p class="muted">Aucun rendez-vous sur la période.</p>'}</section>`}`;
   $('#eMe').onchange = e => { setMe(Number(e.target.value) || 0); S.espMine = true; renderEspace(); };
   $('#eRange').onchange = e => { S.espRange = Number(e.target.value); renderEspace(); };
   $('#eMine').onchange = e => { S.espMine = e.target.checked; renderEspace(); };
   $('#eTaken').onchange = e => { S.espTaken = e.target.checked; renderEspace(); };
   $('#eQ').addEventListener('input', e => { S.espQ = e.target.value; clearTimeout(renderEspace.t); renderEspace.t = setTimeout(() => { renderEspace(); const i = $('#eQ'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); });
 }
-// Détail d'un rendez-vous en lecture, pour l'inspecteur
+// Détail d'un rendez-vous en lecture, pour l'inspecteur : association parcelle par parcelle
 function openVisitInspect(key) {
   const v = S.visitByKey.get(key); if (!v) return;
-  const f = v.farm, p = S.prelById.get(v.prel), i = S.inspById.get(v.insp), clash = S.me && v.insp !== S.me ? meClash(v) : [];
+  const f = v.farm, p = S.prelById.get(v.prel), clash = S.me && !v.insps.includes(S.me) ? meClash(v) : [];
+  const free = v.parcels.filter(x => !pInsp(x) && x.rdv).length;
   openModal(`<h2>${ic('calendar')}<span style="text-transform:capitalize">${esc(fullDate(v.start))}</span> · ${hm(v.start)}–${hm(v.end)}</h2>
-    <div class="fiche-head"><span class="strong" style="font-size:1.15rem">${esc(f.name)}</span><span class="tag">PACAGE ${esc(f.pacage)}</span>${f.dossier_number ? `<span class="tag">DN ${esc(f.dossier_number)}</span>` : ''}
-      ${i ? `<span class="badge st-pris">${ic('shield')} ${esc(personName(i))}</span>` : '<span class="badge st-none">Sans inspecteur</span>'}</div>
-    ${!S.me ? `<div class="alert"><p>Pour vous associer, choisissez votre nom dans l'onglet « Espace inspecteur ».</p></div>` : ''}
+    <div class="fiche-head"><span class="strong" style="font-size:1.15rem">${esc(f.name)}</span><span class="tag">PACAGE ${esc(f.pacage)}</span>${f.dossier_number ? `<span class="tag">DN ${esc(f.dossier_number)}</span>` : ''}</div>
+    ${!S.me ? `<div class="alert"><p>Pour vous associer à une parcelle, choisissez votre nom dans l'onglet « Espace inspecteur ».</p></div>` : ''}
     ${clash.length ? `<div class="alert warn"><p>Vous avez déjà : ${clash.map(x => esc(hm(x.start) + ' ' + x.farm.name)).join(', ')}.</p></div>` : ''}
     <section class="fsec"><h3>${ic('pin')}Lieu et contacts</h3><div class="fgrid">
       ${infoField('Adresse', f.Adresse_complete, 'Text', true)}
       ${f.Telephone_portable ? `<div class="fld"><div class="k">Agriculteur</div><div class="v"><a href="tel:${esc(f.Telephone_portable)}">${esc(f.Telephone_portable)}</a></div></div>` : ''}
       ${infoField('Présence de l\'agriculteur', sharedOf(f, 'Presence_souhaitee_agriculteur'), 'Text')}
       ${p ? `<div class="fld"><div class="k">Préleveur</div><div class="v">${esc(personName(p))}${p.Telephone ? `<br><a href="tel:${esc(p.Telephone)}">${esc(p.Telephone)}</a>` : ''}</div></div>` : ''}</div></section>
-    <section class="fsec"><h3>${ic('plant')}Parcelles (${v.parcels.length})</h3>
-      ${v.parcels.map(x => `<div class="road-p"><h4>${esc(x.key)}</h4><div class="fgrid">${infoField('Culture en place', x.rdv && x.rdv.Culture_en_place, 'Text')}${infoField('Commentaire', x.rdv && x.rdv.Commentaire, 'Text', true)}</div>${parcelInfo(x)}</div>`).join('')}</section>`,
-  {wide: true, foot: `<button class="btn ter" data-close>Fermer</button>${assocButton(v)}`});
+    <section class="fsec"><h3>${ic('plant')}Parcelles (${v.parcels.length}) : un inspecteur par clé CLE</h3>
+      ${v.parcels.map(x => `<div class="road-p"><div class="road-h"><h4 style="margin:.6rem 0 .3rem">${esc(x.key)}</h4>${pInsp(x) ? `<span class="tag">${ic('shield')} ${esc(personName(S.inspById.get(pInsp(x))))}</span>` : '<span class="badge st-none">Sans inspecteur</span>'}<span style="margin-left:auto">${assocButton(x)}</span></div>
+        <div class="fgrid">${infoField('Culture en place', x.rdv && x.rdv.Culture_en_place, 'Text')}${infoField('Commentaire', x.rdv && x.rdv.Commentaire, 'Text', true)}</div>${parcelInfo(x)}</div>`).join('')}</section>`,
+  {wide: true, foot: `<button class="btn ter" data-close>Fermer</button>${S.me && free > 1 ? `<button class="btn" data-assoc="all:${esc(v.key)}">${ic('add')}Prendre les ${free} parcelles libres</button>` : ''}`});
 }
 
 /* ---------- Préleveurs / inspecteurs ---------- */
@@ -2335,6 +2420,8 @@ document.addEventListener('click', e => {
   if (t.closest('[data-grid-imp]')) { pickGridFile(); return; }
   const ia = t.closest('[data-assoc]'); if (ia) { e.stopPropagation(); toggleAssoc(ia.dataset.assoc, ia); return; }
   const vis = t.closest('[data-visit]'); if (vis) { const v = S.visitByKey.get(vis.dataset.visit); if (v) { if (S.cfg.inspectorOnly || S.tab === 'espace') openVisitInspect(v.key); else openFiche(v.farm.key); } return; }
+  const fh = t.closest('[data-fiche-insp]');
+  if (fh) { const f = S.farms.get(fh.dataset.ficheInsp), v = f && (f.visits.find(x => x.start.getTime() >= Date.now()) || f.visits[f.visits.length - 1]); if (v) openVisitInspect(v.key); return; }
   const fi = t.closest('[data-fiche]'); if (fi) { e.stopPropagation(); openFiche(fi.dataset.fiche); return; }
   const qh = t.closest('[data-qfarm]');
   if (qh) { const f = S.farms.get(qh.dataset.qfarm), v = f && (f.visits.find(x => x.start.getTime() >= Date.now()) || f.visits[f.visits.length - 1]);
@@ -2487,7 +2574,7 @@ async function seedDemoRdv() {
     const s = slots[i], st = s ? 'Rdv pris' : ['Injoignable', 'Refus', 'Faux numéro', null][i % 4];
     f.parcels.forEach((x, j) => acts.push(['AddRecord', T_RDV, null, {Cle_parcelle: cleVal(x.key), N_dossier_DN: Number(x.src.dossier_number), Statut: st,
       Date_heure_appel_1: wallToEpoch(y, m + 1, 1, 10, 0, TZ), Presence_souhaitee_agriculteur: i % 2 ? 'Oui' : 'Non',
-      Preleveur: s ? (i % 3) + 1 : 0, Inspecteur: s && i % 2 === 1 ? ((i >> 1) % 2) + 1 : 0, Date_RDV: s ? (d => wallToEpoch(d.getFullYear(), d.getMonth() + 1, d.getDate(), s[1], s[2] + (i === 4 ? j * 45 : 0), TZ))(addDays(now, s[0])) : null, Duree_min: 60, Culture_en_place: x.src.Culture_2026}]));
+      Preleveur: s ? (i % 3) + 1 : 0, Inspecteur: s && i % 2 === 1 && j === 0 ? ((i >> 1) % 2) + 1 : 0, Date_RDV: s ? (d => wallToEpoch(d.getFullYear(), d.getMonth() + 1, d.getDate(), s[1], s[2] + (i === 4 ? j * 45 : 0), TZ))(addDays(now, s[0])) : null, Duree_min: 60, Culture_en_place: x.src.Culture_2026}]));
   });
   await B.apply(acts);
 }
