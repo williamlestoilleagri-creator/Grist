@@ -56,7 +56,24 @@
   .ligne-btn .fr-btn { flex: 1; justify-content: center; }
   /* Rendez-vous pris par date */
   #barre-date { background: var(--bleu-france-clair); border-left: 4px solid var(--bleu-france); padding: 8px 10px; margin-bottom: 10px; }
-  #barre-date .titre-date { font-weight: 700; font-size: 14px; color: var(--bleu-france); margin-bottom: 6px; }
+  #barre-recherche { margin-bottom: 4px; }
+  /* Blocs rétractables : date, recherche, liste des résultats */
+  .tete-pli {
+    display: flex; align-items: center; gap: 6px; width: 100%; border: 0; background: none; padding: 2px 0; margin: 0;
+    cursor: pointer; text-align: left; font: inherit; color: inherit;
+  }
+  .tete-pli .titre-pli { flex: 1; font-weight: 700; font-size: 14px; color: var(--bleu-france); }
+  .tete-pli .resume-pli { font-size: 12px; color: var(--gris-mention); font-weight: 600; white-space: nowrap; }
+  .chevron::before { content: "▾"; display: inline-block; color: var(--bleu-france); font-size: 15px; transition: transform .15s; }
+  .plie .chevron::before, body.liste-pliee #tete-liste .chevron::before { transform: rotate(-90deg); }
+  .barre-pliable:not(.plie) .resume-pli { display: none; }
+  .barre-pliable .corps-pli { margin-top: 6px; }
+  .barre-pliable.plie .corps-pli { display: none; }
+  #tete-liste { padding: 8px 12px; border-bottom: 1px solid var(--gris-bordure); }
+  #tete-liste .titre-pli { font-weight: 400; color: #161616; }
+  #tete-liste .titre-pli b { color: var(--bleu-france); }
+  #tete-liste .titre-pli .rouge { color: var(--rouge-marianne); font-weight: 700; }
+  @media (min-width: 701px) { body.liste-pliee #contenu { display: none; } }
   #barre-date .ligne-date { display: flex; gap: 4px; align-items: center; }
   #barre-date input.fr-input { flex: 1; min-width: 9.5rem; margin: 0; font-size: 14px; background-color: #fff; }
   #barre-date .fr-btn { flex: 0 0 auto; }
@@ -180,19 +197,34 @@
     #outils { padding: 0 12px 8px; border-bottom: 1px solid var(--gris-bordure); }
     #filtres { margin-top: 0; }
     body[data-feuille="bas"] #outils, body[data-feuille="bas"] #contenu { visibility: hidden; }
-    /* recherche flottante en haut de la carte */
-    #barre-recherche {
-      position: fixed; top: calc(var(--haut-entete) + 8px); left: 8px; right: 8px; z-index: 1200;
-      display: flex; gap: 6px; align-items: stretch; background: #fff; padding: 6px; border-radius: 10px;
-      box-shadow: 0 2px 10px rgba(0, 0, 18, .25); visibility: visible;
+    /* recherche et date flottantes en haut de la carte, chacune rétractable en petit bouton */
+    #barres {
+      position: fixed; top: calc(var(--haut-entete) + 8px); left: 8px; right: 8px; z-index: 1200; visibility: visible;
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; pointer-events: none;
     }
+    #barres > * { pointer-events: auto; }
+    .barre-pliable {
+      display: flex; gap: 6px; align-items: stretch; flex: 1 1 100%; min-width: 0; margin: 0; padding: 6px;
+      border-left: 0; border-radius: 10px; background: #fff; box-shadow: 0 2px 10px rgba(0, 0, 18, .25);
+    }
+    #barre-recherche { order: 1; }
+    #barre-date { order: 2; padding: 5px 6px; margin: 0; border-left: 0; background: #fff; }
+    .barre-pliable .corps-pli { flex: 1; min-width: 0; margin: 0; }
+    #barre-recherche .corps-pli { display: flex; gap: 6px; align-items: stretch; }
+    #barre-recherche.plie .corps-pli { display: none; }
+    .barre-pliable.plie { flex: 0 0 auto; padding: 4px; }
+    .tete-pli {
+      order: 2; flex: 0 0 auto; width: 34px; min-height: 40px; justify-content: center; padding: 0;
+      border-radius: 8px; background: #f0f0f8;
+    }
+    .tete-pli .titre-pli .txt, .barre-pliable:not(.plie) .tete-pli .titre-pli { display: none; }
+    .tete-pli .titre-pli { flex: 0 0 auto; font-size: 18px; }
+    .chevron::before { transform: rotate(180deg); }
+    .plie .chevron::before { transform: none; }
+    .plie .tete-pli { width: auto; padding: 0 10px; background: #fff; }
+    #tete-liste { display: none; }
     #barre-recherche label { display: none; }
-    /* sélection du jour, sous la recherche */
-    #barre-date {
-      position: fixed; top: calc(var(--haut-entete) + 70px); left: 8px; right: 8px; z-index: 1200; visibility: visible;
-      margin: 0; padding: 5px 6px; border-left: 0; border-radius: 10px; background: #fff; box-shadow: 0 2px 10px rgba(0, 0, 18, .25);
-    }
-    #barre-date .titre-date, #barre-date #jour-info, #jour-aujourdhui { display: none; }
+    #jour-info, #jour-aujourdhui { display: none; }
     #barre-date .ligne-date::before { content: "📅"; font-size: 18px; padding: 0 2px; }
     #barre-date input.fr-input { font-size: 16px; height: 40px; padding: 6px 8px; background-color: var(--bleu-france-clair); }
     #barre-date input.fr-input { min-width: 0; }
@@ -206,7 +238,7 @@
     #barre-recherche .ligne-btn .fr-btn { width: 44px; min-height: 44px; padding: 0; font-size: 0; justify-content: center; }
     #barre-recherche .ligne-btn .fr-btn::before { margin: 0 !important; --icon-size: 1.4rem; }
     #filtre.fr-input { font-size: 16px; }
-    .leaflet-top { top: 118px; }
+    .leaflet-top { top: calc(var(--haut-barres, 102px) + 16px); }
     .leaflet-control-layers-toggle { width: 40px; height: 40px; }
     .leaflet-touch .leaflet-bar a { width: 40px; height: 40px; line-height: 40px; }
     /* éléments plus grands au doigt */
@@ -237,8 +269,13 @@
       <span class="ligne"><span id="resume">Chargement…</span><span class="fleche" id="fleche">Liste ▴</span></span>
     </button>
     <div id="outils">
-      <div id="barre-date">
-        <div class="titre-date">📅 Visualiser les rendez-vous pris par date</div>
+      <div id="barres">
+      <div id="barre-date" class="barre-pliable">
+        <button type="button" class="tete-pli" data-pli="date" aria-controls="corps-date" aria-expanded="true">
+          <span class="titre-pli"><span class="ico">📅</span><span class="txt"> Visualiser les rendez-vous pris par date</span></span>
+          <span class="resume-pli" id="resume-date"></span><span class="chevron" aria-hidden="true"></span>
+        </button>
+        <div class="corps-pli" id="corps-date">
         <div class="ligne-date">
           <button id="jour-prec" type="button" class="fr-btn fr-btn--sm fr-btn--tertiary fr-icon-arrow-left-s-line" title="Jour précédent avec des rendez-vous">Jour précédent</button>
           <input id="jour" type="date" class="fr-input" aria-label="Date des rendez-vous">
@@ -247,8 +284,14 @@
           <button id="jour-effacer" type="button" class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline fr-icon-close-line" title="Revenir à tous les rendez-vous">Tous les rendez-vous</button>
         </div>
         <div id="jour-info" class="mention">Choisissez une date dans le calendrier : la carte n’affiche alors que les rendez-vous de ce jour.</div>
+        </div>
       </div>
-      <div id="barre-recherche">
+      <div id="barre-recherche" class="barre-pliable">
+        <button type="button" class="tete-pli" data-pli="recherche" aria-controls="corps-recherche" aria-expanded="true">
+          <span class="titre-pli"><span class="ico">🔍</span><span class="txt"> Rechercher des parcelles</span></span>
+          <span class="resume-pli" id="resume-recherche"></span><span class="chevron" aria-hidden="true"></span>
+        </button>
+        <div class="corps-pli" id="corps-recherche">
         <label class="fr-label fr-text--sm fr-mb-1v" for="cles">Rechercher une ou plusieurs parcelles (PACAGE-îlot-parcelle)</label>
         <textarea id="cles" class="fr-input" rows="1" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false"
           placeholder="Clé parcelle, ex. 029151853-2-2" title="Séparez les clés par des espaces, virgules, points-virgules ou retours à la ligne"></textarea>
@@ -256,6 +299,8 @@
           <button id="chercher" type="button" class="fr-btn fr-btn--sm fr-icon-search-line fr-btn--icon-left" title="Rechercher">Rechercher</button>
           <button id="effacer" type="button" class="fr-btn fr-btn--sm fr-btn--secondary fr-icon-close-line fr-btn--icon-left" title="Effacer">Effacer</button>
         </div>
+        </div>
+      </div>
       </div>
       <details id="filtres" open>
         <summary>Filtres et légende</summary>
@@ -265,6 +310,9 @@
         <div id="legende"></div>
       </details>
     </div>
+    <button id="tete-liste" type="button" class="tete-pli" data-pli="liste" aria-controls="contenu" aria-expanded="true">
+      <span class="titre-pli" id="titre-liste">Liste</span><span class="chevron" aria-hidden="true"></span>
+    </button>
     <div id="contenu"><p class="vide">Chargement…</p></div>
   </aside>
   <div id="carte">
@@ -634,7 +682,7 @@
   function marges() {
     if (!mobile.matches) return { haut: 40, bas: 40 };
     const panneau = etatFeuille === 'bas' ? 76 : $('panneau').offsetHeight;
-    return { haut: 124, bas: Math.min(panneau, $('corps').clientHeight * 0.7) + 20 };
+    return { haut: $('barres').offsetHeight + 24, bas: Math.min(panneau, $('corps').clientHeight * 0.7) + 20 };
   }
   function cadrer(l, zoomMax) {
     const pts = l.filter(function (r) { return r.localise; }).map(function (r) { return [r.lat, r.lon]; });
@@ -685,6 +733,7 @@
         (nonLoc ? ' · <span class="rouge">' + nonLoc + ' non localisées</span>' : '');
     }
     $('resume').innerHTML = t;
+    $('titre-liste').innerHTML = t;
   }
 
   function legende() {
@@ -861,6 +910,7 @@
     else html = jourChoisi ? vueJour() : vueCommunes();
     $('contenu').innerHTML = html;
     majResume();
+    majResumesPlis();
     const actif = document.querySelector('.rdv.actif');
     if (actif) {   // on fait défiler la liste seulement (scrollIntoView déplacerait toute la page sur téléphone)
       const c = $('contenu'), d = actif.getBoundingClientRect().top - c.getBoundingClientRect().top;
@@ -1041,6 +1091,7 @@
   function ouvrirPanneau() {
     if (mobile.matches) { if (etatFeuille === 'bas') feuille('mi'); return; }
     if (document.body.classList.contains('panneau-ferme')) definirPanneau(true);
+    if (plis.liste) plier('liste', false);   // liste repliée : on la rouvre pour montrer la sélection
   }
   $('basculer').addEventListener('click', function () { definirPanneau(document.body.classList.contains('panneau-ferme')); });
   $('basculer-carte').addEventListener('click', function () { definirPanneau(true); });
@@ -1051,7 +1102,7 @@
   let etatFeuille = 'bas';
   function hauteurs() {
     // en plein écran, le panneau s'arrête sous la barre de recherche pour garder la poignée accessible
-    const h = $('corps').clientHeight, barre = $('barre-recherche').offsetHeight + $('barre-date').offsetHeight + 20;
+    const h = $('corps').clientHeight, barre = $('barres').offsetHeight + 20;
     return { bas: 76, mi: Math.round(h * 0.55), haut: Math.max(200, h - barre) };
   }
   function feuille(etat) {
@@ -1095,14 +1146,55 @@
     p.addEventListener('pointerup', fin);
     p.addEventListener('pointercancel', fin);
   })();
+  // ---------- Blocs rétractables : date, recherche, liste (état mémorisé) ----------
+  const CLE_PLIS = 'carte-prelevement-plis';
+  let plis = {};
+  try { plis = JSON.parse(localStorage.getItem(CLE_PLIS)) || {}; } catch (e) { plis = {}; }
+  function appliquerPlis() {
+    for (const t of document.querySelectorAll('.tete-pli')) {
+      const nom = t.dataset.pli, replie = !!plis[nom];
+      if (nom === 'liste') document.body.classList.toggle('liste-pliee', replie);
+      else t.parentElement.classList.toggle('plie', replie);
+      t.setAttribute('aria-expanded', String(!replie));
+      t.title = replie ? 'Déplier' : 'Replier';
+    }
+    majBarres();
+  }
+  function plier(nom, replie) {
+    plis[nom] = replie;
+    try { localStorage.setItem(CLE_PLIS, JSON.stringify(plis)); } catch (e) { /* stockage indisponible */ }
+    appliquerPlis();
+    setTimeout(function () { carte.invalidateSize(); }, 50);
+  }
+  // Hauteur des barres flottantes (téléphone) : place des boutons de zoom et du panneau plein écran
+  function majBarres() {
+    document.documentElement.style.setProperty('--haut-barres', $('barres').offsetHeight + 'px');
+    if (mobile.matches) feuille(etatFeuille);
+  }
+  function jourCourt(k) {
+    const [y, m, d] = k.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString('fr-FR', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short' });
+  }
+  // Ce qui reste visible quand un bloc est replié
+  function majResumesPlis() {
+    $('resume-date').textContent = jourChoisi ? jourCourt(jourChoisi) : 'Tous les RDV';
+    const n = vue.type === 'recherche' && !vue.titre ? vue.trouves.length : null;
+    $('resume-recherche').textContent = n === null ? '' : n + ' trouvée' + (n > 1 ? 's' : '');
+  }
+  document.querySelectorAll('.tete-pli').forEach(function (t) {
+    t.addEventListener('click', function () { plier(t.dataset.pli, !plis[t.dataset.pli]); });
+  });
+  appliquerPlis();
+
   function adapter() {
     majHautEntete();
+    majBarres();
     if (mobile.matches) $('filtres').open = false;
     feuille(mobile.matches ? etatFeuille : 'bas');
     setTimeout(function () { carte.invalidateSize(); }, 60);
   }
   if (mobile.addEventListener) mobile.addEventListener('change', adapter); else mobile.addListener(adapter);
-  window.addEventListener('resize', function () { majHautEntete(); if (mobile.matches) feuille(etatFeuille); });
+  window.addEventListener('resize', function () { majHautEntete(); majBarres(); });
   adapter();
 
   // ---------- Copie ----------
