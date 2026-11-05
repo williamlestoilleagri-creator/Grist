@@ -355,6 +355,7 @@
   .esp-row .s{font-size:.8rem;color:var(--mention);display:flex;gap:12px;flex-wrap:wrap}
   .esp-parcs{display:flex;flex-direction:column;gap:4px;margin-top:6px}
   .esp-parc{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:4px 8px;background:var(--alt);font-size:.82rem;color:var(--title)}
+  .esp-parc .t{font-weight:700;color:var(--bf)}
   .esp-parc .btn{min-height:1.6rem;padding:0 .6rem;font-size:.8rem;margin-left:auto}
   @media (max-width:720px){.esp-row{grid-template-columns:60px 1fr}.esp-row .act{grid-column:2}}
 
@@ -2229,7 +2230,8 @@ function assocButton(x) {
 async function toggleAssoc(ref, btn) {
   if (!S.me) return;
   const all = ref.startsWith('all:'), items = parcelItems();
-  const targets = all ? items.filter(it => it.v.key === ref.slice(4) && !it.insp) : items.filter(it => it.x.rdv && String(it.x.rdv.id) === ref);
+  const keys = all ? ref.slice(4).split('|') : [];
+  const targets = all ? items.filter(it => keys.includes(it.v.key) && !it.insp) : items.filter(it => it.x.rdv && String(it.x.rdv.id) === ref);
   if (!targets.length) return;
   const it = targets[0], leaving = !all && it.insp === S.me;
   if (!leaving && !all && it.insp) { toast('Cette parcelle a déjà un inspecteur : ' + personName(S.inspById.get(it.insp)) + '.', true); return; }
@@ -2277,18 +2279,21 @@ function histTable(list) {
   </tbody></table></div>`;
 }
 
-function espRow(v, opts = {}) {
-  const f = v.farm, p = S.prelById.get(v.prel), mineAll = v.parcels.length && v.parcels.every(x => pInsp(x) === S.me);
-  const free = v.parcels.filter(x => !pInsp(x) && x.rdv).length;
-  return `<div class="esp-row${mineAll ? ' mine' : ''}" data-visit="${esc(v.key)}" role="button" tabindex="0">
-    <span class="h">${hm(v.start)}<br><span class="sub">→ ${hm(v.end)}</span></span>
-    <span><span class="n">${esc(f.name)}</span> <span class="sub">PACAGE ${esc(f.pacage)} · ${esc(f.Ville || f.Departement || 'dpt ' + f.dpt)}</span>
-      <span class="s">${f.Adresse_complete ? `<span>${ic('pin')} ${esc(f.Adresse_complete)}</span>` : ''}${p ? `<span>${ic('user')} Préleveur : ${esc(personName(p))}</span>` : ''}</span>
-      <span class="esp-parcs">${v.parcels.map(x => { const done = opts.done && opts.done.has(keyNorm(x.key));
-        return `<span class="esp-parc"><b>${esc(x.key)}</b>${x.rdv && clean(x.rdv.Culture_en_place) ? `<span class="sub">${esc(clean(x.rdv.Culture_en_place))}</span>` : ''}
-          ${opts.grid ? (done ? '<span class="badge st-pris">Grille saisie</span>' : v.end < new Date() ? '<span class="badge st-refus">Grille à saisir</span>' : '<span class="badge st-none">À contrôler</span>') : ''}
+// une exploitation sur une journée : tous ses rendez-vous et toutes ses parcelles (avec leur heure)
+function espRow(g, opts = {}) {
+  const f = g.farm, prels = Array.from(new Set(g.visits.map(v => v.prel).filter(Boolean))).map(id => personName(S.prelById.get(id)));
+  const items = g.visits.flatMap(v => v.parcels.map(x => ({v, x}))), now = new Date();
+  const mineAll = items.length && items.every(it => pInsp(it.x) === S.me), free = items.filter(it => !pInsp(it.x) && it.x.rdv).length;
+  const nTimes = new Set(g.visits.map(v => v.start.getTime())).size;
+  return `<div class="esp-row${mineAll ? ' mine' : ''}" data-visit="${esc(g.visits[0].key)}" role="button" tabindex="0">
+    <span class="h">${hm(g.start)}<br><span class="sub">→ ${hm(g.end)}</span></span>
+    <span><span class="n">${esc(f.name)}</span> <span class="sub">PACAGE ${esc(f.pacage)} · ${esc(f.Ville || f.Departement || 'dpt ' + f.dpt)} · ${items.length} parcelle(s)</span>
+      <span class="s">${f.Adresse_complete ? `<span>${ic('pin')} ${esc(f.Adresse_complete)}</span>` : ''}${prels.length ? `<span>${ic('user')} Préleveur : ${esc(prels.join(', '))}</span>` : ''}</span>
+      <span class="esp-parcs">${items.map(({v, x}) => { const done = opts.done && opts.done.has(keyNorm(x.key));
+        return `<span class="esp-parc">${nTimes > 1 ? `<span class="t">${hm(v.start)}</span>` : ''}<b>${esc(x.key)}</b>${x.rdv && clean(x.rdv.Culture_en_place) ? `<span class="sub">${esc(clean(x.rdv.Culture_en_place))}</span>` : ''}
+          ${opts.grid ? (done ? '<span class="badge st-pris">Grille saisie</span>' : v.end < now ? '<span class="badge st-refus">Grille à saisir</span>' : '<span class="badge st-none">À contrôler</span>') : ''}
           ${assocButton(x)}</span>`; }).join('')}</span></span>
-    <span class="act">${opts.takeAll && free > 1 ? `<button class="btn sec" data-assoc="all:${esc(v.key)}">${ic('add')}Prendre les ${free} parcelles</button>` : ''}</span></div>`;
+    <span class="act">${opts.takeAll && free > 1 ? `<button class="btn sec" data-assoc="all:${esc(g.visits.map(v => v.key).join('|'))}">${ic('add')}Prendre les ${free} parcelles</button>` : ''}</span></div>`;
 }
 function renderEspace() {
   const insp = S.insp.filter(p => p.Actif !== false || p.id === S.me).sort((a, b) => personName(a).localeCompare(personName(b)));
@@ -2305,7 +2310,9 @@ function renderEspace() {
   const histF = hist.filter(e => !q || norm([e.key, e.lieu, e.prel, e.g.name, (farmOfKey(e.key) || {}).name].join(' ')).includes(q));
   const avail = S.visits.filter(v => v.end >= now && (!until || v.start < until) && v.statut === 'Rdv pris' && v.parcels.some(x => !pInsp(x) || S.espTaken)
     && (!S.espMine || !dpts.length || dpts.includes(dptNorm(v.farm.dpt))) && match(v));
-  const group = (list, opts) => { const m = byDay(list), ks = Object.keys(m).sort(); return ks.map(k => `<section class="agenda-day"><h3><span style="text-transform:capitalize">${esc(fullDate(m[k][0].start))}</span><span class="sub">${m[k].reduce((t, v) => t + v.parcels.length, 0)} parcelle(s)</span></h3>${m[k].map(v => espRow(v, opts)).join('')}</section>`).join(''); };
+  // jour > exploitation (rendez-vous d'une même exploitation regroupés)
+  const group = (list, opts) => { const m = byDay(list), ks = Object.keys(m).sort(); return ks.map(k => { const gs = groupByFarm(m[k]);
+    return `<section class="agenda-day"><h3><span style="text-transform:capitalize">${esc(fullDate(m[k][0].start))}</span><span class="sub">${gs.length} exploitation(s) · ${gs.reduce((t, g) => t + g.nParc, 0)} parcelle(s)</span></h3>${gs.map(g => espRow(Object.assign(g, {end: new Date(Math.max(...g.visits.map(v => v.end.getTime())))}), opts)).join('')}</section>`; }).join(''); };
   const nParc = list => list.reduce((t, v) => t + v.parcels.length, 0);
   $('#main').innerHTML = `<div class="section-head"><h2>${ic('shield')} Espace inspecteur FranceAgriMer</h2>
       ${S.me ? `<button class="btn ter" data-sel="insp:${S.me}">${ic('calendar')}Mon planning dans le calendrier</button>` : ''}</div>
@@ -2331,7 +2338,7 @@ function renderEspace() {
           ${histF.length ? histTable(histF.slice(0, 300)) + (histF.length > 300 ? `<p class="sub">${histF.length - 300} contrôle(s) de plus : affinez la recherche.</p>` : '')
             : '<p class="muted">Aucune grille d\'évaluation saisie à votre nom pour l\'instant. Elles apparaissent ici après l\'import du fichier de retour (contrôleur = votre nom).</p>'}</section>
         ${gridSection({id: 'a-esp-grids'})}
-        <section class="fsec" id="a-esp-rdv"><h3>${ic('calendar')}Parcelles à contrôler ${S.espTaken ? '' : 'sans inspecteur '}(${avail.length} rendez-vous)</h3>
+        <section class="fsec" id="a-esp-rdv"><h3>${ic('calendar')}Parcelles à contrôler ${S.espTaken ? '' : 'sans inspecteur '}(${new Set(avail.map(v => v.farm.key + dkey(v.start))).size} exploitation(s) · ${nParc(avail)} parcelle(s))</h3>
           ${avail.length ? group(avail, {takeAll: true}) : '<p class="muted">Aucun rendez-vous sur la période.</p>'}</section>`}`;
   $('#eMe').onchange = e => { setMe(Number(e.target.value) || 0); S.espMine = true; renderEspace(); };
   $('#eRange').onchange = e => { S.espRange = Number(e.target.value); renderEspace(); };
