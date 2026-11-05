@@ -322,6 +322,13 @@
   .parcel{border:1px solid var(--border);border-left:3px solid var(--bf);padding:.75rem 1rem .25rem;margin-bottom:12px}
   .parcel-head{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:.6rem}
   .parcel-head .btn{margin-left:auto}
+  /* champs d'une parcelle : 4 colonnes égales, libellés sur une ligne, champs alignés */
+  .parcel .row{grid-template-columns:repeat(4,minmax(0,1fr));align-items:end}
+  .parcel .row .grp{margin-bottom:.75rem}
+  .parcel label.lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .parcel .input,.parcel .select{min-height:2.5rem;height:2.5rem}
+  .parcel textarea.input{height:auto}
+  @media (max-width:720px){.parcel .row{grid-template-columns:repeat(2,minmax(0,1fr))}}
   .pinfo{background:var(--alt);padding:.75rem 1rem;margin-bottom:.75rem}
   .pinfo h4,.road-p h4{font-size:.85rem;color:var(--bf);margin:.75rem 0 .4rem}
   .pinfo h4.warn{color:var(--warning)}
@@ -1284,9 +1291,9 @@ function openFiche(farmKey, opts = {}) {
           <button type="button" class="btn ghost" data-toggle="pi${i}">${ic('info')}Infos préleveur</button></div>
         <div class="row">
           <div class="grp"><label class="lbl" for="c${i}">Culture en place</label><input class="input" id="c${i}" value="${esc(cult)}"></div>
-          <div class="grp"><label class="lbl" for="af${i}">Absence de fertilisation récente</label>${yn('af' + i, r.Absence_fertilisation_recente)}</div>
+          <div class="grp"><label class="lbl" for="af${i}" title="Absence de fertilisation récente">Sans fertilisation récente</label>${yn('af' + i, r.Absence_fertilisation_recente)}</div>
           <div class="grp"><label class="lbl" for="et${i}">Étiquette prélèvement</label><input class="input" id="et${i}" value="${esc(clean(r.Etiquette_prelevement))}"></div>
-          <div class="grp"><label class="lbl" for="ins${i}">Inspecteur FranceAgriMer<span class="hint">Contrôle de cette parcelle (facultatif)</span></label><select class="select" id="ins${i}" data-ins>${optList(people(S.insp, pInsp(x)), pInsp(x) || '', '— Aucun —')}</select></div>
+          <div class="grp"><label class="lbl" for="ins${i}" title="Inspecteur FranceAgriMer qui contrôle cette parcelle (facultatif)">Inspecteur (contrôle)</label><select class="select" id="ins${i}" data-ins>${optList(people(S.insp, pInsp(x)), pInsp(x) || '', '— Aucun —')}</select></div>
         </div>
         <div class="grp"><label class="lbl" for="co${i}">Commentaire</label><textarea class="input" id="co${i}" rows="2" style="min-height:2.6rem">${esc(clean(r.Commentaire))}</textarea></div>
         <div class="pinfo" id="pi${i}" hidden>${parcelInfo(x)}</div></div>`; }).join('')}
