@@ -665,10 +665,12 @@ const LocalBackend = {
   async meta() {
     const T = {id: [], tableId: [], summarySourceTable: []}, C = {id: [], parentId: [], colId: [], label: [], type: [], isFormula: [], formula: [], visibleCol: [], widgetOptions: []};
     let tr = 0, cr = 0;
+    // « Montrer la colonne » d'une référence (démo) : showCol = nom de la colonne affichée dans la table cible
+    const ids = {}; let k = 0; for (const [tid, t] of Object.entries(this.db)) t.cols.forEach(c => { ids[tid + '.' + c.id] = ++k; });
     for (const [tid, t] of Object.entries(this.db)) {
       tr++; T.id.push(tr); T.tableId.push(tid); T.summarySourceTable.push(0); (this.rowOf = this.rowOf || {})[tr] = tid;
       t.cols.forEach(c => { cr++; C.id.push(cr); C.parentId.push(tr); C.colId.push(c.id); C.label.push(c.label || c.id); C.type.push(c.type || 'Any');
-        C.isFormula.push(!!c.isFormula); C.formula.push(c.formula || ''); C.visibleCol.push(0); C.widgetOptions.push(c.widgetOptions || ''); });
+        C.isFormula.push(!!c.isFormula); C.formula.push(c.formula || ''); C.visibleCol.push(c.showCol ? ids[(c.type || '').slice(4) + '.' + c.showCol] || 0 : 0); C.widgetOptions.push(c.widgetOptions || ''); });
     }
     return parseMeta(T, C);
   },
@@ -806,7 +808,7 @@ function buildModel() {
 }
 
 // Lieux de stockage
-const lieuName = l => l ? (clean(l.Organisme) || clean(l.Responsable) || 'Lieu n° ' + l.id) : 'Lieu inconnu';
+const lieuName = l => l ? (clean(l.Ville) || clean(l.Adresse) || clean(l.Organisme) || 'Lieu n° ' + l.id) : 'Lieu inconnu';
 async function loadData() {
   S.meta = await B.meta();
   const defOk = S.cfg.defTable && S.meta[S.cfg.defTable] && cols(S.cfg.defTable)[S.cfg.defKey];
@@ -1859,20 +1861,27 @@ function hintCol(c) {
   const ref = {Controleur: 'Ref:' + T_INSP, Nom_du_controleur: 'Ref:' + T_INSP, Preleveur: 'Ref:' + T_PREL}[c.colId];
   return ref ? Object.assign({}, c, {type: ref}) : c;
 }
-async function refOptions(tg) {
-  let rows, lab;
-  if (tg === T_INSP) { rows = S.insp; lab = personName; }
-  else if (tg === T_PREL) { rows = S.prel; lab = personName; }
-  else if (tg === T_STOCK) { rows = S.stock; lab = lieuName; }
-  else if (tg === S.cfg.parcTable) { rows = S.parc; lab = r => clean(r[S.cfg.parcKey]); }
-  else {
-    try { rows = S.meta[tg] ? await B.fetch(tg) : []; } catch (e) { rows = []; }
-    const tc = Object.values(cols(tg)).find(c => c.type === 'Text'); lab = r => tc ? clean(r[tc.colId]) : String(r.id);
-  }
-  const seen = new Set(), out = [];
-  rows.forEach(r => { const l = lab(r); if (l && !seen.has(l)) { seen.add(l); out.push({id: r.id, label: l}); } });
-  return out.sort((a, b) => a.label.localeCompare(b.label, 'fr', {numeric: true}));
+// libellés proposés pour une colonne Référence : ceux de la colonne affichée dans Grist (« Montrer la colonne »),
+// rendus uniques (deux lignes de même libellé sont distinguées par leur adresse ou leur numéro)
+async function refOptions(tg, showRowId = 0) {
+  let rows;
+  if (tg === T_INSP) rows = S.insp; else if (tg === T_PREL) rows = S.prel; else if (tg === T_STOCK) rows = S.stock; else if (tg === S.cfg.parcTable) rows = S.parc;
+  else { try { rows = S.meta[tg] ? await B.fetch(tg) : []; } catch (e) { rows = []; } }
+  const tc = cols(tg), show = Object.values(tc).find(c => showRowId && c.rowId === showRowId);
+  const lab = tg === T_INSP || tg === T_PREL ? personName
+    : show ? r => fmtAny(r[show.colId], show.type)
+    : tg === S.cfg.parcTable ? r => clean(r[S.cfg.parcKey])
+    : tg === T_STOCK ? lieuName
+    : (c => r => c ? clean(r[c.colId]) : String(r.id))(Object.values(tc).find(c => c.type === 'Text'));
+  const base = rows.map(r => ({id: r.id, label: lab(r), r})).filter(o => o.label);
+  const n = new Map(); base.forEach(o => n.set(o.label, (n.get(o.label) || 0) + 1));
+  const extra = r => clean(r.Adresse) || clean(r.Responsable) || clean(r.Organisme) || 'n° ' + r.id;
+  const out = base.map(o => ({id: o.id, label: n.get(o.label) > 1 ? `${o.label} — ${extra(o.r)}` : o.label}));
+  const seen = new Set();
+  return out.filter(o => !seen.has(o.label) && seen.add(o.label)).sort((a, b) => a.label.localeCompare(b.label, 'fr', {numeric: true}));
 }
+const refKey = c => c.type.slice(c.type.indexOf(':') + 1) + '#' + (c.visibleCol || 0);
+async function refOpts(c, cache) { const k = refKey(c); if (!cache.has(k)) cache.set(k, await refOptions(c.type.split(':')[1], c.visibleCol || 0)); return cache.get(k); }
 function matchRef(tg, opts, v) {
   if (typeof v === 'number' && opts.some(o => o.id === v)) return v;
   const s = clean(v); if (!s) return 0;
@@ -1915,9 +1924,9 @@ async function convertCell(c, v, cache) {
   }
   if (ty === 'ChoiceList') return {v: ['L'].concat(s.split(/\s*[;,]\s*/).filter(Boolean))};
   if (ty.startsWith('Ref:') || ty.startsWith('RefList:')) {
-    const tg = ty.split(':')[1]; if (!cache.has(tg)) cache.set(tg, await refOptions(tg));
-    if (ty.startsWith('Ref:')) { const id = matchRef(tg, cache.get(tg), v); return id ? {v: id} : {err: `« ${s} » introuvable dans ${tg}`}; }
-    const parts = s.split(/\s*[;,]\s*/).filter(Boolean), ids = parts.map(x => matchRef(tg, cache.get(tg), x)), miss = parts.filter((x, i) => !ids[i]);
+    const tg = ty.split(':')[1], opts = await refOpts(c, cache);
+    if (ty.startsWith('Ref:')) { const id = matchRef(tg, opts, v); return id ? {v: id} : {err: `« ${s} » introuvable dans ${tg}`}; }
+    const parts = s.split(/\s*[;,]\s*/).filter(Boolean), ids = parts.map(x => matchRef(tg, opts, x)), miss = parts.filter((x, i) => !ids[i]);
     return miss.length ? {err: `introuvable dans ${tg} : ${miss.join(', ')}`} : {v: ['L'].concat(ids)};
   }
   return {v: s};
@@ -1963,8 +1972,8 @@ async function downloadGridTemplate({insp = 0, nRows = 30, tables = null} = {}) 
         const ty = hintCol(c).type, h = hintCol(c);
         if ((ty === 'Choice' || ty === 'ChoiceList') && (h.choices || []).length) kinds.push({ty, f: listRef('ch:' + h.choices.join('|'), h.choices)});
         else if (ty === 'Bool') kinds.push({ty, f: '"Oui,Non"'});
-        else if (c.colId === 'Lieu_de_stockage' && S.stock.length) kinds.push({ty, f: listRef('lieux', Array.from(new Set(S.stock.map(lieuName))).sort())});
-        else if (ty.startsWith('Ref:')) { const tg = ty.slice(4); if (!cache.has(tg)) cache.set(tg, await refOptions(tg)); kinds.push({ty, tg, f: listRef('ref:' + tg, cache.get(tg).map(o => o.label))}); }
+        else if (ty.startsWith('Ref:')) { const o = await refOpts(h, cache); kinds.push({ty, tg: ty.slice(4), f: listRef('ref:' + refKey(h), o.map(x => x.label))}); }
+        else if (c.colId === 'Lieu_de_stockage' && S.stock.length) { const o = await refOptions(T_STOCK); kinds.push({ty, f: listRef('lieux', o.map(x => x.label))}); }
         else kinds.push({ty});
       }
       const ws = wb.addWorksheet(g.sheet, {properties: {tabColor: {argb: g.color}}, views: [{state: 'frozen', ySplit: 4, xSplit: Math.min(2, N), showGridLines: false}],
@@ -2264,7 +2273,8 @@ function gridEntries() {
       else key = clean(cle.v);
       const prel = typeof pr.v === 'number' ? personName(S.prelById.get(pr.v)) : clean(pr.v);
       const nc = Object.entries(row).filter(([k, v]) => cm[k] && typeof v === 'string' && /^non conforme/.test(norm(v).trim())).length;
-      out.push({g, row, date, insp, key, keyN: keyNorm(key), lieu: clean(li.v), prel, nc});
+      const lieu = typeof li.v === 'number' && li.c && li.c.type === 'Ref:' + T_STOCK ? (r => { const sh = Object.values(cols(T_STOCK)).find(c => c.rowId === li.c.visibleCol); return r ? (sh ? fmtAny(r[sh.colId], sh.type) : lieuName(r)) : ''; })(S.stock.find(x => x.id === li.v)) : clean(li.v);
+      out.push({g, row, date, insp, key, keyN: keyNorm(key), lieu, prel, nc});
     }
   }
   return out;
@@ -2565,12 +2575,12 @@ function seedDemo() {
   };
   L.db.Q_QUADHYDRO = grid(false);
   L.db.Q_TAR_MANUELLE = grid(true);
-  L.db.Q_LIEUX_STOCKAGE = {next: 1, rows: [], cols: [empty('Nom_du_controleur', 'Ref:DATA_Inspecteur'), empty('Lieu_de_stockage', 'Text'), empty('Date_du_controle', 'Date'),
+  L.db.Q_LIEUX_STOCKAGE = {next: 1, rows: [], cols: [empty('Nom_du_controleur', 'Ref:DATA_Inspecteur'), Object.assign(empty('Lieu_de_stockage', 'Ref:DATA_Stockage'), {showCol: 'Ville'}), empty('Date_du_controle', 'Date'),
     empty('Temperature_congelateur_n_1', 'Numeric'), empty('Temperature_congelateur_n_2', 'Numeric'), empty('Temperature_congelateur_n_3', 'Numeric'), empty('Temperature_congelateur_n_4', 'Numeric'),
     empty('Conclusions_du_controleur', 'Text')]};
   L.db.DATA_Stockage = T([['Adresse'], ['Ville'], ['CP'], ['Responsable'], ['Organisme'], ['Nombre_d_echantillons_stockes', 'Numeric']]);
-  [['Zone artisanale de Kerbrat', 'Pontivy', '56300', 'M. Le Goff', 'Laboratoire Agro — dépôt Pontivy', 120], ['12 rue du Port', 'Plérin', '22190', 'Mme Tanguy', 'Point relais coopérative', 45],
-    ['Route de Brest', 'Landerneau', '29800', 'M. Kerjean', 'Chambre d\'agriculture — antenne', 60], ['Parc d\'activités', 'Janzé', '35150', 'Mme Robert', 'Dépôt laboratoire Janzé', 30]]
+  [['Zone artisanale de Kerbrat', 'Pontivy', '56300', 'M. Le Goff', 'AUREA', 120], ['12 rue du Port', 'Plérin', '22190', 'Mme Tanguy', 'AUREA', 45],
+    ['Route de Brest', 'Landerneau', '29800', 'M. Kerjean', 'AUREA', 60], ['Parc d\'activités', 'Janzé', '35150', 'Mme Robert', 'CAPINOV', 30], ['Le bourg', 'Pontivy', '56300', 'M. Even', 'CAPINOV', 20]]
     .forEach(([Adresse, Ville, CP, Responsable, Organisme, n]) => L.db.DATA_Stockage.rows.push({id: L.db.DATA_Stockage.next++, Adresse, Ville, CP, Responsable, Organisme, Nombre_d_echantillons_stockes: n}));
   // anciennes tables, pour montrer le renommage
   L.db.Preleveurs = T([['Nom'], ['Prenom'], ['Organisme'], ['Telephone'], ['Email'], ['Departements'], ['Actif', 'Bool'], ['Nom_complet']]);
