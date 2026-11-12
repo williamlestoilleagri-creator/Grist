@@ -8,6 +8,7 @@
 | `prise-rdv-calendrier.html` | Prise de rendez-vous (calendrier) |
 | `rdv/index.html` | Formulaire public de prise de rendez-vous |
 | `duo.html` | **Duo** — interprète à deux écouteurs (ex. japonais ⇄ allemand) |
+| `calculette-gren/` | **Calculette GREN** — dose prévisionnelle d'azote (méthode du bilan, Bretagne) et Plan Prévisionnel de Fumure |
 
 ## ERP « façon SAP » (`erp-sap.html`)
 
@@ -103,3 +104,21 @@ Langues proposées : japonais, allemand, français, anglais, espagnol, italien, 
 - Export par conversation en **TXT**, **CSV** (Excel) ou **JSON** ; export / import global en JSON pour sauvegarder ou changer d'appareil.
 
 > Astuce : gardez le micro du téléphone actif. Si le système bascule sur le micro des écouteurs Bluetooth, certains appareils passent en mode « appel » mono et la séparation gauche/droite est perdue.
+
+## Calculette GREN — fertilisation azotée (`calculette-gren/`)
+
+Application web autonome (un seul fichier HTML, sans serveur) pour calculer la **dose prévisionnelle d'azote** par la méthode du bilan selon le référentiel GREN Bretagne, et éditer le **Plan Prévisionnel de Fumure (PPF)**.
+
+En ligne (GitHub Pages) : `https://williamlestoilleagri-creator.github.io/Grist/calculette-gren/`
+
+- **Exploitation** : PACAGE, raison sociale, adresse, département, commune (recherche geo.api.gouv.fr), sol dominant, SAU — saisis une fois.
+- **Parcelles** : identifiant PACAGE_îlot_parcelle, surface, type de sol, zonage (Standard / ZAR / bassin versant) ; import CSV.
+- **Calcul des doses** : culture, rendement (référence GREN par département, historique sur 5 ans hors extrêmes, ou saisie libre), RSH (forfait ou analyse), CIPAN, pailles, irrigation, apports organiques, pâturage (convertisseur UGB). Formule affichée en blocs : besoins − fournitures ± corrections = dose, puis plafond.
+- **Mémoire pluriannuelle** : le précédent, l'arrière-effet des effluents N-1 et l'historique de rendements sont repris automatiquement à la campagne suivante.
+- **Groupes de parcelles** : proposés seulement si les 5 conditions sont réunies (sol, culture/précédent, historique organique, zonage, rendement) ; contrôle de conformité des groupes validés.
+- **Verrous** : blocage de toute saisie d'épandage dans une période d'interdiction (type I / II / III × culture × zone) et au-delà de 170 kg N organique / ha SAU.
+- **PPF** : impression / PDF et export CSV.
+- **Référentiel** entièrement modifiable (cultures, sols, précédents, CIPAN, effluents, calendrier, paramètres), exportable / importable en JSON.
+- Données enregistrées dans le navigateur (localStorage) + export / import de sauvegarde JSON. Installable sur téléphone et utilisable hors connexion.
+
+> ⚠ Les valeurs du référentiel livrées par défaut sont **indicatives** : elles doivent être vérifiées et corrigées au regard de l'arrêté référentiel GREN Bretagne et des arrêtés ZAR en vigueur. Outil d'aide à la décision, non réglementaire.
