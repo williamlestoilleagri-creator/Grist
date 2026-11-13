@@ -2078,20 +2078,35 @@ async function importGrids(file) {
     ${plans.map(p => p.skip ? `<div class="alert warn"><p>Feuille « ${esc(p.sheet)} » : en-têtes de grille introuvables, feuille ignorée.</p></div>` : `
     <section class="fsec"><h3>${ic('check')}${esc(p.g.name)} <span class="sub" style="font-weight:400">feuille « ${esc(p.sheet)} » → table <code>${p.g.t}</code></span></h3>
       <div class="kpis">${tile('Contrôles à ajouter', p.add.length)}${tile('Déjà présents (ignorés)', p.dup.length, 'var(--disabled)')}${tile('Lignes en erreur (non importées)', p.err.length, p.err.length ? 'var(--error)' : '')}${tile('Avertissements', p.warn.length, p.warn.length ? 'var(--warning)' : '')}</div>
-      ${p.conv.length ? `<p class="grid-note">${ic('info')} ${p.conv.length} colonne(s) encore vides dans Grist seront transformées en colonnes de données pour recevoir les valeurs.</p>` : ''}
+      ${p.conv.length ? `<p class="grid-note">${ic('info')} ${p.conv.length} colonne(s) encore vides dans Grist seront transformées en colonnes de données pour recevoir les valeurs (droit de modifier la structure du document nécessaire) : ${esc(p.conv.map(id => colLabel(cols(p.g.t)[id])).join(', '))}.</p>` : ''}
       ${p.notWritable.length ? `<p class="grid-note">${ic('info')} Colonnes calculées non importées : ${esc(p.notWritable.join(', '))}.</p>` : ''}
       ${p.add.length ? `<details><summary class="sub" style="cursor:pointer">Voir les ${p.add.length} contrôle(s) à ajouter</summary>${li(p.add, x => esc(x.label))}</details>` : ''}
       ${p.err.length ? `<h4 class="stock-h" style="color:var(--error)">${ic('warning')} Erreurs</h4>${li(p.err, x => esc(x.msg))}` : ''}
       ${p.warn.length ? `<h4 class="stock-h" style="color:var(--warning)">${ic('warning')} Avertissements (lignes importées quand même)</h4>${li(p.warn, x => esc(x.msg), 30)}` : ''}
     </section>`).join('')}
     ${!plans.length ? '<p class="muted">Aucune feuille de grille trouvée dans ce fichier : utilisez le fichier de retour téléchargé depuis le calendrier.</p>' : ''}
-    ${plans.length && !nAdd ? '<p class="muted">Rien à ajouter.</p>' : ''}`,
+    ${plans.length && !nAdd ? '<p class="muted">Rien à ajouter.</p>' : ''}<div id="gImpErr"></div>`,
   {wide: true, foot: `<button class="btn ter" data-close>Annuler</button>${nAdd ? `<button class="btn" id="gImp">${ic('check')}Importer ${nAdd} contrôle(s)</button>` : ''}`});
   if (!$('#gImp')) return;
   $('#gImp').onclick = async () => {
     $('#gImp').disabled = true;
+    // 1. colonnes encore vides à transformer en colonnes de données : modification de structure, réservée aux propriétaires du document
+    const conv = [];
+    ok.forEach(p => p.conv.forEach(id => { if (!conv.some(a => a[1] === p.g.t && a[2] === id)) conv.push(['ModifyColumn', p.g.t, id, {isFormula: false}]); }));
+    if (conv.length) {
+      try { await B.apply(conv); }
+      catch (e) {
+        console.error(e);
+        const byT = {}; conv.forEach(([, t, id]) => (byT[t] = byT[t] || []).push(colLabel(cols(t)[id])));
+        $('#gImpErr').innerHTML = `<div class="alert err"><h3>Import impossible avec votre compte</h3>
+          <p>Ces colonnes de grille sont encore des <b>colonnes vides</b> dans Grist. Pour y écrire, il faut les transformer en colonnes de données : c'est une modification de la structure du document, que les règles d'accès réservent aux propriétaires (${esc(e.message || e)}).</p>
+          <p><b>À faire une seule fois par un propriétaire du document</b> : ouvrir chaque table ci-dessous, sélectionner la colonne puis, dans le panneau de droite, « Transformer en colonne de données ». L'import fonctionnera ensuite pour tous les agents.</p>
+          <ul>${Object.entries(byT).map(([t, l]) => `<li><code>${esc(t)}</code> : ${esc(l.join(', '))}</li>`).join('')}</ul></div>`;
+        $('#gImpErr').scrollIntoView({block: 'nearest'}); $('#gImp').disabled = false;
+        return;
+      }
+    }
     const acts = [];
-    ok.forEach(p => p.conv.forEach(id => { if (!acts.some(a => a[1] === p.g.t && a[2] === id)) acts.push(['ModifyColumn', p.g.t, id, {isFormula: false}]); }));
     ok.forEach(p => p.add.forEach(x => acts.push(['AddRecord', p.g.t, null, x.f])));
     if (await write(acts, `${nAdd} contrôle(s) importé(s) : ` + ok.filter(p => p.add.length).map(p => `${p.g.name} ${p.add.length}`).join(', '))) closeModal();
   };
@@ -2123,12 +2138,17 @@ function gridSection({id, big = false}) {
   const gs = gridTables(), title = `${ic('upload')} Grilles d'évaluation des contrôles`;
   const head = big ? `<div class="section-head"><h2>${title}</h2><span class="muted">${GRID_TABLES.map(g => `<code>${g.t}</code>`).join(' · ')}</span></div>` : `<h3>${title}</h3>`;
   if (!gs.length) return `<section class="${big ? '' : 'fsec'}" id="${id}">${head}<div class="alert warn"><p>Aucune des tables ${GRID_TABLES.map(g => `<code>${g.t}</code>`).join(', ')} n'existe dans le document.</p></div></section>`;
+  const emptyCols = gs.map(g => [g, gridCols(g.t).filter(isEmptyCol)]).filter(([, l]) => l.length);
+  const warnEmpty = emptyCols.length ? `<div class="alert warn"><p><b>Colonnes encore vides dans Grist</b> : ${emptyCols.map(([g, l]) => `<code>${g.t}</code> (${l.length})`).join(', ')}. Le premier import les transforme en colonnes de données, ce qui demande le droit de modifier la structure du document.
+    Si un agent sans ce droit voit « Blocked by full structure access rules », un propriétaire doit d'abord transformer ces colonnes (panneau de droite de Grist, « Transformer en colonne de données ») ou faire lui-même un premier import.</p>
+    <details><summary class="sub" style="cursor:pointer">Voir les colonnes</summary><ul class="sub">${emptyCols.map(([g, l]) => `<li><code>${g.t}</code> : ${esc(l.map(colLabel).join(', '))}</li>`).join('')}</ul></details></div>` : '';
   const tile = g => `<div class="kpi"><div class="kpi-l">${esc(g.name)}</div><div class="kpi-v">${(S.grids[g.t] || []).length}</div><div class="kpi-s">contrôle(s) dans <code>${g.t}</code> · ${gridCols(g.t).length} colonnes</div></div>`;
   return `<section class="${big ? '' : 'fsec'}" id="${id}">${head}
     <p class="sub">1. Téléchargez le fichier de retour : une feuille Excel par type de contrôle (${gs.map(g => esc(g.name)).join(', ')}), avec les colonnes des grilles et des listes déroulantes.
       2. Une ligne par contrôle. 3. Importez le fichier rempli : un aperçu s'affiche, puis chaque feuille est ajoutée à sa table Grist (sans doublon).</p>
     <div class="exp-bar"><button class="btn" data-grid-dl type="button">${ic('download')}Télécharger le fichier de retour</button>
       <button class="btn sec" data-grid-imp type="button">${ic('upload')}Importer le fichier rempli</button></div>
+    ${warnEmpty}
     <div class="kpis">${gs.map(tile).join('')}</div></section>`;
 }
 
