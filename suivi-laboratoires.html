@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-scheme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suivi des laboratoires</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/dsfr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/utility/icons/icons.min.css">
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root { --bf: #000091; --bf-975: #f5f5fe; --bf-950: #ececfe; --titre: #161616; --texte: #3a3a3a; --mention: #666; --bord: #ddd; --alt: #f6f6f6; --gris: #eee; }
+  body { background: #fff; }
+  .mast { padding: 1.25rem 0 1rem; border-bottom: 1px solid var(--bord); }
+  .mention { color: var(--mention); }
+  .cartes { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .6rem; margin: 1.25rem 0; }
+  .carte { text-align: left; border: 1px solid var(--bord); border-top: 4px solid var(--bf); background: #fff; padding: .6rem .8rem; cursor: pointer; font: inherit; color: inherit; }
+  .carte:hover, .carte:focus-visible { box-shadow: 0 4px 12px rgba(0,0,18,.16); }
+  .carte .val { font-size: 1.7rem; font-weight: 700; color: var(--titre); line-height: 1.15; display: block; font-variant-numeric: tabular-nums; }
+  .carte .lib { font-size: .8rem; color: var(--titre); display: block; font-weight: 500; }
+  .carte .det { font-size: .72rem; color: var(--mention); display: block; }
+  .filtres { background: var(--alt); padding: .75rem 1rem .25rem; margin-bottom: 1rem; border-left: 4px solid var(--bf); }
+  .filtres .fr-select-group, .filtres .fr-input-group { margin-bottom: .6rem; }
+  .filtres .fr-label { font-size: .78rem; }
+  .encart { border: 1px solid var(--bord); padding: 1rem 1.25rem 1.25rem; margin-bottom: 1.25rem; }
+  .encart h2 { font-size: 1.1rem; color: var(--bf); margin: 0 0 .25rem; }
+  .encart .sous { font-size: .8rem; color: var(--mention); margin-bottom: .75rem; }
+  .tab-wrap { overflow-x: auto; border: 1px solid var(--bord); }
+  table.tb { width: 100%; border-collapse: collapse; font-size: .84rem; }
+  .tb th { background: var(--gris); color: var(--titre); text-align: left; padding: .5rem .55rem; border-bottom: 2px solid var(--texte); white-space: nowrap; }
+  .tb td { padding: .4rem .55rem; border-bottom: 1px solid var(--bord); vertical-align: middle; }
+  .tb .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tb tr.labo td { background: var(--bf-975); font-weight: 700; border-top: 2px solid var(--bf); }
+  .tb tr.dpt td:first-child { padding-left: 1.5rem; }
+  .tb tfoot td { font-weight: 700; border-top: 2px solid var(--texte); }
+  .lien { color: var(--bf); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; background: none; border: 0; padding: 0; font: inherit; }
+  .lien.zero { color: #aaa; text-decoration: none; cursor: default; }
+  .pct { color: var(--mention); font-size: .75rem; margin-left: .3rem; font-weight: 400; }
+  .barre { display: flex; height: 12px; min-width: 160px; background: var(--alt); border-radius: 3px; overflow: hidden; }
+  .barre span { height: 100%; cursor: pointer; }
+  .legende { display: flex; flex-wrap: wrap; gap: .25rem 1rem; font-size: .78rem; margin: .5rem 0 .75rem; }
+  .legende i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: .3rem; vertical-align: -1px; }
+  .b { display: inline-block; font-size: .68rem; font-weight: 700; text-transform: uppercase; padding: 0 .4rem; line-height: 1.35rem; border-radius: 4px; white-space: nowrap; }
+  .chaleur td.h { text-align: center; font-weight: 700; cursor: pointer; }
+  .import { border: 2px dashed var(--bf); background: var(--bf-975); padding: 1rem 1.25rem; margin: 1rem 0; }
+  .import ul { font-size: .85rem; }
+  .voile { position: fixed; inset: 0; background: rgba(22,22,22,.6); z-index: 1000; display: flex; align-items: flex-start; justify-content: center; padding: 3vh 12px; overflow-y: auto; }
+  .fenetre { background: #fff; width: min(1150px, 100%); padding: 0 1.5rem 1.5rem; box-shadow: 0 6px 24px rgba(0,0,18,.3); }
+  .fenetre-tete { position: sticky; top: 0; background: #fff; display: flex; gap: 1rem; align-items: center; padding: 1rem 0 .75rem; border-bottom: 1px solid var(--bord); z-index: 2; flex-wrap: wrap; }
+  .fenetre-tete h2 { font-size: 1.15rem; margin: 0; flex: 1 1 300px; }
+  .fenetre-tete .fr-input { max-width: 260px; }
+  .sub { font-size: .75rem; color: var(--mention); }
+  .vide { color: var(--mention); font-style: italic; padding: 1rem; }
+</style>
+</head>
+<body>
+<div class="fr-container fr-py-3w">
+  <div class="mast">
+    <div class="fr-grid-row fr-grid-row--gutters fr-grid-row--middle">
+      <div class="fr-col-12 fr-col-md-8">
+        <p class="fr-badge fr-badge--sm fr-badge--info fr-mb-2w">Campagne reliquats azotés 2026</p>
+        <h1 class="fr-h3 fr-mb-1v">Suivi des prélèvements par laboratoire</h1>
+        <p class="fr-text--sm fr-mb-0 mention">Avancement de chaque laboratoire, département par département, par rapport aux parcelles qui lui sont attribuées.</p>
+      </div>
+      <div class="fr-col-12 fr-col-md-4" style="text-align:right">
+        <p class="fr-text--sm fr-mb-1w mention" id="maj">Connexion à Grist…</p>
+        <button type="button" class="fr-btn fr-btn--secondary fr-btn--sm fr-btn--icon-left fr-icon-upload-line" id="btnImport">Importer le fichier des labos</button>
+        <button type="button" class="fr-btn fr-btn--tertiary fr-btn--sm fr-btn--icon-left fr-icon-refresh-line" id="rafraichir">Rafraîchir</button>
+        <input type="file" id="fichier" accept=".xlsx,.xls" hidden>
+      </div>
+    </div>
+  </div>
+  <div id="avis"></div>
+  <div id="contenu">
+    <div class="cartes" id="cartes"></div>
+    <div class="filtres">
+      <div class="fr-grid-row fr-grid-row--gutters">
+        <div class="fr-col-12 fr-col-md-3"><div class="fr-input-group"><label class="fr-label" for="fq">Recherche</label><input class="fr-input" type="search" id="fq" placeholder="CLE, PACAGE, exploitation…"></div></div>
+        <div class="fr-col-6 fr-col-md-2"><div class="fr-select-group"><label class="fr-label" for="fLabo">Laboratoire</label><select class="fr-select" id="fLabo"></select></div></div>
+        <div class="fr-col-6 fr-col-md-2"><div class="fr-select-group"><label class="fr-label" for="fDpt">Département</label><select class="fr-select" id="fDpt"></select></div></div>
+        <div class="fr-col-6 fr-col-md-1"><div class="fr-select-group"><label class="fr-label" for="fType">Type</label><select class="fr-select" id="fType"></select></div></div>
+        <div class="fr-col-6 fr-col-md-1"><div class="fr-select-group"><label class="fr-label" for="fLot">Lot</label><select class="fr-select" id="fLot"></select></div></div>
+        <div class="fr-col-12 fr-col-md-3"><div class="fr-select-group"><label class="fr-label" for="fRaison">Raison de la sélection</label><select class="fr-select" id="fRaison"></select></div></div>
+      </div>
+    </div>
+    <section class="encart">
+      <h2>Avancement par laboratoire et par département</h2>
+      <p class="sous">Parcelles attribuées dans le fichier des laboratoires. Cliquez sur n’importe quel chiffre, y compris les totaux, pour voir la liste des parcelles.</p>
+      <div class="legende" id="legende"></div>
+      <div id="matrice"></div>
+    </section>
+    <section class="encart">
+      <h2>Taux d’avancement : laboratoire × département</h2>
+      <p class="sous">Part des parcelles traitées (prélevées ou déclarées non prélevables). Cliquez sur une case pour voir les parcelles restant à prélever.</p>
+      <div id="chaleur"></div>
+    </section>
+    <p class="fr-text--xs mention" id="pied"></p>
+  </div>
+</div>
+<div id="fenetre"></div>
+
+<script>
+(function () {
+'use strict';
+
+/* ============================================================
+   PARAMÈTRES
+   ============================================================ */
+const T_PLAN = 'Plan_prelevements_labos';   // table créée par l'import du fichier des laboratoires
+const T_RDV = 'RDV_Prelevements', T_SUITE = 'Suites_RDV', T_PREL = 'DATA_Preleveur';
+// colonnes de la table de suivi : [colonne Grist, type, en-têtes possibles dans le fichier]
+const COLS = [
+  ['Ordre', 'Int', ['ORDRE']], ['PACAGE', 'Text', ['PACAGE']], ['Raison_sociale', 'Text', ['Raison sociale']], ['Mail', 'Text', ['Mail']],
+  ['Adresse', 'Text', ['Adresse complète']], ['Zone', 'Text', ['Zone']], ['Code_departement', 'Text', ['Code département']], ['Telephone', 'Text', ['Téléphone portable']],
+  ['CLELAB', 'Text', ['CLELAB']], ['Doublon', 'Text', ['DOUBLE']], ['Type', 'Text', ['TYPE']], ['Nom_parcelle', 'Text', ['NOM_PARCELLE']],
+  ['Ilot_parcelle', 'Text', ['Ilot-Parcelle']], ['Ordre_parcelle', 'Int', ["Ordre d'apparition des parcelles"]], ['Surface', 'Numeric', ['Surf_shp']],
+  ['Latitude', 'Numeric', ['Latitude']], ['Longitude', 'Numeric', ['Longitude']], ['Labo', 'Text', ['Labo']], ['Culture_2026', 'Text', ['Culture 2026']],
+  ['Commentaire_parcelle', 'Text', ['Commentaire parcelle']], ['Raison_de_la_selection', 'Text', ['Raison de la selection', 'Raison de la sélection']], ['Lot', 'Text', ['Lot']]
+];
+const DPT = {'22': 'Côtes-d’Armor', '29': 'Finistère', '35': 'Ille-et-Vilaine', '56': 'Morbihan'};
+// état d'avancement d'une parcelle attribuée (ordre = ordre d'affichage)
+const ETATS = [
+  {k: 'prel', lib: 'Prélevée', hex: '#18753c'},
+  {k: 'np', lib: 'Non prélevable', hex: '#ce0500'},
+  {k: 'passe', lib: 'RDV passé, suite non saisie', hex: '#c3992a'},
+  {k: 'avenir', lib: 'RDV à venir', hex: '#0063cb'},
+  {k: 'echec', lib: 'Injoignable / refus / faux n°', hex: '#b34000'},
+  {k: 'todo', lib: 'À contacter', hex: '#929292'}
+];
+const FAIT = ['prel', 'np'];
+
+/* ============================================================
+   OUTILS
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const isErr = v => Array.isArray(v) && v[0] === 'E';
+const clean = v => (v === null || v === undefined || isErr(v)) ? '' : String(v).trim();
+const norm = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const fmt = n => (n ?? 0).toLocaleString('fr-FR');
+const pct = (a, b) => b ? Math.round(a / b * 100) : 0;
+const keyNorm = s => String(s || '').trim().replace(/[\s|/_.;,]+/g, '-').split('-').filter(Boolean).map(p => p.replace(/^0+(?=\d)/, '')).join('-').toLowerCase();
+const pacNorm = v => { const s = clean(v).replace(/\s+/g, '').replace(/\.0+$/, ''); return /^\d{1,9}$/.test(s) ? s.padStart(9, '0') : s; };
+const dptNorm = v => clean(v).replace(/\.0+$/, '').replace(/\D/g, '').replace(/^0+/, '');
+const dptLib = d => d ? (DPT[d] ? d + ' · ' + DPT[d] : d) : 'Non renseigné';
+const dateHeure = sec => sec ? new Date(sec * 1000).toLocaleString('fr-FR', {timeZone: 'Europe/Paris', dateStyle: 'short', timeStyle: 'short'}) : '';
+const dateFr = sec => sec ? new Date(sec * 1000).toLocaleDateString('fr-FR', {timeZone: 'UTC'}) : '';
+const personne = p => p ? [clean(p.Prenom), clean(p.Nom)].filter(Boolean).join(' ') || clean(p.Nom_complet) : '';
+const ouiNon = v => { if (v === true) return 'oui'; if (v === false) return 'non'; const n = norm(v).trim(); if (!n) return '';
+  if (/^(non|n|0|false|pas|impossible|refus|non preleve)/.test(n)) return 'non'; if (/^(oui|o|x|1|true|fait|preleve|realise)/.test(n)) return 'oui'; return ''; };
+function rows(col) { if (!col || !col.id) return []; const ks = Object.keys(col); return col.id.map((_, i) => { const r = {}; ks.forEach(k => { r[k] = col[k][i]; }); return r; }); }
+const etat = k => ETATS.find(e => e.k === k);
+const badge = k => { const e = etat(k); return `<span class="b" style="background:${e.hex}1f;color:${e.hex}">${esc(e.lib)}</span>`; };
+const filled = v => v !== null && v !== undefined && v !== '' && v !== 0 && !isErr(v);
+// une ligne RDV est d'autant plus « fiable » qu'elle est renseignée (cf. doublons REF1 / REF2)
+const rdvScore = r => (filled(r.Date_RDV) ? 100 : 0) + (filled(r.Statut) ? 50 : 0) + (filled(r.Preleveur) ? 20 : 0) + Object.keys(r).filter(c => c !== 'id' && filled(r[c])).length;
+
+/* ============================================================
+   DONNÉES
+   ============================================================ */
+const D = {meta: {}, plan: [], lignes: [], doublons: 0};
+const F = {q: '', labo: '', dpt: '', type: '', lot: '', raison: ''};
+
+async function lire(t) { try { return rows(await grist.docApi.fetchTable(t)); } catch (e) { console.warn('Table indisponible :', t, e); return []; } }
+async function lireMeta() {
+  const T = await grist.docApi.fetchTable('_grist_Tables'), C = await grist.docApi.fetchTable('_grist_Tables_column'), byRow = {}, meta = {};
+  T.id.forEach((rid, i) => { const t = T.tableId[i]; if (t && !t.startsWith('_grist')) { byRow[rid] = t; meta[t] = {}; } });
+  C.id.forEach((cid, i) => { const t = byRow[C.parentId[i]]; if (t) meta[t][C.colId[i]] = {type: C.type[i] || 'Any'}; });
+  return meta;
+}
+
+async function charger() {
+  $('rafraichir').disabled = true; $('maj').textContent = 'Actualisation…';
+  D.meta = await lireMeta();
+  if (!D.meta[T_PLAN]) {
+    $('contenu').hidden = true;
+    $('avis').innerHTML = `<div class="import"><h2 class="fr-h5">Première étape : importer le fichier des laboratoires</h2>
+      <p class="fr-text--sm">La table <code>${T_PLAN}</code> n’existe pas encore. Cliquez sur « Importer le fichier des labos » et choisissez le fichier Excel du découpage (ex. <i>Fichier_DRAAF_RDD_2026_découpage réalisé.xlsx</i>).</p>
+      <ul><li>L’onglet <b>COMPLET</b> est lu s’il existe ; sinon tous les onglets qui ont une colonne <b>CLELAB</b> (un par laboratoire).</li>
+      <li>La table est créée automatiquement : il faut être <b>propriétaire</b> du document (création de table).</li>
+      <li>Pour mettre à jour le découpage plus tard, réimportez simplement le nouveau fichier : le contenu de la table est remplacé.</li></ul></div>`;
+    $('maj').textContent = 'Table de suivi absente'; $('rafraichir').disabled = false;
+    return;
+  }
+  $('contenu').hidden = false;
+  const [plan, rdv, suite, prel] = await Promise.all([lire(T_PLAN), lire(T_RDV), lire(T_SUITE), lire(T_PREL)]);
+  // table référencée par RDV_Prelevements.Cle_parcelle (normalement DATA_Parcelles_DEF)
+  const tc = ((D.meta[T_RDV] || {}).Cle_parcelle || {}).type || '', refT = tc.startsWith('Ref:') ? tc.slice(4) : '';
+  const ref = refT && D.meta[refT] ? await lire(refT) : [];
+  construire(plan, rdv, suite, prel, ref);
+  remplirFiltres(); afficher();
+  $('avis').innerHTML = D.doublons ? `<div class="fr-alert fr-alert--info fr-alert--sm fr-mb-2w"><p>${fmt(D.doublons)} ligne(s) marquée(s) « D » (doublon) dans le fichier ne sont pas comptées.</p></div>` : '';
+  $('maj').textContent = 'Mis à jour à ' + new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'});
+  $('rafraichir').disabled = false;
+}
+
+function construire(plan, rdv, suite, prel, ref) {
+  const refById = new Map(ref.map(r => [r.id, r])), prelById = new Map(prel.map(p => [p.id, p]));
+  const keyOfRdv = r => { const v = r.Cle_parcelle; if (typeof v === 'number') { const d = refById.get(v); return d ? clean(d.CLE) || clean(d.CLELAB) || clean(d.Cle2_2) : ''; } return clean(v); };
+  // rendez-vous par parcelle, du plus renseigné au moins renseigné
+  const rdvBy = new Map();
+  rdv.forEach(r => { const k = keyNorm(keyOfRdv(r)); if (k) (rdvBy.get(k) || rdvBy.set(k, []).get(k)).push(r); });
+  rdvBy.forEach(l => l.sort((a, b) => rdvScore(b) - rdvScore(a) || b.id - a.id));
+  // suites par parcelle : prélevées d'abord, puis non prélevables, par date
+  const suiBy = new Map();
+  suite.forEach(r => { const k = keyNorm(r.CLE_pacage_ilot_parcelle_), f = ouiNon(r.Prelevement_fait); if (k && f) (suiBy.get(k) || suiBy.set(k, []).get(k)).push({f, r}); });
+  suiBy.forEach(l => l.sort((a, b) => (a.f === 'oui' ? 0 : 1) - (b.f === 'oui' ? 0 : 1) || (a.r.date_de_prelevement || 0) - (b.r.date_de_prelevement || 0)));
+  D.doublons = 0;
+  const lignes = [];
+  for (const p of plan) {
+    if (/^d/i.test(clean(p.Doublon))) { D.doublons++; continue; }
+    const cle = clean(p.CLELAB), k = keyNorm(cle); if (!k) continue;
+    lignes.push({p, cle, k, pac: pacNorm(p.PACAGE || cle.split('-')[0]), dpt: dptNorm(p.Code_departement) || dptNorm(pacNorm(p.PACAGE).slice(0, 3)), labo: clean(p.Labo) || 'Laboratoire non renseigné',
+      type: clean(p.Type) || '—', lot: clean(p.Lot), raison: clean(p.Raison_de_la_selection), nom: clean(p.Raison_sociale).replace(/\s*\((REF\d*)\)\s*$/i, ''), commune: clean(p.Adresse).split(/\s\d{5}\s/).pop()});
+  }
+  // une parcelle de référence figure deux fois (REF1 puis REF2) avec la même CLE : on répartit dans l'ordre
+  // les suites (1re suite -> REF1, 2e -> REF2) et les rendez-vous de cette CLE
+  const parCle = new Map(); lignes.forEach(x => (parCle.get(x.k) || parCle.set(x.k, []).get(x.k)).push(x));
+  const now = Date.now() / 1000;
+  for (const [k, l] of parCle) {
+    l.sort((a, b) => a.type.localeCompare(b.type) || (a.p.Ordre || 0) - (b.p.Ordre || 0));
+    // rendez-vous datés, du plus ancien au plus récent ; les lignes vides en doublon sont ignorées
+    const su = suiBy.get(k) || [], best = (rdvBy.get(k) || [])[0] || null;
+    const dates = (rdvBy.get(k) || []).filter(r => typeof r.Date_RDV === 'number').sort((a, b) => a.Date_RDV - b.Date_RDV);
+    l.forEach((x, i) => {
+      const s = su[i], r = dates[i] || dates[dates.length - 1] || best;
+      x.suite = s ? s.r : null; x.rdv = r || null;
+      x.date = r && typeof r.Date_RDV === 'number' ? r.Date_RDV : null;
+      x.statut = clean(r && r.Statut);
+      x.prel = r ? personne(prelById.get(r.Preleveur)) : '';
+      x.orgFait = s ? clean(s.r.Organisme) || clean((prelById.get(r && r.Preleveur) || {}).Organisme) : '';
+      x.raisonNP = s && s.f === 'non' ? clean(s.r.raison_de_non_prelevement) : '';
+      x.datePrel = s && typeof s.r.date_de_prelevement === 'number' ? s.r.date_de_prelevement : null;
+      x.e = s ? (s.f === 'oui' ? 'prel' : 'np') : x.date ? (x.date >= now - 43200 ? 'avenir' : 'passe') : /injoignable|refus|faux/i.test(x.statut) ? 'echec' : 'todo';
+      x.autreOrg = x.orgFait && norm(x.orgFait) !== norm(x.labo);
+      x.txt = norm([x.cle, x.pac, x.nom, x.commune, x.prel, x.labo, x.type].join(' '));
+    });
+  }
+  D.lignes = lignes;
+}
+
+/* ============================================================
+   FILTRES ET AFFICHAGE
+   ============================================================ */
+const ok = (x, sauf) => (!F.q || x.txt.includes(norm(F.q.trim()))) && (sauf === 'labo' || !F.labo || x.labo === F.labo) && (sauf === 'dpt' || !F.dpt || x.dpt === F.dpt)
+  && (!F.type || x.type === F.type) && (!F.lot || x.lot === F.lot) && (!F.raison || x.raison === F.raison);
+function remplirFiltres() {
+  const opt = (id, vals, cur, tous, lib) => { $(id).innerHTML = `<option value="">${tous}</option>` + vals.map(v => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(lib ? lib(v) : v)}</option>`).join(''); };
+  const u = f => [...new Set(D.lignes.map(f).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr', {numeric: true}));
+  opt('fLabo', u(x => x.labo), F.labo, 'Tous'); opt('fDpt', u(x => x.dpt), F.dpt, 'Tous', dptLib);
+  opt('fType', u(x => x.type), F.type, 'Tous'); opt('fLot', u(x => x.lot), F.lot, 'Tous'); opt('fRaison', u(x => x.raison), F.raison, 'Toutes');
+}
+// codes de détail : « e=<état>|labo=<labo>|dpt=<dpt> » ; état « * » = toutes, « reste » = non traitées
+const code = (e, labo, dpt) => ['e=' + e, labo ? 'labo=' + labo : '', dpt ? 'dpt=' + dpt : ''].filter(Boolean).join('|');
+const lien = (n, c) => n ? `<button type="button" class="lien" data-d="${esc(c)}">${fmt(n)}</button>` : '<span class="lien zero">0</span>';
+const selon = (l, e) => e === '*' ? l : e === 'reste' ? l.filter(x => !FAIT.includes(x.e)) : l.filter(x => x.e === e);
+function barre(l, labo, dpt) {
+  return `<div class="barre" title="${ETATS.map(e => e.lib + ' : ' + selon(l, e.k).length).join(' · ')}">${ETATS.map(e => { const n = selon(l, e.k).length;
+    return n ? `<span style="width:${n / l.length * 100}%;background:${e.hex}" data-d="${esc(code(e.k, labo, dpt))}"></span>` : ''; }).join('')}</div>`;
+}
+function ligneTab(l, labo, dpt, lib, cls) {
+  const n = e => selon(l, e).length, fait = n('prel') + n('np');
+  return `<tr class="${cls}"><td>${lib}</td><td class="num">${lien(l.length, code('*', labo, dpt))}</td><td class="num">${lien(n('prel'), code('prel', labo, dpt))}</td>
+    <td class="num">${lien(n('np'), code('np', labo, dpt))}</td><td class="num"><b>${lien(n('reste'), code('reste', labo, dpt))}</b></td>
+    <td class="num">${lien(n('avenir'), code('avenir', labo, dpt))}</td><td class="num">${lien(n('passe'), code('passe', labo, dpt))}</td><td class="num">${lien(n('echec'), code('echec', labo, dpt))}</td>
+    <td class="num">${lien(n('todo'), code('todo', labo, dpt))}</td><td class="num">${pct(fait, l.length)} %</td><td>${barre(l, labo, dpt)}</td></tr>`;
+}
+function afficher() {
+  const L = D.lignes.filter(x => ok(x)), n = e => selon(L, e).length;
+  const carte = (val, lib, det, c, couleur) => `<button type="button" class="carte" data-d="${esc(c)}" style="border-top-color:${couleur}"><span class="val">${fmt(val)}</span><span class="lib">${esc(lib)}</span><span class="det">${det}</span></button>`;
+  $('cartes').innerHTML = carte(L.length, 'Parcelles à prélever', `${fmt(new Set(L.map(x => x.pac)).size)} exploitation(s) · ${fmt(new Set(L.map(x => x.labo)).size)} labo(s)`, code('*'), '#000091')
+    + carte(n('prel'), 'Prélevées', pct(n('prel'), L.length) + ' %', code('prel'), '#18753c')
+    + carte(n('np'), 'Non prélevables', pct(n('np'), L.length) + ' %', code('np'), '#ce0500')
+    + carte(n('reste'), 'Restant à prélever', pct(n('reste'), L.length) + ' % du total', code('reste'), '#b34000')
+    + carte(n('avenir'), 'dont RDV à venir', 'date de RDV fixée', code('avenir'), '#0063cb')
+    + carte(n('passe'), 'dont RDV passés sans suite', 'suite de RDV à saisir', code('passe'), '#c3992a')
+    + carte(n('todo') + n('echec'), 'dont sans RDV', `${fmt(n('todo'))} à contacter · ${fmt(n('echec'))} en échec`, code('sansrdv'), '#929292');
+  $('legende').innerHTML = ETATS.map(e => `<span><i style="background:${e.hex}"></i>${esc(e.lib)}</span>`).join('');
+  // matrice laboratoire > département
+  const labos = [...new Set(L.map(x => x.labo))].sort((a, b) => a.localeCompare(b, 'fr'));
+  const dpts = [...new Set(L.map(x => x.dpt))].sort();
+  $('matrice').innerHTML = L.length ? `<div class="tab-wrap"><table class="tb"><thead><tr><th>Laboratoire / département</th><th class="num">À prélever</th><th class="num">Prélevées</th><th class="num">Non prélevables</th>
+    <th class="num">Restant</th><th class="num">RDV à venir</th><th class="num">RDV passés sans suite</th><th class="num">Échec contact</th><th class="num">À contacter</th><th class="num">Traitées</th><th>Répartition</th></tr></thead><tbody>
+    ${labos.map(lab => { const ll = L.filter(x => x.labo === lab);
+      return ligneTab(ll, lab, '', esc(lab), 'labo') + dpts.filter(d => ll.some(x => x.dpt === d)).map(d => ligneTab(ll.filter(x => x.dpt === d), lab, d, esc(dptLib(d)), 'dpt')).join(''); }).join('')}</tbody>
+    <tfoot>${ligneTab(L, '', '', 'Total', '')}</tfoot></table></div>` : '<p class="vide">Aucune parcelle pour ces filtres.</p>';
+  // carte de chaleur
+  const coul = p => `hsl(${Math.round(p * 1.2)}, 65%, ${92 - p * .35}%)`;
+  const cell = (l, lab, d) => { if (!l.length) return '<td class="mention" style="text-align:center">—</td>'; const p = pct(selon(l, 'prel').length + selon(l, 'np').length, l.length);
+    return `<td class="h" style="background:${coul(p)}" data-d="${esc(code('reste', lab, d))}" title="${selon(l, 'reste').length} restante(s) sur ${l.length}">${p} %<div class="sub">${fmt(selon(l, 'reste').length)} restante(s) / ${fmt(l.length)}</div></td>`; };
+  const dAll = [...new Set(D.lignes.filter(x => ok(x, 'dpt')).map(x => x.dpt))].sort();
+  $('chaleur').innerHTML = L.length ? `<div class="tab-wrap"><table class="tb chaleur"><thead><tr><th>Laboratoire</th>${dAll.map(d => `<th style="text-align:center">${esc(dptLib(d))}</th>`).join('')}<th style="text-align:center">Total</th></tr></thead><tbody>
+    ${labos.map(lab => `<tr><td><b>${esc(lab)}</b></td>${dAll.map(d => cell(L.filter(x => x.labo === lab && x.dpt === d), lab, d)).join('')}${cell(L.filter(x => x.labo === lab), lab, '')}</tr>`).join('')}
+    <tr><td><b>Total</b></td>${dAll.map(d => cell(L.filter(x => x.dpt === d), '', d)).join('')}${cell(L, '', '')}</tr></tbody></table></div>` : '';
+  const autres = L.filter(x => x.autreOrg).length;
+  $('pied').innerHTML = `Sources : ${T_PLAN} (parcelles attribuées à chaque laboratoire), ${T_RDV} (rendez-vous), ${T_SUITE} (prélevée / non prélevable). Rapprochement par CLE (les zéros de tête sont ignorés). `
+    + 'Les parcelles de référence REF1 et REF2 partagent la même CLE : la 1re suite saisie est comptée pour REF1, la 2e pour REF2.'
+    + (autres ? ` <b>${fmt(autres)}</b> parcelle(s) ont été prélevées par un autre organisme que le laboratoire attribué : <button type="button" class="lien" data-d="e=autre">voir</button>.` : '');
+}
+
+/* ---------- Liste détaillée ---------- */
+function detail(c) {
+  const o = {}; c.split('|').forEach(s => { const i = s.indexOf('='); o[s.slice(0, i)] = s.slice(i + 1); });
+  let l = D.lignes.filter(x => ok(x) && (!o.labo || x.labo === o.labo) && (!o.dpt || x.dpt === o.dpt));
+  l = o.e === 'sansrdv' ? l.filter(x => x.e === 'todo' || x.e === 'echec') : o.e === 'autre' ? l.filter(x => x.autreOrg) : selon(l, o.e);
+  const titre = ({'*': 'Parcelles à prélever', reste: 'Parcelles restant à prélever', sansrdv: 'Parcelles sans rendez-vous', autre: 'Prélevées par un autre organisme'}[o.e] || etat(o.e).lib)
+    + (o.labo ? ' — ' + o.labo : '') + (o.dpt ? ' — ' + dptLib(o.dpt) : '');
+  const cols = [['CLE', x => `<b>${esc(x.cle)}</b><div class="sub">${esc(x.type)}${x.lot ? ' · ' + esc(x.lot) : ''}</div>`, x => x.cle], ['Type', null, x => x.type],
+    ['Exploitation', x => `${esc(x.nom)}<div class="sub">PACAGE ${esc(x.pac)}${x.commune ? ' · ' + esc(x.commune) : ''}</div>`, x => x.nom], ['PACAGE', null, x => x.pac],
+    ['Dpt', x => esc(x.dpt), x => x.dpt], ['Laboratoire', x => esc(x.labo), x => x.labo],
+    ['État', x => badge(x.e) + (x.raisonNP ? `<div class="sub">${esc(x.raisonNP)}</div>` : '') + (x.autreOrg ? `<div class="sub">par ${esc(x.orgFait)}</div>` : ''), x => etat(x.e).lib],
+    ['RDV', x => x.date ? esc(dateHeure(x.date)) + (x.prel ? `<div class="sub">${esc(x.prel)}</div>` : '') : (x.statut ? esc(x.statut) : '—'), x => x.date ? dateHeure(x.date) : x.statut],
+    ['Préleveur', null, x => x.prel], ['Date de prélèvement', x => esc(dateFr(x.datePrel)) || '—', x => dateFr(x.datePrel)],
+    ['Raison de non-prélèvement', null, x => x.raisonNP], ['Organisme ayant prélevé', null, x => x.orgFait],
+    ['Téléphone', x => clean(x.p.Telephone) ? `<a href="tel:${esc(clean(x.p.Telephone).replace(/[^\d+]/g, ''))}">${esc(clean(x.p.Telephone))}</a>` : '', x => clean(x.p.Telephone)],
+    ['Culture 2026', null, x => clean(x.p.Culture_2026)], ['Commentaire parcelle', null, x => clean(x.p.Commentaire_parcelle)]];
+  l.sort((a, b) => a.labo.localeCompare(b.labo) || a.dpt.localeCompare(b.dpt) || a.nom.localeCompare(b.nom, 'fr') || a.cle.localeCompare(b.cle, 'fr', {numeric: true}));
+  const vis = cols.filter(c => c[1]);
+  $('fenetre').innerHTML = `<div class="voile" id="voile"><div class="fenetre" role="dialog" aria-modal="true" aria-label="${esc(titre)}">
+    <div class="fenetre-tete"><h2>${esc(titre)} <span class="mention fr-text--sm">(${fmt(l.length)} parcelle(s))</span></h2>
+      <input class="fr-input" type="search" id="lq" placeholder="Rechercher…" aria-label="Rechercher dans la liste">
+      <button type="button" class="fr-btn fr-btn--sm fr-btn--secondary fr-icon-download-line fr-btn--icon-left" id="lcsv">CSV</button>
+      <button type="button" class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline fr-icon-close-line fr-btn--icon-left" id="lfermer">Fermer</button></div>
+    <div class="tab-wrap fr-mt-2w"><table class="tb"><thead><tr>${vis.map(c => `<th>${esc(c[0])}</th>`).join('')}</tr></thead><tbody id="lcorps"></tbody></table></div></div></div>`;
+  const dessiner = () => { const q = norm($('lq').value.trim()), m = l.filter(x => !q || norm(cols.map(c => c[2](x)).join(' ')).includes(q));
+    $('lcorps').innerHTML = m.slice(0, 1000).map(x => `<tr>${vis.map(c => `<td>${c[1](x)}</td>`).join('')}</tr>`).join('')
+      + (m.length > 1000 ? `<tr><td colspan="${vis.length}" class="vide">${fmt(m.length - 1000)} ligne(s) de plus : utilisez l’export CSV.</td></tr>` : '') || `<tr><td colspan="${vis.length}" class="vide">Aucune parcelle.</td></tr>`; };
+  $('lq').addEventListener('input', dessiner); dessiner();
+  $('lfermer').onclick = fermer; $('voile').onclick = e => { if (e.target.id === 'voile') fermer(); };
+  $('lcsv').onclick = () => {
+    const csv = '﻿' + [cols.map(c => c[0])].concat(l.map(x => cols.map(c => c[2](x)))).map(r => r.map(v => '"' + String(v ?? '').replace(/"/g, '""') + '"').join(';')).join('\r\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], {type: 'text/csv;charset=utf-8'}));
+    a.download = titre.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w -]+/g, '').trim().replace(/\s+/g, '-').toLowerCase() + '.csv';
+    document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  };
+}
+const fermer = () => { $('fenetre').innerHTML = ''; };
+
+/* ============================================================
+   IMPORT DU FICHIER DES LABORATOIRES
+   ============================================================ */
+const hNorm = s => norm(s).replace(/[^a-z0-9]/g, '');
+function lireFichier(buf) {
+  const wb = XLSX.read(buf, {type: 'array', cellDates: true});
+  const feuilles = wb.SheetNames.map(n => ({n, aoa: XLSX.utils.sheet_to_json(wb.Sheets[n], {header: 1, raw: true, defval: null})}))
+    .map(s => { const i = s.aoa.findIndex(r => (r || []).some(c => hNorm(c) === 'clelab')); return Object.assign(s, {h: i}); }).filter(s => s.h >= 0);
+  if (!feuilles.length) throw new Error('aucun onglet du fichier n’a de colonne CLELAB.');
+  const complet = feuilles.find(s => /complet/i.test(s.n)), choix = complet ? [complet] : feuilles;
+  const out = [], vus = new Set();
+  for (const s of choix) {
+    const head = s.aoa[s.h].map(hNorm), idx = COLS.map(([, , hs]) => head.findIndex(h => hs.some(x => hNorm(x) === h)));
+    for (const r of s.aoa.slice(s.h + 1)) {
+      if (!r || !clean(r[idx[8]])) continue;
+      const o = {};
+      COLS.forEach(([id, type], j) => { let v = idx[j] >= 0 ? r[idx[j]] : null;
+        if (v instanceof Date) v = id === 'Ilot_parcelle' ? null : v.toISOString().slice(0, 10);
+        if (type === 'Int' || type === 'Numeric') { const n = typeof v === 'number' ? v : parseFloat(String(v ?? '').replace(',', '.')); v = isNaN(n) ? null : type === 'Int' ? Math.round(n) : n; }
+        else v = v === null || v === undefined ? '' : String(v).trim().replace(/\.0+$/, '');
+        o[id] = v; });
+      o.PACAGE = pacNorm(o.PACAGE); o.Code_departement = dptNorm(o.Code_departement) || dptNorm(o.PACAGE.slice(0, 3));
+      // Excel transforme « 1-1 » en date : on reprend îlot-parcelle depuis la CLE
+      if (!o.Ilot_parcelle) o.Ilot_parcelle = o.CLELAB.split('-').slice(1).join('-');
+      const id = [o.Ordre, o.CLELAB, o.Type, o.Labo].join('§'); if (!complet && vus.has(id)) continue; vus.add(id);
+      out.push(o);
+    }
+  }
+  return {lignes: out, source: choix.map(s => s.n).join(', ')};
+}
+async function importer(file) {
+  const avis = m => { $('avis').innerHTML = m; };
+  try {
+    const {lignes, source} = lireFichier(await file.arrayBuffer());
+    if (!lignes.length) throw new Error('aucune ligne avec une CLELAB.');
+    const labos = [...new Set(lignes.map(o => o.Labo))].join(', ');
+    const existe = !!D.meta[T_PLAN], nAvant = existe ? (await lire(T_PLAN)).length : 0;
+    if (!confirm(`${fmt(lignes.length)} parcelle(s) lues dans l’onglet ${source} (laboratoires : ${labos}).\n\n`
+      + (existe ? `Le contenu actuel de ${T_PLAN} (${fmt(nAvant)} ligne(s)) sera remplacé.` : `La table ${T_PLAN} va être créée.`)
+      + '\n\nLes tables RDV_Prelevements et Suites_RDV ne sont pas modifiées. Continuer ?')) return;
+    avis('<div class="fr-alert fr-alert--info fr-alert--sm"><p>Import en cours…</p></div>');
+    if (!existe) await grist.docApi.applyUserActions([['AddTable', T_PLAN, COLS.map(([id, type]) => ({id, type, isFormula: false}))]]);
+    else {
+      const manque = COLS.filter(([id]) => !D.meta[T_PLAN][id]);
+      if (manque.length) await grist.docApi.applyUserActions(manque.map(([id, type]) => ['AddColumn', T_PLAN, id, {type, isFormula: false}]));
+      const ids = (await lire(T_PLAN)).map(r => r.id);
+      for (let i = 0; i < ids.length; i += 2000) await grist.docApi.applyUserActions([['BulkRemoveRecord', T_PLAN, ids.slice(i, i + 2000)]]);
+    }
+    for (let i = 0; i < lignes.length; i += 1000) {
+      const part = lignes.slice(i, i + 1000), cols = {};
+      COLS.forEach(([id]) => { cols[id] = part.map(o => o[id]); });
+      await grist.docApi.applyUserActions([['BulkAddRecord', T_PLAN, part.map(() => null), cols]]);
+      avis(`<div class="fr-alert fr-alert--info fr-alert--sm"><p>Import en cours… ${fmt(Math.min(i + 1000, lignes.length))} / ${fmt(lignes.length)}</p></div>`);
+    }
+    await charger();
+    avis(`<div class="fr-alert fr-alert--success fr-alert--sm fr-mb-2w"><p>${fmt(lignes.length)} parcelle(s) importée(s) dans <code>${T_PLAN}</code> depuis l’onglet ${esc(source)}.</p></div>`);
+  } catch (e) {
+    console.error(e);
+    const acl = /access|blocked|permission|droit/i.test(String(e.message || e));
+    avis(`<div class="fr-alert fr-alert--error fr-alert--sm fr-mb-2w"><p>Import impossible : ${esc(e.message || e)}${acl ? '<br>La création ou la modification de la table demande les droits de <b>propriétaire</b> du document : demandez à un propriétaire de faire l’import.' : ''}</p></div>`);
+  }
+}
+
+/* ---------- Événements ---------- */
+let tq; $('fq').addEventListener('input', e => { F.q = e.target.value; clearTimeout(tq); tq = setTimeout(afficher, 250); });
+[['fLabo', 'labo'], ['fDpt', 'dpt'], ['fType', 'type'], ['fLot', 'lot'], ['fRaison', 'raison']].forEach(([id, k]) => { $(id).onchange = e => { F[k] = e.target.value; afficher(); }; });
+$('rafraichir').onclick = () => charger().catch(err => console.error(err));
+$('btnImport').onclick = () => { if (!window.XLSX) { alert('La bibliothèque de lecture Excel n’a pas pu être chargée (cdnjs.cloudflare.com).'); return; } $('fichier').value = ''; $('fichier').click(); };
+$('fichier').onchange = e => { const f = e.target.files[0]; if (f) importer(f); };
+document.addEventListener('click', e => { const d = e.target.closest('[data-d]'); if (d && !$('fenetre').contains(d)) detail(d.dataset.d); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') fermer(); });
+
+if (window.grist) {
+  grist.ready({requiredAccess: 'full'});
+  let t; grist.onRecords(() => { clearTimeout(t); t = setTimeout(() => charger().catch(err => console.error(err)), 800); });
+  charger().catch(err => { console.error(err); $('avis').innerHTML = `<div class="fr-alert fr-alert--error fr-alert--sm"><p>Impossible de charger les données : ${esc(err.message || err)}. Réglez l'accès du widget sur « Accès complet au document ».</p></div>`; });
+} else {
+  $('contenu').hidden = true; $('maj').textContent = 'API Grist non détectée';
+  $('avis').innerHTML = '<div class="fr-alert fr-alert--info fr-alert--sm"><p>Ouvrez cette page comme widget personnalisé dans Grist (accès complet au document) pour afficher les données.</p></div>';
+}
+})();
+</script>
+</body>
+</html>

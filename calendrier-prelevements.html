@@ -750,7 +750,7 @@ function rdvKey(r) {
 // valeur à écrire dans Cle_parcelle : id de la ligne référencée, ou la clé texte
 function cleVal(key) {
   if (!cleIsRef()) return key;
-  const d = S.cleByKey.get(key); return d ? d.id : key;
+  const d = S.cleByKey.get(keyNorm(key)); return d ? d.id : key;
 }
 const txt = v => typeof v === 'string' ? clean(v) : '';
 // coordonnées de l'exploitation reprises de DATA_Parcelles_DEF quand la table des parcelles ne les a pas
@@ -764,22 +764,43 @@ function fillFromDef(f, d) {
   if (!f.Adresse_complete && (clean(d.Adresse) || clean(d.Commune))) f.Adresse_complete = [clean(d.Adresse), clean(d.Code_Postal).split('.')[0], clean(d.Commune)].filter(Boolean).join(' ');
 }
 
+// richesse d'une ligne RDV : sert à choisir la bonne ligne quand une parcelle en a plusieurs
+const filled = v => v !== null && v !== undefined && v !== '' && v !== 0 && v !== false && !isErr(v) && !(Array.isArray(v) && v[0] === 'L' && v.length < 2);
+function rdvScore(r) {
+  let s = 0;
+  for (const [c, w] of [['Date_RDV', 100], ['Statut', 50], ['Preleveur', 20], ['Inspecteur', 10], ['Date_heure_appel_1', 5], ['Date_heure_appel_2', 5], ['Date_heure_appel_3', 5]]) if (filled(r[c])) s += w;
+  for (const c in r) if (c !== 'id' && c !== 'Cle_parcelle' && !c.startsWith('gristHelper') && filled(r[c])) s += 1;
+  return s;
+}
+// n° PACAGE sur 9 chiffres : « 29014881 » et « 029014881 » désignent la même exploitation
+const pacKey = v => { const t = String(v ?? '').trim().replace(/\.0+$/, ''); return /^\d{1,9}$/.test(t) ? t.padStart(9, '0') : t; };
+// PACAGE (exploitation) d'une clé : celui de la ligne DEF si elle existe, sinon le début de la clé
+const farmKeyOf = (k, d) => (d && clean(d.PACAGE)) || String(k).split(/[-|]/)[0];
 function buildModel() {
-  S.farms = new Map(); S.visits = []; S.visitByKey = new Map(); S.rdvByKey = new Map(); S.orphans = 0;
-  // une ligne RDV par clé parcelle (si doublon : la plus récente)
-  for (const r of S.rdv) { const k = rdvKey(r); if (!k) { S.orphans++; continue; } const ex = S.rdvByKey.get(k); if (!ex || r.id > ex.id) S.rdvByKey.set(k, r); }
-  const farmOf = (fk, name) => { let f = S.farms.get(fk); if (!f) { f = {key: fk, pacage: fk, name: '', parcels: []}; S.farms.set(fk, f); } if (!f.name && name) f.name = name; return f; };
+  S.farms = new Map(); S.visits = []; S.visitByKey = new Map(); S.rdvByKey = new Map(); S.orphans = 0; S.rdvDups = [];
+  // Une ligne RDV par parcelle. Les clés sont comparées après normalisation (zéros de tête, séparateurs).
+  // En cas de doublon (ex. parcelles de référence REF1 / REF2 qui partagent la même CLE), on garde la ligne
+  // la plus renseignée (statut, date, préleveur, appels…) et non la plus récente, souvent vide.
+  const nb = new Map();
+  for (const r of S.rdv) {
+    const k = keyNorm(rdvKey(r)); if (!k) { S.orphans++; continue; }
+    nb.set(k, (nb.get(k) || 0) + 1);
+    const ex = S.rdvByKey.get(k), a = rdvScore(r), b = ex ? rdvScore(ex) : -1;
+    if (!ex || a > b || (a === b && r.id > ex.id)) S.rdvByKey.set(k, r);
+  }
+  for (const [k, n] of nb) if (n > 1) S.rdvDups.push(k);
+  const farmOf = (fk, name) => { fk = pacKey(fk); let f = S.farms.get(fk); if (!f) { f = {key: fk, pacage: fk, name: '', parcels: []}; S.farms.set(fk, f); } if (!f.name && name) f.name = name; return f; };
   const seen = new Set();
   for (const p of S.parc) {
-    const key = clean(p[S.cfg.parcKey]); if (!key || seen.has(key)) continue; seen.add(key);
+    const key = clean(p[S.cfg.parcKey]), kn = keyNorm(key); if (!kn || seen.has(kn)) continue; seen.add(kn);
     const f = farmOf(farmKeyOfParc(p), farmName(p));
     for (const k of ['dossier_number', 'Telephone_portable', 'Mail', 'Adresse_complete', 'Departement', 'Code_departement', 'Code_postal', 'Ville']) if (!f[k] && clean(p[k])) f[k] = clean(p[k]);
-    const d = S.def.get(key) || null; fillFromDef(f, d);
-    f.parcels.push({key, src: p, def: d, rdv: S.rdvByKey.get(key) || null});
+    const d = S.def.get(kn) || null; fillFromDef(f, d);
+    f.parcels.push({key, src: p, def: d, rdv: S.rdvByKey.get(kn) || null});
   }
   // rendez-vous dont la clé n'est pas (ou plus) dans la table des parcelles
-  for (const [k, r] of S.rdvByKey) if (!seen.has(k)) {
-    const d = S.def.get(k) || null, f = farmOf(k.split('-')[0], txt(r.Raison_sociale) || txt(r.Nom_exploitation2) || txt(r.Nom_exploitation));
+  for (const [kn, r] of S.rdvByKey) if (!seen.has(kn)) {
+    const k = rdvKey(r), d = S.def.get(kn) || null, f = farmOf(farmKeyOf(k, d), txt(r.Raison_sociale) || txt(r.Nom_exploitation2) || txt(r.Nom_exploitation));
     fillFromDef(f, d); f.parcels.push({key: k, src: null, def: d, rdv: r});
   }
   for (const f of S.farms.values()) {
@@ -814,13 +835,13 @@ async function loadData() {
   const defOk = S.cfg.defTable && S.meta[S.cfg.defTable] && cols(S.cfg.defTable)[S.cfg.defKey];
   const [parc, def, rdv, p, i] = await Promise.all([B.fetch(S.cfg.parcTable), defOk ? B.fetch(S.cfg.defTable) : [], B.fetch(T_RDV), B.fetch(T_PREL), B.fetch(T_INSP)]);
   S.parc = parc; S.rdv = rdv; S.prel = p; S.insp = i;
-  S.def = new Map(); def.forEach(x => { const k = clean(x[S.cfg.defKey]); if (k && !S.def.has(k)) S.def.set(k, x); });
+  S.def = new Map(); def.forEach(x => { const k = keyNorm(clean(x[S.cfg.defKey])); if (k && !S.def.has(k)) S.def.set(k, x); });
   // table référencée par Cle_parcelle (normalement DATA_Parcelles_DEF)
   const refT = cleIsRef() ? typeOf(T_RDV, 'Cle_parcelle').slice(4) : '';
   const refRows = !refT ? [] : refT === S.cfg.defTable && defOk ? def : S.meta[refT] ? await B.fetch(refT) : [];
   S.cleCol = refT === S.cfg.defTable ? S.cfg.defKey : ['CLE', 'CLELAB', 'Cle', 'Cle2_2'].find(c => cols(refT)[c]) || S.cfg.defKey;
   S.cleById = new Map(refRows.map(x => [x.id, x]));
-  S.cleByKey = new Map(); refRows.forEach(x => { const k = clean(x[S.cleCol]); if (k && !S.cleByKey.has(k)) S.cleByKey.set(k, x); });
+  S.cleByKey = new Map(); refRows.forEach(x => { const k = keyNorm(clean(x[S.cleCol])); if (k && !S.cleByKey.has(k)) S.cleByKey.set(k, x); });
   S.prelById = new Map(p.map(x => [x.id, x])); S.inspById = new Map(i.map(x => [x.id, x]));
   S.stock = S.meta[T_STOCK] ? await B.fetch(T_STOCK) : [];
   // grilles d'évaluation des contrôles (une table par type de contrôle)
@@ -1197,6 +1218,8 @@ function renderFarms() {
   $('#main').innerHTML = `<div class="section-head"><h2>Exploitations</h2>
       <span class="muted">${all.length} exploitations · ${S.parc.length} parcelles · ${STATUTS.map(s => `${s} : ${cnt(s)}`).join(' · ')} · À appeler : ${cnt('')}</span></div>
     ${S.orphans ? `<div class="alert warn"><p>${S.orphans} ligne(s) de <code>${T_RDV}</code> n'ont pas de clé parcelle et sont ignorées.</p></div>` : ''}
+    ${S.rdvDups.length ? `<div class="alert info"><p>${S.rdvDups.length} parcelle(s) ont plusieurs lignes dans <code>${T_RDV}</code> (souvent les parcelles de référence REF1 / REF2). Le calendrier affiche et met à jour la ligne la plus renseignée ; les autres ne sont ni lues ni modifiées.
+      <details><summary>Voir les clés concernées</summary><p class="muted" style="font-size:.8rem">${S.rdvDups.slice(0, 300).map(esc).join(', ')}${S.rdvDups.length > 300 ? '…' : ''}</p></details></p></div>` : ''}
     <div class="filters">
       <div><label class="lbl" for="eq">Recherche</label><input class="input" id="eq" type="search" placeholder="Nom, PACAGE, n° dossier, commune, clé…" value="${esc(S.expQ)}"></div>
       <div><label class="lbl" for="est">Statut</label><select class="select" id="est">${optList(STATUTS.map(s => [s, s]).concat([['__none', 'À appeler']]), S.expStatut, 'Tous')}</select></div>
@@ -2299,7 +2322,7 @@ function gridEntries() {
   }
   return out;
 }
-const farmOfKey = key => { const f = S.farms.get(String(key).split('-')[0]); return f && f.parcels.some(x => keyNorm(x.key) === keyNorm(key)) ? f : f || null; };
+const farmOfKey = key => { const f = S.farms.get(pacKey(String(key).split(/[-|]/)[0])); return f && f.parcels.some(x => keyNorm(x.key) === keyNorm(key)) ? f : f || null; };
 function histTable(list) {
   return `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Grille</th><th>Parcelle (CLE) / lieu</th><th>Exploitation</th><th>Préleveur</th><th>Constat</th></tr></thead><tbody>
     ${list.map(e => { const f = e.key ? farmOfKey(e.key) : null;
