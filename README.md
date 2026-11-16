@@ -9,7 +9,7 @@
 | `calendrier-prelevements.html` | Calendrier des prélèvements reliquats (préleveurs, inspecteurs FranceAgriMer, exports PDF/Excel, résultats et grilles d'évaluation des contrôles) |
 | `registre-parcelles.html` | Registre des parcelles des dossiers reçus retenues pour un prélèvement : coordonnées géographiques (liens Google Maps / Géoportail, carte), vue par parcelle ou par exploitation |
 | `tableau-de-bord-campagne.html` | Tableau de bord de la campagne : préleveurs, suites des RDV, erreurs préleveurs, contrôles (grilles Q_QUADHYDRO / Q_TAR_MANUELLE / Q_LIEUX_STOCKAGE), totaux cliquables |
-| `suivi-laboratoires.html` | Suivi des prélèvements par laboratoire et par département : import du fichier de découpage (onglet COMPLET) dans la table `Plan_prelevements_labos`, avancement, parcelles restant à prélever |
+| `suivi-laboratoires.html` | Suivi des prélèvements par laboratoire et par département (à prélever, prélevées, non prélevables, restant) à partir de la table COMPLET importée du fichier des labos |
 | `rdv/index.html` | Formulaire public de prise de rendez-vous |
 | `duo.html` | **Duo** — interprète à deux écouteurs (ex. japonais ⇄ allemand) |
 

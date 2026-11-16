@@ -311,9 +311,11 @@ function construire() {
   const col = (r, a, b) => r[a] !== undefined && r[a] !== null && r[a] !== '' ? r[a] : r[b];
   D.err = [];
   for (const r of t.err) {
-    const key = clean(col(r, 'CLE', 'B')), d = col(r, 'Date', 'C'), org = clean(col(r, 'Organisme', 'A'));
+    // CLE est une référence vers DATA_RELIQUATCLEAN (numéro de ligne) : on reprend la CLELAB de la ligne référencée
+    const cv = col(r, 'CLE', 'B'), rr = typeof cv === 'number' ? relById.get(cv) : null;
+    const key = rr ? clean(rr.CLELAB) : typeof cv === 'number' ? '' : clean(cv), d = col(r, 'Date', 'C'), org = clean(col(r, 'Organisme', 'A'));
     if (!key && !org) continue;   // ligne vide
-    const pac = key ? pacDe(key) : '', x = rdvByKey.get(keyNorm(key)), su = D.suites.filter(s => s.k === keyNorm(key));
+    const pac = rr && clean(rr.PACAGE) ? pacNorm(rr.PACAGE) : key ? pacDe(key) : '', x = rdvByKey.get(keyNorm(key)), su = D.suites.filter(s => s.k === keyNorm(key));
     D.err.push({id: r.id, key, k: keyNorm(key), pac, dpt: dptOf(pac), farm: dptOf(pac) ? farm(pac) : null, org: org || (x ? x.org : ''), date: num(d) || null, dateTxt: typeof d === 'number' ? '' : clean(d),
       prel: x ? x.prel : 0, rdvDate: x ? x.date : null, suite: su.length ? su[su.length - 1] : null});
   }

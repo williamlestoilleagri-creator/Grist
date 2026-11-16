@@ -136,6 +136,8 @@ function latLon(r) {
   if (!r) return null;
   let lat = NaN, lon = NaN;
   for (const c in r) { const n = c.toLowerCase(); if (/^(lat|latitude)$/.test(n)) lat = numFr(r[c]); else if (/^(lon|lng|long|longitude)$/.test(n)) lon = numFr(r[c]); }
+  // Centrodes : Latitude / Longitude en Lambert 93, converties en degrés dans TEMP_LAT / TEMP_LONG
+  if (!(isFinite(lat) && Math.abs(lat) <= 90 && isFinite(lon) && Math.abs(lon) <= 180) && r.TEMP_LAT !== undefined) { lat = numFr(r.TEMP_LAT); lon = numFr(r.TEMP_LONG); }
   if (!(isFinite(lat) && isFinite(lon))) for (const c in r) if (/^(gps|coord|coordonnees|coordonnees_gps)$/i.test(c)) {
     const m = /(-?\d+[.,]\d+)\s*[;, ]\s*(-?\d+[.,]\d+)/.exec(clean(r[c])); if (m) { lat = numFr(m[1]); lon = numFr(m[2]); break; } }
   return isFinite(lat) && isFinite(lon) && lat && lon && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? {lat, lon} : null;
