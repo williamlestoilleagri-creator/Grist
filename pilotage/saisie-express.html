@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-scheme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Saisie express</title>
+<link rel="stylesheet" href="socle.css">
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<script src="socle.js"></script>
+<style>
+  .se{max-width:980px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+  .se-zone{position:relative}
+  .se-zone textarea{font-size:1.05rem;min-height:3.2rem;padding:.7rem .9rem;line-height:1.5}
+  .se-ac{position:absolute;z-index:20;background:var(--surface);box-shadow:var(--shadow-lg);border:1px solid var(--border);min-width:260px;max-height:260px;overflow:auto}
+  .se-ac button{display:flex;gap:8px;width:100%;text-align:left;background:none;border:0;padding:6px 10px;cursor:pointer;font-size:.85rem}
+  .se-ac button[aria-selected=true],.se-ac button:hover{background:var(--bf-950)}
+  .se-ac .k{color:var(--mention);font-size:.75rem;margin-left:auto}
+  .se-apercu{display:flex;flex-direction:column;gap:8px}
+  .se-carte{border:1px solid var(--border);border-left:4px solid var(--bf);padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+  .se-carte.ko{border-left-color:var(--warning)}
+  .se-carte .titre{font-weight:700;color:var(--title)}
+  .se-puces{display:flex;flex-wrap:wrap;gap:6px}
+  .se-puce{font-size:.75rem;background:var(--alt);border:1px solid var(--border);padding:1px 8px;border-radius:12px}
+  .se-puce b{color:var(--mention);font-weight:500;margin-right:4px}
+  .se-puce.warn{background:var(--warning-bg);border-color:#f5c3b3;color:var(--warning)}
+  .se-aide{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px 14px;font-size:.8rem}
+  .se-aide code{background:var(--bf-950);color:var(--bf);padding:0 5px;font-family:var(--mono);font-size:.78rem}
+  .se-hist li{display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid var(--contrast);font-size:.85rem}
+  .se-hist li .t{flex:1;min-width:0}
+  .se-def{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+  .se-def .champ{min-width:200px;flex:1}
+</style>
+</head>
+<body>
+<script>
+(function () {
+  const P = Pilotage, esc = P.esc;
+  const ui = {texte: '', ac: null, historique: []};
+  let defauts = {projet: null, responsable: null};
+  try { defauts = Object.assign(defauts, JSON.parse(localStorage.getItem('saisie-express-defauts') || '{}')); } catch (e) { /* ignoré */ }
+
+  P.demarrer({
+    id: 'saisie-express',
+    titre: 'Saisie express',
+    sousTitre: 'Une ligne de texte devient une tâche complète',
+    entites: ['tache', 'projet'],
+    optionnelles: ['projet'],
+    rendu: () => { if (P.$('#se-in')) { apercu(); historique(); } else dessiner(); },
+  });
+
+  /* ---------- Correspondances floues ---------- */
+  const compact = s => P.norm(String(s).replace(/_/g, ' '));
+  function chercher(ent, val) {
+    const v = compact(val); if (!v) return {res: null, liste: []};
+    const sc = P.liste(ent).map(r => {
+      const lib = compact(r._libelle), code = compact(r.code || ''), mots = String(r._libelle).split(/[\s'’-]+/).filter(Boolean);
+      const init = P.norm(mots.map(m => m[0]).join(''));
+      let s = 0;
+      if (lib === v || code === v) s = 100;
+      else if (code && code.startsWith(v)) s = 80;
+      else if (lib.startsWith(v)) s = 70;
+      else if (mots.some(m => P.norm(m).startsWith(v))) s = 60;
+      else if (init === v) s = 55;
+      else if (lib.includes(v)) s = 40;
+      return {r, s};
+    }).filter(x => x.s).sort((a, b) => b.s - a.s || a.r._libelle.localeCompare(b.r._libelle, 'fr'));
+    return {res: sc[0] ? sc[0].r : null, ambigu: sc.length > 1 && sc[1].s === sc[0].s, liste: sc.map(x => x.r)};
+  }
+  function chercherChoix(liste, val) {
+    const v = compact(val);
+    return liste.find(x => compact(x) === v) || liste.find(x => compact(x).includes(v)) || liste.find(x => compact(x).replace(/^p/, '') === v) || null;
+  }
+  const jeton = (s) => s.replace(/\s+/g, '_');
+  const themeEnt = () => { const c = P.colonne('tache', 'theme'); return c && /^Ref/.test(c.type) ? 'theme' : null; };
+
+  /* ---------- Dates en français ---------- */
+  const JOURS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+  const MOIS = ['janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin', 'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre'];
+  function lireDate(txt) {
+    const auj = P.today(); const t = P.norm(txt.replace(/\s+/g, ' ')) ; const s = txt.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+    let m;
+    if (/^(aujourd'?hui|auj)$/.test(s)) return auj;
+    if (s === 'demain') return P.addDays(auj, 1);
+    if (/^apres-?demain$/.test(s)) return P.addDays(auj, 2);
+    if ((m = /^j\+(\d+)$/.exec(s))) return P.addDays(auj, +m[1]);
+    if ((m = /^s\+(\d+)$/.exec(s))) return P.addDays(auj, 7 * m[1]);
+    if ((m = /^dans (\d+) ?(j|jours?|sem|semaines?|mois)$/.exec(s))) return /^m/.test(m[2]) ? P.addMonths(auj, +m[1]) : P.addDays(auj, (/^s/.test(m[2]) ? 7 : 1) * m[1]);
+    if (/^fin (de (la )?)?semaine$/.test(s)) { let d = P.addDays(P.lundi(auj), 4); if (d < auj) d = P.addDays(d, 7); return d; }
+    if (/^fin (du )?mois$/.test(s)) return new Date(auj.getFullYear(), auj.getMonth() + 1, 0);
+    if ((m = /^(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)( prochain)?$/.exec(s))) { let n = (JOURS.indexOf(m[1]) - auj.getDay() + 7) % 7; if (n === 0 || m[2]) n = n || 7; return P.addDays(auj, n); }
+    if ((m = /^(\d{1,2})[\/.-](\d{1,2})(?:[\/.-](\d{2,4}))?$/.exec(s))) {
+      let y = m[3] ? +m[3] : auj.getFullYear(); if (y < 100) y += 2000;
+      let d = new Date(y, +m[2] - 1, +m[1]);
+      if (!m[3] && P.diffDays(auj, d) > 60) d = new Date(y + 1, +m[2] - 1, +m[1]);
+      return d.getMonth() === +m[2] - 1 ? d : null;
+    }
+    if ((m = /^(\d{1,2}) (janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)( \d{4})?$/.exec(s))) {
+      let y = m[3] ? +m[3] : auj.getFullYear(); let d = new Date(y, MOIS.indexOf(m[2]), +m[1]);
+      if (!m[3] && P.diffDays(auj, d) > 60) d = new Date(y + 1, MOIS.indexOf(m[2]), +m[1]);
+      return d;
+    }
+    return t ? null : null;
+  }
+  const RX_DATE = "(?:aujourd'?hui|demain|apr[eè]s-?demain|j\\+\\d+|s\\+\\d+|dans \\d+ ?(?:j|jours?|sem|semaines?|mois)|fin (?:de (?:la )?)?semaine|fin (?:du )?mois|(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)(?: prochain)?|\\d{1,2}[\\/.-]\\d{1,2}(?:[\\/.-]\\d{2,4})?|\\d{1,2} (?:janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[ée]cembre)(?: \\d{4})?)";
+
+  /* ---------- Analyse d'une ligne ---------- */
+  function analyser(ligne) {
+    let txt = ' ' + ligne + ' ';
+    const vals = {}, puces = [], alertes = [];
+    const appuis = [], themes = [];
+    // Plage de dates « du X au Y »
+    txt = txt.replace(new RegExp(`\\s(?:du|de) (${RX_DATE}) (?:au|à|a) (${RX_DATE})(?=\\s)`, 'i'), (all, a, b) => {
+      const d1 = lireDate(a), d2 = lireDate(b);
+      if (d1) vals.debut = d1; if (d2) vals.echeance = d2; return ' ';
+    });
+    // Échéance : « pour le X », « avant le X », « le X », « X »
+    txt = txt.replace(new RegExp(`\\s(?:(?:pour|avant|d'ici|d’ici|au plus tard)\\s(?:le\\s)?|le\\s|pour\\s)?(${RX_DATE})(?=\\s|[,.;]|$)`, 'i'), (all, a) => {
+      const d = lireDate(a); if (d && !vals.echeance) { vals.echeance = d; return ' '; } return all;
+    });
+    // Jetons préfixés
+    txt = txt.replace(/(^|\s)([@+#*=!~])([^\s]*)/g, (all, sp, pre, val) => {
+      if (pre === '!') {
+        const prios = P.choix('tache', 'priorite');
+        const rang = val === '' || val === '!' ? 1 : /^\d$/.test(val) ? +val : null;
+        const p = rang ? prios.find(x => P.rangPriorite(x) === rang) : chercherChoix(prios, val);
+        if (p) vals.priorite = p; else alertes.push(`Priorité « ${val} » inconnue`);
+        return sp;
+      }
+      if (pre === '~') {
+        const m = /^(\d+(?:[.,]\d+)?)(j|jh|h)?$/i.exec(val);
+        if (m) { let n = parseFloat(m[1].replace(',', '.')); if (m[2] && m[2].toLowerCase() === 'h') n = Math.round(n / 7 * 100) / 100; vals.charge = n; }
+        else alertes.push(`Charge « ${val} » illisible`);
+        return sp;
+      }
+      if (!val) return all;
+      if (pre === '@' || pre === '+') {
+        const r = chercher('agent', val);
+        if (r.res) { if (pre === '@') vals.responsable = r.res.id; else appuis.push(r.res.id); if (r.ambigu) alertes.push(`« ${val} » : plusieurs personnes possibles`); }
+        else alertes.push(`Personne « ${val} » introuvable`);
+        return sp;
+      }
+      if (pre === '#') {
+        const r = chercher('projet', val);
+        if (r.res) { vals.projet = r.res.id; if (r.ambigu) alertes.push(`« ${val} » : plusieurs projets possibles`); } else alertes.push(`Projet « ${val} » introuvable`);
+        return sp;
+      }
+      if (pre === '*') {
+        const te = themeEnt();
+        if (te) { const r = chercher('theme', val); if (r.res) themes.push(r.res.id); else alertes.push(`Thème « ${val} » introuvable`); }
+        else { const c = chercherChoix(P.choix('tache', 'theme'), val); if (c) themes.push(c); else alertes.push(`Thème « ${val} » introuvable`); }
+        return sp;
+      }
+      if (pre === '=') {
+        const c = chercherChoix(P.choix('tache', 'statut'), val);
+        if (c) vals.statut = c; else alertes.push(`Statut « ${val} » inconnu`);
+        return sp;
+      }
+      return all;
+    });
+    if (appuis.length) vals.appuis = appuis;
+    if (themes.length) vals.theme = themes;
+    if (!vals.projet && defauts.projet && P.get('projet', defauts.projet)) { vals.projet = defauts.projet; vals._projetDefaut = true; }
+    if (!vals.responsable && defauts.responsable && P.get('agent', defauts.responsable)) { vals.responsable = defauts.responsable; vals._respDefaut = true; }
+    if (!vals.priorite && vals.projet && P.a('tache', 'priorite')) { const pp = (P.get('projet', vals.projet) || {}).priorite; if (pp && P.choix('tache', 'priorite').includes(pp)) vals.priorite = pp; }
+    let titre = txt.replace(/\s+/g, ' ').replace(/\s([,.;])/g, '$1').trim().replace(/[,;]$/, '');
+    titre = titre.charAt(0).toUpperCase() + titre.slice(1);
+    vals.titre = titre;
+    if (!titre) alertes.push('Intitulé vide');
+    if (vals.debut && vals.echeance && vals.echeance < vals.debut) alertes.push('Échéance avant le début');
+    const auj = P.today();
+    if (vals.projet) puces.push(['Projet', P.libelle('projet', vals.projet) + (vals._projetDefaut ? ' (par défaut)' : '')]);
+    if (vals.responsable) puces.push(['Responsable', P.libelle('agent', vals.responsable) + (vals._respDefaut ? ' (par défaut)' : '')]);
+    if (appuis.length) puces.push(['Appuis', P.libelles('agent', appuis).join(', ')]);
+    if (vals.debut) puces.push(['Début', P.fmtDateLong(vals.debut)]);
+    if (vals.echeance) puces.push(['Échéance', `${P.fmtDateLong(vals.echeance)} (${P.relatif(P.diffDays(vals.echeance, auj))})`]);
+    if (vals.priorite) puces.push(['Priorité', vals.priorite]);
+    if (vals.statut) puces.push(['Statut', vals.statut]);
+    if (themes.length) puces.push(['Thème', themeEnt() ? P.libelles('theme', themes).join(', ') : themes.join(', ')]);
+    if (vals.charge != null) puces.push(['Charge', P.fmtNb(vals.charge, 2) + ' J/H']);
+    return {vals, puces, alertes};
+  }
+
+  /* ---------- Interface ---------- */
+  function dessiner() {
+    const corps = P.$('#pl-corps');
+    const projets = P.liste('projet').filter(p => !P.estClos(p.phase)).sort((a, b) => a._libelle.localeCompare(b._libelle, 'fr'));
+    const agents = P.liste('agent').slice().sort((a, b) => a._libelle.localeCompare(b._libelle, 'fr'));
+    corps.innerHTML = `<div class="se">
+      <div class="se-zone"><label for="se-in" class="sr">Nouvelle tâche</label>
+        <textarea class="in" id="se-in" rows="1" placeholder="Ex. : Relancer le garage pour la livraison @Erwan #LOG-2026-02 vendredi !2 ~0,5 *parc">${esc(ui.texte)}</textarea>
+        <div class="se-ac hidden" id="se-ac" role="listbox"></div></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn pri" id="se-ok">${P.ic('plus')} Créer la tâche</button>
+        <span class="muted small"><kbd>Entrée</kbd> crée la tâche · <kbd>Maj</kbd>+<kbd>Entrée</kbd> nouvelle ligne (une tâche par ligne) · <kbd>Tab</kbd> complète</span></div>
+      <div class="se-apercu" id="se-apercu" aria-live="polite"></div>
+      <details class="carte" ${ui.texte ? '' : 'open'}><summary style="cursor:pointer;font-weight:700">Mémo de saisie</summary>
+        <div class="se-aide" style="margin-top:10px">
+          <span><code>@nom</code> responsable</span><span><code>+nom</code> personne en appui</span>
+          ${P.table('projet') ? '<span><code>#code</code> ou <code>#mot</code> projet</span>' : ''}<span><code>!1</code> … <code>!4</code> priorité (<code>!!</code> = P1)</span>
+          ${P.a('tache', 'theme') ? '<span><code>*thème</code> thème</span>' : ''}<span><code>~2</code> charge en jours (<code>~3h</code>)</span>
+          <span><code>=en cours</code> statut</span><span><code>vendredi</code>, <code>demain</code>, <code>25/11</code></span>
+          <span><code>j+5</code>, <code>s+2</code>, <code>dans 3 semaines</code></span><span><code>fin du mois</code>, <code>fin de semaine</code></span>
+          <span><code>du 20/11 au 28/11</code> début et échéance</span><span>Coller plusieurs lignes = plusieurs tâches</span>
+        </div></details>
+      <div class="carte se-def"><div class="champ"><label for="se-dp">Projet par défaut</label><select class="in sm" id="se-dp"><option value="">— Aucun —</option>${projets.map(p => `<option value="${p.id}" ${p.id === defauts.projet ? 'selected' : ''}>${esc(p._libelle)}</option>`).join('')}</select></div>
+        <div class="champ"><label for="se-dr">Responsable par défaut</label><select class="in sm" id="se-dr"><option value="">— Aucun —</option>${agents.map(a => `<option value="${a.id}" ${a.id === defauts.responsable ? 'selected' : ''}>${esc(a._libelle)}</option>`).join('')}</select></div></div>
+      <section class="carte"><h2>Créées dans cette session</h2><ul class="liste-nue se-hist" id="se-hist"></ul></section>
+    </div>`;
+    const ta = P.$('#se-in');
+    if (!P.table('projet')) P.$('#se-dp').closest('.champ').classList.add('hidden');
+    ta.addEventListener('input', () => { ui.texte = ta.value; ajuster(); apercu(); autoComplete(); });
+    ta.addEventListener('keydown', clavier);
+    ta.addEventListener('click', autoComplete);
+    ta.addEventListener('blur', () => setTimeout(() => cacherAc(), 150));
+    P.$('#se-ok').addEventListener('click', creer);
+    P.$('#se-dp').addEventListener('change', e => { defauts.projet = +e.target.value || null; sauverDef(); apercu(); });
+    P.$('#se-dr').addEventListener('change', e => { defauts.responsable = +e.target.value || null; sauverDef(); apercu(); });
+    P.$('#se-ac').addEventListener('mousedown', e => { const b = e.target.closest('button'); if (b) { e.preventDefault(); inserer(b.dataset.v); } });
+    ajuster(); apercu(); historique(); ta.focus();
+  }
+  const sauverDef = () => { try { localStorage.setItem('saisie-express-defauts', JSON.stringify(defauts)); } catch (e) { /* ignoré */ } };
+  function ajuster() { const ta = P.$('#se-in'); ta.style.height = 'auto'; ta.style.height = Math.min(320, ta.scrollHeight + 4) + 'px'; }
+  const lignes = () => ui.texte.split('\n').map(l => l.trim()).filter(Boolean);
+
+  function apercu() {
+    const zone = P.$('#se-apercu');
+    const ls = lignes();
+    zone.innerHTML = ls.map(l => { const a = analyser(l); return `<div class="se-carte ${a.alertes.length ? 'ko' : ''}"><div class="titre">${esc(a.vals.titre || '(sans intitulé)')}</div>
+      <div class="se-puces">${a.puces.map(([k, v]) => `<span class="se-puce"><b>${esc(k)}</b>${esc(v)}</span>`).join('')}${a.alertes.map(x => `<span class="se-puce warn">⚠ ${esc(x)}</span>`).join('')}</div></div>`; }).join('');
+    P.$('#se-ok').innerHTML = `${P.ic('plus')} ${ls.length > 1 ? `Créer les ${ls.length} tâches` : 'Créer la tâche'}`;
+    P.$('#se-ok').disabled = !ls.length;
+  }
+
+  /* ---------- Autocomplétion ---------- */
+  function jetonCourant() {
+    const ta = P.$('#se-in'); const pos = ta.selectionStart; const avant = ta.value.slice(0, pos);
+    const m = /(^|\s)([@+#*=])([^\s]*)$/.exec(avant);
+    return m ? {pre: m[2], val: m[3], debut: pos - m[3].length, fin: pos} : null;
+  }
+  function autoComplete() {
+    const j = jetonCourant(); const ac = P.$('#se-ac');
+    if (!j) return cacherAc();
+    let items = [];
+    if (j.pre === '@' || j.pre === '+') items = (j.val ? chercher('agent', j.val).liste : P.liste('agent')).map(r => ({v: jeton(r._libelle), l: r._libelle, k: 'personne'}));
+    else if (j.pre === '#') items = (j.val ? chercher('projet', j.val).liste : P.liste('projet')).filter(p => !P.estClos(p.phase)).map(r => ({v: jeton(r.code || r._libelle), l: r._libelle, k: r.code || 'projet'}));
+    else if (j.pre === '*') items = themeEnt() ? (j.val ? chercher('theme', j.val).liste : P.liste('theme')).map(r => ({v: jeton(r._libelle.replace(/^\W+\s*/u, '')), l: r._libelle, k: 'thème'})) : P.choix('tache', 'theme').filter(x => !j.val || compact(x).includes(compact(j.val))).map(x => ({v: jeton(x), l: x, k: 'thème'}));
+    else if (j.pre === '=') items = P.choix('tache', 'statut').filter(x => !j.val || compact(x).includes(compact(j.val))).map(x => ({v: jeton(x.replace(/^\W+\s*/u, '')), l: x, k: 'statut'}));
+    items = items.slice(0, 8);
+    if (!items.length) return cacherAc();
+    ui.ac = {j, items, sel: 0};
+    ac.innerHTML = items.map((it, i) => `<button type="button" role="option" aria-selected="${i === 0}" data-v="${esc(it.v)}">${esc(it.l)}<span class="k">${esc(it.k)}</span></button>`).join('');
+    const ta = P.$('#se-in'); ac.style.left = '8px'; ac.style.top = (ta.offsetHeight + 2) + 'px';
+    ac.classList.remove('hidden');
+  }
+  function cacherAc() { ui.ac = null; const ac = P.$('#se-ac'); if (ac) ac.classList.add('hidden'); }
+  function inserer(v) {
+    const ta = P.$('#se-in'); const j = ui.ac ? ui.ac.j : jetonCourant(); if (!j) return;
+    ta.value = ta.value.slice(0, j.debut) + v + ' ' + ta.value.slice(j.fin);
+    const pos = j.debut + v.length + 1; ta.setSelectionRange(pos, pos); ui.texte = ta.value;
+    cacherAc(); ajuster(); apercu(); ta.focus();
+  }
+  function clavier(e) {
+    if (ui.ac) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); ui.ac.sel = (ui.ac.sel + (e.key === 'ArrowDown' ? 1 : -1) + ui.ac.items.length) % ui.ac.items.length; P.$$('#se-ac button').forEach((b, i) => b.setAttribute('aria-selected', i === ui.ac.sel)); return; }
+      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) { e.preventDefault(); inserer(ui.ac.items[ui.ac.sel].v); return; }
+      if (e.key === 'Escape') { cacherAc(); return; }
+    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); creer(); }
+  }
+
+  /* ---------- Création ---------- */
+  async function creer() {
+    const ls = lignes(); if (!ls.length) return;
+    const analyses = ls.map(analyser);
+    if (analyses.some(a => !a.vals.titre)) { P.toast('Une ligne n’a pas d’intitulé.', 'warn'); return; }
+    const acts = analyses.map(a => { const v = Object.assign({}, a.vals); delete v._projetDefaut; delete v._respDefaut; return P.actionAjout('tache', v); });
+    const bouton = P.$('#se-ok'); bouton.disabled = true;
+    try {
+      const ids = await P.appliquer(acts);
+      analyses.forEach((a, i) => ui.historique.unshift({id: ids[i], titre: a.vals.titre, projet: a.vals.projet, echeance: a.vals.echeance}));
+      ui.texte = '';
+      P.toast(ls.length > 1 ? `${ls.length} tâches créées.` : 'Tâche créée.', 'ok');
+      dessiner();
+    } catch (e) { bouton.disabled = false; }
+  }
+  function historique() {
+    const ul = P.$('#se-hist');
+    const l = ui.historique.filter(h => P.get('tache', h.id));
+    ul.innerHTML = l.length ? l.map(h => `<li><span class="t"><strong>${esc(h.titre)}</strong><br><span class="muted small">${esc(P.libelle('projet', h.projet) || 'Sans projet')}${h.echeance ? ' · ' + P.fmtDate(h.echeance) : ''}</span></span>
+      <button class="btn ter sm" data-annuler="${h.id}">Annuler</button></li>`).join('') : '<li class="muted small">Aucune tâche créée pour l’instant.</li>';
+    ul.onclick = async e => { const b = e.target.closest('[data-annuler]'); if (!b) return; await P.supprimer('tache', +b.dataset.annuler, 'Tâche supprimée.'); ui.historique = ui.historique.filter(h => h.id !== +b.dataset.annuler); };
+  }
+})();
+</script>
+</body>
+</html>

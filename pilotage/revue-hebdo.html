@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-scheme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Revue hebdomadaire</title>
+<link rel="stylesheet" href="socle.css">
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<script src="socle.js"></script>
+<style>
+  .rv{display:flex;flex-direction:column;gap:16px;max-width:1200px}
+  .rv h2{font-size:1.05rem}
+  .rv-titre{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+  .rv-titre h2{font-size:1.35rem}
+  .rv-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:16px}
+  .rv-grp{margin:8px 0 2px;font-weight:700;color:var(--bf);font-size:.85rem}
+  .rv-li{display:flex;gap:8px;align-items:baseline;padding:4px 0;border-bottom:1px solid var(--contrast);font-size:.85rem}
+  .rv-li .t{flex:1;min-width:0}
+  .rv-li .m{color:var(--mention);font-size:.78rem;white-space:nowrap}
+  .rv-notes{width:100%;min-height:90px}
+  .rv-filtres{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .rv-filtres select,.rv-filtres input{width:auto}
+  @media (max-width:500px){.rv-cols{grid-template-columns:1fr}}
+  @media print{.rv-notes{border:1px solid #999;box-shadow:none;background:none}}
+</style>
+</head>
+<body>
+<script>
+(function () {
+  const P = Pilotage, esc = P.esc;
+  const ui = {fin: P.today(), duree: 7, domaine: '', agent: ''};
+
+  P.demarrer({
+    id: 'revue-hebdo',
+    titre: 'Revue hebdomadaire',
+    sousTitre: 'Ce qui a bougé, ce qui bloque, ce qui arrive',
+    entites: ['tache', 'projet', 'jalon', 'temps'],
+    optionnelles: ['jalon', 'temps'],
+    reglagesHtml: () => `<div class="grille">
+      <div class="champ"><label for="rg-dormant">Tâche « dormante » après (jours sans mise à jour)</label><input class="in" id="rg-dormant" type="number" min="3" value="${P.reglage('dormant', 14)}"></div>
+      <div class="champ"><label for="rg-avenir">Horizon « à venir » (jours)</label><input class="in" id="rg-avenir" type="number" min="1" value="${P.reglage('avenir', 7)}"></div></div>`,
+    lireReglages: (el, r) => { r.dormant = +el.querySelector('#rg-dormant').value || 14; r.avenir = +el.querySelector('#rg-avenir').value || 7; },
+    outils: () => `<div class="rv-filtres no-print">
+        <div class="grp" role="group" aria-label="Période">
+          <button class="btn sm" data-per="sem-prec">Semaine précédente</button>
+          <button class="btn sm" data-per="sem">Cette semaine</button>
+          <button class="btn sm" data-per="7j" aria-pressed="true">7 derniers jours</button>
+        </div>
+        <label class="sr" for="rv-fin">Fin de période</label><input class="in sm" type="date" id="rv-fin" value="${P.iso(ui.fin)}" data-bulle="Dernier jour de la période">
+        <label class="sr" for="rv-dom">Domaine</label><select class="in sm" id="rv-dom"><option value="">Tous domaines</option></select>
+        <label class="sr" for="rv-ag">Agent</label><select class="in sm" id="rv-ag"><option value="">Toute l'équipe</option></select>
+      </div>
+      <button class="btn sec sm" id="rv-copier">${P.ic('copier')} Copier</button>
+      <button class="btn pri sm" id="rv-imprimer">${P.ic('imprimer')} Imprimer</button>`,
+    surOutils: el => {
+      el.addEventListener('click', e => {
+        const b = e.target.closest('[data-per]'); if (!b) return;
+        P.$$('[data-per]', el).forEach(x => x.setAttribute('aria-pressed', x === b));
+        const t = P.today();
+        if (b.dataset.per === 'sem') { ui.fin = P.addDays(P.lundi(t), 6); }
+        else if (b.dataset.per === 'sem-prec') { ui.fin = P.addDays(P.lundi(t), -1); }
+        else ui.fin = t;
+        P.$('#rv-fin').value = P.iso(ui.fin); dessiner();
+      });
+      el.querySelector('#rv-fin').addEventListener('change', e => { ui.fin = P.fromIso(e.target.value) || P.today(); P.$$('[data-per]', el).forEach(x => x.setAttribute('aria-pressed', 'false')); dessiner(); });
+      el.querySelector('#rv-dom').addEventListener('change', e => { ui.domaine = e.target.value; dessiner(); });
+      el.querySelector('#rv-ag').addEventListener('change', e => { ui.agent = e.target.value ? +e.target.value : ''; dessiner(); });
+      el.querySelector('#rv-imprimer').addEventListener('click', () => window.print());
+      el.querySelector('#rv-copier').addEventListener('click', copier);
+    },
+    rendu: () => { remplirFiltres(); dessiner(); },
+  });
+
+  function remplirFiltres() {
+    const dom = P.$('#rv-dom'), ag = P.$('#rv-ag');
+    const doms = P.uniq(P.liste('projet').map(p => p.domaine).filter(Boolean)).sort();
+    dom.innerHTML = '<option value="">Tous domaines</option>' + doms.map(d => `<option ${d === ui.domaine ? 'selected' : ''}>${esc(d)}</option>`).join('');
+    dom.classList.toggle('hidden', !doms.length);
+    ag.innerHTML = '<option value="">Toute l\'équipe</option>' + P.liste('agent').slice().sort((a, b) => a._libelle.localeCompare(b._libelle, 'fr'))
+      .map(a => `<option value="${a.id}" ${a.id === ui.agent ? 'selected' : ''}>${esc(a._libelle)}</option>`).join('');
+  }
+
+  function dessiner() {
+    const corps = P.$('#pl-corps');
+    const fin = ui.fin, debut = P.addDays(fin, -(ui.duree - 1)), auj = P.today();
+    const dans = (d, a, b) => d && d >= a && d <= b;
+    const avenir = P.reglage('avenir', 7), dormant = P.reglage('dormant', 14);
+    const projetOk = id => { if (!ui.domaine) return true; const p = P.get('projet', id); return p && p.domaine === ui.domaine; };
+    const agentOk = t => !ui.agent || t.responsable === ui.agent || (t.appuis || []).includes(ui.agent);
+    const taches = P.liste('tache').filter(t => projetOk(t.projet) && agentOk(t));
+    const ouvertes = taches.filter(t => !P.estClos(t.statut));
+    const projets = P.liste('projet').filter(p => !ui.domaine || p.domaine === ui.domaine);
+    const jalons = P.liste('jalon').filter(j => projetOk(j.projet));
+    const temps = P.liste('temps').filter(x => dans(x.date, debut, fin) && (!ui.agent || x.agent === ui.agent) && (!ui.domaine || !x.projet || projetOk(x.projet)));
+
+    const terminees = taches.filter(t => P.estTermine(t.statut) && (dans(t.fin_reelle, debut, fin) || (!t.fin_reelle && dans(t.maj && P.jour(t.maj), debut, fin))));
+    const nouvelles = P.a('tache', 'cree_le') ? taches.filter(t => dans(t.cree_le && P.jour(t.cree_le), debut, fin)) : [];
+    const retards = ouvertes.filter(t => t.echeance && t.echeance < auj).sort((a, b) => a.echeance - b.echeance);
+    const prochaines = ouvertes.filter(t => dans(t.echeance, auj, P.addDays(auj, avenir))).sort((a, b) => a.echeance - b.echeance);
+    const jalAtteints = jalons.filter(j => j.atteint && dans(j.date_reelle || j.date, debut, fin));
+    const jalDepasses = jalons.filter(j => !j.atteint && j.date && j.date < auj);
+    const jalAvenir = jalons.filter(j => !j.atteint && dans(j.date, auj, P.addDays(auj, 15))).sort((a, b) => a.date - b.date);
+    const dormantes = P.a('tache', 'maj') ? ouvertes.filter(t => t.maj && P.diffDays(auj, P.jour(t.maj)) > dormant).sort((a, b) => a.maj - b.maj) : [];
+    const incompletes = ouvertes.filter(t => !t.responsable || !t.echeance);
+
+    const nomProjet = id => P.libelle('projet', id) || 'Sans projet';
+    const resp = t => t.responsable ? esc(P.libelle('agent', t.responsable)) : '<span class="badge warn">sans responsable</span>';
+    const parProjet = (liste, ligne) => {
+      if (!liste.length) return '<p class="muted small">Rien à signaler.</p>';
+      const g = new Map(); liste.forEach(t => { const k = nomProjet(t.projet); if (!g.has(k)) g.set(k, []); g.get(k).push(t); });
+      return Array.from(g.entries()).sort((a, b) => a[0].localeCompare(b[0], 'fr')).map(([k, l]) => `<div class="rv-grp">${esc(k)}</div>${l.map(ligne).join('')}`).join('');
+    };
+
+    const meteo = projets.filter(p => !P.estClos(p.phase)).map(p => {
+      const tp = P.tachesDuProjet(p.id);
+      const s = P.santeProjet(p);
+      const av = P.avancementProjet(p.id);
+      const j = p.fin ? P.diffDays(p.fin, auj) : null;
+      const pj = jalons.filter(x => x.projet === p.id && !x.atteint && x.date).sort((a, b) => a.date - b.date)[0];
+      return {p, s, av, j, nbRetard: tp.filter(t => P.urgence(t).code === 'retard').length, pj};
+    }).sort((a, b) => a.s.rang - b.s.rang);
+
+    const agents = new Map();
+    temps.forEach(x => {
+      const k = x.agent || 0; if (!agents.has(k)) agents.set(k, {tot: 0, proj: 0});
+      const a = agents.get(k); a.tot += x.duree || 0; if (x.tache || x.projet) a.proj += x.duree || 0;
+    });
+    const totalTemps = P.somme(temps.map(x => x.duree));
+
+    const cleNotes = 'revue-notes:' + P.etat.docName + ':' + P.iso(debut);
+    let notes = ''; try { notes = localStorage.getItem(cleNotes) || ''; } catch (e) { /* ignoré */ }
+
+    corps.innerHTML = `<div class="rv" id="rv-rapport">
+      <div class="rv-titre"><h2>Revue du ${P.fmtDate(debut)} au ${P.fmtDate(fin)}</h2>
+        <span class="muted small">${ui.domaine ? esc(ui.domaine) + ' · ' : ''}${ui.agent ? esc(P.libelle('agent', ui.agent)) + ' · ' : ''}éditée le ${P.fmtDate(auj)}</span></div>
+      <div class="tuiles">
+        <div class="tuile ok"><div class="v">${terminees.length}</div><div class="l">tâche(s) terminée(s)</div></div>
+        ${P.a('tache', 'cree_le') ? `<div class="tuile"><div class="v">${nouvelles.length}</div><div class="l">nouvelle(s) tâche(s)</div></div>` : ''}
+        <div class="tuile ${retards.length ? 'err' : 'ok'}"><div class="v">${retards.length}</div><div class="l">tâche(s) en retard</div></div>
+        <div class="tuile ${prochaines.length ? 'warn' : ''}"><div class="v">${prochaines.length}</div><div class="l">échéance(s) sous ${avenir} j</div></div>
+        ${P.table('jalon') ? `<div class="tuile ok"><div class="v">${jalAtteints.length}</div><div class="l">jalon(s) atteint(s)</div></div>
+        <div class="tuile ${jalDepasses.length ? 'err' : ''}"><div class="v">${jalDepasses.length}</div><div class="l">jalon(s) dépassé(s)</div></div>` : ''}
+        ${P.table('temps') ? `<div class="tuile"><div class="v">${P.fmtNb(totalTemps)}</div><div class="l">J/H déclarés</div></div>` : ''}
+      </div>
+
+      <section class="carte"><h2>🌦️ Météo des projets en cours</h2>
+        ${meteo.length ? `<table class="tab"><thead><tr><th>Projet</th><th>État</th><th>Phase</th><th>Avancement</th><th>Deadline</th><th class="num">Retards</th><th>Prochain jalon</th></tr></thead><tbody>
+        ${meteo.map(m => `<tr><td><strong>${esc(m.p.code ? m.p.code + ' · ' : '')}${esc(m.p.titre)}</strong></td><td><span class="badge ${m.s.c}">${esc(m.s.l)}</span></td>
+          <td>${esc(m.p.phase || '')}</td>
+          <td style="min-width:110px"><div class="barre ${m.av >= .8 ? 'ok' : ''}"><span style="width:${Math.round(m.av * 100)}%"></span></div><span class="small">${P.fmtPct(m.av)}</span></td>
+          <td>${m.p.fin ? `${P.fmtDate(m.p.fin)} <span class="small ${m.j < 0 ? '' : 'muted'}" style="${m.j < 0 ? 'color:var(--error)' : ''}">(${m.j < 0 ? 'dépassée de ' + (-m.j) + ' j' : 'J-' + m.j})</span>` : '<span class="muted">–</span>'}</td>
+          <td class="num">${m.nbRetard || ''}</td><td class="small">${m.pj ? esc(m.pj.titre) + ' · ' + P.fmtDate(m.pj.date) : ''}</td></tr>`).join('')}</tbody></table>` : '<p class="muted small">Aucun projet en cours.</p>'}
+      </section>
+
+      <div class="rv-cols">
+        <section class="carte"><h2>✅ Réalisé sur la période</h2>
+          ${parProjet(terminees, t => `<div class="rv-li"><span class="t">${esc(t.titre)}${t.suites ? `<br><span class="muted small">${esc(t.suites)}</span>` : ''}</span><span class="m">${resp(t)} · ${P.fmtDate(t.fin_reelle || (t.maj && P.jour(t.maj)))}</span></div>`)}
+        </section>
+        <section class="carte"><h2>🔴 En retard</h2>
+          ${retards.length ? retards.map(t => `<div class="rv-li"><span class="t"><strong>${esc(t.titre)}</strong><br><span class="muted small">${esc(nomProjet(t.projet))}${t.suites ? ' · ' + esc(t.suites) : ''}</span></span>
+            <span class="m">${resp(t)}<br><span class="badge err">${-P.diffDays(t.echeance, auj)} j de retard</span></span></div>`).join('') : '<p class="muted small">Aucune tâche en retard. 👏</p>'}
+        </section>
+        <section class="carte"><h2>📅 À venir</h2>
+          ${prochaines.length ? prochaines.map(t => `<div class="rv-li"><span class="t">${esc(t.titre)}<br><span class="muted small">${esc(nomProjet(t.projet))}</span></span><span class="m">${resp(t)} · ${P.fmtDateCourt(t.echeance)} (${P.relatif(P.diffDays(t.echeance, auj))})</span></div>`).join('') : `<p class="muted small">Aucune échéance dans les ${avenir} prochains jours.</p>`}
+          ${jalAvenir.length ? `<div class="rv-grp">Jalons des 15 prochains jours</div>${jalAvenir.map(j => `<div class="rv-li"><span class="t">🏁 ${esc(j.titre)}<br><span class="muted small">${esc(nomProjet(j.projet))}</span></span><span class="m">${P.fmtDateCourt(j.date)}</span></div>`).join('')}` : ''}
+        </section>
+        ${P.table('jalon') ? `<section class="carte"><h2>🏁 Jalons</h2>
+          <div class="rv-grp">Atteints sur la période</div>${jalAtteints.length ? jalAtteints.map(j => `<div class="rv-li"><span class="t">${esc(j.titre)}</span><span class="m">${P.fmtDate(j.date_reelle || j.date)}</span></div>`).join('') : '<p class="muted small">Aucun.</p>'}
+          <div class="rv-grp">Dépassés et non atteints</div>${jalDepasses.length ? jalDepasses.map(j => `<div class="rv-li"><span class="t">${esc(j.titre)}<br><span class="muted small">${esc(nomProjet(j.projet))}</span></span><span class="m"><span class="badge err">prévu le ${P.fmtDate(j.date)}</span></span></div>`).join('') : '<p class="muted small">Aucun.</p>'}
+        </section>` : ''}
+        <section class="carte"><h2>💤 Points d'attention</h2>
+          ${P.a('tache', 'maj') ? `<div class="rv-grp">Sans mise à jour depuis plus de ${dormant} jours</div>${dormantes.length ? dormantes.map(t => `<div class="rv-li"><span class="t">${esc(t.titre)}</span><span class="m">${resp(t)} · ${P.diffDays(auj, P.jour(t.maj))} j</span></div>`).join('') : '<p class="muted small">Aucune.</p>'}` : ''}
+          <div class="rv-grp">Tâches ouvertes incomplètes</div>${incompletes.length ? incompletes.map(t => `<div class="rv-li"><span class="t">${esc(t.titre)}</span><span class="m">${!t.responsable ? '<span class="badge warn">sans responsable</span> ' : ''}${!t.echeance ? '<span class="badge warn">sans échéance</span>' : ''}</span></div>`).join('') : '<p class="muted small">Aucune.</p>'}
+          ${nouvelles.length ? `<div class="rv-grp">Nouvelles tâches</div>${nouvelles.map(t => `<div class="rv-li"><span class="t">${esc(t.titre)}<br><span class="muted small">${esc(nomProjet(t.projet))}</span></span><span class="m">${resp(t)}</span></div>`).join('')}` : ''}
+        </section>
+        ${P.table('temps') ? `<section class="carte"><h2>⏱️ Temps déclaré</h2>
+          ${agents.size ? `<table class="tab"><thead><tr><th>Agent</th><th class="num">Total (J/H)</th><th class="num">Projets</th><th class="num">Hors projet</th></tr></thead><tbody>
+          ${Array.from(agents.entries()).sort((a, b) => b[1].tot - a[1].tot).map(([id, a]) => `<tr><td>${id ? esc(P.libelle('agent', id)) : '<span class="badge warn">sans agent</span>'}</td><td class="num">${P.fmtNb(a.tot)}</td><td class="num">${P.fmtNb(a.proj)}</td><td class="num">${P.fmtNb(a.tot - a.proj)}</td></tr>`).join('')}
+          <tr><td><strong>Total</strong></td><td class="num"><strong>${P.fmtNb(totalTemps)}</strong></td><td class="num">${P.fmtNb(P.somme(Array.from(agents.values()).map(a => a.proj)))}</td><td class="num">${P.fmtNb(totalTemps - P.somme(Array.from(agents.values()).map(a => a.proj)))}</td></tr></tbody></table>` : '<p class="muted small">Aucun temps déclaré sur la période.</p>'}
+        </section>` : ''}
+      </div>
+      <section class="carte"><h2>📝 Décisions et points à aborder</h2>
+        <textarea class="in rv-notes no-print" id="rv-notes" placeholder="Notes de la réunion (enregistrées dans ce navigateur pour cette période)">${esc(notes)}</textarea>
+        <div class="print-only" id="rv-notes-print" style="white-space:pre-wrap">${esc(notes) || '<br><br><br>'}</div>
+      </section>
+    </div>`;
+    const ta = P.$('#rv-notes');
+    ta.addEventListener('input', P.debounce(() => { try { localStorage.setItem(cleNotes, ta.value); } catch (e) { /* ignoré */ } P.$('#rv-notes-print').textContent = ta.value; }, 300));
+  }
+
+  async function copier() {
+    const src = P.$('#rv-rapport'); if (!src) return;
+    const clone = src.cloneNode(true);
+    clone.querySelectorAll('.no-print').forEach(x => x.remove());
+    clone.querySelectorAll('.print-only').forEach(x => { x.style.display = 'block'; });
+    const html = `<div style="font-family:Marianne,Arial,sans-serif;font-size:13px">${clone.innerHTML}</div>`;
+    const texte = clone.innerText;
+    try {
+      await navigator.clipboard.write([new ClipboardItem({'text/html': new Blob([html], {type: 'text/html'}), 'text/plain': new Blob([texte], {type: 'text/plain'})})]);
+      P.toast('Revue copiée : collez-la dans un mail ou un document.', 'ok');
+    } catch (e) {
+      try { await navigator.clipboard.writeText(texte); P.toast('Revue copiée (texte seul).', 'ok'); }
+      catch (e2) { P.toast('Copie impossible dans ce navigateur : utilisez Imprimer.', 'warn'); }
+    }
+  }
+})();
+</script>
+</body>
+</html>

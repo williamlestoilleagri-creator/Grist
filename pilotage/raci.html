@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-scheme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Matrice RACI</title>
+<link rel="stylesheet" href="socle.css">
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<script src="socle.js"></script>
+<style>
+  .rc-wrap{overflow:auto;border:1px solid var(--border);max-height:calc(100vh - 210px)}
+  table.rc{border-collapse:separate;border-spacing:0;font-size:.82rem}
+  .rc th,.rc td{border-bottom:1px solid var(--contrast);border-right:1px solid var(--contrast);padding:0;background:var(--surface)}
+  .rc thead th{position:sticky;top:0;z-index:2;background:var(--alt);border-bottom:2px solid var(--text);vertical-align:bottom;padding:6px 4px;font-weight:500}
+  .rc thead th.ag{height:130px;width:44px;min-width:44px}
+  .rc thead th.ag span{writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;display:inline-block;max-height:120px;overflow:hidden;text-overflow:ellipsis;color:var(--title)}
+  .rc .pj{position:sticky;left:0;z-index:1;min-width:280px;max-width:340px;padding:6px 10px;text-align:left;font-weight:500}
+  .rc thead .pj{z-index:3}
+  .rc .pj small{display:block;color:var(--mention);font-weight:400}
+  .rc td.c button{width:100%;height:36px;border:0;background:none;cursor:pointer;font-weight:700;font-size:.9rem}
+  .rc td.c button:hover{background:var(--bf-975);box-shadow:inset 0 0 0 2px var(--bf-850)}
+  .rc td.c.chef button{background:repeating-linear-gradient(135deg,transparent 0 6px,var(--bf-975) 6px 12px)}
+  .rc .ctl{padding:4px 8px;white-space:nowrap;font-size:.75rem}
+  .rc tfoot td{position:sticky;bottom:0;background:var(--alt);border-top:2px solid var(--text);text-align:center;font-size:.72rem;padding:4px 2px}
+  .rc tfoot td.pj{z-index:3}
+  .L{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:22px;padding:0 4px;border-radius:3px;color:#fff}
+  .L.A{background:var(--error)} .L.R{background:var(--bf)} .L.C{background:var(--warning)} .L.I{background:#929292}
+  .rc-menu{position:fixed;z-index:60;background:var(--surface);box-shadow:var(--shadow-lg);border:1px solid var(--border);padding:8px;display:flex;flex-direction:column;gap:6px;min-width:230px}
+  .rc-menu .lettres{display:flex;gap:4px}
+  .rc-menu .lettres button{flex:1;border:1px solid var(--border);background:var(--surface);cursor:pointer;padding:6px 0;font-weight:700}
+  .rc-menu .lettres button[aria-pressed=true]{box-shadow:inset 0 0 0 2px var(--title)}
+  .rc-leg{display:flex;gap:14px;flex-wrap:wrap;font-size:.8rem;align-items:center;margin-bottom:10px}
+  @media print{.rc-wrap{max-height:none;overflow:visible}.rc thead th,.rc .pj,.rc tfoot td{position:static}}
+</style>
+</head>
+<body>
+<script>
+(function () {
+  const P = Pilotage, esc = P.esc;
+  const ui = {domaine: '', clos: false, tousAgents: false};
+  const LETTRES = {R: 'Réalise', A: 'Approuve', C: 'Consulté', I: 'Informé'};
+
+  P.demarrer({
+    id: 'raci',
+    titre: 'Matrice RACI',
+    sousTitre: 'Qui réalise, approuve, est consulté ou informé, projet par projet',
+    entites: ['role', 'projet', 'agent'],
+    outils: () => `<select class="in sm" id="rc-dom" style="width:auto" aria-label="Domaine"><option value="">Tous domaines</option></select>
+      <label class="case small"><input type="checkbox" id="rc-clos"> Projets clos</label>
+      <label class="case small"><input type="checkbox" id="rc-tous"> Tous les agents</label>
+      <button class="btn ter sm" id="rc-print">${P.ic('imprimer')} Imprimer</button>`,
+    surOutils: el => {
+      el.querySelector('#rc-dom').addEventListener('change', e => { ui.domaine = e.target.value; dessiner(); });
+      el.querySelector('#rc-clos').addEventListener('change', e => { ui.clos = e.target.checked; dessiner(); });
+      el.querySelector('#rc-tous').addEventListener('change', e => { ui.tousAgents = e.target.checked; dessiner(); });
+      el.querySelector('#rc-print').addEventListener('click', () => window.print());
+    },
+    rendu: () => {
+      const doms = P.uniq(P.liste('projet').map(p => p.domaine).filter(Boolean)).sort();
+      const d = P.$('#rc-dom'); d.innerHTML = '<option value="">Tous domaines</option>' + doms.map(x => `<option ${x === ui.domaine ? 'selected' : ''}>${esc(x)}</option>`).join(''); d.classList.toggle('hidden', !doms.length);
+      dessiner();
+    },
+  });
+
+  /* Valeur de choix correspondant à une lettre (ex. « A – Approuve ») */
+  const valeurLettre = l => P.choix('role', 'role').find(x => P.lettreRole(x) === l) || l;
+  const rolesDe = (pid, aid) => P.liste('role').filter(r => r.projet === pid && r.personne === aid);
+
+  function dessiner() {
+    const corps = P.$('#pl-corps');
+    const projets = P.liste('projet').filter(p => (!ui.domaine || p.domaine === ui.domaine) && (ui.clos || !P.estClos(p.phase)))
+      .sort((a, b) => String(a.code || a.titre).localeCompare(String(b.code || b.titre), 'fr'));
+    const ids = new Set(projets.map(p => p.id));
+    const roles = P.liste('role').filter(r => ids.has(r.projet));
+    const avecRole = new Set(roles.map(r => r.personne));
+    projets.forEach(p => (p.chefs || []).forEach(id => avecRole.add(id)));
+    const agents = P.liste('agent').filter(a => ui.tousAgents || avecRole.has(a.id)).sort((a, b) => a._libelle.localeCompare(b._libelle, 'fr'));
+    const aPart = P.a('role', 'part');
+
+    const ctrl = p => {
+      const l = roles.filter(r => r.projet === p.id).map(r => P.lettreRole(r.role));
+      const nA = l.filter(x => x === 'A').length, nR = l.filter(x => x === 'R').length;
+      const pb = [];
+      if (!nA) pb.push('aucun A'); if (nA > 1) pb.push(`${nA} A`); if (!nR) pb.push('aucun R');
+      return pb.length ? `<span class="badge warn" data-bulle="Une règle RACI : un seul « A » (responsable final) et au moins un « R » par projet.">⚠ ${pb.join(', ')}</span>` : '<span class="badge ok">✓ complet</span>';
+    };
+    const totaux = agents.map(a => {
+      const r = roles.filter(x => x.personne === a.id);
+      const n = l => r.filter(x => P.lettreRole(x.role) === l).length;
+      return {A: n('A'), R: n('R'), C: n('C'), I: n('I'), part: P.somme(r.map(x => x.part || 0))};
+    });
+
+    corps.innerHTML = `
+      <div class="rc-leg">${Object.entries(LETTRES).map(([l, t]) => `<span><span class="L ${l}">${l}</span> ${t}</span>`).join('')}
+        <span class="muted">Hachuré : chargé(e) de mission du projet · Cliquer une case pour attribuer un rôle</span></div>
+      ${projets.length && agents.length ? `<div class="rc-wrap"><table class="rc">
+        <thead><tr><th class="pj">Projet</th>${agents.map(a => `<th class="ag" title="${esc(a._libelle)}"><span>${esc(a._libelle)}</span></th>`).join('')}<th>Contrôle</th></tr></thead>
+        <tbody>${projets.map(p => `<tr><th class="pj" scope="row">${esc(p.titre)}<small>${esc([p.code, p.phase].filter(Boolean).join(' · '))}</small></th>
+          ${agents.map(a => { const rs = rolesDe(p.id, a.id); const chef = (p.chefs || []).includes(a.id);
+            const ls = P.uniq(rs.map(r => P.lettreRole(r.role)).filter(Boolean));
+            const info = rs.map(r => `${esc(r.role)}${r.part ? ' · ' + P.fmtPct(r.part) : ''}${r.commentaire ? ' · ' + esc(r.commentaire) : ''}`).join('<br>');
+            return `<td class="c ${chef ? 'chef' : ''}"><button data-p="${p.id}" data-a="${a.id}" aria-label="${esc(a._libelle)} sur ${esc(p.titre)} : ${ls.join(', ') || 'aucun rôle'}" ${info || chef ? `data-bulle="<strong>${esc(a._libelle)}</strong><br>${chef ? 'Chargé(e) de mission<br>' : ''}${info}"` : ''}>${ls.map(l => `<span class="L ${l}">${l}</span>`).join(' ')}</button></td>`; }).join('')}
+          <td class="ctl">${ctrl(p)}</td></tr>`).join('')}</tbody>
+        <tfoot><tr><td class="pj" style="text-align:left">Charge par personne${aPart ? ' (A·R · temps cumulé)' : ' (A·R)'}</td>${totaux.map(t => `<td data-bulle="A : ${t.A} · R : ${t.R} · C : ${t.C} · I : ${t.I}${aPart ? '<br>Temps consacré cumulé : ' + P.fmtPct(t.part) : ''}">${t.A}·${t.R}${aPart && t.part ? `<br><span style="${t.part > 1 ? 'color:var(--error);font-weight:700' : ''}">${P.fmtPct(t.part)}</span>` : ''}</td>`).join('')}<td></td></tr></tfoot>
+      </table></div>` : '<div class="vide">Aucun projet ou aucun agent à afficher. Cochez « Tous les agents » pour commencer à attribuer des rôles.</div>'}`;
+    const wrap = P.$('.rc-wrap');
+    if (wrap) wrap.addEventListener('click', e => { const b = e.target.closest('button[data-p]'); if (b) menu(b, +b.dataset.p, +b.dataset.a); });
+  }
+
+  function menu(btn, pid, aid) {
+    P.$$('.rc-menu').forEach(m => m.remove());
+    const rs = rolesDe(pid, aid); const actuel = rs[0] ? P.lettreRole(rs[0].role) : '';
+    const aPart = P.a('role', 'part') && P.modifiable('role', 'part');
+    const m = document.createElement('div'); m.className = 'rc-menu'; m.setAttribute('role', 'dialog');
+    m.innerHTML = `<strong class="small">${esc(P.libelle('agent', aid))} · ${esc(P.libelle('projet', pid))}</strong>
+      <div class="lettres">${Object.keys(LETTRES).map(l => `<button data-l="${l}" aria-pressed="${l === actuel}" title="${LETTRES[l]}"><span class="L ${l}">${l}</span></button>`).join('')}</div>
+      ${aPart ? `<label class="small">Temps consacré (%) <input class="in sm" type="number" min="0" max="100" step="5" id="rc-part" value="${rs[0] && rs[0].part != null ? Math.round(rs[0].part * 100) : ''}"></label>` : ''}
+      <div style="display:flex;gap:6px;justify-content:space-between">${rs.length ? '<button class="btn danger sm" data-l="">Retirer</button>' : '<span></span>'}<button class="btn ter sm" data-fermer>Fermer</button></div>`;
+    document.body.appendChild(m);
+    const r = btn.getBoundingClientRect();
+    m.style.left = Math.min(window.innerWidth - m.offsetWidth - 8, r.left) + 'px';
+    m.style.top = (r.bottom + m.offsetHeight > window.innerHeight ? r.top - m.offsetHeight - 4 : r.bottom + 4) + 'px';
+    const fermer = () => { m.remove(); document.removeEventListener('mousedown', dehors); document.removeEventListener('keydown', esc2); };
+    const dehors = e => { if (!m.contains(e.target)) fermer(); };
+    const esc2 = e => { if (e.key === 'Escape') fermer(); };
+    setTimeout(() => { document.addEventListener('mousedown', dehors); document.addEventListener('keydown', esc2); }, 0);
+    m.querySelector('.lettres button').focus();
+    m.addEventListener('click', async e => {
+      if (e.target.closest('[data-fermer]')) return fermer();
+      const b = e.target.closest('[data-l]'); if (!b) return;
+      const l = b.dataset.l; const partEl = m.querySelector('#rc-part');
+      const vals = l ? {role: valeurLettre(l)} : null;
+      if (vals && partEl && partEl.value !== '') vals.part = Math.max(0, +partEl.value) / 100;
+      const acts = [];
+      if (!l) rs.forEach(x => acts.push(P.actionSuppr('role', x.id)));
+      else if (rs.length) { acts.push(P.actionMaj('role', rs[0].id, vals)); rs.slice(1).forEach(x => acts.push(P.actionSuppr('role', x.id))); }
+      else acts.push(P.actionAjout('role', Object.assign({projet: pid, personne: aid}, vals)));
+      fermer();
+      await P.appliquer(acts, l ? `${P.libelle('agent', aid)} : ${l} – ${LETTRES[l]}` : 'Rôle retiré.');
+    });
+  }
+})();
+</script>
+</body>
+</html>

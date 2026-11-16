@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-scheme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fiche projet</title>
+<link rel="stylesheet" href="socle.css">
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<script src="socle.js"></script>
+<style>
+  .fp{display:grid;grid-template-columns:270px 1fr;gap:16px;align-items:start}
+  .fp-liste{border:1px solid var(--border);position:sticky;top:76px;max-height:calc(100vh - 96px);display:flex;flex-direction:column}
+  .fp-liste .tete{padding:8px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:6px}
+  .fp-liste ul{list-style:none;margin:0;padding:0;overflow:auto}
+  .fp-liste li button{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--contrast);padding:8px 10px 8px 12px;cursor:pointer;position:relative}
+  .fp-liste li button:hover{background:var(--alt)}
+  .fp-liste li button[aria-current=true]{background:var(--bf-975)}
+  .fp-liste li button[aria-current=true]::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:3px;background:var(--bf)}
+  .fp-liste .nom{font-weight:500;color:var(--title);font-size:.85rem;display:block}
+  .fp-liste .meta{font-size:.72rem;color:var(--mention)}
+  .fp-fiche{display:flex;flex-direction:column;gap:14px;min-width:0}
+  .fp-tete{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;border-bottom:3px solid var(--bf);padding-bottom:10px}
+  .fp-tete h2{font-size:1.5rem;flex:1;min-width:240px}
+  .fp-tete .code{font-family:var(--mono);color:var(--mention);font-size:.85rem;display:block;font-weight:400}
+  .fp-badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .fp-2{display:grid;grid-template-columns:3fr 2fr;gap:14px}
+  .fp-bloc h3{font-size:.8rem;text-transform:uppercase;letter-spacing:.03em;color:var(--mention);margin:10px 0 2px}
+  .fp-bloc h3:first-child{margin-top:0}
+  .fp-bloc p{margin:0;white-space:pre-wrap;font-size:.88rem}
+  .fp-pers{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:.85rem}
+  .fp-av{width:28px;height:28px;border-radius:50%;background:var(--bf-925);color:var(--bf);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.72rem;flex:0 0 auto}
+  .fp-jal{display:flex;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid var(--contrast);font-size:.85rem}
+  .fp-jal .d{width:86px;flex:0 0 auto;font-variant-numeric:tabular-nums;color:var(--mention)}
+  .fp-form h3{font-size:.95rem;margin:4px 0 0;padding-top:8px;border-top:1px solid var(--border);grid-column:1/-1}
+  .fp-lignes{display:flex;flex-direction:column;gap:6px}
+  .fp-lignes .l{display:grid;grid-template-columns:1fr 160px 36px;gap:6px}
+  .fp-lignes .l.r{grid-template-columns:1fr 180px 36px}
+  @media (max-width:900px){.fp{grid-template-columns:1fr}.fp-liste{position:static;max-height:280px}.fp-2{grid-template-columns:1fr}}
+  @media print{.fp{grid-template-columns:1fr}.fp-liste{display:none}.fp-2{grid-template-columns:3fr 2fr}}
+</style>
+</head>
+<body>
+<script>
+(function () {
+  const P = Pilotage, esc = P.esc;
+  const ui = {sel: null, recherche: '', tous: false};
+  try { ui.sel = +localStorage.getItem('fiche-projet-sel') || null; } catch (e) { /* ignoré */ }
+
+  P.demarrer({
+    id: 'fiche-projet',
+    titre: 'Fiche projet',
+    sousTitre: 'Synthèse d’un projet et saisie de nouveaux projets',
+    entites: ['projet', 'tache', 'jalon', 'role', 'temps', 'prestataire'],
+    optionnelles: ['tache', 'jalon', 'role', 'temps', 'prestataire'],
+    outils: () => `<button class="btn pri sm" id="fp-nouveau">${P.ic('plus')} Nouveau projet</button>`,
+    surOutils: el => el.querySelector('#fp-nouveau').addEventListener('click', () => formulaire(null)),
+    init: () => P.surCurseur((tableId, id) => { if (tableId === P.table('projet') && id !== ui.sel) { ui.sel = id; dessiner(); } }),
+    rendu: () => dessiner(),
+  });
+
+  const initiales = n => (n || '?').split(/[\s-]+/).filter(Boolean).slice(0, 2).map(x => x[0]).join('').toUpperCase();
+
+  function dessiner() {
+    const corps = P.$('#pl-corps');
+    const projets = P.liste('projet').slice().sort((a, b) => (P.estClos(a.phase) - P.estClos(b.phase)) || String(a.code || a.titre).localeCompare(String(b.code || b.titre), 'fr'));
+    if (!projets.length) {
+      corps.innerHTML = `<div class="vide"><p>Aucun projet pour l’instant.</p><button class="btn pri" id="fp-n2">${P.ic('plus')} Créer le premier projet</button></div>`;
+      P.$('#fp-n2').addEventListener('click', () => formulaire(null)); return;
+    }
+    if (!ui.sel || !P.get('projet', ui.sel)) ui.sel = (projets.find(p => !P.estClos(p.phase)) || projets[0]).id;
+    const q = P.norm(ui.recherche);
+    const visibles = projets.filter(p => (ui.tous || !P.estClos(p.phase) || p.id === ui.sel) && (!q || P.norm(p.titre + ' ' + (p.code || '')).includes(q)));
+    corps.innerHTML = `<div class="fp">
+      <nav class="fp-liste no-print" aria-label="Projets">
+        <div class="tete"><label class="sr" for="fp-q">Rechercher</label><input class="in sm" id="fp-q" placeholder="Rechercher un projet" value="${esc(ui.recherche)}">
+          <label class="case small"><input type="checkbox" id="fp-tous" ${ui.tous ? 'checked' : ''}> Afficher les projets clos</label></div>
+        <ul>${visibles.map(p => { const s = P.santeProjet(p); return `<li><button data-id="${p.id}" aria-current="${p.id === ui.sel}">
+          <span class="nom">${esc(p.titre || '(sans titre)')}</span><span class="meta">${esc(p.code || '')} ${p.code ? '·' : ''} ${esc(s.l)}${p.fin ? ' · ' + P.fmtDate(p.fin) : ''}</span></button></li>`; }).join('') || '<li class="muted small" style="padding:10px">Aucun résultat</li>'}</ul>
+      </nav>
+      <article class="fp-fiche" id="fp-fiche"></article></div>`;
+    P.$('#fp-q').addEventListener('input', P.debounce(e => { ui.recherche = e.target.value; dessiner(); P.$('#fp-q').focus(); const v = P.$('#fp-q'); v.setSelectionRange(v.value.length, v.value.length); }, 250));
+    P.$('#fp-tous').addEventListener('change', e => { ui.tous = e.target.checked; dessiner(); });
+    P.$('.fp-liste ul').addEventListener('click', e => { const b = e.target.closest('button[data-id]'); if (!b) return; ui.sel = +b.dataset.id; try { localStorage.setItem('fiche-projet-sel', ui.sel); } catch (x) { /* ignoré */ } dessiner(); });
+    fiche(P.get('projet', ui.sel));
+  }
+
+  function fiche(p) {
+    const el = P.$('#fp-fiche'); const auj = P.today();
+    const s = P.santeProjet(p);
+    const taches = P.tachesDuProjet(p.id).slice().sort((a, b) => P.urgence(a).rang - P.urgence(b).rang || ((a.echeance || 9e15) - (b.echeance || 9e15)));
+    const ouvertes = taches.filter(t => !P.estClos(t.statut));
+    const retards = taches.filter(t => P.urgence(t).code === 'retard');
+    const jalons = P.liste('jalon').filter(j => j.projet === p.id).sort((a, b) => (a.date || 9e15) - (b.date || 9e15));
+    const roles = P.liste('role').filter(r => r.projet === p.id);
+    const av = P.avancementProjet(p.id);
+    const j = p.fin ? P.diffDays(p.fin, auj) : null;
+    const reel = P.table('temps') ? P.chargeReelleProjet(p.id) : null;
+    const planif = P.table('tache') ? P.chargePlanifieeProjet(p.id) : null;
+    const prest = (p.prestataires || []).map(id => P.get('prestataire', id)).filter(Boolean);
+    const mode = !prest.length ? '🏠 Réalisé en interne' : '🤝 Avec prestataire(s)';
+    const bloc = (titre, txt) => txt ? `<h3>${titre}</h3><p>${esc(txt)}</p>` : '';
+    const ordreRole = {A: 0, R: 1, C: 2, I: 3, '': 4};
+    const equipe = new Map();
+    (p.chefs || []).forEach(id => equipe.set(id, {id, roles: ['Chargé(e) de mission']}));
+    roles.slice().sort((a, b) => ordreRole[P.lettreRole(a.role)] - ordreRole[P.lettreRole(b.role)]).forEach(r => {
+      if (!r.personne) return; if (!equipe.has(r.personne)) equipe.set(r.personne, {id: r.personne, roles: []});
+      equipe.get(r.personne).roles.push(r.role + (r.part ? ` (${P.fmtPct(r.part)})` : ''));
+    });
+
+    el.innerHTML = `
+      <header class="fp-tete">
+        <div style="flex:1;min-width:240px"><h2><span class="code">${esc(p.code || '')}</span>${esc(p.titre || '(sans titre)')}</h2>
+          <div class="fp-badges">${p.domaine ? `<span class="badge info">${esc(p.domaine)}</span>` : ''}${p.phase ? `<span class="badge">${esc(p.phase)}</span>` : ''}
+          ${p.priorite ? `<span class="badge ${P.rangPriorite(p.priorite) <= 1 ? 'err' : P.rangPriorite(p.priorite) === 2 ? 'warn' : ''}">${esc(p.priorite)}</span>` : ''}<span class="badge ${s.c}">${esc(s.l)}</span><span class="badge new">${mode}</span></div></div>
+        <div class="no-print" style="display:flex;gap:6px">
+          <button class="btn sec sm" id="fp-modif">${P.ic('modifier')} Modifier</button>
+          <button class="btn ter sm" id="fp-print">${P.ic('imprimer')} Imprimer</button></div>
+      </header>
+      <div class="tuiles">
+        <div class="tuile ${av >= .8 ? 'ok' : ''}"><div class="v">${P.fmtPct(av)}</div><div class="l">avancement</div><div class="barre" style="margin-top:4px"><span style="width:${Math.round(av * 100)}%"></span></div></div>
+        <div class="tuile ${j != null && j < 0 && !P.estClos(p.phase) ? 'err' : j != null && j <= 15 ? 'warn' : ''}"><div class="v">${p.fin ? (P.estClos(p.phase) ? '✓' : j < 0 ? `+${-j} j` : `J-${j}`) : '–'}</div><div class="l">deadline ${p.fin ? P.fmtDate(p.fin) : 'non définie'}</div></div>
+        ${P.table('tache') ? `<div class="tuile ${retards.length ? 'err' : ''}"><div class="v">${ouvertes.length}<span class="small muted"> / ${taches.length}</span></div><div class="l">tâches ouvertes${retards.length ? ` · <strong style="color:var(--error)">${retards.length} en retard</strong>` : ''}</div></div>` : ''}
+        <div class="tuile ${reel != null && p.charge && reel > p.charge ? 'warn' : ''}"><div class="v">${P.fmtNb(p.charge)}</div><div class="l">J/H estimés${planif != null ? ` · ${P.fmtNb(planif)} planifiés` : ''}${reel != null ? ` · ${P.fmtNb(reel)} réels` : ''}</div></div>
+        ${P.table('jalon') ? `<div class="tuile"><div class="v">${jalons.filter(x => x.atteint).length}<span class="small muted"> / ${jalons.length}</span></div><div class="l">jalons atteints</div></div>` : ''}
+        ${p.budget ? `<div class="tuile"><div class="v" style="font-size:1.2rem">${P.fmtEuro(p.budget)}</div><div class="l">budget prévu</div></div>` : ''}
+      </div>
+      <div class="fp-2">
+        <section class="carte fp-bloc">${bloc('Objectifs', p.objectifs)}${bloc('Critères de réussite', p.criteres)}${bloc('Description', p.description)}${bloc('Contraintes', p.contraintes)}${bloc('Risques', p.risques)}${bloc('Besoins de formation', p.formation)}
+          ${!p.objectifs && !p.description && !p.criteres ? '<p class="muted small">Aucune description. Cliquez sur « Modifier » pour compléter la fiche.</p>' : ''}
+          <h3>Calendrier</h3><p>${p.debut ? 'Début le ' + P.fmtDate(p.debut) : 'Début non défini'}${p.fin ? ' · deadline le ' + P.fmtDate(p.fin) : ''}${p.fin_reelle ? ' · terminé le ' + P.fmtDate(p.fin_reelle) : ''}</p>
+        </section>
+        <section class="carte fp-bloc">
+          <h3>Équipe</h3>${equipe.size ? Array.from(equipe.values()).map(x => { const n = P.libelle('agent', x.id); return `<div class="fp-pers"><span class="fp-av" aria-hidden="true">${esc(initiales(n))}</span><span><strong>${esc(n)}</strong><br><span class="muted small">${esc(x.roles.join(' · '))}</span></span></div>`; }).join('') : '<p class="muted small">Aucun membre.</p>'}
+          ${(p.parties || []).length ? `<h3>Parties prenantes</h3><div style="display:flex;flex-wrap:wrap;gap:4px">${P.libelles('partie', p.parties).map(x => `<span class="tag">${esc(x)}</span>`).join('')}</div>` : ''}
+          <h3>Prestataires</h3>${prest.length ? prest.map(x => { const fin = x.fin ? P.diffDays(x.fin, auj) : null; return `<div class="fp-pers"><span><strong>${esc(x.nom)}</strong> ${x.type ? `<span class="badge">${esc(x.type)}</span>` : ''}<br><span class="muted small">${esc([x.marche, x.representant, x.telephone].filter(Boolean).join(' · '))}</span>
+            ${fin != null && fin < 0 ? '<br><span class="badge err">contrat expiré</span>' : fin != null && fin <= 90 ? `<br><span class="badge warn">contrat : fin dans ${fin} j</span>` : ''}</span></div>`; }).join('') : '<p class="muted small">Aucun : projet réalisé en interne.</p>'}
+        </section>
+      </div>
+      ${P.table('jalon') ? `<section class="carte"><h3 class="sec-titre">🏁 Jalons</h3>${jalons.length ? jalons.map(x => {
+        const etat = x.atteint ? '<span class="badge ok">atteint</span>' : !x.date ? '<span class="badge">non daté</span>' : x.date < auj ? '<span class="badge err">dépassé</span>' : P.diffDays(x.date, auj) <= 15 ? '<span class="badge warn">imminent</span>' : '<span class="badge info">à venir</span>';
+        return `<div class="fp-jal"><span class="d">${x.date ? P.fmtDate(x.date) : '–'}</span><span style="flex:1">${esc(x.titre)}</span>${etat}</div>`; }).join('') : '<p class="muted small">Aucun jalon.</p>'}</section>` : ''}
+      ${P.table('tache') ? `<section class="carte"><h3 class="sec-titre">✅ Tâches <span class="muted small" style="font-weight:400">${ouvertes.length} ouverte(s) sur ${taches.length}</span></h3>
+        ${taches.length ? `<table class="tab"><thead><tr><th>Tâche</th><th>Responsable</th><th>Échéance</th><th>Statut</th><th>Urgence</th><th>Avancement</th></tr></thead><tbody>
+        ${taches.map(t => { const u = P.urgence(t); return `<tr><td>${esc(t.titre)}</td><td>${esc(P.libelle('agent', t.responsable))}</td><td>${t.echeance ? P.fmtDate(t.echeance) : ''}</td><td>${esc(t.statut || '')}</td>
+          <td><span class="badge ${u.classe}">${esc(u.libelle)}</span></td><td style="min-width:90px"><div class="barre"><span style="width:${Math.round(P.avancement(t) * 100)}%"></span></div></td></tr>`; }).join('')}</tbody></table>` : '<p class="muted small">Aucune tâche.</p>'}</section>` : ''}
+      <p class="print-only small muted">Fiche éditée le ${P.fmtDate(auj)}</p>`;
+    P.$('#fp-modif').addEventListener('click', () => formulaire(p));
+    P.$('#fp-print').addEventListener('click', () => window.print());
+  }
+
+  /* Proposition de code : même préfixe que les projets du domaine, année en cours, numéro suivant */
+  function codeSuggere(domaine) {
+    const an = new Date().getFullYear();
+    const codes = P.liste('projet').map(p => ({p, m: /^([A-Za-z]+)-(\d{4})-(\d+)$/.exec(p.code || '')})).filter(x => x.m);
+    if (!codes.length) return '';
+    const memes = codes.filter(x => !domaine || x.p.domaine === domaine);
+    const prefixe = (memes[0] || codes[0]).m[1];
+    const num = Math.max(0, ...codes.filter(x => x.m[1] === prefixe && +x.m[2] === an).map(x => +x.m[3])) + 1;
+    return `${prefixe}-${an}-${String(num).padStart(2, '0')}`;
+  }
+
+  function formulaire(p) {
+    const nouveau = !p; p = p || {};
+    const f = (ch, opts) => P.champFormulaire('projet', ch, p[ch], opts);
+    const roleChoix = P.choix('role', 'role');
+    const div = document.createElement('div');
+    div.className = 'fp-form';
+    div.innerHTML = `<form class="grille" id="fp-f" onsubmit="return false">
+      <h3>Identification</h3>
+      ${f('titre', {large: true})}${f('code')}${f('domaine')}${f('phase')}${f('priorite')}
+      <h3>Calendrier et charge</h3>
+      ${f('debut')}${f('fin')}${f('fin_reelle')}${f('charge')}${f('budget')}
+      <h3>Équipe et partenaires</h3>
+      ${f('chefs', {large: true})}${f('parties', {large: true})}${f('prestataires', {large: true})}
+      <h3>Contenu</h3>
+      ${f('objectifs', {large: true, long: true})}${f('criteres', {large: true, long: true})}${f('description', {large: true, long: true})}
+      ${f('contraintes', {long: true})}${f('risques', {long: true})}${f('formation', {large: true})}
+    </form>
+    ${nouveau && P.table('jalon') && P.a('jalon', 'projet') ? `<div><h3>Jalons initiaux <span class="muted small" style="font-weight:400">(facultatif)</span></h3>
+      <div class="fp-lignes" id="fp-jal"></div><button type="button" class="btn ter sm" id="fp-jal-add" style="margin-top:6px">${P.ic('plus')} Ajouter un jalon</button></div>` : ''}
+    ${nouveau && P.table('role') ? `<div><h3>Rôles (RACI) <span class="muted small" style="font-weight:400">(facultatif)</span></h3>
+      <div class="fp-lignes" id="fp-rol"></div><button type="button" class="btn ter sm" id="fp-rol-add" style="margin-top:6px">${P.ic('plus')} Ajouter une personne</button></div>` : ''}`;
+    const agents = P.liste('agent').slice().sort((a, b) => a._libelle.localeCompare(b._libelle, 'fr'));
+    const ligneJal = () => { const l = document.createElement('div'); l.className = 'l'; l.innerHTML = `<input class="in sm" placeholder="Libellé du jalon" data-j="titre"><input class="in sm" type="date" data-j="date"><button type="button" class="btn ter sm ic" title="Retirer">${P.ic('fermer')}</button>`; l.querySelector('button').onclick = () => l.remove(); P.$('#fp-jal', div).appendChild(l); };
+    const ligneRol = () => { const l = document.createElement('div'); l.className = 'l r'; l.innerHTML = `<select class="in sm" data-r="personne"><option value="">Personne…</option>${agents.map(a => `<option value="${a.id}">${esc(a._libelle)}</option>`).join('')}</select>
+      <select class="in sm" data-r="role">${roleChoix.map(x => `<option>${esc(x)}</option>`).join('')}</select><button type="button" class="btn ter sm ic" title="Retirer">${P.ic('fermer')}</button>`; l.querySelector('button').onclick = () => l.remove(); P.$('#fp-rol', div).appendChild(l); };
+    if (P.$('#fp-jal-add', div)) { P.$('#fp-jal-add', div).onclick = ligneJal; ligneJal(); }
+    if (P.$('#fp-rol-add', div)) { P.$('#fp-rol-add', div).onclick = ligneRol; ligneRol(); }
+    if (nouveau) {
+      const code = P.$('[data-ch=code]', div), dom = P.$('[data-ch=domaine]', div), phase = P.$('[data-ch=phase]', div), prio = P.$('[data-ch=priorite]', div);
+      if (code && !code.value) code.value = codeSuggere(dom && dom.value);
+      if (dom && code) dom.addEventListener('change', () => { if (!code.dataset.touche) code.value = codeSuggere(dom.value); });
+      if (code) code.addEventListener('input', () => { code.dataset.touche = '1'; });
+      if (phase && !phase.value) { const v = P.choix('projet', 'phase').find(x => /cadr|prevu|prévu|idee|idée|nouveau/i.test(x)); if (v) phase.value = v; }
+      if (prio && !prio.value) { const v = P.choix('projet', 'priorite').find(x => P.rangPriorite(x) === 3); if (v) prio.value = v; }
+    }
+    P.modale({titre: nouveau ? 'Nouveau projet' : 'Modifier le projet', contenu: div, large: true, boutons: [
+      {libelle: 'Annuler', classe: 'ter'},
+      {libelle: nouveau ? 'Créer le projet' : 'Enregistrer', classe: 'pri', action: async c => {
+        const vals = P.lireFormulaire('projet', P.$('#fp-f', c));
+        if (!String(vals.titre || '').trim()) { const t = P.$('[data-ch=titre]', c); t.classList.add('err'); t.focus(); P.toast('L’intitulé est obligatoire.', 'warn'); return false; }
+        if (vals.debut && vals.fin && vals.fin < vals.debut) { P.toast('La deadline est antérieure à la date de début.', 'warn'); return false; }
+        if (!nouveau) { await P.modifier('projet', p.id, vals, 'Projet enregistré.'); return; }
+        const id = await P.ajouter('projet', vals);
+        const acts = [];
+        P.$$('#fp-jal .l', c).forEach(l => { const t = P.$('[data-j=titre]', l).value.trim(); if (t) acts.push(P.actionAjout('jalon', {titre: t, projet: id, date: P.fromIso(P.$('[data-j=date]', l).value)})); });
+        P.$$('#fp-rol .l', c).forEach(l => { const pers = +P.$('[data-r=personne]', l).value; if (pers) acts.push(P.actionAjout('role', {projet: id, personne: pers, role: P.$('[data-r=role]', l).value})); });
+        if (acts.length) await P.appliquer(acts);
+        ui.sel = id; try { localStorage.setItem('fiche-projet-sel', id); } catch (e) { /* ignoré */ }
+        P.toast('Projet créé.', 'ok'); dessiner();
+      }},
+    ]});
+  }
+})();
+</script>
+</body>
+</html>

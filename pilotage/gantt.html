@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-scheme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gantt</title>
+<link rel="stylesheet" href="socle.css">
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<script src="socle.js"></script>
+<style>
+  .pl-corps{padding:0}
+  .gt-barre-outils{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .gt-wrap{overflow:auto;height:calc(100vh - 66px);position:relative;border-top:1px solid var(--border)}
+  .pl-demo:not(.hidden) ~ .pl-corps .gt-wrap{height:calc(100vh - 92px)}
+  .gt{position:relative;min-width:100%}
+  .gt-row{display:flex;height:30px;border-bottom:1px solid var(--contrast)}
+  .gt-row.proj{background:var(--bf-975);height:34px;border-bottom:1px solid var(--bf-925)}
+  .gt-lbl{position:sticky;left:0;z-index:3;width:var(--lw);flex:0 0 var(--lw);background:var(--surface);border-right:1px solid var(--border);padding:0 8px;display:flex;align-items:center;gap:6px;font-size:.8rem;overflow:hidden;white-space:nowrap}
+  .gt-row.proj .gt-lbl{background:var(--bf-975);font-weight:700;color:var(--title)}
+  .gt-lbl .t{overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+  .gt-lbl .who{color:var(--mention);font-size:.7rem;flex:0 0 auto}
+  .gt-lbl button.rep{background:none;border:0;cursor:pointer;padding:0 2px;color:var(--bf);display:flex}
+  .gt-lbl button.rep svg{width:16px;height:16px;transition:transform .15s}
+  .gt-lbl button.rep[aria-expanded=true] svg{transform:rotate(90deg)}
+  .gt-trk{position:relative;flex:0 0 auto}
+  .gt-head{position:sticky;top:0;z-index:5;background:var(--surface);box-shadow:0 1px 0 var(--text)}
+  .gt-head .gt-lbl{z-index:6;font-weight:700;color:var(--title);height:100%}
+  .gt-h1,.gt-h2{position:relative;height:22px}
+  .gt-h1 span,.gt-h2 span{position:absolute;top:0;bottom:0;border-left:1px solid var(--border);font-size:.72rem;padding:3px 4px;overflow:hidden;white-space:nowrap;color:var(--title)}
+  .gt-h1 span{font-weight:700}
+  .gt-h2 span{color:var(--mention)}
+  .gt-h2 span.we{background:var(--alt)}
+  .gt-grid{position:absolute;top:0;bottom:0;pointer-events:none;z-index:0}
+  .gt-grid i{position:absolute;top:0;bottom:0;border-left:1px solid var(--contrast)}
+  .gt-grid i.we{background:rgba(0,0,0,.025);border:0}
+  .gt-today{position:absolute;top:0;bottom:0;width:2px;background:var(--rm);z-index:2;pointer-events:none}
+  .gt-today::before{content:"Aujourd’hui";position:absolute;top:2px;left:4px;font-size:.65rem;color:var(--rm);font-weight:700;white-space:nowrap}
+  .gt-bar{position:absolute;top:7px;height:16px;background:var(--bf);color:#fff;font-size:.68rem;line-height:16px;white-space:nowrap;cursor:grab;z-index:1;border-radius:2px;overflow:visible;touch-action:none;user-select:none}
+  .gt-bar .pg{position:absolute;inset:0 auto 0 0;background:rgba(0,0,0,.28);pointer-events:none}
+  .gt-bar .lb{position:absolute;left:calc(100% + 6px);color:var(--text);pointer-events:none;font-size:.7rem}
+  .gt-bar .h{position:absolute;top:0;bottom:0;width:7px;cursor:ew-resize}
+  .gt-bar .h.g{left:-3px} .gt-bar .h.d{right:-3px}
+  .gt-bar.ro{cursor:pointer}
+  .gt-bar.err{background:var(--error)} .gt-bar.warn{background:#d64d00} .gt-bar.jaune{background:#b7a73f} .gt-bar.ok{background:var(--bf)} .gt-bar.clos{background:#929292}
+  .gt-bar.estime{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.35) 0 4px,transparent 4px 8px)}
+  .gt-bar.proj{top:9px;height:12px;background:var(--title)}
+  .gt-bar.proj::before,.gt-bar.proj::after{content:"";position:absolute;bottom:-5px;border:5px solid transparent;border-top-color:var(--title)}
+  .gt-bar.proj::before{left:0;border-left-color:var(--title)} .gt-bar.proj::after{right:0;border-right-color:var(--title)}
+  .gt-bar.proj .pg{background:var(--bf-hover)}
+  .gt-bar.drag{opacity:.75;cursor:grabbing;box-shadow:var(--shadow-lg)}
+  .gt-jal{position:absolute;top:9px;width:14px;height:14px;transform:translateX(-7px) rotate(45deg);background:var(--warning);z-index:2;cursor:grab;border:2px solid #fff;touch-action:none}
+  .gt-jal.ok{background:var(--success)} .gt-jal.err{background:var(--error)}
+  .gt-vide{position:absolute;inset:0;cursor:copy}
+  .gt-vide:hover::after{content:"Cliquer pour planifier";position:absolute;left:8px;top:7px;font-size:.7rem;color:var(--mention)}
+  .gt-leg{display:flex;gap:10px;align-items:center;font-size:.72rem;color:var(--mention)}
+  .gt-leg i{display:inline-block;width:12px;height:8px;margin-right:3px;vertical-align:middle}
+  @media print{.gt-wrap{height:auto;overflow:visible}}
+</style>
+</head>
+<body>
+<script>
+(function () {
+  const P = Pilotage, esc = P.esc;
+  const ZOOMS = {jour: 30, semaine: 12, mois: 4, trimestre: 1.6};
+  const ui = {zoom: 'semaine', domaine: '', agent: '', clos: false, replies: new Set(), scrollToToday: true};
+  try { Object.assign(ui, JSON.parse(localStorage.getItem('gantt-ui') || '{}')); ui.replies = new Set(ui.replies || []); ui.scrollToToday = true; } catch (e) { /* ignoré */ }
+  const sauverUi = () => { try { localStorage.setItem('gantt-ui', JSON.stringify(Object.assign({}, ui, {replies: Array.from(ui.replies)}))); } catch (e) { /* ignoré */ } };
+  let geo = null; // géométrie courante (début de l'axe, px par jour)
+
+  P.demarrer({
+    id: 'gantt',
+    titre: 'Gantt',
+    sousTitre: 'Projets, tâches et jalons – glisser pour replanifier',
+    entites: ['tache', 'projet', 'jalon'],
+    optionnelles: ['jalon'],
+    champsRequis: {tache: ['titre'], projet: ['titre']},
+    outils: () => `<div class="gt-barre-outils">
+      <div class="grp" role="group" aria-label="Échelle">${Object.keys(ZOOMS).map(z => `<button class="btn sm" data-zoom="${z}" aria-pressed="${z === ui.zoom}">${z[0].toUpperCase() + z.slice(1)}</button>`).join('')}</div>
+      <button class="btn ter sm" id="gt-auj">Aujourd’hui</button>
+      <select class="in sm" id="gt-dom" style="width:auto"><option value="">Tous domaines</option></select>
+      <select class="in sm" id="gt-ag" style="width:auto"><option value="">Toute l’équipe</option></select>
+      <label class="case small"><input type="checkbox" id="gt-clos" ${ui.clos ? 'checked' : ''}> Éléments clos</label>
+      <button class="btn ter sm" id="gt-tout">Tout replier</button></div>`,
+    surOutils: el => {
+      el.addEventListener('click', e => {
+        const z = e.target.closest('[data-zoom]');
+        if (z) { ui.zoom = z.dataset.zoom; P.$$('[data-zoom]', el).forEach(b => b.setAttribute('aria-pressed', b === z)); ui.scrollToToday = true; sauverUi(); dessiner(); }
+        if (e.target.closest('#gt-auj')) allerAujourdhui();
+        if (e.target.closest('#gt-tout')) {
+          const ids = P.liste('projet').map(p => p.id).concat([0]);
+          const toutReplie = ids.every(id => ui.replies.has(id));
+          ui.replies = toutReplie ? new Set() : new Set(ids); sauverUi(); dessiner();
+        }
+      });
+      el.querySelector('#gt-dom').addEventListener('change', e => { ui.domaine = e.target.value; sauverUi(); dessiner(); });
+      el.querySelector('#gt-ag').addEventListener('change', e => { ui.agent = e.target.value ? +e.target.value : ''; sauverUi(); dessiner(); });
+      el.querySelector('#gt-clos').addEventListener('change', e => { ui.clos = e.target.checked; sauverUi(); dessiner(); });
+    },
+    rendu: () => { filtres(); dessiner(); },
+  });
+
+  function filtres() {
+    const doms = P.uniq(P.liste('projet').map(p => p.domaine).filter(Boolean)).sort();
+    const d = P.$('#gt-dom'); d.innerHTML = '<option value="">Tous domaines</option>' + doms.map(x => `<option ${x === ui.domaine ? 'selected' : ''}>${esc(x)}</option>`).join(''); d.classList.toggle('hidden', !doms.length);
+    P.$('#gt-ag').innerHTML = '<option value="">Toute l’équipe</option>' + P.liste('agent').slice().sort((a, b) => a._libelle.localeCompare(b._libelle, 'fr')).map(a => `<option value="${a.id}" ${a.id === ui.agent ? 'selected' : ''}>${esc(a._libelle)}</option>`).join('');
+  }
+
+  /* Dates affichées d'une tâche : début/échéance, ou durée estimée avant l'échéance */
+  function periodeTache(t) {
+    let d = t.debut, f = t.echeance, estime = false;
+    if (d && f && f < d) { const x = d; d = f; f = x; }
+    if (!d && f) { d = P.addDays(f, -Math.max(1, Math.ceil((t.charge || 1) * 1.4)) + 1); estime = true; }
+    if (d && !f) { f = P.addDays(d, Math.max(1, Math.ceil((t.charge || 1) * 1.4)) - 1); estime = true; }
+    return d ? {d, f, estime} : null;
+  }
+
+  function dessiner() {
+    const corps = P.$('#pl-corps');
+    const auj = P.today();
+    const ppd = ZOOMS[ui.zoom];
+    const projetOk = p => (!ui.domaine || p.domaine === ui.domaine) && (ui.clos || !P.estClos(p.phase));
+    const agentOk = t => !ui.agent || t.responsable === ui.agent || (t.appuis || []).includes(ui.agent);
+    const projets = P.liste('projet').filter(projetOk).sort((a, b) => ((a.debut || a.fin || 9e15) - (b.debut || b.fin || 9e15)) || a.titre.localeCompare(b.titre, 'fr'));
+    const idsProjets = new Set(projets.map(p => p.id));
+    const taches = P.liste('tache').filter(t => (ui.clos || !P.estClos(t.statut)) && agentOk(t) && (t.projet ? idsProjets.has(t.projet) : !ui.domaine));
+    const groupes = projets.map(p => ({p, t: taches.filter(t => t.projet === p.id)})).filter(g => !ui.agent || g.t.length);
+    const orphelines = taches.filter(t => !t.projet || !P.get('projet', t.projet));
+    if (orphelines.length) groupes.push({p: null, t: orphelines});
+    groupes.forEach(g => g.t.sort((a, b) => ((periodeTache(a) || {d: 9e15}).d - (periodeTache(b) || {d: 9e15}).d)));
+
+    // Étendue de l'axe
+    const dates = [auj];
+    groupes.forEach(g => { if (g.p) [g.p.debut, g.p.fin].forEach(x => x && dates.push(x)); g.t.forEach(t => { const pr = periodeTache(t); if (pr) dates.push(pr.d, pr.f); }); });
+    P.liste('jalon').forEach(j => { if (j.date && idsProjets.has(j.projet)) dates.push(j.date); });
+    let debut = new Date(Math.min(...dates)), fin = new Date(Math.max(...dates));
+    debut = P.addDays(P.lundi(debut), -14); fin = P.addDays(fin, 45);
+    if (P.diffDays(fin, debut) < 120) fin = P.addDays(debut, 120);
+    if (ui.zoom === 'mois' || ui.zoom === 'trimestre') { debut = new Date(debut.getFullYear(), debut.getMonth(), 1); }
+    const nbJours = P.diffDays(fin, debut) + 1, W = Math.round(nbJours * ppd);
+    geo = {debut, ppd};
+    const x = d => Math.round(P.diffDays(d, debut) * ppd);
+
+    // En-têtes
+    const h1 = [], h2 = [], grille = [];
+    const mois = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+    for (let d = new Date(debut.getFullYear(), debut.getMonth(), 1); d <= fin; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
+      const a = Math.max(0, x(d)), b = Math.min(W, x(new Date(d.getFullYear(), d.getMonth() + 1, 1)));
+      if (ui.zoom === 'trimestre' || ui.zoom === 'mois') {
+        if (ui.zoom === 'mois' || d.getMonth() % 3 === 0) {
+          const finSeg = ui.zoom === 'mois' ? b : Math.min(W, x(new Date(d.getFullYear(), d.getMonth() + 3, 1)));
+          h2.push(`<span style="left:${a}px;width:${finSeg - a}px">${ui.zoom === 'mois' ? mois[d.getMonth()] : 'T' + (Math.floor(d.getMonth() / 3) + 1)}</span>`);
+          grille.push(`<i style="left:${a}px"></i>`);
+        }
+        if (d.getMonth() === 0 || d.getTime() === new Date(debut.getFullYear(), debut.getMonth(), 1).getTime()) {
+          const fa = Math.min(W, x(new Date(d.getFullYear() + 1, 0, 1)));
+          h1.push(`<span style="left:${a}px;width:${fa - a}px">${d.getFullYear()}</span>`);
+        }
+      } else {
+        h1.push(`<span style="left:${a}px;width:${b - a}px">${mois[d.getMonth()]} ${d.getFullYear()}</span>`);
+      }
+    }
+    if (ui.zoom === 'jour') {
+      for (let d = debut; d <= fin; d = P.addDays(d, 1)) {
+        const we = !P.estOuvre(d);
+        h2.push(`<span class="${we ? 'we' : ''}" style="left:${x(d)}px;width:${ppd}px;text-align:center;padding:3px 0">${d.getDate()}</span>`);
+        grille.push(`<i class="${we ? 'we' : ''}" style="left:${x(d)}px;${we ? `width:${ppd}px` : ''}"></i>`);
+      }
+    } else if (ui.zoom === 'semaine') {
+      for (let d = P.lundi(debut); d <= fin; d = P.addDays(d, 7)) {
+        h2.push(`<span style="left:${x(d)}px;width:${7 * ppd}px">S${P.semaineIso(d)} · ${d.getDate()}</span>`);
+        grille.push(`<i style="left:${x(d)}px"></i>`);
+        grille.push(`<i class="we" style="left:${x(P.addDays(d, 5))}px;width:${2 * ppd}px"></i>`);
+      }
+    }
+
+    const modT = {d: P.modifiable('tache', 'debut'), f: P.modifiable('tache', 'echeance')};
+    const modP = {d: P.modifiable('projet', 'debut'), f: P.modifiable('projet', 'fin')};
+    const lignes = [];
+    groupes.forEach(g => {
+      const pid = g.p ? g.p.id : 0;
+      const replie = ui.replies.has(pid);
+      const av = g.p ? P.avancementProjet(g.p.id) : 0;
+      let barreP = '';
+      if (g.p && (g.p.debut || g.p.fin)) {
+        const d = g.p.debut || g.p.fin, f = g.p.fin || g.p.debut;
+        barreP = `<div class="gt-bar proj ${modP.d || modP.f ? '' : 'ro'}" data-type="projet" data-id="${g.p.id}" style="left:${x(d)}px;width:${Math.max(ppd, x(P.addDays(f, 1)) - x(d))}px"
+          data-bulle="<strong>${esc(g.p.titre)}</strong><br>${P.fmtDate(g.p.debut)} → ${P.fmtDate(g.p.fin)}<br>Avancement ${P.fmtPct(av)}">
+          <span class="pg" style="width:${Math.round(av * 100)}%"></span>${modP.d ? '<span class="h g"></span>' : ''}${modP.f ? '<span class="h d"></span>' : ''}</div>`;
+      }
+      const jal = g.p ? P.liste('jalon').filter(j => j.projet === g.p.id && j.date).map(j => {
+        const c = j.atteint ? 'ok' : j.date < auj ? 'err' : '';
+        return `<div class="gt-jal ${c}" data-type="jalon" data-id="${j.id}" style="left:${x(j.date) + ppd / 2}px" data-bulle="🏁 <strong>${esc(j.titre)}</strong><br>${P.fmtDate(j.date)}${j.atteint ? ' · atteint' : ''}"></div>`;
+      }).join('') : '';
+      lignes.push(`<div class="gt-row proj"><div class="gt-lbl"><button class="rep" data-rep="${pid}" aria-expanded="${!replie}" title="Replier / déplier">${P.ic('droite')}</button>
+        <span class="t" data-bulle="${esc(g.p ? g.p.titre : 'Tâches sans projet')}">${esc(g.p ? (g.p.code ? g.p.code + ' · ' : '') + g.p.titre : 'Sans projet')}</span><span class="who">${g.t.length}</span></div>
+        <div class="gt-trk" style="width:${W}px">${barreP}${jal}</div></div>`);
+      if (replie) return;
+      g.t.forEach(t => {
+        const pr = periodeTache(t); const u = P.urgence(t); const av = P.avancement(t);
+        const resp = P.libelle('agent', t.responsable);
+        const cls = P.estClos(t.statut) ? 'clos' : u.classe || 'ok';
+        let barre = `<div class="gt-vide" data-type="planifier" data-id="${t.id}"></div>`;
+        if (pr) {
+          barre = `<div class="gt-bar ${cls} ${pr.estime ? 'estime' : ''} ${modT.d || modT.f ? '' : 'ro'}" data-type="tache" data-id="${t.id}" style="left:${x(pr.d)}px;width:${Math.max(ppd, x(P.addDays(pr.f, 1)) - x(pr.d))}px"
+            data-bulle="<strong>${esc(t.titre)}</strong><br>${resp ? esc(resp) + '<br>' : ''}${P.fmtDate(t.debut) || '?'} → ${P.fmtDate(t.echeance) || '?'}${pr.estime ? ' (durée estimée)' : ''}<br>${esc(t.statut || '')} · ${P.fmtPct(av)} · ${esc(u.libelle)}">
+            <span class="pg" style="width:${Math.round(av * 100)}%"></span>${modT.d ? '<span class="h g"></span>' : ''}${modT.f ? '<span class="h d"></span>' : ''}<span class="lb">${esc(resp.split(' ')[0] || '')}</span></div>`;
+        }
+        lignes.push(`<div class="gt-row"><div class="gt-lbl" style="padding-left:30px"><span class="t" data-bulle="${esc(t.titre)}">${esc(t.titre)}</span><span class="who">${esc(resp.split(' ').map(s => s[0]).join(''))}</span></div>
+          <div class="gt-trk" style="width:${W}px">${barre}</div></div>`);
+      });
+    });
+
+    const ancien = P.$('.gt-wrap'); const scroll = ancien ? {l: ancien.scrollLeft, t: ancien.scrollTop} : null;
+    corps.innerHTML = `<div class="gt-wrap"><div class="gt" style="--lw:300px;width:${W + 300}px">
+      <div class="gt-head"><div class="gt-row" style="height:44px;border:0"><div class="gt-lbl"><span class="t">Projet / tâche</span>
+        <span class="gt-leg no-print"><span><i style="background:var(--error)"></i>retard</span><span><i style="background:#d64d00"></i>urgent</span><span><i style="background:var(--bf)"></i>ok</span></span></div>
+        <div class="gt-trk" style="width:${W}px"><div class="gt-h1">${h1.join('')}</div><div class="gt-h2">${h2.join('')}</div></div></div></div>
+      <div style="position:relative">
+        <div class="gt-grid" style="left:300px;width:${W}px">${grille.join('')}</div>
+        <div class="gt-today" style="left:${300 + x(auj) + ppd / 2}px"></div>
+        ${lignes.join('') || '<div class="vide" style="margin:16px">Aucun projet ni tâche à afficher avec ces filtres.</div>'}
+      </div></div></div>`;
+    const wrap = P.$('.gt-wrap');
+    if (ui.scrollToToday) { ui.scrollToToday = false; wrap.scrollLeft = Math.max(0, x(auj) - 200); }
+    else if (scroll) { wrap.scrollLeft = scroll.l; wrap.scrollTop = scroll.t; }
+    brancher(wrap);
+  }
+
+  function allerAujourdhui() { const w = P.$('.gt-wrap'); if (w && geo) w.scrollTo({left: Math.max(0, P.diffDays(P.today(), geo.debut) * geo.ppd - 200), behavior: 'smooth'}); }
+
+  function brancher(wrap) {
+    wrap.addEventListener('click', e => {
+      const r = e.target.closest('[data-rep]');
+      if (r) { const id = +r.dataset.rep; ui.replies.has(id) ? ui.replies.delete(id) : ui.replies.add(id); sauverUi(); dessiner(); return; }
+      const v = e.target.closest('.gt-vide');
+      if (v && P.modifiable('tache', 'echeance')) {
+        const t = P.get('tache', +v.dataset.id);
+        const jour = P.addDays(geo.debut, Math.floor((e.clientX - v.getBoundingClientRect().left) / geo.ppd));
+        const duree = Math.max(1, Math.ceil((t.charge || 3) * 1.4));
+        const vals = {echeance: P.addDays(jour, duree - 1)}; if (P.modifiable('tache', 'debut')) vals.debut = jour;
+        P.modifier('tache', t.id, vals, `« ${t.titre} » planifiée du ${P.fmtDate(vals.debut || jour)} au ${P.fmtDate(vals.echeance)}.`);
+      }
+    });
+    wrap.addEventListener('pointerdown', e => {
+      const el = e.target.closest('.gt-bar,.gt-jal'); if (!el || e.button !== 0) return;
+      const type = el.dataset.type, id = +el.dataset.id;
+      const mode = e.target.classList.contains('g') ? 'g' : e.target.classList.contains('d') ? 'd' : 'm';
+      const ent = type === 'projet' ? 'projet' : type === 'jalon' ? 'jalon' : 'tache';
+      const chD = {projet: 'debut', tache: 'debut', jalon: 'date'}[ent], chF = {projet: 'fin', tache: 'echeance', jalon: 'date'}[ent];
+      const peut = ent === 'jalon' ? P.modifiable('jalon', 'date') : (mode === 'g' ? P.modifiable(ent, chD) : mode === 'd' ? P.modifiable(ent, chF) : (P.modifiable(ent, chD) || P.modifiable(ent, chF)));
+      const x0 = e.clientX, left0 = el.offsetLeft, w0 = el.offsetWidth;
+      let delta = 0, bouge = false;
+      if (peut) el.setPointerCapture(e.pointerId);
+      const move = ev => {
+        if (!peut) return;
+        delta = Math.round((ev.clientX - x0) / geo.ppd);
+        if (Math.abs(ev.clientX - x0) > 3) bouge = true;
+        if (!bouge) return;
+        el.classList.add('drag');
+        const px = delta * geo.ppd;
+        if (mode === 'm') el.style.left = (left0 + px) + 'px';
+        else if (mode === 'g') { el.style.left = Math.min(left0 + px, left0 + w0 - geo.ppd) + 'px'; el.style.width = Math.max(geo.ppd, w0 - px) + 'px'; }
+        else el.style.width = Math.max(geo.ppd, w0 + px) + 'px';
+      };
+      const up = async () => {
+        el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up);
+        if (!bouge) { ouvrir(ent, id); return; }
+        if (!delta) { dessiner(); return; }
+        const r = P.get(ent, id); const vals = {};
+        if (ent === 'jalon') vals.date = P.addDays(r.date, delta);
+        else {
+          const pr = ent === 'tache' ? periodeTache(r) : {d: r.debut || r.fin, f: r.fin || r.debut};
+          if (mode !== 'd' && P.modifiable(ent, chD)) vals[chD] = P.addDays(pr.d, delta);
+          if (mode !== 'g' && P.modifiable(ent, chF)) vals[chF] = P.addDays(pr.f, delta);
+          if (mode === 'm' && ent === 'tache' && !r.debut) delete vals.debut;
+          if (vals[chD] && vals[chF] && vals[chF] < vals[chD]) { P.toast('La fin ne peut pas précéder le début.', 'warn'); dessiner(); return; }
+        }
+        const txt = Object.entries(vals).map(([k, v]) => `${P.ENTITES[ent].champs[k].l} : ${P.fmtDate(v)}`).join(' · ');
+        try { await P.modifier(ent, id, vals, `${r._libelle} → ${txt}`); } catch (err) { dessiner(); }
+      };
+      el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+      e.preventDefault();
+    });
+  }
+
+  /* Édition rapide au clic */
+  function ouvrir(ent, id) {
+    const r = P.get(ent, id); if (!r) return;
+    const champs = {tache: ['titre', 'statut', 'responsable', 'debut', 'echeance', 'avancement', 'charge', 'suites'], projet: ['titre', 'phase', 'debut', 'fin'], jalon: ['titre', 'date', 'atteint', 'date_reelle']}[ent];
+    const div = document.createElement('form'); div.className = 'grille'; div.onsubmit = () => false;
+    div.innerHTML = champs.map(ch => P.champFormulaire(ent, ch, r[ch], {large: ch === 'titre' || ch === 'suites'})).join('') +
+      (ent === 'tache' ? `<p class="small muted large" style="margin:0">Projet : ${esc(P.libelle('projet', r.projet) || '—')} · ${esc(P.urgence(r).libelle)}</p>` : '');
+    P.modale({titre: ent === 'tache' ? 'Tâche' : ent === 'projet' ? 'Projet' : 'Jalon', contenu: div, boutons: [
+      {libelle: 'Annuler', classe: 'ter'},
+      {libelle: 'Enregistrer', classe: 'pri', action: async () => { await P.modifier(ent, id, P.lireFormulaire(ent, div), 'Modifications enregistrées.'); }},
+    ]});
+  }
+})();
+</script>
+</body>
+</html>

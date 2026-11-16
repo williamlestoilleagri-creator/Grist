@@ -8,6 +8,7 @@
 | `prise-rdv-calendrier.html` | Prise de rendez-vous (calendrier) |
 | `rdv/index.html` | Formulaire public de prise de rendez-vous |
 | `duo.html` | **Duo** — interprète à deux écouteurs (ex. japonais ⇄ allemand) |
+| `pilotage/` | **Pilotage de projets** — 8 widgets DSFR (revue hebdo, fiche projet, capacité/charge, Gantt, saisie express, sous-tâches, RACI, échéancier des contrats) : voir `pilotage/README.md` |
 
 ## ERP « façon SAP » (`erp-sap.html`)
 

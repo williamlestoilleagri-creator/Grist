@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-scheme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Échéancier des marchés et contrats</title>
+<link rel="stylesheet" href="socle.css">
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<script src="socle.js"></script>
+<style>
+  .ec{display:flex;flex-direction:column;gap:16px}
+  .ec-filtres{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .ec-frise{border:1px solid var(--border);overflow-x:auto}
+  .ec-axe,.ec-ligne{display:flex;min-width:var(--w)}
+  .ec-axe{background:var(--alt);border-bottom:2px solid var(--text);position:sticky;top:0}
+  .ec-nom{flex:0 0 240px;position:sticky;left:0;background:var(--surface);z-index:2;padding:6px 10px;border-right:1px solid var(--border);font-size:.82rem;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .ec-axe .ec-nom{background:var(--alt);font-weight:700}
+  .ec-trk{position:relative;flex:1}
+  .ec-axe .ec-trk span{position:absolute;top:0;bottom:0;border-left:1px solid var(--border);font-size:.7rem;padding:6px 4px;color:var(--title);white-space:nowrap}
+  .ec-ligne{border-bottom:1px solid var(--contrast);height:34px}
+  .ec-ligne .ec-nom{line-height:22px}
+  .ec-bar{position:absolute;top:9px;height:16px;background:var(--success);cursor:pointer;border-radius:2px}
+  .ec-bar.warn{background:var(--warning)} .ec-bar.err{background:#929292}
+  .ec-bar .fen{position:absolute;top:0;bottom:0;right:0;background:repeating-linear-gradient(45deg,rgba(255,255,255,.45) 0 3px,transparent 3px 6px)}
+  .ec-auj{position:absolute;top:0;bottom:0;width:2px;background:var(--rm);z-index:1;pointer-events:none}
+  .ec-an{position:absolute;top:0;bottom:0;border-left:1px dashed var(--border);pointer-events:none}
+  tr.cliquable{cursor:pointer}
+  tr.cliquable:hover td{background:var(--bf-975)!important}
+  @media print{.ec-frise{overflow:visible}}
+</style>
+</head>
+<body>
+<script>
+(function () {
+  const P = Pilotage, esc = P.esc;
+  const ui = {types: null, q: '', expires: true};
+
+  P.demarrer({
+    id: 'echeancier-contrats',
+    titre: 'Échéancier des marchés et contrats',
+    sousTitre: 'Renouvellements à anticiper, prestataires mobilisés',
+    entites: ['prestataire', 'projet', 'tache'],
+    optionnelles: ['projet', 'tache'],
+    champsRequis: {prestataire: ['nom']},
+    reglagesHtml: () => `<div class="grille"><div class="champ"><label for="rg-seuil">Alerte de renouvellement (jours avant la fin)</label><input class="in" type="number" min="15" id="rg-seuil" value="${P.reglage('seuil', 90)}"></div>
+      <div class="champ"><label for="rg-preavis">Délai de préparation d’un nouveau marché (jours)</label><input class="in" type="number" min="0" id="rg-preavis" value="${P.reglage('preavis', 180)}"><span class="aide">Zone hachurée sur la frise</span></div></div>`,
+    lireReglages: (el, r) => { r.seuil = +el.querySelector('#rg-seuil').value || 90; r.preavis = +el.querySelector('#rg-preavis').value || 0; },
+    outils: () => `<button class="btn ter sm" id="ec-csv">Exporter (CSV)</button><button class="btn ter sm" id="ec-print">${P.ic('imprimer')} Imprimer</button>`,
+    surOutils: el => {
+      el.querySelector('#ec-print').addEventListener('click', () => window.print());
+      el.querySelector('#ec-csv').addEventListener('click', exporter);
+    },
+    rendu: () => dessiner(),
+  });
+
+  const nature = p => {
+    const t = P.norm(p.type);
+    if (/demarch|consult|prospect/.test(t)) return 'demarche';
+    if (/march|accord|ugap/.test(t)) return 'marche';
+    if (/contrat|convention|abonnement/.test(t)) return 'contrat';
+    if (/ponctuel|devis|commande/.test(t)) return 'ponctuel';
+    return p.fin || p.debut ? 'contrat' : 'ponctuel';
+  };
+  const avecContrat = p => ['marche', 'contrat'].includes(nature(p));
+  function etat(p) {
+    if (!avecContrat(p)) return {c: '', l: '—', j: null};
+    if (!p.fin) return {c: 'warn', l: '⚠️ Date de fin à saisir', j: null};
+    const j = P.diffDays(p.fin, P.today());
+    if (j < 0) return {c: 'err', l: `🔴 Expiré depuis ${-j} j`, j};
+    if (j <= P.reglage('seuil', 90)) return {c: 'warn', l: `🟠 Fin dans ${j} j`, j};
+    return {c: 'ok', l: `🟢 En cours (${j} j)`, j};
+  }
+  const usages = p => ({
+    projets: P.liste('projet').filter(x => (x.prestataires || []).includes(p.id)),
+    taches: P.liste('tache').filter(t => t.prestataire === p.id && !P.estClos(t.statut)),
+  });
+
+  function dessiner() {
+    const corps = P.$('#pl-corps'); const auj = P.today();
+    const tous = P.liste('prestataire');
+    const types = P.uniq(tous.map(p => p.type).filter(Boolean)).sort();
+    if (!ui.types) ui.types = new Set(types);
+    const q = P.norm(ui.q);
+    const liste = tous.filter(p => (!p.type || !types.length || ui.types.has(p.type)) && (!q || P.norm([p.nom, p.marche, p.representant, (p.specialite || []).join(' ')].join(' ')).includes(q)));
+    const contrats = liste.filter(avecContrat);
+    const actifs = contrats.filter(p => { const e = etat(p); return e.j != null && e.j >= 0; });
+    const aRenouveler = contrats.filter(p => etat(p).c === 'warn' && etat(p).j != null);
+    const expires = contrats.filter(p => etat(p).c === 'err');
+    const sansFin = contrats.filter(p => !p.fin);
+    const montant = P.somme(actifs.map(p => p.montant || 0));
+
+    // Frise
+    const dates = contrats.flatMap(p => [p.debut, p.fin]).filter(Boolean);
+    let deb = new Date(Math.min(auj.getTime(), ...dates.map(d => d.getTime())));
+    let fin = new Date(Math.max(P.addMonths(auj, 12).getTime(), ...dates.map(d => d.getTime())));
+    deb = new Date(deb.getFullYear(), deb.getMonth() - 1, 1); fin = new Date(fin.getFullYear(), fin.getMonth() + 2, 1);
+    const jours = P.diffDays(fin, deb), largeur = Math.max(700, Math.min(2400, jours * 1.2));
+    const pc = d => (P.diffDays(d, deb) / jours * 100);
+    const repere = [];
+    const pas = jours > 1500 ? 12 : jours > 700 ? 6 : 3;
+    for (let d = new Date(deb.getFullYear(), Math.ceil(deb.getMonth() / pas) * pas, 1); d < fin; d = new Date(d.getFullYear(), d.getMonth() + pas, 1))
+      repere.push(`<span style="left:${pc(d)}%">${d.toLocaleDateString('fr-FR', {month: 'short', year: 'numeric'})}</span>`);
+    const ans = []; for (let y = deb.getFullYear() + 1; y <= fin.getFullYear(); y++) ans.push(`<i class="ec-an" style="left:${pc(new Date(y, 0, 1))}%"></i>`);
+    const frise = contrats.filter(p => p.fin || p.debut).sort((a, b) => (a.fin || a.debut) - (b.fin || b.debut)).map(p => {
+      const e = etat(p); const d0 = p.debut || P.addDays(p.fin, -365), d1 = p.fin || P.addMonths(p.debut, 12);
+      const l = pc(d0), w = Math.max(.4, pc(d1) - l);
+      const fen = p.fin ? Math.min(100, P.reglage('preavis', 180) / Math.max(1, P.diffDays(d1, d0)) * 100) : 0;
+      return `<div class="ec-ligne"><div class="ec-nom" title="${esc(p.nom)}">${esc(p.nom)}</div><div class="ec-trk">${ans.join('')}
+        <div class="ec-bar ${e.c === 'ok' ? '' : e.c}" data-id="${p.id}" style="left:${l}%;width:${w}%" data-bulle="<strong>${esc(p.nom)}</strong><br>${esc(p.type || '')} ${esc(p.marche || '')}<br>${p.debut ? P.fmtDate(p.debut) : '?'} → ${p.fin ? P.fmtDate(p.fin) : '?'}<br>${esc(e.l)}${p.montant ? '<br>' + P.fmtEuro(p.montant) : ''}">${fen ? `<span class="fen" style="width:${fen}%"></span>` : ''}</div>
+        <div class="ec-auj" style="left:${pc(auj)}%"></div></div></div>`;
+    }).join('');
+
+    const ligne = p => {
+      const e = etat(p); const u = usages(p);
+      return `<tr class="cliquable" data-id="${p.id}"><td><strong>${esc(p.nom)}</strong><br><span class="muted small">${esc((p.specialite || []).join(', '))}</span></td>
+        <td>${esc(p.type || '')}</td><td class="mono">${esc(p.marche || '')}</td><td>${p.debut ? P.fmtDate(p.debut) : ''}</td><td>${p.fin ? P.fmtDate(p.fin) : ''}</td>
+        <td><span class="badge ${e.c}">${esc(e.l)}</span></td><td class="num">${p.montant ? P.fmtEuro(p.montant) : ''}</td>
+        <td class="small">${u.projets.length ? u.projets.map(x => esc(x.code || x.titre)).join(', ') : '<span class="muted">—</span>'}${u.taches.length ? `<br><span class="muted">${u.taches.length} tâche(s) en cours</span>` : ''}</td>
+        <td class="small">${esc([p.representant, p.telephone].filter(Boolean).join(' · '))}${p.mail ? `<br><a href="mailto:${esc(p.mail)}" onclick="event.stopPropagation()">${esc(p.mail)}</a>` : ''}</td></tr>`;
+    };
+    const tri = (a, b) => { const ea = etat(a), eb = etat(b); return (ea.j == null ? 1e6 : ea.j) - (eb.j == null ? 1e6 : eb.j); };
+    const autres = liste.filter(p => !avecContrat(p)).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+
+    corps.innerHTML = `<div class="ec">
+      <div class="tuiles">
+        <div class="tuile ok"><div class="v">${actifs.length}</div><div class="l">marché(s) / contrat(s) en cours</div></div>
+        <div class="tuile ${aRenouveler.length ? 'warn' : ''}"><div class="v">${aRenouveler.length}</div><div class="l">à renouveler sous ${P.reglage('seuil', 90)} j</div></div>
+        <div class="tuile ${expires.length ? 'err' : ''}"><div class="v">${expires.length}</div><div class="l">expiré(s)</div></div>
+        ${sansFin.length ? `<div class="tuile warn"><div class="v">${sansFin.length}</div><div class="l">sans date de fin</div></div>` : ''}
+        ${P.a('prestataire', 'montant') ? `<div class="tuile"><div class="v" style="font-size:1.2rem">${P.fmtEuro(montant)}</div><div class="l">montant des contrats en cours</div></div>` : ''}
+        <div class="tuile"><div class="v">${autres.length}</div><div class="l">prestataire(s) ponctuel(s) ou démarché(s)</div></div>
+      </div>
+      <div class="ec-filtres no-print">${types.map(t => `<button class="tag" data-type="${esc(t)}" aria-pressed="${ui.types.has(t)}">${esc(t)}</button>`).join('')}
+        <input class="in sm" id="ec-q" placeholder="Rechercher (nom, marché, spécialité…)" value="${esc(ui.q)}" style="max-width:300px" aria-label="Rechercher"></div>
+      ${expires.length || aRenouveler.length || sansFin.length ? `<div class="alerte ${expires.length ? 'err' : 'warn'}"><strong>À traiter :</strong>
+        ${[...expires.map(p => `${esc(p.nom)} (expiré le ${P.fmtDate(p.fin)})`), ...aRenouveler.map(p => `${esc(p.nom)} (fin le ${P.fmtDate(p.fin)})`), ...sansFin.map(p => `${esc(p.nom)} (date de fin manquante)`)].join(' · ')}</div>` : ''}
+      <section class="carte"><h2>Frise des marchés et contrats</h2>
+        ${frise ? `<div class="ec-frise" style="--w:${Math.min(largeur, 1100) + 240}px"><div class="ec-axe"><div class="ec-nom">Prestataire</div><div class="ec-trk" style="height:28px">${repere.join('')}</div></div>${frise}</div>
+        <p class="small muted" style="margin:6px 0 0">Vert : en cours · orange : fin sous ${P.reglage('seuil', 90)} j · gris : expiré · hachures : ${P.reglage('preavis', 180)} derniers jours, période de préparation du renouvellement · trait rouge : aujourd’hui</p>` : '<p class="muted small">Aucun contrat daté.</p>'}
+      </section>
+      <section class="carte"><h2>Marchés et contrats</h2>
+        ${contrats.length ? `<div style="overflow-x:auto"><table class="tab"><thead><tr><th>Prestataire</th><th>Type</th><th>Référence</th><th>Début</th><th>Fin</th><th>État</th><th class="num">Montant</th><th>Projets</th><th>Contact</th></tr></thead>
+        <tbody>${contrats.slice().sort(tri).map(ligne).join('')}</tbody></table></div>` : '<p class="muted small">Aucun.</p>'}</section>
+      <section class="carte"><h2>Prestataires ponctuels et démarchés</h2>
+        ${autres.length ? `<div style="overflow-x:auto"><table class="tab"><thead><tr><th>Prestataire</th><th>Type</th><th>Référence</th><th>Début</th><th>Fin</th><th>État</th><th class="num">Montant</th><th>Projets</th><th>Contact</th></tr></thead>
+        <tbody>${autres.map(ligne).join('')}</tbody></table></div>` : '<p class="muted small">Aucun.</p>'}</section>
+    </div>`;
+    corps.querySelector('.ec-filtres').addEventListener('click', e => { const b = e.target.closest('[data-type]'); if (!b) return; const t = b.dataset.type; ui.types.has(t) ? ui.types.delete(t) : ui.types.add(t); dessiner(); });
+    P.$('#ec-q').addEventListener('input', P.debounce(e => { ui.q = e.target.value; dessiner(); const i = P.$('#ec-q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250));
+    corps.onclick = e => { const r = e.target.closest('tr[data-id],.ec-bar[data-id]'); if (r) editer(+r.dataset.id); };
+  }
+
+  function editer(id) {
+    const p = P.get('prestataire', id); if (!p) return;
+    const u = usages(p);
+    const f = document.createElement('form'); f.className = 'grille'; f.onsubmit = () => false;
+    f.innerHTML = ['nom', 'type', 'marche', 'debut', 'fin', 'montant', 'specialite', 'representant', 'telephone', 'mail']
+      .map(ch => P.champFormulaire('prestataire', ch, p[ch], {large: ch === 'nom' || ch === 'specialite'})).join('') +
+      `<div class="large small muted">${u.projets.length ? 'Projets : ' + u.projets.map(x => esc(x.titre)).join(', ') : 'Aucun projet lié.'}${u.taches.length ? ' · Tâches en cours : ' + u.taches.map(x => esc(x.titre)).join(', ') : ''}</div>`;
+    P.modale({titre: p.nom, contenu: f, large: true, boutons: [
+      {libelle: 'Annuler', classe: 'ter'},
+      {libelle: 'Enregistrer', classe: 'pri', action: async () => {
+        const v = P.lireFormulaire('prestataire', f);
+        if (v.debut && v.fin && v.fin < v.debut) { P.toast('La fin du contrat précède son début.', 'warn'); return false; }
+        await P.modifier('prestataire', id, v, 'Prestataire enregistré.');
+      }},
+    ]});
+  }
+
+  function exporter() {
+    const cols = ['Prestataire', 'Type', 'Référence', 'Début', 'Fin', 'Jours restants', 'État', 'Montant', 'Projets'];
+    const l = P.liste('prestataire').slice().sort((a, b) => (etat(a).j ?? 1e6) - (etat(b).j ?? 1e6)).map(p => {
+      const e = etat(p); return [p.nom, p.type, p.marche, P.fmtDate(p.debut), P.fmtDate(p.fin), e.j ?? '', e.l.replace(/^\W+\s*/u, ''), p.montant ?? '', usages(p).projets.map(x => x.code || x.titre).join(', ')];
+    });
+    const csv = [cols, ...l].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';')).join('\r\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + csv], {type: 'text/csv;charset=utf-8'}));
+    a.download = `echeancier-contrats-${P.iso(P.today())}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+})();
+</script>
+</body>
+</html>

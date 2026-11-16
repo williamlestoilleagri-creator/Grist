@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-scheme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Capacité et charge</title>
+<link rel="stylesheet" href="socle.css">
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<script src="socle.js"></script>
+<style>
+  .cc{display:flex;flex-direction:column;gap:14px}
+  .cc-wrap{overflow:auto;border:1px solid var(--border)}
+  table.cc-t{border-collapse:separate;border-spacing:0;font-size:.78rem;min-width:100%}
+  .cc-t th,.cc-t td{border-bottom:1px solid var(--contrast);border-right:1px solid var(--contrast);padding:0;text-align:center;background:var(--surface)}
+  .cc-t thead th{position:sticky;top:0;background:var(--alt);border-bottom:2px solid var(--text);padding:5px 4px;font-weight:500;color:var(--title);white-space:nowrap;z-index:1}
+  .cc-t thead th small{display:block;color:var(--mention);font-weight:400}
+  .cc-t th.ag{position:sticky;left:0;text-align:left;padding:6px 10px;min-width:190px;z-index:2;font-weight:500}
+  .cc-t thead th.ag{z-index:3}
+  .cc-t th.ag small{display:block;color:var(--mention);font-weight:400}
+  .cc-t td button{width:100%;min-width:64px;height:40px;border:0;cursor:pointer;font-variant-numeric:tabular-nums;line-height:1.15;background:transparent}
+  .cc-t td button:hover{box-shadow:inset 0 0 0 2px var(--bf)}
+  .cc-t td .r{display:block;font-weight:700;font-size:.82rem}
+  .cc-t td .d{display:block;font-size:.66rem;opacity:.85}
+  .n0{background:var(--surface)!important;color:var(--disabled)}
+  .n1{background:#e3f6e8!important;color:#0f5a2c}
+  .n2{background:#b8fec9!important;color:#0f5a2c}
+  .n3{background:#fceeac!important;color:#5c4b1e}
+  .n4{background:#ffd8bf!important;color:#8a2c00}
+  .n5{background:#ffbdbd!important;color:#8a0000}
+  .passe{background-image:repeating-linear-gradient(135deg,transparent 0 5px,rgba(0,0,0,.035) 5px 10px)}
+  .cc-t tr.total th,.cc-t tr.total td{border-top:2px solid var(--text);font-weight:700}
+  .cc-leg{display:flex;gap:10px;flex-wrap:wrap;font-size:.75rem;align-items:center}
+  .cc-leg i{display:inline-block;width:18px;height:12px;vertical-align:middle;margin-right:4px;border:1px solid var(--border)}
+  .cc-semcour{box-shadow:inset 0 -3px 0 var(--rm)}
+</style>
+</head>
+<body>
+<script>
+(function () {
+  const P = Pilotage, esc = P.esc;
+  const ui = {semaines: 12, passe: 4, domaine: '', tous: false};
+  try { Object.assign(ui, JSON.parse(localStorage.getItem('capacite-ui') || '{}')); } catch (e) { /* ignoré */ }
+  const sauverUi = () => { try { localStorage.setItem('capacite-ui', JSON.stringify(ui)); } catch (e) { /* ignoré */ } };
+  let calc = null;
+
+  P.demarrer({
+    id: 'capacite-charge',
+    titre: 'Capacité et charge',
+    sousTitre: 'Charge planifiée des tâches comparée aux jours disponibles, semaine par semaine',
+    entites: ['tache', 'agent', 'temps', 'projet'],
+    optionnelles: ['temps', 'projet'],
+    champsRequis: {tache: ['titre', 'responsable'], agent: []},
+    reglagesHtml: () => `<div class="grille">
+      <div class="champ"><label for="rg-res">Réserve hors projet (%)</label><input class="in" id="rg-res" type="number" min="0" max="90" placeholder="auto" value="${P.reglage('reserve', '') ?? ''}">
+        <span class="aide">Part du temps consacrée au support, à la maintenance… Vide = calculée sur les temps déclarés des 8 dernières semaines (20 % sinon).</span></div>
+      <div class="champ"><label for="rg-def">Charge par défaut d’une tâche non estimée (J/H)</label><input class="in" id="rg-def" type="number" min="0" step="0.5" value="${P.reglage('chargeDefaut', 1)}"></div>
+      <div class="champ"><label for="rg-app">Part de la charge confiée aux appuis (%)</label><input class="in" id="rg-app" type="number" min="0" max="90" value="${P.reglage('partAppuis', 0)}"><span class="aide">Répartie à parts égales entre les personnes en appui.</span></div></div>`,
+    lireReglages: (el, r) => {
+      const v = el.querySelector('#rg-res').value; r.reserve = v === '' ? '' : Math.min(90, Math.max(0, +v));
+      r.chargeDefaut = Math.max(0, +el.querySelector('#rg-def').value || 0); r.partAppuis = Math.min(90, Math.max(0, +el.querySelector('#rg-app').value || 0));
+    },
+    outils: () => `<label class="small" for="cc-sem">Horizon</label><select class="in sm" id="cc-sem" style="width:auto">${[6, 12, 26, 52].map(n => `<option value="${n}" ${n === ui.semaines ? 'selected' : ''}>${n} semaines</option>`).join('')}</select>
+      <select class="in sm" id="cc-passe" style="width:auto" aria-label="Semaines passées">${[0, 4, 8].map(n => `<option value="${n}" ${n === ui.passe ? 'selected' : ''}>${n ? n + ' sem. passées (réalisé)' : 'Sans le passé'}</option>`).join('')}</select>
+      <select class="in sm" id="cc-dom" style="width:auto" aria-label="Domaine"><option value="">Tous domaines</option></select>
+      <label class="case small"><input type="checkbox" id="cc-tous" ${ui.tous ? 'checked' : ''}> Toute l’équipe</label>
+      <button class="btn sec sm" id="cc-cap">Capacités…</button>`,
+    surOutils: el => {
+      el.querySelector('#cc-sem').addEventListener('change', e => { ui.semaines = +e.target.value; sauverUi(); dessiner(); });
+      el.querySelector('#cc-passe').addEventListener('change', e => { ui.passe = +e.target.value; sauverUi(); dessiner(); });
+      el.querySelector('#cc-dom').addEventListener('change', e => { ui.domaine = e.target.value; dessiner(); });
+      el.querySelector('#cc-tous').addEventListener('change', e => { ui.tous = e.target.checked; sauverUi(); dessiner(); });
+      el.querySelector('#cc-cap').addEventListener('click', capacites);
+    },
+    rendu: () => {
+      const doms = P.uniq(P.liste('projet').map(p => p.domaine).filter(Boolean)).sort();
+      const d = P.$('#cc-dom'); d.innerHTML = '<option value="">Tous domaines</option>' + doms.map(x => `<option ${x === ui.domaine ? 'selected' : ''}>${esc(x)}</option>`).join(''); d.classList.toggle('hidden', !doms.length);
+      dessiner();
+    },
+  });
+
+  const tauxAgent = id => { const c = (P.reglage('capacites', {}) || {})[id]; return c == null ? 1 : c / 100; };
+
+  /* Réserve hors projet : réglage, ou part constatée dans les temps déclarés récents */
+  function reserve() {
+    const r = P.reglage('reserve', '');
+    if (r !== '' && r != null) return {v: r / 100, auto: false};
+    const debut = P.addDays(P.today(), -56);
+    const t = P.liste('temps').filter(x => x.date && x.date >= debut && x.date <= P.today());
+    const tot = P.somme(t.map(x => x.duree)); const hors = P.somme(t.filter(x => !x.tache && !x.projet).map(x => x.duree));
+    return tot >= 5 ? {v: Math.min(.8, hors / tot), auto: true, mesure: true} : {v: .2, auto: true};
+  }
+
+  function calculer() {
+    const auj = P.today(), lundi0 = P.lundi(auj);
+    const semaines = [];
+    for (let i = -ui.passe; i < ui.semaines; i++) { const d = P.addDays(lundi0, 7 * i); semaines.push({i, debut: d, fin: P.addDays(d, 6), jours: P.joursOuvres(d, P.addDays(d, 6)), passe: i < 0}); }
+    const horizonFin = semaines[semaines.length - 1].fin;
+    const res = reserve();
+    const projetOk = t => { if (!ui.domaine) return true; const p = P.get('projet', t.projet); return p && p.domaine === ui.domaine; };
+    const taches = P.liste('tache').filter(t => !P.estClos(t.statut) && projetOk(t));
+    const charge = new Map(); // agentId -> {semaine index -> [{t, j}]}, plus 'np' (non planifié) et 'retard'
+    const ajouter = (aid, cle, t, j) => { if (!charge.has(aid)) charge.set(aid, {}); const c = charge.get(aid); (c[cle] = c[cle] || []).push({t, j}); };
+    const stats = {nonEstimees: 0, sansEcheance: 0, sansResp: 0, retard: 0};
+    taches.forEach(t => {
+      const est = t.charge != null && t.charge > 0;
+      if (!est) stats.nonEstimees++;
+      const total = Math.max(0, est ? t.charge : P.reglage('chargeDefaut', 1)) * (1 - P.avancement(t));
+      if (!total) return;
+      const appuis = (t.appuis || []).filter(a => a !== t.responsable);
+      const partA = appuis.length ? P.reglage('partAppuis', 0) / 100 : 0;
+      const parts = [[t.responsable || 0, total * (1 - partA)], ...appuis.map(a => [a, total * partA / appuis.length])];
+      if (!t.responsable) stats.sansResp++;
+      if (!t.echeance) { stats.sansEcheance++; parts.forEach(([a, j]) => ajouter(a, 'np', t, j)); return; }
+      let debut = t.debut && t.debut > auj ? t.debut : auj, fin = t.echeance;
+      if (fin < auj) { stats.retard++; parts.forEach(([a, j]) => ajouter(a, 0, t, j)); return; }
+      if (debut > fin) debut = fin;
+      let jours = P.joursOuvres(debut, fin); if (!jours.length) jours = [fin];
+      const parJour = 1 / jours.length;
+      semaines.forEach(s => {
+        if (s.passe) return;
+        const n = jours.filter(d => d >= s.debut && d <= s.fin).length;
+        if (n) parts.forEach(([a, j]) => ajouter(a, s.i, t, j * n * parJour));
+      });
+      const apres = jours.filter(d => d > horizonFin).length;
+      if (apres) parts.forEach(([a, j]) => ajouter(a, 'apres', t, j * apres * parJour));
+    });
+    // Réalisé (temps déclarés) sur les semaines passées
+    const realise = new Map();
+    P.liste('temps').forEach(x => {
+      if (!x.date) return; const s = semaines.find(w => w.passe && x.date >= w.debut && x.date <= w.fin); if (!s) return;
+      const a = x.agent || 0; if (!realise.has(a)) realise.set(a, {}); const r = realise.get(a); r[s.i] = (r[s.i] || 0) + (x.duree || 0);
+    });
+    const avecCharge = new Set([...charge.keys(), ...realise.keys()]);
+    let agents = P.liste('agent').filter(a => ui.tous || avecCharge.has(a.id)).sort((a, b) => a._libelle.localeCompare(b._libelle, 'fr'));
+    if (charge.has(0)) agents = agents.concat([{id: 0, _libelle: 'Non affecté'}]);
+    return {semaines, agents, charge, realise, res, stats};
+  }
+
+  const niveau = ratio => ratio == null ? 'n0' : ratio === 0 ? 'n0' : ratio <= .5 ? 'n1' : ratio <= .85 ? 'n2' : ratio <= 1 ? 'n3' : ratio <= 1.2 ? 'n4' : 'n5';
+  const capacite = (a, s, res) => a.id ? s.jours.length * tauxAgent(a.id) * (1 - res.v) : 0;
+  const sommeCle = (c, k) => c && c[k] ? P.somme(c[k].map(x => x.j)) : 0;
+
+  function dessiner() {
+    const corps = P.$('#pl-corps');
+    calc = calculer();
+    const {semaines, agents, charge, realise, res, stats} = calc;
+    const futures = semaines.filter(s => !s.passe);
+    const totCharge = P.somme(agents.map(a => P.somme(futures.map(s => sommeCle(charge.get(a.id), s.i)))));
+    const totCap = P.somme(agents.map(a => P.somme(futures.map(s => capacite(a, s, res)))));
+    const surcharges = agents.filter(a => a.id && futures.some(s => { const cap = capacite(a, s, res); return cap > 0 && sommeCle(charge.get(a.id), s.i) > cap * 1.0001; }));
+    const cellule = (a, s) => {
+      if (s.passe) {
+        const r = (realise.get(a.id) || {})[s.i] || 0; const cap = s.jours.length * (a.id ? tauxAgent(a.id) : 0);
+        return `<td class="passe ${niveau(cap ? r / cap : null)}"><button data-a="${a.id}" data-s="${s.i}" data-bulle="Réalisé : ${P.fmtNb(r)} J/H déclarés<br>${s.jours.length} jour(s) ouvré(s)"><span class="r">${r ? P.fmtNb(r) : '·'}</span><span class="d">réalisé</span></button></td>`;
+      }
+      const c = sommeCle(charge.get(a.id), s.i); const cap = capacite(a, s, res);
+      const ratio = cap ? c / cap : (c ? 9 : 0);
+      return `<td class="${niveau(ratio)} ${s.i === 0 ? 'cc-semcour' : ''}"><button data-a="${a.id}" data-s="${s.i}" data-bulle="${esc(a._libelle)} · semaine ${P.semaineIso(s.debut)}<br>Charge : ${P.fmtNb(c)} J/H · Capacité : ${P.fmtNb(cap)} J/H<br>${cap ? 'Occupation : ' + P.fmtPct(c / cap) : ''}">
+        <span class="r">${c ? (cap ? P.fmtPct(c / cap) : P.fmtNb(c) + ' j') : '·'}</span><span class="d">${c ? P.fmtNb(c) + ' / ' + P.fmtNb(cap) : ''}</span></button></td>`;
+    };
+    corps.innerHTML = `<div class="cc">
+      <div class="tuiles">
+        <div class="tuile ${totCap && totCharge / totCap > 1 ? 'err' : totCap && totCharge / totCap > .85 ? 'warn' : 'ok'}"><div class="v">${totCap ? P.fmtPct(totCharge / totCap) : '–'}</div><div class="l">occupation sur ${ui.semaines} semaines</div></div>
+        <div class="tuile"><div class="v">${P.fmtNb(totCharge)}</div><div class="l">J/H de charge planifiée</div></div>
+        <div class="tuile"><div class="v">${P.fmtNb(totCap)}</div><div class="l">J/H disponibles pour les projets</div></div>
+        <div class="tuile ${surcharges.length ? 'err' : 'ok'}"><div class="v">${surcharges.length}</div><div class="l">agent(s) en surcharge au moins une semaine</div></div>
+        <div class="tuile ${stats.retard ? 'err' : ''}"><div class="v">${stats.retard}</div><div class="l">tâche(s) en retard reportée(s) sur cette semaine</div></div>
+        <div class="tuile ${stats.nonEstimees ? 'warn' : ''}"><div class="v">${stats.nonEstimees}</div><div class="l">tâche(s) sans charge estimée</div></div>
+        <div class="tuile ${stats.sansEcheance ? 'warn' : ''}"><div class="v">${stats.sansEcheance}</div><div class="l">tâche(s) sans échéance (non planifiées)</div></div>
+      </div>
+      <div class="cc-leg"><span><i class="n1"></i>≤ 50 %</span><span><i class="n2"></i>≤ 85 %</span><span><i class="n3"></i>≤ 100 %</span><span><i class="n4"></i>≤ 120 %</span><span><i class="n5"></i>&gt; 120 %</span>
+        <span class="muted">Réserve hors projet : ${P.fmtPct(res.v)} ${res.auto ? (res.mesure ? '(mesurée sur les temps déclarés)' : '(valeur par défaut)') : '(réglée)'} · capacité = jours ouvrés × taux d’activité × (1 − réserve) · jours fériés déduits</span></div>
+      ${agents.length ? `<div class="cc-wrap"><table class="cc-t"><thead><tr><th class="ag">Agent</th>
+        ${semaines.map(s => `<th class="${s.i === 0 ? 'cc-semcour' : ''}">S${P.semaineIso(s.debut)}<small>${P.fmtDateCourt(s.debut)}${s.jours.length < 5 ? ` · ${s.jours.length} j` : ''}</small></th>`).join('')}
+        <th>Non planifié<small>sans échéance</small></th><th>Au-delà<small>de l’horizon</small></th></tr></thead><tbody>
+        ${agents.map(a => `<tr><th class="ag">${esc(a._libelle)}<small>${a.id ? `capacité ${P.fmtPct(tauxAgent(a.id))}` : 'tâches sans responsable'}</small></th>${semaines.map(s => cellule(a, s)).join('')}
+          <td><button data-a="${a.id}" data-s="np"><span class="r">${sommeCle(charge.get(a.id), 'np') ? P.fmtNb(sommeCle(charge.get(a.id), 'np')) + ' j' : '·'}</span></button></td>
+          <td><button data-a="${a.id}" data-s="apres"><span class="r">${sommeCle(charge.get(a.id), 'apres') ? P.fmtNb(sommeCle(charge.get(a.id), 'apres')) + ' j' : '·'}</span></button></td></tr>`).join('')}
+        <tr class="total"><th class="ag">Équipe</th>${semaines.map(s => {
+          if (s.passe) { const r = P.somme(agents.map(a => (realise.get(a.id) || {})[s.i] || 0)); return `<td class="passe"><span class="r" style="display:block;padding:8px 2px">${P.fmtNb(r)}</span></td>`; }
+          const c = P.somme(agents.map(a => sommeCle(charge.get(a.id), s.i))), cap = P.somme(agents.map(a => capacite(a, s, res)));
+          return `<td class="${niveau(cap ? c / cap : null)}"><span class="r" style="display:block;padding:4px 2px 0">${cap ? P.fmtPct(c / cap) : '–'}</span><span class="d" style="display:block;padding-bottom:4px;font-weight:400">${P.fmtNb(c)} / ${P.fmtNb(cap)}</span></td>`; }).join('')}
+          <td>${P.fmtNb(P.somme(agents.map(a => sommeCle(charge.get(a.id), 'np'))))} j</td><td>${P.fmtNb(P.somme(agents.map(a => sommeCle(charge.get(a.id), 'apres'))))} j</td></tr>
+      </tbody></table></div>` : '<div class="vide">Aucune charge à afficher. Cochez « Toute l’équipe » pour voir tous les agents.</div>'}
+      <p class="small muted" style="margin:0">Charge d’une tâche ouverte = charge estimée × (1 − avancement), répartie sur les jours ouvrés entre aujourd’hui (ou sa date de début) et son échéance. Une tâche en retard est entièrement comptée sur la semaine en cours. Cliquer une case pour voir et réaffecter les tâches.</p>
+    </div>`;
+    const w = P.$('.cc-wrap');
+    if (w) w.addEventListener('click', e => { const b = e.target.closest('button[data-a]'); if (b) detail(+b.dataset.a, b.dataset.s); });
+  }
+
+  function detail(aid, cle) {
+    const a = aid ? P.get('agent', aid) : {_libelle: 'Non affecté'};
+    const s = calc.semaines.find(x => String(x.i) === cle);
+    if (s && s.passe) {
+      const t = P.liste('temps').filter(x => (x.agent || 0) === aid && x.date >= s.debut && x.date <= s.fin);
+      P.modale({titre: `${a._libelle} · réalisé semaine ${P.semaineIso(s.debut)}`, contenu: t.length ? `<table class="tab"><thead><tr><th>Date</th><th>Activité</th><th>Tâche / projet</th><th class="num">J/H</th></tr></thead><tbody>${t.map(x => `<tr><td>${P.fmtDate(x.date)}</td><td>${esc(x.type || '')}</td><td>${esc(P.libelle('tache', x.tache) || P.libelle('projet', x.projet) || x.commentaire || '')}</td><td class="num">${P.fmtNb(x.duree)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Aucun temps déclaré.</p>'});
+      return;
+    }
+    const items = ((calc.charge.get(aid) || {})[cle === 'np' || cle === 'apres' ? cle : +cle] || []).slice().sort((x, y) => y.j - x.j);
+    const titre = cle === 'np' ? 'tâches sans échéance' : cle === 'apres' ? 'au-delà de l’horizon' : `semaine ${P.semaineIso(s.debut)} (${P.fmtDateCourt(s.debut)} – ${P.fmtDateCourt(s.fin)})`;
+    const agents = P.liste('agent').slice().sort((x, y) => x._libelle.localeCompare(y._libelle, 'fr'));
+    const modR = P.modifiable('tache', 'responsable'), modE = P.modifiable('tache', 'echeance');
+    const div = document.createElement('div');
+    div.innerHTML = items.length ? `<p class="small muted" style="margin:0">${s ? `Capacité de la semaine : ${P.fmtNb(capacite(a, s, calc.res))} J/H · charge : ${P.fmtNb(P.somme(items.map(x => x.j)))} J/H. ` : ''}Modifiez le responsable ou l’échéance pour rééquilibrer la charge.</p>
+      <table class="tab"><thead><tr><th>Tâche</th><th class="num">J/H cette période</th><th>Responsable</th><th>Échéance</th></tr></thead><tbody>
+      ${items.map(({t, j}) => `<tr data-id="${t.id}"><td><strong>${esc(t.titre)}</strong><br><span class="small muted">${esc(P.libelle('projet', t.projet) || '')} · ${esc(P.urgence(t).libelle)}${t.charge ? '' : ' · charge non estimée'}</span></td><td class="num">${P.fmtNb(j, 2)}</td>
+        <td>${modR ? `<select class="in sm" data-f="responsable"><option value="">—</option>${agents.map(x => `<option value="${x.id}" ${x.id === t.responsable ? 'selected' : ''}>${esc(x._libelle)}</option>`).join('')}</select>` : esc(P.libelle('agent', t.responsable))}</td>
+        <td>${modE ? `<input class="in sm" type="date" data-f="echeance" value="${t.echeance ? P.iso(t.echeance) : ''}">` : P.fmtDate(t.echeance)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Aucune tâche.</p>';
+    div.addEventListener('change', async e => {
+      const tr = e.target.closest('tr[data-id]'); if (!tr) return; const id = +tr.dataset.id;
+      if (e.target.dataset.f === 'responsable') await P.modifier('tache', id, {responsable: +e.target.value || null}, 'Tâche réaffectée.');
+      if (e.target.dataset.f === 'echeance') await P.modifier('tache', id, {echeance: P.fromIso(e.target.value)}, 'Échéance modifiée.');
+    });
+    P.modale({titre: `${a._libelle} · ${titre}`, contenu: div, large: true});
+  }
+
+  function capacites() {
+    const agents = P.liste('agent').slice().sort((a, b) => a._libelle.localeCompare(b._libelle, 'fr'));
+    const div = document.createElement('div');
+    div.innerHTML = `<p class="small muted" style="margin:0">Taux d’activité de chaque agent (100 % = temps plein ; 80 % = temps partiel ; 50 % = mi-temps sur le pôle). La réserve hors projet s’applique en plus.</p>
+      <div class="grille">${agents.map(a => `<div class="champ"><label for="cap-${a.id}">${esc(a._libelle)}</label><input class="in sm" type="number" min="0" max="100" step="5" id="cap-${a.id}" data-id="${a.id}" value="${Math.round(tauxAgent(a.id) * 100)}"></div>`).join('')}</div>`;
+    P.modale({titre: 'Capacités de l’équipe', contenu: div, boutons: [{libelle: 'Annuler', classe: 'ter'}, {libelle: 'Enregistrer', classe: 'pri', action: async () => {
+      const c = {}; P.$$('input[data-id]', div).forEach(i => { const v = Math.max(0, Math.min(100, +i.value)); if (v !== 100) c[i.dataset.id] = v; });
+      await P.setReglage('capacites', c); dessiner(); P.toast('Capacités enregistrées.', 'ok');
+    }}]});
+  }
+})();
+</script>
+</body>
+</html>
