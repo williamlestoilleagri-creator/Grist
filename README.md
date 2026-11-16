@@ -7,6 +7,8 @@
 | `grist-assistant-claude.html` | Assistant Claude |
 | `prise-rdv-calendrier.html` | Prise de rendez-vous (calendrier) |
 | `calendrier-prelevements.html` | Calendrier des prélèvements reliquats (préleveurs, inspecteurs FranceAgriMer, exports PDF/Excel, résultats et grilles d'évaluation des contrôles) |
+| `registre-parcelles.html` | Registre des parcelles uniques (une CLE = une parcelle) toutes tables confondues : vue par parcelle ou par exploitation, sélection, dossier, prélèvement, contrôle prévu / réalisé |
+| `tableau-de-bord-campagne.html` | Tableau de bord de la campagne : préleveurs, suites des RDV, erreurs préleveurs, contrôles (grilles Q_QUADHYDRO / Q_TAR_MANUELLE / Q_LIEUX_STOCKAGE), totaux cliquables |
 | `rdv/index.html` | Formulaire public de prise de rendez-vous |
 | `duo.html` | **Duo** — interprète à deux écouteurs (ex. japonais ⇄ allemand) |
 
