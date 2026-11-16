@@ -1,0 +1,1987 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-scheme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tableau croisé dynamique</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<style>
+  /* ================= Police Marianne (DSFR) ================= */
+  @font-face{font-family:Marianne;font-style:normal;font-weight:300;font-display:swap;src:url(https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14.2/dist/fonts/Marianne-Light.woff2) format("woff2")}
+  @font-face{font-family:Marianne;font-style:normal;font-weight:400;font-display:swap;src:url(https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14.2/dist/fonts/Marianne-Regular.woff2) format("woff2")}
+  @font-face{font-family:Marianne;font-style:italic;font-weight:400;font-display:swap;src:url(https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14.2/dist/fonts/Marianne-Regular_Italic.woff2) format("woff2")}
+  @font-face{font-family:Marianne;font-style:normal;font-weight:500;font-display:swap;src:url(https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14.2/dist/fonts/Marianne-Medium.woff2) format("woff2")}
+  @font-face{font-family:Marianne;font-style:normal;font-weight:700;font-display:swap;src:url(https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14.2/dist/fonts/Marianne-Bold.woff2) format("woff2")}
+
+  /* ================= Jetons DSFR ================= */
+  :root{
+    --bf:#000091; --bf-hover:#1212ff; --bf-active:#2323ff;
+    --bf-975:#f5f5fe; --bf-950:#ececfe; --bf-925:#e3e3fd; --bf-850:#cacafb; --bf-625:#8585f6;
+    --title:#161616; --text:#3a3a3a; --mention:#666666; --disabled:#929292;
+    --border:#dddddd; --plain:#3a3a3a;
+    --alt:#f6f6f6; --contrast:#eeeeee; --surface:#ffffff;
+    --success:#18753c; --success-bg:#b8fec9;
+    --error:#ce0500; --error-bg:#ffe9e9;
+    --warning:#b34000; --warning-bg:#ffe9e6;
+    --info:#0063cb; --info-bg:#e8edff;
+    --focus:#0a76f6;
+    --text-black-white-grey:#000;
+    --shadow-lg:0 6px 18px rgba(0,0,18,.16),0 2px 6px rgba(0,0,18,.12);
+    --font:Marianne,arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--surface);color:var(--text);font-family:var(--font);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  button,input,select,textarea{font:inherit;color:inherit}
+  :focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+  .muted{color:var(--mention)}
+  .sr{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  [hidden]{display:none!important}
+
+  /* ================= En-tête ================= */
+  #app{display:flex;flex-direction:column;height:100vh}
+  .hdr{flex:0 0 auto;background:var(--surface);box-shadow:0 2px 6px rgba(0,0,18,.12);position:relative;z-index:20}
+  .hdr-in{display:flex;align-items:center;gap:14px;padding:6px 14px;min-height:60px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:16px;min-width:0;padding:4px 6px}
+  .brand .fr-logo{margin:0;padding:0;flex:0 0 auto}
+  .svc{min-width:0;padding-left:14px;border-left:1px solid var(--border)}
+  .brand.nologo .svc{border-left:0;padding-left:0}
+  .svc-title{margin:0;font-weight:700;font-size:1.05rem;color:var(--title);line-height:1.3}
+  .svc-tag{margin:0;font-size:.8rem;color:var(--mention);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:320px}
+  .hdr-tools{display:flex;align-items:center;gap:6px;margin-left:auto;flex-wrap:wrap}
+  @media (max-width:1100px){.hdr-tools .lbl{display:none}}
+  @media (max-width:640px){.svc{display:none}}
+
+  /* Contrôle segmenté DSFR */
+  .seg{display:inline-flex;box-shadow:inset 0 0 0 1px var(--bf)}
+  .seg button{border:0;background:transparent;color:var(--bf);padding:.35rem .8rem;min-height:2.25rem;cursor:pointer;font-weight:500;font-size:.88rem;display:inline-flex;align-items:center;gap:.4rem}
+  .seg button[aria-pressed=true]{background:var(--bf);color:#fff}
+  .seg button:not([aria-pressed=true]):hover{background:var(--alt)}
+
+  /* ================= Mise en page ================= */
+  .layout{flex:1;display:flex;min-height:0;position:relative}
+  #main{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--surface)}
+  .bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 18px;border-bottom:1px solid var(--border);min-height:48px}
+  .bar .stat{font-size:.85rem;color:var(--mention)}
+  .bar .stat b{color:var(--title);font-weight:700}
+  .bar .sp{flex:1}
+  #out{flex:1;overflow:auto;min-height:0;position:relative}
+  #panel{width:340px;flex:0 0 340px;border-left:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;min-height:0}
+  #panel.closed{display:none}
+  @media (max-width:900px){
+    #panel{position:absolute;right:0;top:0;bottom:0;z-index:30;box-shadow:var(--shadow-lg);width:min(340px,100%)}
+  }
+  .p-sec{padding:12px 16px;border-bottom:1px solid var(--border)}
+  .p-title{display:flex;align-items:center;gap:8px;margin:0 0 8px;font-size:.95rem;font-weight:700;color:var(--title)}
+  .p-title .sp{flex:1}
+  .p-scroll{flex:1;overflow:auto;min-height:0;display:flex;flex-direction:column}
+
+  /* ================= Boutons DSFR ================= */
+  .btn{display:inline-flex;align-items:center;gap:.5rem;min-height:2.5rem;padding:.5rem 1rem;border:0;border-radius:0;background:transparent;color:var(--bf);font-weight:500;font-size:.95rem;line-height:1.5rem;cursor:pointer;white-space:nowrap;text-decoration:none}
+  .btn.pri{background:var(--bf);color:#fff}
+  .btn.pri:hover{background:var(--bf-hover)}
+  .btn.pri:active{background:var(--bf-active)}
+  .btn.sec{box-shadow:inset 0 0 0 1px var(--bf)}
+  .btn.sec:hover,.btn.ter:hover,.btn.tn:hover{background:var(--alt)}
+  .btn.ter{box-shadow:inset 0 0 0 1px var(--border)}
+  .btn.danger{color:var(--error);box-shadow:inset 0 0 0 1px var(--error)}
+  .btn.danger:hover{background:var(--error-bg)}
+  .btn.sm{min-height:2rem;padding:.25rem .75rem;font-size:.85rem}
+  .btn.icon-only{padding:.5rem;justify-content:center;min-width:2.5rem}
+  .btn.sm.icon-only{min-width:2rem;padding:.25rem}
+  .btn:disabled{background:var(--contrast);color:var(--disabled);box-shadow:none;cursor:not-allowed}
+  .btn.sec:disabled,.btn.ter:disabled{background:transparent;box-shadow:inset 0 0 0 1px var(--border)}
+
+  /* ================= Formulaires DSFR ================= */
+  .field{margin-bottom:14px}
+  .field:last-child{margin-bottom:0}
+  .field label,.field .lab{display:block;font-size:.9rem;color:var(--title);margin-bottom:6px}
+  .hint{display:block;font-size:.75rem;color:var(--mention);line-height:1.3;margin-top:2px}
+  .inp{width:100%;min-height:2.5rem;border:0;border-radius:.25rem .25rem 0 0;background:var(--contrast);box-shadow:inset 0 -2px 0 var(--plain);padding:.45rem .75rem;color:var(--title)}
+  select.inp{padding-right:2rem;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23161616' d='m12 13.1 5-4.9 1.4 1.4-6.4 6.3-6.4-6.4L7 8.1l5 5z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .5rem center;background-size:1.25rem}
+  .inp.sm{min-height:2rem;padding:.25rem .6rem;font-size:.88rem}
+  select.inp.sm{padding-right:2rem}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media (max-width:560px){.row2{grid-template-columns:1fr}}
+  .check{display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:.9rem;color:var(--title);padding:4px 0}
+  .check input{width:1.15rem;height:1.15rem;accent-color:var(--bf);margin:.15rem 0 0;flex:0 0 auto}
+  .check small{display:block;color:var(--mention);font-size:.75rem}
+  fieldset{border:0;padding:0;margin:0 0 16px}
+  legend{font-weight:700;color:var(--title);font-size:.95rem;margin-bottom:6px;padding:0}
+
+  /* ================= Badges / tags ================= */
+  .badge{display:inline-flex;align-items:center;gap:4px;font-size:.72rem;font-weight:700;text-transform:uppercase;line-height:1.25rem;padding:0 .5rem;border-radius:.25rem;white-space:nowrap;background:var(--contrast);color:var(--text)}
+  .badge.blue{background:var(--bf-950);color:var(--bf)}
+  .badge.info{background:var(--info-bg);color:var(--info)}
+  .badge.warning{background:var(--warning-bg);color:var(--warning)}
+  .tag{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;line-height:1.5rem;padding:0 .4rem 0 .7rem;border-radius:1rem;background:var(--bf-950);color:var(--bf);border:0;cursor:pointer;font-weight:500}
+  .tag:hover{background:var(--bf-925)}
+
+  /* ================= Liste des champs ================= */
+  .search{display:flex;align-items:center;gap:6px;background:var(--contrast);box-shadow:inset 0 -2px 0 var(--plain);border-radius:.25rem .25rem 0 0;padding:0 .5rem}
+  .search input{flex:1;border:0;background:transparent;min-height:2.1rem;padding:0 .25rem;font-size:.88rem;min-width:0}
+  .search input:focus{outline:none}
+  .search:focus-within{outline:2px solid var(--focus);outline-offset:2px}
+  #fields{list-style:none;margin:8px 0 0;padding:0;max-height:34vh;overflow:auto;border:1px solid var(--border)}
+  #fields li{display:flex;align-items:center;gap:8px;padding:3px 6px 3px 8px;font-size:.88rem;color:var(--title);border-bottom:1px solid var(--alt);cursor:grab;background:var(--surface)}
+  #fields li:hover{background:var(--bf-975)}
+  #fields li.sub{padding-left:26px}
+  #fields li.used .fl{font-weight:700}
+  #fields li input{width:1rem;height:1rem;accent-color:var(--bf);margin:0;cursor:pointer;flex:0 0 auto}
+  #fields .fl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #fields .exp{border:0;background:transparent;width:1.4rem;height:1.4rem;display:inline-grid;place-items:center;cursor:pointer;color:var(--mention);padding:0;--ic:.95rem}
+  #fields .exp[aria-expanded=false] .ic::before{transform:rotate(-90deg)}
+  #fields .more{border:0;background:transparent;color:var(--bf);width:1.6rem;height:1.6rem;display:inline-grid;place-items:center;cursor:pointer;--ic:1rem;opacity:.6}
+  #fields li:hover .more,#fields .more:focus-visible{opacity:1}
+  #fields .more:hover{background:var(--bf-950)}
+  .ty{font-family:var(--mono);font-size:.66rem;min-width:1.9rem;text-align:center;padding:0 .2rem;line-height:1.1rem;border-radius:.2rem;background:var(--contrast);color:var(--mention);flex:0 0 auto}
+  .ty.num{background:var(--bf-950);color:var(--bf)}
+  .ty.date{background:#fee7fc;color:#6e445a}
+  .ty.ref{background:#c3fad5;color:#18753c}
+  .ty.list{background:#fceeac;color:#66673d}
+  .empty-note{padding:10px;color:var(--mention);font-size:.85rem}
+
+  /* ================= Zones ================= */
+  .zones{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+  .zone{border:1px dashed var(--border);min-height:96px;min-width:0;display:flex;flex-direction:column;background:var(--surface)}
+  .zone.over{border-color:var(--bf);background:var(--bf-975)}
+  .zone h3{margin:0;padding:5px 8px;font-size:.78rem;font-weight:700;color:var(--title);display:flex;align-items:center;gap:6px;background:var(--alt);text-transform:uppercase;letter-spacing:.02em;--ic:.9rem}
+  .zone .chips{flex:1;padding:6px;display:flex;flex-direction:column;gap:5px;position:relative}
+  .zone .ph{font-size:.75rem;color:var(--disabled);padding:4px 2px}
+  .chip{display:flex;align-items:center;gap:2px;background:var(--bf-950);color:var(--bf);font-size:.82rem;font-weight:500;cursor:grab;min-height:1.9rem;position:relative}
+  .chip.dragging{opacity:.4}
+  .chip .cl{flex:1;min-width:0;border:0;background:transparent;color:inherit;text-align:left;padding:.2rem .1rem .2rem .5rem;cursor:pointer;display:flex;align-items:center;gap:5px;overflow:hidden;--ic:.85rem}
+  .chip .cl span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .chip .cl:hover{text-decoration:underline}
+  .chip .cx{border:0;background:transparent;color:inherit;width:1.7rem;height:1.7rem;display:inline-grid;place-items:center;cursor:pointer;--ic:.85rem;flex:0 0 auto}
+  .chip .cx:hover{background:var(--bf-925)}
+  .chip.has-filter{box-shadow:inset 3px 0 0 var(--bf)}
+  .drop-mark{height:2px;background:var(--bf);margin:-3px 0}
+  @media (max-width:400px){.zones{grid-template-columns:minmax(0,1fr)}}
+
+  /* ================= Tableau croisé ================= */
+  table.pv{border-collapse:separate;border-spacing:0;font-size:.86rem;min-width:min(100%,400px);font-variant-numeric:tabular-nums}
+  table.pv th,table.pv td{padding:.35rem .7rem;border-bottom:1px solid var(--border);border-right:1px solid var(--alt);white-space:nowrap}
+  table.pv thead th{position:sticky;background:var(--alt);color:var(--title);font-weight:700;text-align:center;z-index:2;border-bottom:1px solid var(--border)}
+  table.pv thead tr:last-child th{border-bottom:2px solid var(--plain)}
+  table.pv thead th.corner{text-align:left;left:0;z-index:3;vertical-align:bottom;font-weight:500;color:var(--mention);font-size:.8rem}
+  table.pv thead th.tot{background:var(--bf-950);color:var(--bf)}
+  table.pv thead th.vh{font-weight:500;font-size:.8rem}
+  table.pv thead th.lev{cursor:default}
+  table.pv tbody th{text-align:left;font-weight:400;color:var(--title);background:var(--surface)}
+  table.pv.compact tbody th{position:sticky;left:0;z-index:1;max-width:420px;overflow:hidden;text-overflow:ellipsis}
+  table.pv td{text-align:right;color:var(--title)}
+  table.pv td.v{cursor:pointer}
+  table.pv td.v:hover{outline:2px solid var(--bf-625);outline-offset:-2px}
+  table.pv td.ct{background:var(--bf-975)}
+  table.pv tr.group th,table.pv tr.group td{font-weight:700}
+  table.pv tr.sub th,table.pv tr.sub td{font-weight:700;background:var(--bf-975)}
+  table.pv tr.grand th,table.pv tr.grand td{font-weight:700;background:var(--bf-950);color:var(--bf);border-top:2px solid var(--bf);border-bottom:0}
+  table.pv tbody tr:not(.grand):not(.sub):hover th,table.pv tbody tr:not(.grand):not(.sub):hover td:not(.hm){background:var(--alt)}
+  table.pv .neg{color:var(--error)}
+  .tg{border:0;background:transparent;width:1.3rem;height:1.3rem;padding:0;margin-right:4px;display:inline-grid;place-items:center;cursor:pointer;color:var(--bf);vertical-align:-.25rem;--ic:.95rem}
+  .tg:hover{background:var(--bf-950)}
+  .tg[aria-expanded=false] .ic::before{transform:rotate(-90deg)}
+  .tg-sp{display:inline-block;width:1.3rem;margin-right:4px}
+  .vide{color:var(--mention);font-style:italic}
+  .pv-wrap{padding:14px 18px 40px;display:inline-block;min-width:100%}
+  .warnbox{margin:0 0 10px;padding:8px 12px;background:var(--warning-bg);color:var(--warning);font-size:.85rem;box-shadow:inset 4px 0 0 var(--warning)}
+
+  /* ================= États vides ================= */
+  .blank{max-width:560px;margin:8vh auto;padding:0 20px;text-align:center;color:var(--text)}
+  .blank h2{color:var(--title);font-size:1.35rem;margin:12px 0 8px}
+  .blank p{margin:0 0 10px}
+  .blank .pic{width:120px;height:auto}
+  .blank ol{text-align:left;display:inline-block;margin:6px 0 16px;padding-left:1.2rem}
+
+  /* ================= Graphique ================= */
+  .chart{padding:14px 18px 30px}
+  .chart svg{display:block;width:100%;height:auto;max-width:1100px}
+  .chart text{font-family:var(--font);fill:var(--text);font-size:12px}
+  .chart .ax text{fill:var(--mention);font-size:11px}
+  .chart .grid{stroke:var(--border)}
+  .chart .base{stroke:var(--plain)}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.82rem;margin:0 0 10px;max-width:1100px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:12px;height:12px;display:inline-block;flex:0 0 auto}
+  .chart .note{font-size:.8rem;color:var(--mention);margin:6px 0 0}
+  #ctip{position:fixed;pointer-events:none;background:var(--surface);color:var(--text);font-size:.8rem;padding:8px 10px;box-shadow:var(--shadow-lg);z-index:200;white-space:nowrap;display:none}
+  #ctip b{color:var(--title)}
+
+  /* ================= Menus ================= */
+  .menu{position:fixed;z-index:150;background:var(--surface);box-shadow:var(--shadow-lg);min-width:220px;max-width:320px;padding:4px 0;max-height:70vh;overflow:auto}
+  .menu button{display:flex;align-items:center;gap:10px;width:100%;border:0;background:transparent;text-align:left;padding:.5rem 1rem;font-size:.88rem;color:var(--title);cursor:pointer;--ic:1rem}
+  .menu button:hover,.menu button:focus{background:var(--alt);outline:none}
+  .menu button:disabled{color:var(--disabled);cursor:default;background:transparent}
+  .menu button .ic{color:var(--bf)}
+  .menu button .ok{margin-left:auto;color:var(--bf)}
+  .menu hr{border:0;border-top:1px solid var(--border);margin:4px 0}
+  .menu .mh{font-size:.72rem;text-transform:uppercase;color:var(--mention);padding:.4rem 1rem .1rem;font-weight:700}
+
+  /* ================= Modale DSFR ================= */
+  .modal-back{position:fixed;inset:0;background:rgba(22,22,22,.64);display:flex;align-items:flex-start;justify-content:center;padding:5vh 14px 14px;z-index:100;overflow:auto}
+  .modal{background:var(--surface);box-shadow:var(--shadow-lg);width:560px;max-width:100%;display:flex;flex-direction:column;max-height:90vh}
+  .modal.wide{width:1000px}
+  .modal-close{display:flex;justify-content:flex-end;padding:8px 10px 0}
+  .modal-h{margin:0;padding:0 24px 6px;font-weight:700;font-size:1.25rem;color:var(--title);display:flex;align-items:center;gap:8px;--ic:1.25rem}
+  .modal-b{padding:10px 24px 18px;overflow:auto}
+  .modal-f{padding:12px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+  .modal-f .sp{flex:1}
+  .vlist{border:1px solid var(--border);max-height:42vh;overflow:auto;margin-top:8px}
+  .vlist label{display:flex;align-items:center;gap:8px;padding:4px 10px;font-size:.88rem;cursor:pointer;border-bottom:1px solid var(--alt)}
+  .vlist label:hover{background:var(--bf-975)}
+  .vlist input{accent-color:var(--bf);width:1rem;height:1rem;margin:0}
+  .vlist .n{margin-left:auto;color:var(--mention);font-size:.78rem}
+  .tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:12px}
+  .tabs button{border:0;background:transparent;padding:.5rem 1rem;cursor:pointer;color:var(--title);font-weight:500;font-size:.9rem;box-shadow:inset 0 -2px 0 transparent}
+  .tabs button[aria-selected=true]{color:var(--bf);box-shadow:inset 0 -2px 0 var(--bf)}
+  table.dt{border-collapse:collapse;font-size:.82rem;width:100%}
+  table.dt th{text-align:left;background:var(--alt);color:var(--title);padding:.4rem .6rem;border-bottom:2px solid var(--plain);white-space:nowrap;position:sticky;top:0}
+  table.dt td{padding:.3rem .6rem;border-bottom:1px solid var(--border);white-space:nowrap;max-width:280px;overflow:hidden;text-overflow:ellipsis}
+  table.dt tr:nth-child(even) td{background:var(--alt)}
+  .help h3{font-size:1rem;color:var(--title);margin:16px 0 6px}
+  .help p,.help li{font-size:.9rem}
+  .help ul{padding-left:1.2rem;margin:4px 0}
+
+  /* ================= Notifications ================= */
+  #toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:300;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+  .toast{background:var(--surface);box-shadow:var(--shadow-lg);padding:10px 16px;font-size:.88rem;color:var(--title);pointer-events:auto;max-width:90vw;box-shadow:inset 4px 0 0 var(--info),var(--shadow-lg)}
+  .toast.ok{box-shadow:inset 4px 0 0 var(--success),var(--shadow-lg)}
+  .toast.err{box-shadow:inset 4px 0 0 var(--error),var(--shadow-lg)}
+  .loading{padding:40px;text-align:center;color:var(--mention)}
+  .spin{width:28px;height:28px;border:3px solid var(--bf-925);border-top-color:var(--bf);border-radius:50%;animation:sp 1s linear infinite;margin:0 auto 10px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  @media print{
+    .hdr-tools,#panel,.bar .btn,.bar select{display:none!important}
+    #app{height:auto}#out{overflow:visible}
+    table.pv thead th{position:static}
+  }
+
+  /* DSFR 1.14.2 – bloc-marque et icônes (Remix Icon, licence Apache 2.0) */
+.fr-logo{--text-spacing:0;--underline-img:none;color:var(--text-black-white-grey);display:inline-block;font-size:1.05rem;font-weight:700;letter-spacing:-.01em;line-height:1.0317460317em;text-indent:-.1em;text-transform:uppercase;vertical-align:middle}
+.fr-logo:before{background-image:url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 44 18'%3E%3Cpath fill='%23fff' d='M11.3 10.2c-.9.6-1.7 1.3-2.3 2.1v-.1c.4-.5.7-1 1-1.5.4-.2.7-.5 1-.8.5-.5 1-1 1.7-1.3.3-.1.5-.1.8 0-.1.1-.2.1-.4.2H13v-.1c-.3.3-.7.5-1 .9-.1.2-.2.6-.7.6 0 .1.1 0 0 0zm1.6 4.6c0-.1-.1 0-.2 0l-.1.1-.1.1-.2.2s.1.1.2 0l.1-.1c.1 0 .2-.1.2-.2.1 0 .1 0 .1-.1 0 .1 0 0 0 0zm-1.6-4.3c.1 0 .2 0 .2-.1s.1-.1.1-.1v-.1c-.2.1-.3.2-.3.3zm2.4 1.9s0-.1 0 0c.1-.1.2-.1.3-.1.7-.1 1.4-.3 2.1-.6-.8-.5-1.7-.9-2.6-1h.1c-.1-.1-.3-.1-.5-.2h.1c-.2-.1-.5-.1-.7-.2.1 0 .2-.2.2-.3h-.1c-.4.2-.6.5-.8.9.2.1.5 0 .7.1h-.3c-.1 0-.2.1-.2.2h.1c-.1 0-.1.1-.2.1.1.1.2 0 .4 0 0 .1.1.1.1.1-.1 0-.2.1-.3.3-.1.2-.2.2-.3.3v.1c-.3.2-.6.5-.9.8v.1c-.1.1-.2.1-.2.2v.1c.4-.1.6-.4 1-.5l.6-.3c.2 0 .3-.1.5-.1v.1h.2c0 .1-.2 0-.1.1s.3.1.4 0c.2-.2.3-.2.4-.2zM12.4 14c-.4.2-.9.2-1.2.4 0 0 0 .1-.1.1 0 0-.1 0-.1.1-.1 0-.1.1-.2.2l-.1.1s0 .1.1 0l.1-.1s-.1.1-.1.2V15.3l-.1.1s0 .1-.1.1l-.1.1.2-.2.1-.1h.2s0-.1.1-.1c.1-.1.2-.2.3-.2h.1c.1-.1.3-.1.4-.2.1-.1.2-.2.3-.2.2-.2.5-.3.8-.5-.1 0-.2-.1-.3-.1 0 .1-.2 0-.3 0zM30 9.7c-.1.2-.4.2-.6.3-.2.2 0 .4.1.5.1.3-.2.5-.4.5.1.1.2.1.2.1 0 .2.2.2.1.4s-.5.3-.3.5c.1.2.1.5 0 .7-.1.2-.3.4-.5.5-.2.1-.4.1-.6 0-.1 0-.1-.1-.2-.1-.5-.1-1-.2-1.5-.2-.1 0-.3.1-.4.1-.1.1-.3.2-.4.3l-.1.1c-.1.1-.2.2-.2.3-.1.2-.2.4-.2.6-.2.5-.2 1 0 1.4 0 0 1 .3 1.7.6.2.1.5.2.7.4l1.7 1H13.2l1.6-1c.6-.4 1.3-.7 2-1 .5-.2 1.1-.5 1.5-.9.2-.2.3-.4.5-.5.3-.4.6-.7 1-1l.3-.3s0-.1.1-.1c-.2.1-.2.2-.4.2 0 0-.1 0 0-.1s.2-.2.3-.2v-.1c-.4 0-.7.2-1 .5h-.2c-.5.2-.8.5-1.2.7v-.1c-.2.1-.4.2-.5.2-.2 0-.5.1-.8 0-.4 0-.7.1-1.1.2-.2.1-.4.1-.6.2v.1l-.2.2c-.2.1-.3.2-.5.4l-.5.5h-.1l.1-.1.1-.1c0-.1.1-.1.1-.2.2-.1.3-.3.5-.4 0 0-.1 0 0 0 0 0 0-.1.1-.1l-.1.1c-.1.1-.1.2-.2.2v-.1-.1l.2-.2c.1-.1.2-.1.3-.2h.1c-.2.1-.3.1-.5.2H14h-.1c0-.1.1-.1.2-.2h.1c1-.8 2.3-.6 3.4-1 .1-.1.2-.1.3-.2.1-.1.3-.2.5-.3.2-.2.4-.4.5-.7v-.1c-.4.4-.8.7-1.3 1-.6.2-1.3.4-2 .4 0-.1.1-.1.1-.1 0-.1.1-.1.1-.2h.1s0-.1.1-.1h.1c-.1-.1-.3.1-.4 0 .1-.1 0-.2.1-.2h.1s0-.1.1-.1c.5-.3.9-.5 1.3-.7-.1 0-.1.1-.2 0 .1 0 0-.1.1-.1.3-.1.6-.3.9-.4-.1 0-.2.1-.3 0 .1 0 .1-.1.2-.1v-.1h0c0-.1.1 0 .2-.1h-.1c.1-.1.2-.2.4-.2 0-.1-.1 0-.1-.1h.1-.5c-.1 0 0-.1 0-.1.1-.2.2-.5.3-.7h-.1c-.3.3-.8.5-1.2.6h-.2c-.2.1-.4.1-.5 0-.1-.1-.2-.2-.3-.2-.2-.1-.5-.3-.8-.4-.7-.2-1.5-.4-2.3-.3.3-.1.7-.2 1.1-.3.5-.2 1-.3 1.5-.3h-.3c-.4 0-.9.1-1.3.2-.3.1-.6.2-.9.2-.2.1-.3.2-.5.2v-.1c.3-.4.7-.7 1.1-.8.5-.1 1.1 0 1.6.1.4 0 .8.1 1.1.2.1 0 .2.2.3.3.2.1.4 0 .5.1v-.2c.1-.1.3 0 .4 0 .2-.2-.2-.4-.3-.6v-.1c.2.2.5.4.7.6.1.1.5.2.5 0-.2-.3-.4-.6-.7-.9v-.2c-.1 0-.1 0-.1-.1-.1-.1-.1-.2-.1-.3-.1-.2 0-.4-.1-.5-.1-.2-.1-.3-.1-.5-.1-.5-.2-1-.3-1.4-.1-.6.3-1 .6-1.5.2-.4.5-.7.8-1 .1-.4.3-.7.6-1 .3-.3.6-.5.9-.6.3-.1.5-.2.8-.3l2.5-.4H25l1.8.3c.1 0 .2 0 .2.1.1.1.3.2.4.2.2.1.4.3.6.5.1.1.2.3.1.4-.1.1-.1.4-.2.4-.2.1-.4.1-.6.1-.1 0-.2 0-.4-.1.5.2.9.4 1.2.8 0 .1.2.1.3.1v.1c-.1.1-.1.1-.1.2h.1c.1-.1.1-.4.3-.3.2.1.2.3.1.4-.1.1-.2.2-.4.3v.2c.1.1.1.2.2.4s.1.5.2.7c.1.5.2.9.2 1.4 0 .2-.1.5 0 .7l.3.6c.1.2.2.3.3.5.2.3.6.6.4 1zm-15.6 5.2c-.1 0-.1.1-.1.1s.1 0 .1-.1zm5.8-1.8c-.1.1 0 0 0 0zm-6.7-.2c0 .1.1 0 .1 0 .2-.1.5 0 .6-.2-.1-.1-.2 0-.2-.1-.1 0-.2 0-.2.1-.1.1-.3.1-.3.2z'/%3E%3Cpath fill='gray' d='M27.9 6.8c.1 0 .3 0 .3.1-.1.2-.4.3-.6.5h-.1c-.1.1-.1.2-.1.2h-.3c.1.1.3.2.5.2l.1.1h.2V8c-.1.1-.2.1-.4.1.2.1.5.1.7 0 .2-.1 0-.4.1-.5-.1 0 0-.1-.1-.1.1-.1.1-.2.2-.2s.1 0 .2-.1c0-.1-.1-.1-.1-.2.2-.1.3-.3.3-.5 0-.1-.3-.1-.4-.2h-.5c-.2 0-.3.1-.5.1l-.6.3c.2-.1.4-.1.7-.2 0 .3.2.3.4.3'/%3E%3C/svg%3E"),linear-gradient(90deg,#000091,#000091 50%,#e1000f 0,#e1000f),linear-gradient(90deg,#000,#000);background-position:0 -.0625rem,0 0,0 0;background-repeat:no-repeat,no-repeat,no-repeat;background-size:2.75rem 1.125rem,2.75rem 1rem,0;content:"";display:block;forced-color-adjust:none;height:1rem;margin-bottom:.3333333333rem;width:2.75rem}
+.fr-logo:after{background-image:url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 252 180'%3E%3Cdefs%3E%3Csymbol id='a' viewBox='0 0 11 15.5'%3E%3Cpath d='M10.4 5.3C11.9 1.5 10.1 0 7.9 0 4.2 0 0 6.5 0 11.7c0 2.5 1.2 3.8 3 3.8 2.1 0 4.3-2 6.2-5.5h-1c-1.2 1.5-2.6 2.6-3.9 2.6-1.3 0-2-.8-2-2.6a10.7 10.7 0 01.3-2.2zm-4-3.1c1.1 0 2 .8 1.5 2.6L3.1 6.1c.8-2.2 2.2-4 3.4-4z'/%3E%3C/symbol%3E%3Csymbol id='b' viewBox='0 0 12.4 21.8'%3E%3Cuse width='11' height='15.5' y='6.4' href='%23a'/%3E%3Cpath d='M7.9 4.7L12.4.6V0h-3L6.7 4.7H8z'/%3E%3C/symbol%3E%3Csymbol id='c' viewBox='0 0 11.5 19'%3E%3Cpath d='M1.7 5.7h2.6L.1 17.1a1.3 1.3 0 001.2 2c3 0 6.4-2.6 7.8-6.2h-.7a9.4 9.4 0 01-5.1 3.5L7 5.7H11l.5-1.6H7.7L9 0H7.6L4.9 4.1l-3.2.4v1.2z'/%3E%3C/symbol%3E%3Csymbol id='d' viewBox='0 0 9.8 21.9'%3E%3Cpath d='M7.6 8c.3-1-.4-1.6-1-1.6-2.2 0-5 2.1-6 5h.7A5.6 5.6 0 014.4 9L.1 20.3a1.1 1.1 0 001 1.6c2.2 0 4.7-2 5.8-5H6A5.6 5.6 0 013 19.5zM8 3.7a1.8 1.8 0 001.8-1.8A1.8 1.8 0 008 0a1.8 1.8 0 00-1.8 1.8A1.8 1.8 0 008 3.6'/%3E%3C/symbol%3E%3Csymbol id='e' viewBox='0 0 14.8 15.5'%3E%3Cpath d='M3.3 3.1c.7 0 1 1 0 3.4l-3 6.8c-.7 1.3 0 2.2 1.2 2.2a1.3 1.3 0 001.5-1l3-8C7.4 4.8 10 3 11 3s.8.6.3 1.6l-4.6 9a1.3 1.3 0 001.1 1.9c2.3 0 5-2 6-5h-.6A5.6 5.6 0 0110 13l4-8a6.1 6.1 0 00.8-2.8A2 2 0 0012.6 0c-2 0-3.6 2.2-6 5V2.8C6.6 1.4 6.1 0 4.8 0 3.2 0 1.8 2.5.7 4.9h.7c.7-1.1 1.3-1.8 2-1.8'/%3E%3C/symbol%3E%3Csymbol id='f' viewBox='0 0 12 15.5'%3E%3Cpath d='M11.8 3.5c.5-1.9.2-3.5-1.2-3.5-1.8 0-2.3 1.2-4 5V2.8C6.5 1.3 6 0 4.6 0 3.1 0 1.7 2.5.5 5h.8C2 3.7 2.8 3 3.3 3c.7 0 1 1 0 3.4l-3 6.8c-.7 1.3 0 2.1 1.2 2.1a1.3 1.3 0 001.5-1l3-8a50.3 50.3 0 012.6-3h3.2z'/%3E%3C/symbol%3E%3Csymbol id='g' viewBox='0 0 14.7 16.2'%3E%3Cpath d='M10.5 13.1c-.6 0-1-1 0-3.4L14.6.1 13.4 0l-1.3 1.3h-.3C6.1 1.3 0 8.6 0 14.2a2 2 0 002.1 2.1c1.7 0 3.3-2.4 5.2-5l-.1 1c-.3 2.6.6 4 2 4 1.5 0 3-2.4 4-4.9h-.7c-.7 1.1-1.5 1.8-2 1.8zM7.9 9.8c-1.3 1.6-3.4 3.5-4.3 3.5-.5 0-.9-.5-.9-1.6 0-3.5 4-8.2 6-8.2a4.2 4.2 0 011.4.2z'/%3E%3C/symbol%3E%3Csymbol id='h' viewBox='0 0 21.9 19.8'%3E%3Cpath d='M11.2 19.8l.3-.9c-3.8-.7-4.3-.7-2.7-4.8l1.4-3.9h3c1.9 0 1.9.9 1.6 3h1l2.6-6.9h-1c-1 1.6-1.8 2.9-3.8 2.9h-3l2-5.6c.8-2 1.1-2.4 3.7-2.4h.7c2.6 0 3 .7 3 3.5h1l.9-4.7H7.3L7 .9c3 .6 3.3.9 2 4.8L5.7 14c-1.5 3.9-2 4.2-5.5 4.8l-.3.9z'/%3E%3C/symbol%3E%3Csymbol id='i' viewBox='0 0 10.1 21.9'%3E%3Cpath d='M2.9 19.4L10.1.3 9.8 0l-5 .6v.6l1 .7c.9.7.6 1.3-.2 3.4L.2 19.9a1.3 1.3 0 001.1 2c2.3 0 4.7-2.1 5.8-5h-.7a6.5 6.5 0 01-3.5 2.5'/%3E%3C/symbol%3E%3Csymbol id='j' viewBox='0 0 18 22'%3E%3Cpath d='M18 .6h-4.3a3.8 3.8 0 00-2.1-.6A6.6 6.6 0 005 6.5a3.3 3.3 0 003 3.6c-1.9.8-3 1.8-3 2.9a1.7 1.7 0 00.9 1.5c-4.3 1.3-6 2.8-6 4.7 0 2 2.6 2.8 5.6 2.8 5.3 0 9.6-2.7 9.6-5.1 0-1.8-1.6-2.5-4.3-3.3-2.2-.7-3.2-.8-3.2-1.6A2.4 2.4 0 019 10.2a6.6 6.6 0 006.1-6.5 4.5 4.5 0 00-.2-1.5h2.5zM9.8 16.2c2.1.7 3 1 3 1.6 0 1.4-2 2.5-5.6 2.5-2.7 0-4-.6-4-2 0-1.5 1.4-2.5 3.5-3.3a21.5 21.5 0 003 1.2zM9 9c-1 0-1.3-.8-1.3-1.7 0-2.8 1.4-6.2 3.5-6.2 1 0 1.3.8 1.3 1.6 0 2.9-1.4 6.3-3.5 6.3z'/%3E%3C/symbol%3E%3Csymbol id='k' viewBox='0 0 23 25.1'%3E%3Cpath d='M14.3 15.6c1.9 0 2 .8 1.6 2.8H17l2.5-6.8h-1c-1 1.6-1.7 2.9-3.8 2.9h-4.1l2-5.6c.7-2 1-2.4 3.7-2.4H18c2.6 0 3 .7 3 3.5h1l.9-4.7H7.3l-.3.9c3 .6 3.3.9 2 4.8l-3.2 8.4c-1.5 3.9-2 4.2-5.6 4.8l-.2 1h17.4l3.2-5h-1.2c-2 2-4 3.8-8 3.8-4.7 0-4.3-.3-2.7-4.6l1.4-3.8h4.2zm2.3-11.8L21 .6V0h-3l-2.6 3.9h1.2v-.1z'/%3E%3C/symbol%3E%3Csymbol id='l' viewBox='0 0 13.6 21.8'%3E%3Cpath d='M11.4 6.4c-2 0-4 2.2-5.8 4.8L9.6.3 9.4 0l-5 .6V1l1 .8c.9.7.6 1.3-.2 3.4L.8 16.8A13.9 13.9 0 000 19c0 1.4 1.8 2.7 3.5 2.7 3.8 0 10-6.9 10-12.2 0-2.3-.5-3.2-2.1-3.2zM4.8 19.5c-.8 0-1.9-.7-1.9-1.3a15.5 15.5 0 01.8-2.2L5 12.7C6.3 11 8.4 9.3 9.6 9.3c.7 0 1.2.4 1.2 1.5 0 3.1-2.9 8.7-6 8.7z'/%3E%3C/symbol%3E%3Csymbol id='m' viewBox='0 0 19.2 19.9'%3E%3Cpath d='M17.6 0H7.3L7 .9c3 .6 3.3.9 2 4.8l-3.2 8.5c-1.5 3.9-2 4.2-5.5 4.8L0 20h15.7l3.5-6H18c-2 2-4.2 4.8-7.7 4.8-2.7 0-3-.5-1.6-4.5l3.1-8.5c1.4-3.9 2-4.2 5.5-4.8z'/%3E%3C/symbol%3E%3Csymbol id='n' viewBox='0 0 126 90'%3E%3Cuse width='12.4' height='21.8' x='112.7' y='66.1' href='%23b'/%3E%3Cuse width='11.5' height='19' x='102.2' y='69' href='%23c'/%3E%3Cuse width='9.8' height='21.9' x='93.6' y='66.1' href='%23d'/%3E%3Cuse width='14.8' height='15.5' x='77.2' y='72.5' href='%23e'/%3E%3Cuse width='12' height='15.5' x='65.7' y='72.5' href='%23f'/%3E%3Cuse width='11' height='15.5' x='54.3' y='72.5' href='%23a'/%3E%3Cuse width='11.5' height='19' x='43.7' y='69' href='%23c'/%3E%3Cuse width='14.7' height='16.2' x='28.9' y='71.8' href='%23g'/%3E%3Cuse width='12' height='15.5' x='19.6' y='72.5' href='%23f'/%3E%3Cuse width='21.9' height='19.8' y='67.6' href='%23h'/%3E%3Cuse width='12.4' height='21.8' x='77.3' y='33.1' href='%23b'/%3E%3Cuse width='11.5' height='19' x='66.8' y='36' href='%23c'/%3E%3Cuse width='9.8' height='21.9' x='58.2' y='33' href='%23d'/%3E%3Cuse width='10.1' height='21.9' x='49.4' y='33.1' href='%23i'/%3E%3Cuse width='14.7' height='16.2' x='34.9' y='38.8' href='%23g'/%3E%3Cuse width='18' height='22' x='18.6' y='39.4' href='%23j'/%3E%3Cuse width='23' height='25.1' y='29.3' href='%23k'/%3E%3Cuse width='12.4' height='21.8' x='76.8' y='.1' href='%23b'/%3E%3Cuse width='11.5' height='19' x='66.2' y='2.9' href='%23c'/%3E%3Cuse width='12' height='15.5' x='54.8' y='6.5' href='%23f'/%3E%3Cuse width='11' height='15.5' x='43.4' y='6.4' href='%23a'/%3E%3Cuse width='13.6' height='21.8' x='29.4' y='.1' href='%23l'/%3E%3Cuse width='9.8' height='21.9' x='20.6' href='%23d'/%3E%3Cuse width='19.2' height='19.9' y='1.4' href='%23m'/%3E%3C/symbol%3E%3C/defs%3E%3Cuse fill='%23000' width='126' height='90' x='0' y='0' href='%23n'/%3E%3Cuse fill='%23fff' width='126' height='90' x='126' y='90' href='%23n'/%3E%3C/svg%3E");background-position:0 calc(100% + 1.875rem);background-repeat:no-repeat;background-size:5.25rem 3.75rem;content:"";display:block;min-width:2.625rem;padding-top:2.2083333333rem}
+.fr-logo--sm{font-size:.7875rem}
+.fr-logo--sm:before{background-position:0 -.046875rem,0 0,0 0;background-size:2.0625rem .84375rem,2.0625rem .75rem,0;height:.75rem;margin-bottom:.25rem;width:2.0625rem}
+.fr-logo--sm:after{background-position:0 calc(100% + 1.40625rem);background-size:3.9375rem 2.8125rem;min-width:1.96875rem;padding-top:1.65625rem}
+.ic::before{content:"";display:inline-block;flex:0 0 auto;width:var(--ic,1rem);height:var(--ic,1rem);background-color:currentColor;-webkit-mask:var(--m) center/contain no-repeat;mask:var(--m) center/contain no-repeat;vertical-align:-.15em}
+.ic-down{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><path d='m12 13.172 4.95-4.95 1.414 1.414L12 16 5.636 9.636 7.05 8.222l4.95 4.95Z'/></svg>")}
+.ic-up{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><path d='m12 10.828-4.95 4.95-1.414-1.414L12 8l6.364 6.364-1.414 1.414-4.95-4.95Z'/></svg>")}
+.ic-add{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><path d='M11 11V5h2v6h6v2h-6v6h-2v-6H5v-2h6Z'/></svg>")}
+.ic-close{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><path d='m12 10.6 4.95-4.96 1.4 1.4L13.42 12l4.96 4.95-1.4 1.4L12 13.42l-4.95 4.96-1.4-1.4L10.58 12 5.63 7.05l1.4-1.4z'/></svg>")}
+.ic-refresh{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><path d='M5.46 4.43a10 10 0 0 1 14.73 13.3L17 12.01h3A8 8 0 0 0 6.46 6.23l-1-1.8zm13.08 15.14A10 10 0 0 1 3.8 6.27L7 11.99H4a8 8 0 0 0 13.54 5.77l1 1.8z'/></svg>")}
+.ic-question{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><path d='M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10Zm0-2a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm-1-5h2v2h-2v-2Zm2-1.645V14h-2v-1.5a1 1 0 0 1 1-1 1.5 1.5 0 1 0-1.471-1.794l-1.962-.393A3.501 3.501 0 1 1 13 13.355Z'/></svg>")}
+.ic-search{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><path d='m18.031 16.617 4.283 4.282-1.415 1.415-4.282-4.283A8.96 8.96 0 0 1 11 20c-4.968 0-9-4.032-9-9s4.032-9 9-9 9 4.032 9 9a8.96 8.96 0 0 1-1.969 5.617Zm-2.006-.742A6.977 6.977 0 0 0 18 11c0-3.868-3.133-7-7-7-3.868 0-7 3.132-7 7 0 3.867 3.132 7 7 7a6.977 6.977 0 0 0 4.875-1.975l.15-.15Z'/></svg>")}
+.ic-filter{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><path d='M21 4v2h-1l-5 7.5V22H9v-8.5L4 6H3V4h18Zm-3.404 2H6.404L11 12.894V20h2v-7.106L17.596 6Z'/></svg>")}
+.ic-download{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><path d='M3 19h18v2H3v-2Zm10-5.828L19.071 7.1l1.414 1.414L12 17 3.515 8.515 4.929 7.1 11 13.17V2h2v11.172Z'/></svg>")}
+.ic-copy{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><path d='M17 2v2h3.007c.548 0 .993.445.993.993v16.014a.994.994 0 0 1-.993.993H3.993A.994.994 0 0 1 3 21.007V4.993C3 4.445 3.445 4 3.993 4H7V2h10ZM7 6H5v14h14V6h-2v2H7V6Zm8-2H9v2h6V4Z'/></svg>")}
+.ic-print{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><path d='M6 19H3a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h3V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v4h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-3v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-2Zm0-2v-1a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1h2V9H4v8h2ZM8 4v3h8V4H8Zm0 13v3h8v-3H8Zm-3-7h3v2H5v-2Z'/></svg>")}
+.ic-table{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><path d='M21 3a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h18Zm-7 7h-4v9h4v-9Zm6 0h-4v9h4v-9ZM8 10H4v9h4v-9Zm12-5H4v3h16V5Z'/></svg>")}
+.ic-chart{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><path d='M21 3a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h18Zm-1 2H4v14h16V5ZM9 13v4H7v-4h2Zm4-6v10h-2V7h2Zm4 3v7h-2v-7h2Z'/></svg>")}
+.ic-settings{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><path d='M14.06 2.213c-.13 1.11.237 2.08 1.001 2.396.765.317 1.71-.108 2.403-.986a9.945 9.945 0 0 1 2.913 2.913c-.877.692-1.303 1.638-.986 2.403.317.765 1.286 1.132 2.396 1.001a9.945 9.945 0 0 1 0 4.12c-1.11-.13-2.08.237-2.396 1.001-.317.765.108 1.71.986 2.403a9.945 9.945 0 0 1-2.913 2.913c-.692-.877-1.638-1.303-2.403-.986-.765.317-1.132 1.286-1.001 2.396a9.945 9.945 0 0 1-4.12 0c.13-1.11-.237-2.08-1.001-2.396-.765-.317-1.71.108-2.403.986a9.945 9.945 0 0 1-2.913-2.913c.877-.692 1.303-1.638.986-2.403-.317-.765-1.286-1.132-2.396-1.001a9.945 9.945 0 0 1 0-4.12c1.11.13 2.08-.237 2.396-1.001.317-.765-.108-1.71-.986-2.403a9.945 9.945 0 0 1 2.913-2.913c.692.877 1.638 1.303 2.403.986.765-.317 1.132-1.286 1.001-2.396a9.945 9.945 0 0 1 4.12 0ZM11.79 4c-.305 1.1-1.002 2.007-2.086 2.457-1.085.449-2.22.3-3.212-.262a6.932 6.932 0 0 0-.297.297c.562.993.71 2.127.262 3.212C6.007 10.788 5.1 11.485 4 11.79c-.004.14-.004.28 0 .42 1.1.305 2.007 1.002 2.457 2.086.449 1.085.3 2.22-.262 3.212.096.102.195.201.297.297.993-.562 2.127-.71 3.212-.262 1.084.45 1.781 1.357 2.086 2.457.14.004.28.004.42 0 .305-1.1 1.002-2.007 2.086-2.457 1.085-.449 2.22-.3 3.212.262.102-.096.201-.195.297-.297-.562-.993-.71-2.127-.262-3.212.45-1.084 1.357-1.781 2.457-2.086.004-.14.004-.28 0-.42-1.1-.305-2.007-1.002-2.457-2.086-.449-1.085-.3-2.22.262-3.212a7.935 7.935 0 0 0-.297-.297c-.993.562-2.127.71-3.212.262C13.212 6.007 12.515 5.1 12.21 4a7.935 7.935 0 0 0-.42 0ZM12 9a3 3 0 1 1 0 6 3 3 0 0 1 0-6Zm0 2a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z'/></svg>")}
+.ic-delete{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><path d='M7 4V2h10v2h5v2h-2v15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6H2V4h5ZM6 6v14h12V6H6Zm3 3h2v8H9V9Zm4 0h2v8h-2V9Z'/></svg>")}
+.ic-sort{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><path d='m11.9498 7.94975-1.4142 1.41421L8.00079 6.828 8.00004 20h-2l.00075-13.172-2.53628 2.53596-1.41422-1.41421L7.00004 3l4.94976 4.94975Zm10 8.10055L17 21l-4.9497-4.9497 1.4142-1.4143 2.5363 2.536L16 4h2l.0008 13.172 2.5348-2.536 1.4142 1.4143Z'/></svg>")}
+.ic-eye{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><path d='M12 3c5.392 0 9.878 3.88 10.819 9-.94 5.12-5.427 9-10.819 9-5.392 0-9.878-3.88-10.819-9C2.121 6.88 6.608 3 12 3Zm0 16c4.2 0 7.842-2.905 8.777-7a9.005 9.005 0 0 0-17.554 0A9.005 9.005 0 0 0 12 19Zm0-2.5a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Zm0-2a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z'/></svg>")}
+.ic-save{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><path d='M7 19v-6h10v6h2V7.83L16.17 5H5v14h2zM4 3h13l4 4v13c0 .55-.45 1-1 1H4c-.55 0-1-.45-1-1V4c0-.55.45-1 1-1zm5 12v4h6v-4H9z'/></svg>")}
+.ic-list{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><path d='M8 4h13v2H8V4ZM4.5 6.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm0 7a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm0 6.9a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3ZM8 11h13v2H8v-2Zm0 7h13v2H8v-2Z'/></svg>")}
+.ic-check{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><path d='m10 15.172 9.192-9.193 1.415 1.414L10 18l-6.364-6.364 1.414-1.414 4.95 4.95Z'/></svg>")}
+.ic-magic{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'> <path d='M15.1986 9.94435C14.7649 9.53358 14.4859 8.98601 14.4085 8.39372L14.0056 5.31126L11.275 6.79712C10.7503 7.08262 10.1433 7.17876 9.55608 7.06936L6.49998 6.50003L7.06931 9.55613C7.17871 10.1434 7.08257 10.7504 6.79707 11.275L5.31121 14.0056L8.39367 14.4085C8.98596 14.486 9.53353 14.765 9.94431 15.1986L12.0821 17.4556L13.4178 14.6485C13.6745 14.1091 14.109 13.6746 14.6484 13.4179L17.4555 12.0822L15.1986 9.94435ZM15.2238 15.5078L13.0111 20.158C12.8687 20.4572 12.5107 20.5843 12.2115 20.4419C12.1448 20.4102 12.0845 20.3664 12.0337 20.3128L8.49229 16.574C8.39749 16.4739 8.27113 16.4095 8.13445 16.3917L3.02816 15.7242C2.69958 15.6813 2.46804 15.3801 2.51099 15.0515C2.52056 14.9783 2.54359 14.9074 2.5789 14.8425L5.04031 10.3191C5.1062 10.198 5.12839 10.0579 5.10314 9.92241L4.16 4.85979C4.09931 4.53402 4.3142 4.22074 4.63997 4.16005C4.7126 4.14652 4.78711 4.14652 4.85974 4.16005L9.92237 5.10319C10.0579 5.12843 10.198 5.10625 10.319 5.04036L14.8424 2.57895C15.1335 2.42056 15.4979 2.52813 15.6562 2.81919C15.6916 2.88409 15.7146 2.95495 15.7241 3.02821L16.3916 8.1345C16.4095 8.27118 16.4739 8.39754 16.5739 8.49233L20.3127 12.0337C20.5533 12.2616 20.5636 12.6414 20.3357 12.882C20.2849 12.9356 20.2246 12.9794 20.1579 13.0111L15.5078 15.2239C15.3833 15.2831 15.283 15.3834 15.2238 15.5078ZM16.0206 17.4349L17.4348 16.0207L21.6775 20.2633L20.2633 21.6775L16.0206 17.4349Z'/> </svg>")}
+.ic-more{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><path d='M12 3c-.825 0-1.5.675-1.5 1.5S11.175 6 12 6s1.5-.675 1.5-1.5S12.825 3 12 3Zm0 15c-.825 0-1.5.675-1.5 1.5S11.175 21 12 21s1.5-.675 1.5-1.5S12.825 18 12 18Zm0-7.5c-.825 0-1.5.675-1.5 1.5s.675 1.5 1.5 1.5 1.5-.675 1.5-1.5-.675-1.5-1.5-1.5Z'/></svg>")}
+.ic-subtract{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><path d='M5 11h14v2H5z'/></svg>")}
+.ic-caret{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><path d='M12 16 6 10h12l-6 6Z'/></svg>")}
+.ic-sigma{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><path d='M5 4h14v3h-2V6H8.4l5.2 6-5.2 6H17v-1h2v3H5v-1.6L10.9 12 5 5.6V4Z'/></svg>")}
+.ic-col{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><path d='M11 5H5v14h6V5Zm2 0v14h6V5h-6ZM4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z'/></svg>")}
+.ic-rowz{--m:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><path d='M19 11V5H5v6h14Zm0 2H5v6h14v-6ZM4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z'/></svg>")}
+.ic-blank::before{background:transparent}
+.ic-caret::before{transition:transform .12s}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="hdr">
+    <div class="hdr-in">
+      <div class="brand" id="brand">
+        <p class="fr-logo fr-logo--sm" id="blocMarque">République<br>Française</p>
+        <div class="svc">
+          <p class="svc-title">Tableau croisé dynamique</p>
+          <p class="svc-tag" id="svcTag">Chargement…</p>
+        </div>
+      </div>
+      <div class="hdr-tools">
+        <div class="seg" role="group" aria-label="Mode d'affichage">
+          <button id="vTable" aria-pressed="true" title="Afficher le tableau croisé"><span class="ic ic-table"></span><span class="lbl">Tableau</span></button>
+          <button id="vChart" aria-pressed="false" title="Afficher le graphique croisé"><span class="ic ic-chart"></span><span class="lbl">Graphique</span></button>
+        </div>
+        <button class="btn sm ter" id="bRefresh" title="Recharger les données depuis Grist"><span class="ic ic-refresh"></span><span class="lbl">Actualiser</span></button>
+        <button class="btn sm ter" id="bExport" aria-haspopup="menu" title="Exporter le résultat"><span class="ic ic-download"></span><span class="lbl">Exporter</span></button>
+        <button class="btn sm ter" id="bOptions" title="Options d'affichage"><span class="ic ic-settings"></span><span class="lbl">Options</span></button>
+        <button class="btn sm ter icon-only" id="bHelp" title="Aide"><span class="ic ic-question"></span><span class="sr">Aide</span></button>
+        <button class="btn sm pri" id="bPanel" aria-expanded="true" aria-controls="panel" title="Afficher ou masquer la liste des champs"><span class="ic ic-list"></span><span class="lbl">Champs</span></button>
+      </div>
+    </div>
+  </header>
+  <div class="layout">
+    <main id="main">
+      <div class="bar" id="bar"></div>
+      <div id="out"><div class="loading"><div class="spin"></div>Connexion à Grist…</div></div>
+    </main>
+    <aside id="panel" aria-label="Champs du tableau croisé dynamique">
+      <div class="p-scroll">
+        <div class="p-sec">
+          <div class="field">
+            <label for="src">Source des données</label>
+            <select class="inp sm" id="src"></select>
+          </div>
+          <div class="field">
+            <label for="viewSel">Vue enregistrée</label>
+            <div style="display:flex;gap:6px">
+              <select class="inp sm" id="viewSel"></select>
+              <button class="btn sm ter icon-only" id="bSaveView" title="Enregistrer la configuration actuelle comme vue"><span class="ic ic-save"></span><span class="sr">Enregistrer la vue</span></button>
+              <button class="btn sm ter icon-only" id="bDelView" title="Supprimer la vue sélectionnée"><span class="ic ic-delete"></span><span class="sr">Supprimer la vue</span></button>
+            </div>
+          </div>
+        </div>
+        <div class="p-sec">
+          <p class="p-title"><span>Champs</span><span class="sp"></span><span class="muted" style="font-weight:400;font-size:.78rem" id="fieldCount"></span></p>
+          <div class="search"><span class="ic ic-search" aria-hidden="true"></span><input id="fSearch" type="search" placeholder="Rechercher un champ" aria-label="Rechercher un champ"></div>
+          <ul id="fields" aria-label="Champs disponibles"></ul>
+          <span class="hint" style="margin-top:6px">Cochez un champ ou glissez-le vers une zone ci-dessous.</span>
+        </div>
+        <div class="p-sec">
+          <div class="zones">
+            <div class="zone" data-zone="filters"><h3><span class="ic ic-filter"></span>Filtres</h3><div class="chips"></div></div>
+            <div class="zone" data-zone="cols"><h3><span class="ic ic-col"></span>Colonnes</h3><div class="chips"></div></div>
+            <div class="zone" data-zone="rows"><h3><span class="ic ic-rowz"></span>Lignes</h3><div class="chips"></div></div>
+            <div class="zone" data-zone="vals"><h3><span class="ic ic-sigma"></span>Valeurs</h3><div class="chips"></div></div>
+          </div>
+          <div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="btn sm ter" id="bClear"><span class="ic ic-delete"></span>Tout effacer</button></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+<div id="ctip"></div>
+<div id="toast" aria-live="polite"></div>
+
+<script>
+'use strict';
+/* =====================================================================
+   Tableau croisé dynamique pour Grist – charte DSFR
+   ===================================================================== */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const clone = o => JSON.parse(JSON.stringify(o));
+const uid = () => Math.random().toString(36).slice(2, 9);
+const EMPTY = '\u0000';
+const SEP = '\u0001';
+const COLL = new Intl.Collator('fr', {numeric: true, sensitivity: 'base'});
+const withTimeout = (p, ms, msg) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(msg || 'Délai dépassé')), ms))]);
+const LINKED = '__linked__';
+
+const AGGS = {
+  sum: 'Somme', count: 'Nombre (lignes)', counta: 'Nombre (valeurs non vides)', distinct: 'Nombre distinct',
+  avg: 'Moyenne', min: 'Minimum', max: 'Maximum', median: 'Médiane', stdev: 'Écart type', var: 'Variance'
+};
+const AGG_SHORT = {sum: 'Somme', count: 'Nombre', counta: 'Nombre', distinct: 'Nombre distinct', avg: 'Moyenne', min: 'Min.', max: 'Max.', median: 'Médiane', stdev: 'Écart type', var: 'Variance'};
+const SHOWS = {
+  raw: 'Valeur', pctTotal: '% du total général', pctCol: '% du total de la colonne', pctRow: '% du total de la ligne',
+  pctParent: '% du total parent (ligne)', runRow: 'Cumul (vers le bas)', rank: 'Rang (dans la colonne)'
+};
+const GROUPS = {
+  none: 'Valeur exacte', day: 'Jour', week: 'Semaine (ISO)', ym: 'Mois (avec année)', yq: 'Trimestre (avec année)',
+  year: 'Année', month: 'Mois de l\u2019année (janv. → déc.)', quarter: 'Trimestre seul (T1 → T4)', dow: 'Jour de la semaine', hour: 'Heure de la journée'
+};
+const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+const MONTHS_S = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+const DOWS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+/* Palette illustrative DSFR */
+const PALETTE = ['#000091', '#e4794a', '#009081', '#a558a0', '#c8aa39', '#417dc4', '#ce614a', '#68a532', '#c08c65', '#465f9d', '#bd987a', '#009099'];
+const ZONES = {filters: 'Filtres', cols: 'Colonnes', rows: 'Lignes', vals: 'Valeurs'};
+const DEFAULT_OPT = {layout: 'compact', subtotals: true, colSubtotals: true, grandRows: true, grandCols: true, repeat: false, heatmap: false, hideEmpty: false, emptyCell: '', brand: true, view: 'table', chartType: 'bar', chartVal: 0};
+const newCfg = () => ({rows: [], cols: [], vals: [], filters: [], opt: clone(DEFAULT_OPT)});
+
+/* ================= État ================= */
+const S = {
+  backend: null, meta: null, src: null, fields: [], fieldMap: new Map(), cache: {}, linked: null,
+  cfg: newCfg(), store: {src: null, byTable: {}, views: []}, collapsed: new Set(), expandedRefs: new Set(),
+  result: null, loading: false
+};
+
+/* ================= Formats ================= */
+const nfCache = new Map();
+function nf(opts) {
+  const k = JSON.stringify(opts);
+  if (!nfCache.has(k)) { try { nfCache.set(k, new Intl.NumberFormat('fr-FR', opts)); } catch (e) { nfCache.set(k, new Intl.NumberFormat('fr-FR')); } }
+  return nfCache.get(k);
+}
+function wopts(f) { if (!f || !f.wo) return {}; return f.wo; }
+function fmtNum(v, f, dec) {
+  if (v === null || v === undefined || !isFinite(v)) return '';
+  const w = wopts(f), o = {};
+  if (w.numMode === 'currency') { o.style = 'currency'; o.currency = w.currency || 'EUR'; }
+  else if (w.numMode === 'percent') o.style = 'percent';
+  if (dec !== undefined && dec !== null && dec !== '') { o.minimumFractionDigits = +dec; o.maximumFractionDigits = +dec; }
+  else if (w.decimals !== undefined || w.maxDecimals !== undefined) {
+    if (w.decimals !== undefined) o.minimumFractionDigits = w.decimals;
+    o.maximumFractionDigits = Math.max(w.maxDecimals ?? (o.style === 'currency' ? 2 : 10), o.minimumFractionDigits || 0);
+  } else if (o.style === 'currency') { o.minimumFractionDigits = 2; o.maximumFractionDigits = 2; }
+  else o.maximumFractionDigits = Math.abs(v) >= 100 ? 2 : 4;
+  return nf(o).format(v);
+}
+const pad = n => String(n).padStart(2, '0');
+const dtfCache = new Map();
+function dateParts(sec, f) {
+  if (f.kind === 'datetime' && f.tz) {
+    let fmt = dtfCache.get(f.tz);
+    if (!fmt) {
+      try { fmt = new Intl.DateTimeFormat('en-CA', {timeZone: f.tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'}); }
+      catch (e) { fmt = new Intl.DateTimeFormat('en-CA', {timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'}); }
+      dtfCache.set(f.tz, fmt);
+    }
+    const p = {}; for (const x of fmt.formatToParts(new Date(sec * 1000))) p[x.type] = x.value;
+    const y = +p.year, m = +p.month, d = +p.day;
+    return {y, m, d, h: +p.hour % 24, mi: +p.minute, dow: (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7};
+  }
+  const dt = new Date(sec * 1000);
+  return {y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, d: dt.getUTCDate(), h: dt.getUTCHours(), mi: dt.getUTCMinutes(), dow: (dt.getUTCDay() + 6) % 7};
+}
+function fmtDate(sec, f) {
+  if (typeof sec !== 'number' || !isFinite(sec)) return '';
+  const p = dateParts(sec, f);
+  const s = `${pad(p.d)}/${pad(p.m)}/${p.y}`;
+  return f.kind === 'datetime' ? `${s} ${pad(p.h)}:${pad(p.mi)}` : s;
+}
+function isoWeek(y, m, d) {
+  const dt = new Date(Date.UTC(y, m - 1, d)); const day = dt.getUTCDay() || 7;
+  dt.setUTCDate(dt.getUTCDate() + 4 - day);
+  const y1 = new Date(Date.UTC(dt.getUTCFullYear(), 0, 1));
+  return {y: dt.getUTCFullYear(), w: Math.ceil(((dt - y1) / 864e5 + 1) / 7)};
+}
+const isEmptyRaw = v => v === null || v === undefined || v === '' || (Array.isArray(v) && v[0] === 'L' && v.length === 1);
+
+/* Valeur brute → texte lisible */
+function fmtRaw(v, f) {
+  if (v === null || v === undefined || v === '') return '';
+  if (Array.isArray(v)) {
+    if (v[0] === 'L') return v.slice(1).map(x => fmtScalar(x, f)).filter(x => x !== '').join(', ');
+    if (v[0] === 'E') return '#' + (v[1] || 'ERREUR');
+    if (v[0] === 'D' || v[0] === 'd') return fmtDate(v[1], {kind: v[0] === 'D' ? 'datetime' : 'date', tz: v[2]});
+    if (v[0] === 'R') return refDisplay(f, v[2]) || '';
+    return JSON.stringify(v);
+  }
+  return fmtScalar(v, f);
+}
+function fmtScalar(v, f) {
+  if (v === null || v === undefined || v === '') return '';
+  if (Array.isArray(v)) return fmtRaw(v, f);
+  const k = f ? f.kind : 'text';
+  if ((k === 'ref' || k === 'reflist') && typeof v === 'number') return v ? refDisplay(f, v) : '';
+  if ((k === 'date' || k === 'datetime') && typeof v === 'number') return fmtDate(v, f);
+  if (typeof v === 'boolean') return v ? 'Oui' : 'Non';
+  if (typeof v === 'number') return fmtNum(v, f);
+  if (typeof v === 'object') return JSON.stringify(v);
+  return String(v);
+}
+function refDisplay(f, id) {
+  if (!id) return '';
+  const t = S.cache[f.refTable];
+  if (!t) return f.refTable + '[' + id + ']';
+  const row = t.byId.get(id);
+  if (!row) return f.refTable + '[' + id + ']';
+  if (!f.visibleCol) return f.refTable + '[' + id + ']';
+  const vf = S.meta.tables[f.refTable] && S.meta.tables[f.refTable].cols[f.visibleCol];
+  return fmtRaw(row[f.visibleCol], vf ? colToField(f.refTable, vf, '') : null);
+}
+function toNum(v) {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'boolean') return v ? 1 : 0;
+  if (typeof v === 'string') {
+    const s = v.replace(/[\s\u00a0\u202f]/g, '').replace(',', '.');
+    return /^[-+]?\d*\.?\d+(e[-+]?\d+)?$/i.test(s) ? parseFloat(s) : NaN;
+  }
+  return NaN;
+}
+
+/* ================= Accès aux données : Grist ou démo ================= */
+const inGrist = window.parent !== window && typeof grist !== 'undefined';
+
+const GristBackend = {
+  mode: 'grist',
+  async init() {
+    grist.ready({requiredAccess: 'full', allowSelectBy: false, onEditOptions: () => openOptions()});
+    grist.onRecords(recs => onLinkedRecords(recs), {keepEncoded: true, includeColumns: 'normal'});
+    if (grist.onOptions) grist.onOptions(opts => onRemoteOptions(opts));
+  },
+  async meta() {
+    const T = await withTimeout(grist.docApi.fetchTable('_grist_Tables'), 15000, 'Pas de réponse de Grist. Vérifiez que le widget a l\u2019accès complet au document.');
+    const C = await grist.docApi.fetchTable('_grist_Tables_column');
+    const tables = {}, byRow = {}, colById = {};
+    T.id.forEach((rid, i) => {
+      const tid = T.tableId[i]; if (!tid || tid.startsWith('_grist')) return;
+      byRow[rid] = tid;
+      tables[tid] = {rowId: rid, cols: {}, order: [], summary: !!(T.summarySourceTable && T.summarySourceTable[i]), hidden: tid.startsWith('GristHidden')};
+    });
+    C.id.forEach((id, i) => { colById[id] = C.colId[i]; });
+    const idx = C.id.map((_, i) => i).sort((a, b) => ((C.parentPos || [])[a] ?? 0) - ((C.parentPos || [])[b] ?? 0));
+    for (const i of idx) {
+      const tid = byRow[C.parentId[i]]; if (!tid) continue;
+      const colId = C.colId[i];
+      if (colId === 'manualSort' || colId.startsWith('gristHelper_')) continue;
+      let wo = {}; try { wo = JSON.parse((C.widgetOptions || [])[i] || '{}') || {}; } catch (e) { wo = {}; }
+      tables[tid].cols[colId] = {colId, label: (C.label || [])[i] || colId, type: C.type[i] || 'Any', wo, visibleCol: colById[(C.visibleCol || [])[i]] || null};
+      tables[tid].order.push(colId);
+    }
+    return {tables};
+  },
+  async fetch(tid) { return grist.docApi.fetchTable(tid); },
+  async linkedTableId() {
+    try { if (grist.selectedTable && grist.selectedTable.getTableId) return await withTimeout(grist.selectedTable.getTableId(), 3000); } catch (e) { /* ignoré */ }
+    try { if (grist.getSelectedTableId) return await withTimeout(grist.getSelectedTableId(), 3000); } catch (e) { /* ignoré */ }
+    return null;
+  },
+  async lsKey() { let d = ''; try { d = await withTimeout(grist.docApi.getDocName(), 3000); } catch (e) { /* ignoré */ } return 'tcd-grist:' + d; },
+  async load() {
+    try { const v = await withTimeout(grist.getOption('tcd'), 6000); if (v) return typeof v === 'string' ? JSON.parse(v) : v; } catch (e) { console.warn('Options du widget indisponibles', e); }
+    try { return JSON.parse(localStorage.getItem(await this.lsKey()) || 'null'); } catch (e) { return null; }
+  },
+  async save(st) {
+    try { await withTimeout(grist.setOption('tcd', st), 8000); } catch (e) { console.warn(e); }
+    try { localStorage.setItem(await this.lsKey(), JSON.stringify(st)); } catch (e) { /* ignoré */ }
+  },
+  async apply(actions) { const r = await grist.docApi.applyUserActions(actions); return r.retValues; }
+};
+
+/* Démo locale (widget ouvert hors de Grist) */
+const DemoBackend = {
+  mode: 'demo', data: null,
+  build() {
+    let seed = 42; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const pick = a => a[Math.floor(rnd() * a.length)];
+    const regions = {'Bretagne': ['Finistère', 'Morbihan', 'Côtes-d\u2019Armor', 'Ille-et-Vilaine'], 'Normandie': ['Calvados', 'Manche', 'Orne', 'Eure'], 'Occitanie': ['Hérault', 'Gard', 'Aude', 'Tarn', 'Gers'], 'Grand Est': ['Marne', 'Moselle', 'Bas-Rhin', 'Vosges'], 'Nouvelle-Aquitaine': ['Gironde', 'Landes', 'Dordogne', 'Charente']};
+    const disp = {id: [], Nom: [], Programme: []};
+    [['Aide à l\u2019installation', 'PAC – 2nd pilier'], ['Modernisation des exploitations', 'France 2030'], ['Conversion à l\u2019agriculture biologique', 'PAC – 2nd pilier'], ['Plan de haies', 'Planification écologique'], ['Agroéquipements', 'France 2030']].forEach(([n, p], i) => { disp.id.push(i + 1); disp.Nom.push(n); disp.Programme.push(p); });
+    const S2 = {id: [], Numero: [], Region: [], Departement: [], Dispositif: [], Date_decision: [], Montant: [], Surface_ha: [], Statut: [], Thematiques: [], Jeune_agriculteur: []};
+    const themes = ['Eau', 'Sols', 'Biodiversité', 'Énergie', 'Bien-être animal', 'Climat'];
+    for (let i = 1; i <= 600; i++) {
+      const r = pick(Object.keys(regions));
+      const y = 2022 + Math.floor(rnd() * 4), m = Math.floor(rnd() * 12), d = 1 + Math.floor(rnd() * 28);
+      const dsp = 1 + Math.floor(rnd() * 5);
+      S2.id.push(i); S2.Numero.push('DOS-' + String(i).padStart(5, '0'));
+      S2.Region.push(r); S2.Departement.push(pick(regions[r])); S2.Dispositif.push(dsp);
+      S2.Date_decision.push(Date.UTC(y, m, d) / 1000);
+      S2.Montant.push(Math.round((2000 + rnd() * 60000 * (dsp === 2 || dsp === 5 ? 2 : 1)) * 100) / 100);
+      S2.Surface_ha.push(rnd() < .08 ? null : Math.round(rnd() * 1800) / 10);
+      S2.Statut.push(pick(['Payé', 'Payé', 'Payé', 'Engagé', 'Engagé', 'Instruction', 'Rejeté']));
+      const th = themes.filter(() => rnd() < .3); S2.Thematiques.push(['L', ...(th.length ? th : [pick(themes)])]);
+      S2.Jeune_agriculteur.push(rnd() < .35);
+    }
+    const col = (colId, label, type, wo = {}, visibleCol = null) => ({colId, label, type, wo, visibleCol});
+    const meta = {tables: {
+      Dossiers_aides: {cols: {}, order: []},
+      Dispositifs: {cols: {}, order: []}
+    }};
+    const add = (t, c) => { meta.tables[t].cols[c.colId] = c; meta.tables[t].order.push(c.colId); };
+    [col('Numero', 'N° dossier', 'Text'), col('Region', 'Région', 'Choice'), col('Departement', 'Département', 'Text'), col('Dispositif', 'Dispositif', 'Ref:Dispositifs', {}, 'Nom'),
+      col('Date_decision', 'Date de décision', 'Date'), col('Montant', 'Montant', 'Numeric', {numMode: 'currency', currency: 'EUR'}), col('Surface_ha', 'Surface (ha)', 'Numeric', {decimals: 1, maxDecimals: 1}),
+      col('Statut', 'Statut', 'Choice'), col('Thematiques', 'Thématiques', 'ChoiceList'), col('Jeune_agriculteur', 'Jeune agriculteur', 'Bool')].forEach(c => add('Dossiers_aides', c));
+    [col('Nom', 'Nom', 'Text'), col('Programme', 'Programme', 'Choice')].forEach(c => add('Dispositifs', c));
+    this.data = {Dossiers_aides: S2, Dispositifs: disp};
+    this.metaObj = meta;
+  },
+  async init() { this.build(); },
+  async meta() { return this.metaObj; },
+  async fetch(tid) { if (!this.data[tid]) throw new Error('Table inconnue : ' + tid); return clone(this.data[tid]); },
+  async linkedTableId() { return null; },
+  async load() { try { return JSON.parse(localStorage.getItem('tcd-demo') || 'null'); } catch (e) { return null; } },
+  async save(st) { try { localStorage.setItem('tcd-demo', JSON.stringify(st)); } catch (e) { /* ignoré */ } },
+  async apply(actions) {
+    const ret = [];
+    for (const a of actions) {
+      if (a[0] === 'AddTable') {
+        const tid = a[1]; this.data[tid] = {id: []}; this.metaObj.tables[tid] = {cols: {}, order: []};
+        for (const c of a[2]) { this.data[tid][c.id] = []; this.metaObj.tables[tid].cols[c.id] = {colId: c.id, label: c.label || c.id, type: c.type, wo: {}}; this.metaObj.tables[tid].order.push(c.id); }
+        ret.push({table_id: tid, columns: a[2].map(c => c.id)});
+      } else if (a[0] === 'BulkAddRecord') {
+        const t = this.data[a[1]]; const n = a[2].length; const start = t.id.length;
+        for (let i = 0; i < n; i++) t.id.push(start + i + 1);
+        for (const [k, arr] of Object.entries(a[3])) { if (!t[k]) t[k] = []; t[k].push(...arr); }
+        ret.push(null);
+      } else ret.push(null);
+    }
+    return ret;
+  }
+};
+
+/* ================= Chargement ================= */
+function columnarToRows(data) {
+  const ids = data.id || [], keys = Object.keys(data).filter(k => k !== 'id' && k !== 'manualSort');
+  const rows = new Array(ids.length), byId = new Map();
+  for (let i = 0; i < ids.length; i++) {
+    const r = {id: ids[i]}; for (const k of keys) r[k] = data[k][i];
+    rows[i] = r; byId.set(ids[i], r);
+  }
+  return {rows, byId};
+}
+async function ensureTable(tid, force) {
+  if (!tid) return null;
+  if (!force && S.cache[tid]) return S.cache[tid];
+  if (!S.meta.tables[tid]) return null;
+  const data = await S.backend.fetch(tid);
+  S.cache[tid] = columnarToRows(data);
+  return S.cache[tid];
+}
+
+/* ================= Champs ================= */
+function kindOf(type) {
+  const base = String(type || 'Any').split(':')[0];
+  return {Numeric: 'num', Int: 'num', Bool: 'bool', Date: 'date', DateTime: 'datetime', Choice: 'text', ChoiceList: 'list', Ref: 'ref', RefList: 'reflist', Attachments: 'att', Text: 'text'}[base] || 'any';
+}
+function colToField(tid, c, prefix) {
+  const kind = kindOf(c.type);
+  const f = {id: prefix + c.colId, colId: c.colId, label: c.label || c.colId, type: c.type, kind, wo: c.wo || {}, table: tid};
+  if (kind === 'datetime') f.tz = String(c.type).split(':')[1] || 'UTC';
+  if (kind === 'ref' || kind === 'reflist') { f.refTable = String(c.type).split(':')[1]; f.visibleCol = c.visibleCol; }
+  return f;
+}
+const TY = {num: ['#', 'num', 'Nombre'], date: ['Date', 'date', 'Date'], datetime: ['Date', 'date', 'Date et heure'], bool: ['O/N', '', 'Booléen (case à cocher)'], text: ['Abc', '', 'Texte / choix'], list: ['[ ]', 'list', 'Liste (plusieurs valeurs : chaque valeur est comptée)'], ref: ['Réf', 'ref', 'Référence vers une autre table'], reflist: ['[Réf]', 'ref', 'Liste de références'], att: ['PJ', '', 'Pièces jointes'], any: ['?', '', 'Type quelconque'], count: ['Σ', 'num', 'Compte les enregistrements']};
+
+function buildFields() {
+  const fields = [];
+  fields.push({id: '__count__', label: 'Nombre d\u2019enregistrements', kind: 'count', get: () => 1, depth: 0});
+  const tid = currentTableId();
+  const t = tid && S.meta.tables[tid];
+  if (t) {
+    for (const colId of t.order) {
+      const c = t.cols[colId];
+      const f = colToField(tid, c, '');
+      f.get = r => r[colId]; f.depth = 0;
+      fields.push(f);
+      if ((f.kind === 'ref' || f.kind === 'reflist') && S.meta.tables[f.refTable]) {
+        const tt = S.meta.tables[f.refTable];
+        for (const sc of tt.order) {
+          const c2 = tt.cols[sc]; const sf = colToField(f.refTable, c2, colId + '.');
+          sf.label = f.label + ' › ' + (c2.label || sc); sf.shortLabel = c2.label || sc; sf.parent = f.id; sf.depth = 1;
+          sf.needs = [f.refTable];
+          if (sf.kind === 'ref' || sf.kind === 'reflist') sf.needs.push(sf.refTable);
+          const single = f.kind === 'ref';
+          sf.get = r => {
+            const cache = S.cache[f.refTable]; if (!cache) return null;
+            const v = r[colId];
+            if (single) { const row = cache.byId.get(v); return row ? row[sc] : null; }
+            if (!Array.isArray(v) || v[0] !== 'L') return null;
+            const out = ['L'];
+            for (const id of v.slice(1)) { const row = cache.byId.get(id); if (!row) continue; const x = row[sc]; if (Array.isArray(x) && x[0] === 'L') out.push(...x.slice(1)); else out.push(x); }
+            return out;
+          };
+          if (sf.kind === 'reflist' && !single) sf.kind = 'reflist';
+          else if (!single && sf.kind !== 'reflist') sf.multi = true;
+          fields.push(sf);
+        }
+      }
+    }
+  } else if (S.src === LINKED && S.linked && S.linked.length) {
+    const sample = S.linked.slice(0, 200);
+    for (const k of Object.keys(S.linked[0])) {
+      if (k === 'id' || k === 'manualSort') continue;
+      let kind = 'text';
+      const vals = sample.map(r => r[k]).filter(v => !isEmptyRaw(v));
+      if (vals.length && vals.every(v => typeof v === 'number')) kind = 'num';
+      else if (vals.length && vals.every(v => typeof v === 'boolean')) kind = 'bool';
+      else if (vals.some(v => Array.isArray(v) && v[0] === 'L')) kind = 'list';
+      fields.push({id: k, colId: k, label: k, kind, wo: {}, get: r => r[k], depth: 0});
+    }
+  }
+  S.fields = fields;
+  S.fieldMap = new Map(fields.map(f => [f.id, f]));
+}
+const fieldById = id => S.fieldMap.get(id);
+function currentTableId() {
+  if (S.src === LINKED) return S.linkedTableId && S.meta.tables[S.linkedTableId] ? S.linkedTableId : null;
+  return S.src;
+}
+function currentRecords() {
+  if (S.src === LINKED) return S.linked || [];
+  const c = S.cache[S.src]; return c ? c.rows : [];
+}
+const isNumField = f => f && (f.kind === 'num' || f.kind === 'count');
+const isDateField = f => f && (f.kind === 'date' || f.kind === 'datetime');
+
+/* ================= Libellés ================= */
+function dimLabel(ch) {
+  const f = fieldById(ch.field); const base = ch.label || (f ? f.label : ch.field);
+  if (ch.label) return ch.label;
+  if (f && isDateField(f) && ch.group && ch.group !== 'none') return base + ' (' + GROUPS[ch.group].replace(/ \(.*\)$/, '').toLowerCase() + ')';
+  if (ch.bin) return base + ' (tranches de ' + fmtNum(ch.bin, null) + ')';
+  return base;
+}
+function valLabel(v) {
+  if (v.label) return v.label;
+  const f = fieldById(v.field);
+  if (!f || f.kind === 'count') return 'Nombre d\u2019enregistrements';
+  let s = AGG_SHORT[v.agg] + ' de ' + f.label;
+  if (v.show && v.show !== 'raw') s += ' (' + SHOWS[v.show].replace(/^% du /, '% ').replace('total ', 'tot. ') + ')';
+  return s;
+}
+
+/* ================= Dimensions ================= */
+function makeDim(ch) {
+  const f = fieldById(ch.field);
+  const info = new Map();
+  const put = (k, l, s) => { if (!info.has(k)) info.set(k, {l, s}); return k; };
+  const emptyKey = () => put(EMPTY, '(vide)', null);
+  const g = ch.group || (isDateField(f) ? 'none' : null);
+  const bin = +ch.bin || 0;
+  function one(v) {
+    if (v === null || v === undefined || v === '') return emptyKey();
+    if (Array.isArray(v)) {
+      if (v[0] === 'E') return put('#ERR', '#ERREUR', '\uffff');
+      return put(JSON.stringify(v), fmtRaw(v, f), JSON.stringify(v));
+    }
+    if ((f.kind === 'ref' || f.kind === 'reflist') && typeof v === 'number') {
+      if (!v) return emptyKey();
+      const d = refDisplay(f, v); return d === '' ? emptyKey() : put('s:' + d, d, d);
+    }
+    if (isDateField(f) && typeof v === 'number') {
+      const p = dateParts(v, f);
+      switch (g) {
+        case 'year': return put('y' + p.y, String(p.y), p.y);
+        case 'quarter': { const q = Math.ceil(p.m / 3); return put('q' + q, 'T' + q, q); }
+        case 'yq': { const q = Math.ceil(p.m / 3); return put('yq' + p.y + q, p.y + ' T' + q, p.y * 10 + q); }
+        case 'month': return put('m' + p.m, MONTHS[p.m - 1], p.m);
+        case 'ym': return put('ym' + p.y + pad(p.m), MONTHS_S[p.m - 1] + ' ' + p.y, p.y * 100 + p.m);
+        case 'week': { const w = isoWeek(p.y, p.m, p.d); return put('w' + w.y + pad(w.w), w.y + ' – S' + pad(w.w), w.y * 100 + w.w); }
+        case 'dow': return put('dw' + p.dow, DOWS[p.dow], p.dow);
+        case 'hour': return put('h' + p.h, pad(p.h) + ' h', p.h);
+        case 'day': return put('d' + p.y + pad(p.m) + pad(p.d), `${pad(p.d)}/${pad(p.m)}/${p.y}`, p.y * 10000 + p.m * 100 + p.d);
+        default: return put('t' + v, fmtDate(v, f), v);
+      }
+    }
+    if (typeof v === 'number') {
+      if (bin > 0) { const a = Math.floor(v / bin) * bin; const b = a + bin; return put('b' + a, '[' + fmtNum(a, f) + ' ; ' + fmtNum(b, f) + '[', a); }
+      return put('n' + v, fmtNum(v, f), v);
+    }
+    if (typeof v === 'boolean') return v ? put('1', 'Oui', 1) : put('0', 'Non', 0);
+    const s = String(v).trim();
+    if (!s) return emptyKey();
+    if (bin > 0 && isNumField(f)) { const n = toNum(s); if (isFinite(n)) return one(n); }
+    return put('s:' + s, s, s);
+  }
+  return {
+    ch, f, info,
+    keys(r) {
+      const v = f.get(r);
+      if (Array.isArray(v) && v[0] === 'L') {
+        if (v.length === 1) return [emptyKey()];
+        const out = []; for (const x of v.slice(1)) { const k = one(x); if (!out.includes(k)) out.push(k); }
+        return out;
+      }
+      return [one(v)];
+    }
+  };
+}
+const cmpSort = (a, b) => {
+  if (a === null && b === null) return 0; if (a === null) return 1; if (b === null) return -1;
+  if (typeof a === 'number' && typeof b === 'number') return a - b;
+  return COLL.compare(String(a), String(b));
+};
+
+/* Filtres */
+function makeFilter(ch) {
+  const flt = ch.filter; if (!flt) return null;
+  const dim = makeDim(ch);
+  if (flt.mode === 'range') {
+    const f = dim.f;
+    const lo = flt.min === '' || flt.min === null || flt.min === undefined ? null : +flt.min;
+    const hi = flt.max === '' || flt.max === null || flt.max === undefined ? null : +flt.max;
+    if (lo === null && hi === null) return null;
+    return r => {
+      let v = f.get(r);
+      const vs = Array.isArray(v) && v[0] === 'L' ? v.slice(1) : [v];
+      return vs.some(x => { const n = toNum(x); if (!isFinite(n)) return false; return (lo === null || n >= lo) && (hi === null || n <= hi); });
+    };
+  }
+  const ex = new Set(flt.exclude || []);
+  if (flt.include) { const inc = new Set(flt.include); return r => dim.keys(r).some(k => inc.has(k)); }
+  if (!ex.size) return null;
+  return r => dim.keys(r).some(k => !ex.has(k));
+}
+
+/* ================= Agrégation ================= */
+function newAcc(agg) {
+  const a = {n: 0, cnt: 0, num: 0, sum: 0, min: Infinity, max: -Infinity, mean: 0, m2: 0};
+  if (agg === 'median') a.vals = [];
+  if (agg === 'distinct') a.set = new Set();
+  return a;
+}
+function accAdd(a, v, f) {
+  a.n++;
+  if (isEmptyRaw(v)) return;
+  a.cnt++;
+  const items = Array.isArray(v) && v[0] === 'L' ? v.slice(1) : [v];
+  if (a.set) for (const x of items) a.set.add(typeof x === 'number' && f && (f.kind === 'ref' || f.kind === 'reflist') ? refDisplay(f, x) : JSON.stringify(x));
+  for (const x of items) {
+    const n = toNum(x); if (!isFinite(n)) continue;
+    a.num++; a.sum += n; if (n < a.min) a.min = n; if (n > a.max) a.max = n;
+    const d = n - a.mean; a.mean += d / a.num; a.m2 += d * (n - a.mean);
+    if (a.vals) a.vals.push(n);
+  }
+}
+function accValue(a, agg) {
+  if (!a) return null;
+  switch (agg) {
+    case 'count': return a.n;
+    case 'counta': return a.cnt;
+    case 'distinct': return a.set.size;
+    case 'sum': return a.num ? a.sum : (a.n ? 0 : null);
+    case 'avg': return a.num ? a.sum / a.num : null;
+    case 'min': return a.num ? a.min : null;
+    case 'max': return a.num ? a.max : null;
+    case 'median': {
+      if (!a.vals.length) return null;
+      if (!a.sorted) { a.vals.sort((x, y) => x - y); a.sorted = true; }
+      const m = a.vals.length >> 1; return a.vals.length % 2 ? a.vals[m] : (a.vals[m - 1] + a.vals[m]) / 2;
+    }
+    case 'stdev': return a.num > 1 ? Math.sqrt(a.m2 / (a.num - 1)) : null;
+    case 'var': return a.num > 1 ? a.m2 / (a.num - 1) : null;
+  }
+  return null;
+}
+
+async function ensureNeeds() {
+  const used = [...S.cfg.rows, ...S.cfg.cols, ...S.cfg.vals, ...S.cfg.filters].map(c => fieldById(c.field)).filter(Boolean);
+  const need = new Set();
+  for (const f of used) {
+    (f.needs || []).forEach(t => need.add(t));
+    if (f.refTable) need.add(f.refTable);
+  }
+  await Promise.all([...need].filter(t => !S.cache[t]).map(t => ensureTable(t).catch(e => console.warn(e))));
+}
+
+function compute() {
+  const cfg = S.cfg;
+  const recsAll = currentRecords();
+  const vals = cfg.vals.length ? cfg.vals : [{uid: '_implicit', field: '__count__', agg: 'count', show: 'raw', implicit: true}];
+  const vDefs = vals.map(v => ({v, f: fieldById(v.field) || {kind: 'count', get: () => 1}}));
+  const rowDims = cfg.rows.filter(c => fieldById(c.field)).map(makeDim);
+  const colDims = cfg.cols.filter(c => fieldById(c.field)).map(makeDim);
+  const filters = [...cfg.filters, ...cfg.rows, ...cfg.cols].filter(c => fieldById(c.field)).map(makeFilter).filter(Boolean);
+  const recs = filters.length ? recsAll.filter(r => filters.every(fn => fn(r))) : recsAll;
+  const R = rowDims.length, C = colDims.length, nV = vDefs.length;
+  const cells = new Map();
+  const rowTree = {key: '', path: [], children: new Map()}, colTree = {key: '', path: [], children: new Map()};
+  const insert = (tree, combo) => {
+    let node = tree, keys = [tree.key];
+    for (let i = 0; i < combo.length; i++) {
+      let ch = node.children.get(combo[i]);
+      if (!ch) { ch = {k: combo[i], path: node.path.concat(combo[i]), key: (node.key ? node.key + SEP : '') + combo[i], children: new Map()}; node.children.set(combo[i], ch); }
+      node = ch; keys.push(node.key);
+    }
+    return keys;
+  };
+  const cart = keysArr => {
+    let out = [[]];
+    for (const ks of keysArr) { const nx = []; for (const p of out) for (const k of ks) nx.push(p.concat(k)); out = nx; }
+    return out;
+  };
+  for (const r of recs) {
+    const rp = new Set(), cp = new Set();
+    for (const combo of cart(rowDims.map(d => d.keys(r)))) insert(rowTree, combo).forEach(k => rp.add(k));
+    for (const combo of cart(colDims.map(d => d.keys(r)))) insert(colTree, combo).forEach(k => cp.add(k));
+    const raw = vDefs.map(d => d.f.get(r));
+    for (const a of rp) for (const b of cp) {
+      const key = a + '\u0002' + b;
+      let accs = cells.get(key);
+      if (!accs) { accs = vDefs.map(d => newAcc(d.v.agg)); cells.set(key, accs); }
+      for (let i = 0; i < nV; i++) accAdd(accs[i], raw[i], vDefs[i].f);
+    }
+  }
+  const get = (rk, ck, vi) => { const a = cells.get(rk + '\u0002' + ck); return a ? accValue(a[vi], vDefs[vi].v.agg) : null; };
+  // Tri des nœuds
+  const sortTree = (tree, dims, isRow) => {
+    const rec = (node, depth) => {
+      if (!node.children.size) { node.sorted = []; return; }
+      const dim = dims[depth], s = dim.ch.sort || {by: 'label', dir: 1};
+      const arr = [...node.children.values()];
+      if (s.by === 'value') {
+        const vi = Math.min(+s.val || 0, nV - 1);
+        arr.forEach(n => { n._v = isRow ? get(n.key, '', vi) : get('', n.key, vi); });
+        arr.sort((a, b) => { if (a.k === EMPTY) return 1; if (b.k === EMPTY) return -1; return ((a._v ?? -Infinity) - (b._v ?? -Infinity)) * (s.dir || 1); });
+      } else {
+        arr.sort((a, b) => { if (a.k === EMPTY && b.k !== EMPTY) return 1; if (b.k === EMPTY && a.k !== EMPTY) return -1; return cmpSort(dim.info.get(a.k).s, dim.info.get(b.k).s) * (s.dir || 1); });
+      }
+      node.sorted = cfg.opt.hideEmpty ? arr.filter(n => n.k !== EMPTY) : arr;
+      for (const c of node.sorted) rec(c, depth + 1);
+    };
+    rec(tree, 0);
+  };
+  sortTree(rowTree, rowDims, true); sortTree(colTree, colDims, false);
+  return {recs, recsAll, rowDims, colDims, vDefs, R, C, nV, rowTree, colTree, get, cells, implicit: !cfg.vals.length};
+}
+
+/* ================= Disposition ================= */
+function rowLabel(res, path, i) { const d = res.rowDims[i]; const inf = d && d.info.get(path[i]); return inf ? inf.l : ''; }
+function colLabel(res, path, i) { const d = res.colDims[i]; const inf = d && d.info.get(path[i]); return inf ? inf.l : ''; }
+
+function layoutRows(res, full) {
+  const {R, rowTree} = res, opt = S.cfg.opt, out = [];
+  const tab = full || opt.layout === 'tabular';
+  if (!R) { out.push({kind: 'grand', path: [], key: ''}); return out; }
+  const walk = (node, depth) => {
+    for (const ch of node.sorted) {
+      const hasCh = depth + 1 < R && ch.sorted && ch.sorted.length > 0;
+      const coll = !full && hasCh && S.collapsed.has('r' + ch.key);
+      if (tab) {
+        if (!hasCh || coll) out.push({kind: 'leaf', path: ch.path, key: ch.key, hasCh, coll});
+        else { walk(ch, depth + 1); if (opt.subtotals || full) out.push({kind: 'sub', path: ch.path, key: ch.key}); }
+      } else {
+        out.push({kind: hasCh ? 'group' : 'leaf', path: ch.path, key: ch.key, hasCh, coll});
+        if (hasCh && !coll) walk(ch, depth + 1);
+      }
+    }
+  };
+  walk(rowTree, 0);
+  if (opt.grandRows || full) out.push({kind: 'grand', path: [], key: ''});
+  return out;
+}
+function layoutCols(res, full) {
+  const {C, colTree} = res, opt = S.cfg.opt, out = [];
+  if (!C) { out.push({kind: 'grand', path: [], key: ''}); return out; }
+  const walk = (node, depth) => {
+    for (const ch of node.sorted) {
+      if (depth + 1 < C) { walk(ch, depth + 1); if (opt.colSubtotals || full) out.push({kind: 'sub', path: ch.path, key: ch.key}); }
+      else out.push({kind: 'leaf', path: ch.path, key: ch.key});
+    }
+  };
+  walk(colTree, 0);
+  if (opt.grandCols || full) out.push({kind: 'grand', path: [], key: ''});
+  return out;
+}
+
+/* Valeur affichée (avec % et cumuls) */
+function cellValue(res, row, col, vi, ctx) {
+  const v = res.vDefs[vi].v, show = v.show || 'raw';
+  const x = res.get(row.key, col.key, vi);
+  if (show === 'raw') return x;
+  if (x === null) return null;
+  const div = d => (d ? x / d : null);
+  switch (show) {
+    case 'pctTotal': return div(res.get('', '', vi));
+    case 'pctRow': return div(res.get(row.key, '', vi));
+    case 'pctCol': return div(res.get('', col.key, vi));
+    case 'pctParent': {
+      if (!row.path.length) return 1;
+      const pk = row.path.slice(0, -1).join(SEP); return div(res.get(pk, col.key, vi));
+    }
+    case 'runRow': {
+      // cumul sur les frères précédents, au même niveau
+      if (!row.path.length) return x;
+      const pk = row.path.slice(0, -1); let node = res.rowTree;
+      for (const k of pk) node = node.children.get(k);
+      let acc = 0;
+      for (const sib of node.sorted) { const y = res.get(sib.key, col.key, vi); if (y !== null) acc += y; if (sib.key === row.key) break; }
+      return acc;
+    }
+    case 'rank': {
+      if (!row.path.length) return null;
+      const pk = row.path.slice(0, -1); let node = res.rowTree;
+      for (const k of pk) node = node.children.get(k);
+      const arr = node.sorted.map(s => res.get(s.key, col.key, vi)).filter(y => y !== null).sort((a, b) => b - a);
+      return arr.indexOf(x) + 1;
+    }
+  }
+  return x;
+}
+function fmtCell(res, vi, x) {
+  if (x === null || x === undefined || (typeof x === 'number' && !isFinite(x))) return S.cfg.opt.emptyCell || '';
+  const {v, f} = res.vDefs[vi], show = v.show || 'raw';
+  const dec = v.dec === undefined || v.dec === '' ? null : v.dec;
+  let s;
+  if (show.startsWith('pct')) s = nf({style: 'percent', minimumFractionDigits: dec ?? 1, maximumFractionDigits: dec ?? 1}).format(x);
+  else if (show === 'rank') s = String(x);
+  else if (['count', 'counta', 'distinct'].includes(v.agg)) s = nf({maximumFractionDigits: 0}).format(x);
+  else if (isDateField(f) && ['min', 'max', 'median', 'avg'].includes(v.agg)) s = fmtDate(x, f);
+  else if (f.kind === 'num' || f.kind === 'count') s = fmtNum(x, (v.agg === 'var') ? null : f, dec);
+  else s = fmtNum(x, null, dec ?? (Number.isInteger(x) ? 0 : 2));
+  if (v.unit) s += '\u00a0' + v.unit;
+  return s;
+}
+
+/* ================= Rendu du tableau ================= */
+const MAX_ROWS = 4000, MAX_COLS = 600;
+function renderTable(res) {
+  const opt = S.cfg.opt, tab = opt.layout === 'tabular';
+  let rows = layoutRows(res, false), cols = layoutCols(res, false);
+  const {R, C, nV} = res;
+  let warn = '';
+  if (rows.length > MAX_ROWS) { warn += `Affichage limité aux ${MAX_ROWS.toLocaleString('fr-FR')} premières lignes sur ${rows.length.toLocaleString('fr-FR')} (l\u2019export contient tout). `; rows = rows.slice(0, MAX_ROWS - 1).concat(rows.filter(r => r.kind === 'grand')); }
+  if (cols.length * nV > MAX_COLS) { warn += `Affichage limité à ${MAX_COLS} colonnes. Placez plutôt ce champ en lignes ou ajoutez un filtre.`; cols = cols.slice(0, Math.floor(MAX_COLS / nV) - 1).concat(cols.filter(c => c.kind === 'grand')); }
+  S.view = {rows, cols};
+  const rhCols = tab ? Math.max(R, 1) : 1;
+  const valRow = nV > 1 || C === 0;
+  const H = C + (valRow ? 1 : 0);
+  let h = `<div class="pv-wrap">${warn ? `<p class="warnbox">${esc(warn)}</p>` : ''}<table class="pv ${tab ? 'tabular' : 'compact'}" id="pvTable"><thead>`;
+  const rowNames = res.rowDims.map(d => dimLabel(d.ch));
+  const cornerTxt = tab ? null : (rowNames.length ? rowNames.join(' › ') : '');
+  const corner = (rs) => tab
+    ? rowNames.length ? rowNames.map((n, i) => `<th class="corner" rowspan="${rs}" scope="col" style="${i ? 'left:auto' : ''}">${esc(n)}</th>`).join('') : `<th class="corner" rowspan="${rs}"></th>`
+    : `<th class="corner" rowspan="${rs}" scope="col">${esc(cornerTxt)}${C ? `<div style="font-size:.72rem;margin-top:2px">${esc(res.colDims.map(d => dimLabel(d.ch)).join(' › '))} →</div>` : ''}</th>`;
+  const topH = i => `top:calc(${i} * 2.05rem)`;
+  for (let l = 0; l < C; l++) {
+    h += '<tr>';
+    if (l === 0) h += corner(H);
+    for (let i = 0; i < cols.length;) {
+      const c = cols[i], L = c.path.length;
+      if (c.kind === 'grand') { if (l === 0) h += `<th class="tot" style="${topH(l)}" rowspan="${C}" colspan="${nV}" scope="col">Total général</th>`; i++; continue; }
+      if (c.kind === 'sub') {
+        if (l === L - 1) h += `<th class="tot" style="${topH(l)}" rowspan="${C - L + 1}" colspan="${nV}" scope="col">Total ${esc(colLabel(res, c.path, L - 1))}</th>`;
+        if (l >= L - 1) { i++; continue; }
+      }
+      const pre = c.path.slice(0, l + 1).join(SEP);
+      let j = i;
+      while (j < cols.length) {
+        const d = cols[j];
+        if (d.kind === 'grand') break;
+        if (d.kind === 'sub' && d.path.length <= l + 1) { if (d.path.length === l + 1 && d.path.join(SEP) === pre) { /* total de ce groupe : hors du groupe */ } break; }
+        if (d.path.slice(0, l + 1).join(SEP) !== pre) break;
+        j++;
+      }
+      const lab = colLabel(res, c.path, l);
+      h += `<th class="lev" style="${topH(l)}" colspan="${(j - i) * nV}" scope="colgroup">${c.path[l] === EMPTY ? '<span class="vide">(vide)</span>' : esc(lab)}</th>`;
+      i = j;
+    }
+    h += '</tr>';
+  }
+  if (valRow) {
+    h += '<tr>';
+    if (C === 0) h += corner(1);
+    for (const c of cols) for (let vi = 0; vi < nV; vi++) h += `<th class="vh${c.kind !== 'leaf' && C ? ' tot' : ''}" style="${topH(C)}" scope="col">${esc(valLabel(res.vDefs[vi].v))}${res.implicit ? '' : ''}</th>`;
+    h += '</tr>';
+  }
+  h += '</thead><tbody>';
+
+  // Carte de chaleur : min/max par valeur sur les cellules de détail
+  const hm = opt.heatmap ? res.vDefs.map(() => ({min: Infinity, max: -Infinity})) : null;
+  const grid = rows.map(r => cols.map(c => res.vDefs.map((_, vi) => {
+    const blankGroup = !tab && r.kind === 'group' && !r.coll && !opt.subtotals;
+    const x = blankGroup ? null : cellValue(res, r, c, vi);
+    if (hm && x !== null && r.kind === 'leaf' && (c.kind === 'leaf' || !C) && typeof x === 'number') { hm[vi].min = Math.min(hm[vi].min, x); hm[vi].max = Math.max(hm[vi].max, x); }
+    return x;
+  })));
+  let prev = null;
+  rows.forEach((r, ri) => {
+    h += `<tr class="${r.kind}">`;
+    const d = r.path.length;
+    if (!tab) {
+      if (r.kind === 'grand') h += `<th scope="row">${R ? 'Total général' : 'Total'}</th>`;
+      else {
+        const k = r.path[d - 1], lab = rowLabel(res, r.path, d - 1);
+        const tg = r.hasCh ? `<button class="tg" data-tg="${esc('r' + r.key)}" aria-expanded="${!r.coll}" title="${r.coll ? 'Développer' : 'Réduire'}"><span class="ic ic-caret"></span></button>` : (R > 1 ? '<span class="tg-sp"></span>' : '');
+        h += `<th scope="row" style="padding-left:calc(.7rem + ${(d - 1) * 1.4}rem)" title="${esc(lab)}">${tg}${k === EMPTY ? '<span class="vide">(vide)</span>' : esc(lab)}</th>`;
+      }
+    } else {
+      if (r.kind === 'grand') h += `<th scope="row" colspan="${rhCols}">${R ? 'Total général' : 'Total'}</th>`;
+      else if (r.kind === 'sub') {
+        for (let i = 0; i < d - 1; i++) h += '<th></th>';
+        h += `<th scope="row" colspan="${rhCols - d + 1}">Total ${esc(rowLabel(res, r.path, d - 1))}</th>`;
+      } else {
+        for (let i = 0; i < rhCols; i++) {
+          if (i >= d) { h += '<th></th>'; continue; }
+          const same = prev && prev.path.length > i && prev.path.slice(0, i + 1).join(SEP) === r.path.slice(0, i + 1).join(SEP);
+          if (same && !opt.repeat) { h += '<th></th>'; continue; }
+          const k = r.path[i], lab = rowLabel(res, r.path, i);
+          const nodeHasCh = i + 1 < R && (i + 1 < d || r.coll);
+          const key = 'r' + r.path.slice(0, i + 1).join(SEP);
+          const coll = S.collapsed.has(key);
+          const tg = nodeHasCh && !same ? `<button class="tg" data-tg="${esc(key)}" aria-expanded="${!coll}" title="${coll ? 'Développer' : 'Réduire'}"><span class="ic ic-caret"></span></button>` : '';
+          h += `<th scope="row">${tg}${k === EMPTY ? '<span class="vide">(vide)</span>' : esc(lab)}</th>`;
+        }
+      }
+    }
+    cols.forEach((c, ci) => {
+      for (let vi = 0; vi < nV; vi++) {
+        const x = grid[ri][ci][vi];
+        let st = '', cls = 'v' + (c.kind !== 'leaf' && C ? ' ct' : '');
+        if (hm && x !== null && r.kind === 'leaf' && (c.kind === 'leaf' || !C) && hm[vi].max > hm[vi].min) {
+          const t = (x - hm[vi].min) / (hm[vi].max - hm[vi].min);
+          st = `background:${mix('#f5f5fe', '#8585f6', t)}`; cls += ' hm';
+        }
+        if (typeof x === 'number' && x < 0) cls += ' neg';
+        h += `<td class="${cls}" data-r="${ri}" data-c="${ci}" data-v="${vi}"${st ? ` style="${st}"` : ''}>${esc(fmtCell(res, vi, x))}</td>`;
+      }
+    });
+    h += '</tr>';
+    if (r.kind === 'leaf') prev = r;
+  });
+  h += '</tbody></table></div>';
+  return h;
+}
+function mix(a, b, t) {
+  const p = s => [1, 3, 5].map(i => parseInt(s.slice(i, i + 2), 16));
+  const A = p(a), B = p(b);
+  return '#' + A.map((x, i) => Math.round(x + (B[i] - x) * Math.max(0, Math.min(1, t))).toString(16).padStart(2, '0')).join('');
+}
+
+/* ================= Rendu du graphique ================= */
+function niceTicks(min, max, n) {
+  if (min === max) { max = min + 1; }
+  const span = max - min, step0 = Math.pow(10, Math.floor(Math.log10(span / n)));
+  const err = span / n / step0;
+  const step = step0 * (err >= 7.5 ? 10 : err >= 3.5 ? 5 : err >= 1.5 ? 2 : 1);
+  const lo = Math.floor(min / step) * step, hi = Math.ceil(max / step) * step;
+  const t = []; for (let x = lo; x <= hi + step / 2; x += step) t.push(+x.toFixed(10));
+  return t;
+}
+function renderChart(res) {
+  const opt = S.cfg.opt, vi = Math.min(opt.chartVal || 0, res.nV - 1);
+  const MAXC = 60, MAXS = 12;
+  let cats = res.R ? res.rowTree.sorted.map(n => ({key: n.key, label: n.k === EMPTY ? '(vide)' : res.rowDims[0].info.get(n.k).l})) : [{key: '', label: 'Total'}];
+  let series = res.C ? res.colTree.sorted.map(n => ({key: n.key, label: n.k === EMPTY ? '(vide)' : res.colDims[0].info.get(n.k).l})) : [{key: '', label: valLabel(res.vDefs[vi].v)}];
+  const notes = [];
+  if (cats.length > MAXC) { notes.push(`${MAXC} premières catégories sur ${cats.length}.`); cats = cats.slice(0, MAXC); }
+  if (series.length > MAXS) { notes.push(`${MAXS} premières séries sur ${series.length}.`); series = series.slice(0, MAXS); }
+  if (res.R > 1 || res.C > 1) notes.push('Le graphique utilise le premier champ des lignes (catégories) et le premier champ des colonnes (séries).');
+  const val = (c, s) => { const x = cellValue(res, {key: c.key, path: c.key ? c.key.split(SEP) : []}, {key: s.key, path: s.key ? s.key.split(SEP) : []}, vi); return typeof x === 'number' && isFinite(x) ? x : null; };
+  const type = opt.chartType;
+  const color = i => PALETTE[i % PALETTE.length];
+  const fmt = x => fmtCell(res, vi, x);
+  let svg = '';
+  const W = 900;
+  const allV = [];
+  if (type === 'stacked') cats.forEach(c => { let p = 0, n = 0; series.forEach(s => { const x = val(c, s); if (x > 0) p += x; else if (x < 0) n += x; }); allV.push(p, n); });
+  else cats.forEach(c => series.forEach(s => { const x = val(c, s); if (x !== null) allV.push(x); }));
+  if (!allV.length) return '<div class="blank"><p>Aucune valeur numérique à représenter.</p></div>';
+  const vmin = Math.min(0, ...allV), vmax = Math.max(0, ...allV);
+  const ticks = niceTicks(vmin, vmax, 5); const t0 = ticks[0], t1 = ticks[ticks.length - 1];
+  if (type === 'line' || type === 'col') {
+    const H = 380, L = 70, Rm = 20, T = 16, B = 70;
+    const pw = W - L - Rm, ph = H - T - B;
+    const y = v => T + ph - (v - t0) / (t1 - t0) * ph;
+    svg += `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Graphique">`;
+    ticks.forEach(t => { svg += `<line class="${t === 0 ? 'base' : 'grid'}" x1="${L}" x2="${W - Rm}" y1="${y(t)}" y2="${y(t)}"/><g class="ax"><text x="${L - 6}" y="${y(t) + 4}" text-anchor="end">${esc(fmtShort(t))}</text></g>`; });
+    const step = pw / cats.length;
+    const every = Math.ceil(cats.length / 20);
+    cats.forEach((c, i) => { if (i % every) return; const x = L + step * (i + .5); svg += `<g class="ax"><text transform="translate(${x},${H - B + 14}) rotate(${cats.length > 8 ? -35 : 0})" text-anchor="${cats.length > 8 ? 'end' : 'middle'}">${esc(trunc(c.label, 22))}</text></g>`; });
+    if (type === 'col') {
+      const gw = step * .8, bw = gw / series.length;
+      cats.forEach((c, i) => series.forEach((s, j) => {
+        const x = val(c, s); if (x === null) return;
+        const bx = L + step * i + step * .1 + bw * j, y0 = y(0), y1 = y(x);
+        svg += `<rect x="${bx}" y="${Math.min(y0, y1)}" width="${Math.max(1, bw - 1)}" height="${Math.max(1, Math.abs(y1 - y0))}" fill="${color(j)}" data-tip="${esc(c.label)}|${esc(s.label)}|${esc(fmt(x))}|${color(j)}"/>`;
+      }));
+    } else {
+      series.forEach((s, j) => {
+        const pts = cats.map((c, i) => { const x = val(c, s); return x === null ? null : [L + step * (i + .5), y(x), x, c]; });
+        let d = '', pen = false;
+        pts.forEach(p => { if (!p) { pen = false; return; } d += (pen ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1); pen = true; });
+        svg += `<path d="${d}" fill="none" stroke="${color(j)}" stroke-width="2.5"/>`;
+        pts.forEach(p => { if (p) svg += `<circle cx="${p[0]}" cy="${p[1]}" r="4" fill="${color(j)}" stroke="#fff" stroke-width="1.5" data-tip="${esc(p[3].label)}|${esc(s.label)}|${esc(fmt(p[2]))}|${color(j)}"/>`; });
+      });
+    }
+    svg += '</svg>';
+  } else {
+    // Barres horizontales (groupées ou empilées)
+    const stacked = type === 'stacked';
+    const bandH = stacked ? 26 : Math.max(22, series.length * 12 + 8);
+    const longest = Math.max(...cats.map(c => Math.min(c.label.length, 34)));
+    const L = Math.min(300, Math.max(90, longest * 7 + 16)), Rm = 30, T = 8, B = 28;
+    const H = T + B + bandH * cats.length;
+    const pw = W - L - Rm;
+    const x = v => L + (v - t0) / (t1 - t0) * pw;
+    svg += `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Graphique en barres">`;
+    ticks.forEach(t => { svg += `<line class="${t === 0 ? 'base' : 'grid'}" y1="${T}" y2="${H - B}" x1="${x(t)}" x2="${x(t)}"/><g class="ax"><text x="${x(t)}" y="${H - B + 16}" text-anchor="middle">${esc(fmtShort(t))}</text></g>`; });
+    cats.forEach((c, i) => {
+      const by = T + bandH * i;
+      svg += `<text x="${L - 8}" y="${by + bandH / 2 + 4}" text-anchor="end">${esc(trunc(c.label, 34))}</text>`;
+      if (stacked) {
+        let pos = 0, neg = 0;
+        series.forEach((s, j) => {
+          const v = val(c, s); if (!v) return;
+          const a = v >= 0 ? pos : neg + v; if (v >= 0) pos += v; else neg += v;
+          svg += `<rect x="${x(a)}" y="${by + 4}" width="${Math.max(1, x(a + Math.abs(v)) - x(a))}" height="${bandH - 8}" fill="${color(j)}" stroke="#fff" stroke-width="1" data-tip="${esc(c.label)}|${esc(s.label)}|${esc(fmt(v))}|${color(j)}"/>`;
+        });
+      } else {
+        const bh = (bandH - 8) / series.length;
+        series.forEach((s, j) => {
+          const v = val(c, s); if (v === null) return;
+          const x0 = x(0), x1 = x(v);
+          svg += `<rect x="${Math.min(x0, x1)}" y="${by + 4 + bh * j}" width="${Math.max(1, Math.abs(x1 - x0))}" height="${Math.max(1, bh - 1)}" fill="${color(j)}" data-tip="${esc(c.label)}|${esc(s.label)}|${esc(fmt(v))}|${color(j)}"/>`;
+        });
+      }
+    });
+    svg += '</svg>';
+  }
+  const legend = series.length > 1 || res.C ? `<div class="legend">${series.map((s, j) => `<span><i style="background:${color(j)}"></i>${esc(s.label)}</span>`).join('')}</div>` : '';
+  return `<div class="chart"><p style="margin:0 0 6px;font-weight:700;color:var(--title)">${esc(valLabel(res.vDefs[vi].v))}${res.R ? ' par ' + esc(dimLabel(res.rowDims[0].ch).toLowerCase()) : ''}${res.C ? ' et ' + esc(dimLabel(res.colDims[0].ch).toLowerCase()) : ''}</p>${legend}${svg}${notes.length ? `<p class="note">${esc(notes.join(' '))}</p>` : ''}</div>`;
+}
+const trunc = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+function fmtShort(v) {
+  const a = Math.abs(v);
+  if (a >= 1e9) return nf({maximumFractionDigits: 1}).format(v / 1e9) + ' Md';
+  if (a >= 1e6) return nf({maximumFractionDigits: 1}).format(v / 1e6) + ' M';
+  if (a >= 1e4) return nf({maximumFractionDigits: 1}).format(v / 1e3) + ' k';
+  return nf({maximumFractionDigits: 2}).format(v);
+}
+
+/* ================= Rendu général ================= */
+let renderSeq = 0;
+async function refreshView() {
+  const seq = ++renderSeq;
+  renderZones(); renderFields();
+  const out = $('#out');
+  const cfg = S.cfg;
+  updateHeader();
+  if (!S.src) { out.innerHTML = blankHtml('nosrc'); renderBar(null); return; }
+  if (!cfg.rows.length && !cfg.cols.length && !cfg.vals.length) { out.innerHTML = blankHtml('start'); renderBar(null); return; }
+  try { await ensureNeeds(); } catch (e) { console.warn(e); }
+  if (seq !== renderSeq) return;
+  let res;
+  try { res = compute(); } catch (e) { console.error(e); out.innerHTML = `<div class="blank"><h2>Erreur de calcul</h2><p>${esc(e.message)}</p></div>`; return; }
+  S.result = res;
+  renderBar(res);
+  out.innerHTML = cfg.opt.view === 'chart' ? renderChart(res) : renderTable(res);
+}
+function blankHtml(kind) {
+  const pic = `<svg class="pic" viewBox="0 0 120 90" aria-hidden="true"><rect x="2" y="2" width="116" height="86" fill="#f5f5fe" stroke="#cacafb"/><rect x="2" y="2" width="116" height="16" fill="#e3e3fd"/><rect x="2" y="2" width="34" height="86" fill="#ececfe"/><g fill="#000091"><rect x="44" y="28" width="16" height="6"/><rect x="68" y="28" width="22" height="6"/><rect x="96" y="28" width="12" height="6"/><rect x="44" y="44" width="20" height="6"/><rect x="68" y="44" width="10" height="6"/><rect x="96" y="44" width="16" height="6"/><rect x="44" y="60" width="12" height="6"/><rect x="68" y="60" width="18" height="6"/><rect x="96" y="60" width="8" height="6"/></g><g fill="#e1000f"><rect x="8" y="28" width="20" height="6"/><rect x="8" y="44" width="16" height="6"/><rect x="8" y="60" width="22" height="6"/></g></svg>`;
+  if (kind === 'nosrc') return `<div class="blank">${pic}<h2>Aucune table disponible</h2><p>Ce document ne contient pas encore de table, ou le widget n\u2019a pas l\u2019<b>accès complet au document</b>.</p><p class="muted">Dans le panneau de droite de Grist (Créateur), réglez « Accès » sur « Accès complet au document ».</p></div>`;
+  return `<div class="blank">${pic}<h2>Construisez votre tableau croisé</h2><ol><li>Choisissez la <b>source des données</b> dans le panneau « Champs ».</li><li>Glissez des champs vers <b>Lignes</b> et <b>Colonnes</b> pour les regrouper.</li><li>Glissez un champ vers <b>Valeurs</b> pour le synthétiser (somme, nombre, moyenne…).</li><li>Ajoutez des <b>Filtres</b> pour restreindre les données.</li></ol><div><button class="btn sec" id="bSuggest"><span class="ic ic-magic"></span>Proposer un tableau</button></div></div>`;
+}
+function renderBar(res) {
+  const bar = $('#bar');
+  if (!res) { bar.innerHTML = S.src ? `<span class="stat"><b>${currentRecords().length.toLocaleString('fr-FR')}</b> enregistrements dans la source</span>` : ''; return; }
+  const nf0 = res.recs.length.toLocaleString('fr-FR'), nAll = res.recsAll.length.toLocaleString('fr-FR');
+  const active = [...S.cfg.filters, ...S.cfg.rows, ...S.cfg.cols].filter(c => c.filter && makeFilter(c));
+  let h = `<span class="stat"><b>${nf0}</b> enregistrement${res.recs.length > 1 ? 's' : ''}${res.recs.length !== res.recsAll.length ? ` retenu${res.recs.length > 1 ? 's' : ''} sur ${nAll}` : ''}</span>`;
+  for (const c of active) h += `<button class="tag" data-flt="${c.uid}" title="Modifier le filtre">${esc(dimLabel(c))} : ${esc(filterSummary(c))}<span class="ic ic-close" style="--ic:.8rem" data-unflt="${c.uid}" title="Retirer ce filtre"></span></button>`;
+  h += '<span class="sp"></span>';
+  if (S.cfg.opt.view === 'chart') {
+    if (res.nV > 1) h += `<label class="sr" for="chartVal">Valeur représentée</label><select class="inp sm" id="chartVal" style="width:auto">${res.vDefs.map((d, i) => `<option value="${i}"${i === (S.cfg.opt.chartVal || 0) ? ' selected' : ''}>${esc(valLabel(d.v))}</option>`).join('')}</select>`;
+    h += `<div class="seg" role="group" aria-label="Type de graphique">${[['bar', 'Barres'], ['stacked', 'Empilées'], ['col', 'Colonnes'], ['line', 'Courbes']].map(([k, l]) => `<button data-ct="${k}" aria-pressed="${S.cfg.opt.chartType === k}">${l}</button>`).join('')}</div>`;
+  } else if (res.R > 1) {
+    h += `<button class="btn sm ter" id="bExpand"><span class="ic ic-add"></span>Tout développer</button><button class="btn sm ter" id="bCollapse"><span class="ic ic-subtract"></span>Tout réduire</button>`;
+  }
+  bar.innerHTML = h;
+}
+function filterSummary(c) {
+  const f = c.filter;
+  if (f.mode === 'range') {
+    const fd = fieldById(c.field), fm = v => (isDateField(fd) ? fmtDate(+v, fd) : fmtNum(+v, fd));
+    const a = f.min !== '' && f.min !== null && f.min !== undefined, b = f.max !== '' && f.max !== null && f.max !== undefined;
+    return a && b ? `${fm(f.min)} → ${fm(f.max)}` : a ? `≥ ${fm(f.min)}` : `≤ ${fm(f.max)}`;
+  }
+  const lab = k => (k === EMPTY ? '(vide)' : (S._labelCache && S._labelCache[c.uid] && S._labelCache[c.uid][k]) || k.replace(/^s:/, ''));
+  if (f.include) return f.include.length === 1 ? lab(f.include[0]) : f.include.length + ' valeurs';
+  return f.exclude.length === 1 ? 'sauf ' + lab(f.exclude[0]) : f.exclude.length + ' exclues';
+}
+function updateHeader() {
+  const t = S.src === LINKED ? 'Données liées au widget' + (S.linkedTableId ? ' (' + S.linkedTableId + ')' : '') : S.src || '—';
+  $('#svcTag').textContent = (S.backend && S.backend.mode === 'demo' ? 'Mode démonstration · ' : '') + 'Source : ' + t;
+  $('#blocMarque').hidden = !S.cfg.opt.brand;
+  $('#brand').classList.toggle('nologo', !S.cfg.opt.brand);
+  $('#vTable').setAttribute('aria-pressed', S.cfg.opt.view !== 'chart');
+  $('#vChart').setAttribute('aria-pressed', S.cfg.opt.view === 'chart');
+}
+
+/* ================= Panneau des champs ================= */
+function usedFieldIds() { return new Set([...S.cfg.rows, ...S.cfg.cols, ...S.cfg.vals, ...S.cfg.filters].map(c => c.field)); }
+function renderFields() {
+  const ul = $('#fields'), q = $('#fSearch').value.trim().toLowerCase(), used = usedFieldIds();
+  let h = '', n = 0;
+  for (const f of S.fields) {
+    if (f.depth === 1 && !q && !S.expandedRefs.has(f.parent)) continue;
+    if (q && !f.label.toLowerCase().includes(q)) continue;
+    n++;
+    const ty = TY[f.kind] || TY.any;
+    const isRef = (f.kind === 'ref' || f.kind === 'reflist') && S.fields.some(x => x.parent === f.id);
+    h += `<li draggable="true" data-field="${esc(f.id)}" class="${f.depth ? 'sub' : ''}${used.has(f.id) ? ' used' : ''}">`;
+    h += `<input type="checkbox" ${used.has(f.id) ? 'checked' : ''} aria-label="Utiliser le champ ${esc(f.label)}" data-chk="${esc(f.id)}">`;
+    h += `<span class="ty ${ty[1]}" title="${esc(ty[2])}">${ty[0]}</span><span class="fl" title="${esc(f.label)}${f.colId && f.colId !== f.label ? ' (' + esc(f.id) + ')' : ''}">${esc(f.depth ? f.shortLabel : f.label)}</span>`;
+    if (isRef && !q) h += `<button class="exp" data-exp="${esc(f.id)}" aria-expanded="${S.expandedRefs.has(f.id)}" title="Afficher les champs de la table liée ${esc(f.refTable)}"><span class="ic ic-caret"></span></button>`;
+    h += `<button class="more" data-more="${esc(f.id)}" aria-haspopup="menu" title="Ajouter à une zone"><span class="ic ic-more"></span><span class="sr">Ajouter ${esc(f.label)} à une zone</span></button></li>`;
+  }
+  ul.innerHTML = h || '<li class="empty-note">Aucun champ.</li>';
+  $('#fieldCount').textContent = (S.fields.length - 1) + ' champ' + (S.fields.length > 2 ? 's' : '');
+}
+function renderZones() {
+  for (const z of Object.keys(ZONES)) {
+    const box = $(`.zone[data-zone="${z}"] .chips`);
+    const list = S.cfg[z];
+    if (!list.length) { box.innerHTML = `<span class="ph">${{filters: 'Glissez ici pour filtrer', cols: 'Glissez ici les colonnes', rows: 'Glissez ici les lignes', vals: 'Glissez ici les valeurs à calculer'}[z]}</span>`; continue; }
+    box.innerHTML = list.map(c => {
+      const ok = !!fieldById(c.field);
+      const lab = z === 'vals' ? valLabel(c) : dimLabel(c);
+      const hasF = c.filter && makeFilterSafe(c);
+      return `<div class="chip${hasF ? ' has-filter' : ''}" draggable="true" data-uid="${c.uid}" data-zone="${z}" style="${ok ? '' : 'opacity:.55'}"><button class="cl" data-chip="${c.uid}" aria-haspopup="menu" title="${esc(ok ? lab + ' – cliquez pour les options' : 'Champ introuvable dans la source : ' + c.field)}">${hasF ? '<span class="ic ic-filter"></span>' : ''}<span>${esc(lab)}</span><span class="ic ic-down" style="margin-left:auto"></span></button><button class="cx" data-rm="${c.uid}" title="Retirer ${esc(lab)}"><span class="ic ic-close"></span><span class="sr">Retirer</span></button></div>`;
+    }).join('');
+  }
+}
+function makeFilterSafe(c) { try { return fieldById(c.field) && makeFilter(c); } catch (e) { return null; } }
+
+/* ================= Actions sur la configuration ================= */
+function newChip(zone, fieldId) {
+  const f = fieldById(fieldId);
+  if (zone === 'vals') {
+    let agg = 'counta';
+    if (!f || f.kind === 'count') agg = 'count';
+    else if (f.kind === 'num' && !f.multi) agg = 'sum';
+    else if (f.kind === 'num') agg = 'sum';
+    return {uid: uid(), field: fieldId, agg, show: 'raw'};
+  }
+  const c = {uid: uid(), field: fieldId, sort: {by: 'label', dir: 1}};
+  if (isDateField(f)) c.group = 'year';
+  return c;
+}
+function addField(zone, fieldId, index) {
+  const f = fieldById(fieldId);
+  if (!f) return;
+  if (f.kind === 'count' && zone !== 'vals') { toast('« Nombre d\u2019enregistrements » ne peut aller que dans Valeurs.'); zone = 'vals'; }
+  const ch = newChip(zone, fieldId);
+  const arr = S.cfg[zone];
+  arr.splice(index === undefined ? arr.length : index, 0, ch);
+  changed();
+}
+function findChip(uid) {
+  for (const z of Object.keys(ZONES)) { const i = S.cfg[z].findIndex(c => c.uid === uid); if (i >= 0) return {zone: z, index: i, chip: S.cfg[z][i]}; }
+  return null;
+}
+function moveChip(uid, zone, index) {
+  const loc = findChip(uid); if (!loc) return;
+  S.cfg[loc.zone].splice(loc.index, 1);
+  let ch = loc.chip;
+  if (zone === 'vals' && loc.zone !== 'vals') ch = newChip('vals', ch.field);
+  else if (zone !== 'vals' && loc.zone === 'vals') {
+    if (fieldById(ch.field) && fieldById(ch.field).kind === 'count') { S.cfg[loc.zone].splice(loc.index, 0, ch); toast('Ce champ ne peut aller que dans Valeurs.'); return; }
+    ch = newChip(zone, ch.field);
+  }
+  if (index === undefined || index > S.cfg[zone].length) index = S.cfg[zone].length;
+  if (loc.zone === zone && index > loc.index) index--;
+  S.cfg[zone].splice(Math.max(0, index), 0, ch);
+  changed();
+}
+function removeChip(uid) { const loc = findChip(uid); if (!loc) return; S.cfg[loc.zone].splice(loc.index, 1); changed(); }
+function toggleField(fid) {
+  const used = usedFieldIds();
+  if (used.has(fid)) { for (const z of Object.keys(ZONES)) S.cfg[z] = S.cfg[z].filter(c => c.field !== fid); changed(); return; }
+  const f = fieldById(fid);
+  addField(isNumField(f) ? 'vals' : 'rows', fid);
+}
+let saveTimer = null;
+function changed(noSave) {
+  refreshView();
+  if (noSave) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(persist, 600);
+}
+function persist() {
+  if (!S.src) return;
+  S.store.src = S.src;
+  S.store.byTable[S.src] = clone(S.cfg);
+  S._lastSaved = JSON.stringify(S.store);
+  S.backend.save(clone(S.store));
+}
+function onRemoteOptions(opts) {
+  const v = opts && opts.tcd; if (!v) return;
+  const st = typeof v === 'string' ? JSON.parse(v) : v;
+  const js = JSON.stringify(st);
+  if (js === S._lastSaved) return;
+  S._lastSaved = js;
+  S.store = normStore(st);
+  if (S.store.src && S.store.src !== S.src && validSrc(S.store.src)) selectSource(S.store.src, true);
+  else { S.cfg = normCfg(S.store.byTable[S.src]); refreshView(); }
+}
+function normStore(st) {
+  st = st && typeof st === 'object' ? st : {};
+  return {src: st.src || null, byTable: st.byTable || {}, views: Array.isArray(st.views) ? st.views : []};
+}
+function normCfg(c) {
+  const n = newCfg(); if (!c) return n;
+  for (const z of Object.keys(ZONES)) n[z] = Array.isArray(c[z]) ? c[z].map(x => Object.assign({uid: uid()}, x)) : [];
+  n.opt = Object.assign(clone(DEFAULT_OPT), c.opt || {});
+  return n;
+}
+
+/* ================= Sources ================= */
+function validSrc(s) { return s === LINKED ? S.linkedAvailable : !!(S.meta && S.meta.tables[s]); }
+function renderSources() {
+  const sel = $('#src'); let h = '';
+  if (S.linkedAvailable) h += `<option value="${LINKED}">↳ Données liées au widget${S.linkedTableId ? ' (' + esc(S.linkedTableId) + ')' : ''}</option>`;
+  const names = Object.keys(S.meta.tables).filter(t => !S.meta.tables[t].hidden).sort(COLL.compare);
+  const normal = names.filter(t => !S.meta.tables[t].summary), sums = names.filter(t => S.meta.tables[t].summary);
+  if (normal.length) h += `<optgroup label="Tables du document">${normal.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('')}</optgroup>`;
+  if (sums.length) h += `<optgroup label="Tables de synthèse">${sums.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('')}</optgroup>`;
+  sel.innerHTML = h || '<option value="">(aucune table)</option>';
+  if (S.src) sel.value = S.src;
+}
+function renderViews() {
+  const sel = $('#viewSel');
+  sel.innerHTML = '<option value="">— Configuration en cours —</option>' + S.store.views.map((v, i) => `<option value="${i}">${esc(v.name)}${v.src !== S.src ? ' · ' + esc(v.src === LINKED ? 'données liées' : v.src) : ''}</option>`).join('');
+  sel.value = S.curView ?? '';
+}
+async function selectSource(src, keepCfg) {
+  S.src = src; S.collapsed.clear(); S.curView = '';
+  $('#src').value = src;
+  $('#out').innerHTML = '<div class="loading"><div class="spin"></div>Chargement des données…</div>';
+  try {
+    if (src !== LINKED) await ensureTable(src);
+  } catch (e) { $('#out').innerHTML = `<div class="blank"><h2>Impossible de lire la table</h2><p>${esc(e.message || e)}</p></div>`; return; }
+  buildFields();
+  if (!keepCfg || keepCfg === true) S.cfg = normCfg(S.store.byTable[src]);
+  renderViews();
+  refreshView();
+}
+let linkedTimer = null;
+function onLinkedRecords(recs) {
+  S.linked = recs || [];
+  if (!S.linkedAvailable) { S.linkedAvailable = true; if (S.meta) renderSources(); }
+  clearTimeout(linkedTimer);
+  linkedTimer = setTimeout(async () => {
+    if (!S.meta) return;
+    if (S.src === LINKED) { buildFields(); refreshView(); }
+    else if (S.src && S.src === S.linkedTableId) { await ensureTable(S.src, true); refreshView(); }
+  }, 250);
+}
+async function reloadAll() {
+  try {
+    S.meta = await S.backend.meta();
+    S.cache = {};
+    if (S.src && S.src !== LINKED && !S.meta.tables[S.src]) S.src = null;
+    renderSources();
+    if (S.src && S.src !== LINKED) await ensureTable(S.src, true);
+    buildFields(); refreshView();
+    toast('Données actualisées.', 'ok');
+  } catch (e) { toast('Erreur : ' + (e.message || e), 'err'); }
+}
+
+/* ================= Menus ================= */
+let menuEl = null, menuAnchor = null;
+function closeMenu() { if (menuEl) { menuEl.remove(); menuEl = null; if (menuAnchor) menuAnchor.focus(); menuAnchor = null; } }
+function openMenu(anchor, items) {
+  closeMenu();
+  const m = document.createElement('div'); m.className = 'menu'; m.setAttribute('role', 'menu');
+  items.forEach(it => {
+    if (it === '-') { m.appendChild(document.createElement('hr')); return; }
+    if (it.head) { const d = document.createElement('div'); d.className = 'mh'; d.textContent = it.head; m.appendChild(d); return; }
+    const b = document.createElement('button'); b.setAttribute('role', 'menuitem');
+    b.innerHTML = `<span class="ic ${it.icon || 'ic-blank'}"></span><span>${esc(it.label)}</span>${it.checked ? '<span class="ic ic-check ok"></span>' : ''}`;
+    if (it.disabled) b.disabled = true;
+    b.onclick = e => { e.stopPropagation(); const a = menuAnchor; closeMenu(); it.action && it.action(a); };
+    m.appendChild(b);
+  });
+  document.body.appendChild(m);
+  const r = anchor.getBoundingClientRect(), mw = m.offsetWidth, mh = m.offsetHeight;
+  let left = Math.min(r.left, innerWidth - mw - 8), top = r.bottom + 4;
+  if (top + mh > innerHeight - 8) top = Math.max(8, r.top - mh - 4);
+  m.style.left = Math.max(8, left) + 'px'; m.style.top = top + 'px';
+  menuEl = m; menuAnchor = anchor;
+  const first = m.querySelector('button:not(:disabled)'); if (first) first.focus();
+  m.addEventListener('keydown', e => {
+    const bs = $$('button:not(:disabled)', m), i = bs.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') { e.preventDefault(); bs[(i + 1) % bs.length].focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); bs[(i - 1 + bs.length) % bs.length].focus(); }
+    else if (e.key === 'Escape' || e.key === 'Tab') { e.preventDefault(); closeMenu(); }
+  });
+}
+document.addEventListener('mousedown', e => { if (menuEl && !menuEl.contains(e.target)) { menuAnchor = null; closeMenu(); } });
+
+function fieldMenu(anchor, fid) {
+  const f = fieldById(fid);
+  openMenu(anchor, [{head: f.label},
+    {label: 'Ajouter aux lignes', icon: 'ic-rowz', action: () => addField('rows', fid), disabled: f.kind === 'count'},
+    {label: 'Ajouter aux colonnes', icon: 'ic-col', action: () => addField('cols', fid), disabled: f.kind === 'count'},
+    {label: 'Ajouter aux valeurs', icon: 'ic-sigma', action: () => addField('vals', fid)},
+    {label: 'Ajouter aux filtres', icon: 'ic-filter', action: () => { addField('filters', fid); const c = S.cfg.filters[S.cfg.filters.length - 1]; if (c) openFilter(c.uid); }, disabled: f.kind === 'count'}]);
+}
+function chipMenu(anchor, cuid) {
+  const loc = findChip(cuid); if (!loc) return;
+  const {zone, index, chip} = loc, arr = S.cfg[zone];
+  const f = fieldById(chip.field);
+  const items = [{head: zone === 'vals' ? valLabel(chip) : dimLabel(chip)}];
+  if (zone === 'vals') {
+    items.push({label: 'Paramètres du champ de valeur…', icon: 'ic-settings', action: () => openValSettings(cuid), disabled: !f});
+    if (f && f.kind !== 'count') {
+      items.push('-', {head: 'Synthèse par'});
+      const aggs = isNumField(f) || isDateField(f) ? ['sum', 'count', 'avg', 'min', 'max', 'median', 'distinct'] : ['counta', 'count', 'distinct'];
+      for (const a of aggs) items.push({label: AGGS[a], checked: chip.agg === a, action: () => { chip.agg = a; changed(); }});
+    }
+  } else {
+    items.push({label: 'Filtrer…', icon: 'ic-filter', action: () => openFilter(cuid), disabled: !f});
+    if (chip.filter) items.push({label: 'Effacer le filtre', icon: 'ic-close', action: () => { delete chip.filter; changed(); }});
+    if (zone !== 'filters') {
+      const s = chip.sort || {by: 'label', dir: 1};
+      items.push({label: 'Trier A → Z', icon: 'ic-sort', checked: s.by === 'label' && s.dir === 1, action: () => { chip.sort = {by: 'label', dir: 1}; changed(); }});
+      items.push({label: 'Trier Z → A', icon: 'ic-sort', checked: s.by === 'label' && s.dir === -1, action: () => { chip.sort = {by: 'label', dir: -1}; changed(); }});
+      items.push({label: 'Trier par valeur décroissante', icon: 'ic-sort', checked: s.by === 'value' && s.dir === -1, action: () => { chip.sort = {by: 'value', dir: -1, val: 0}; changed(); }});
+      items.push({label: 'Trier par valeur croissante', icon: 'ic-sort', checked: s.by === 'value' && s.dir === 1, action: () => { chip.sort = {by: 'value', dir: 1, val: 0}; changed(); }});
+    }
+    items.push({label: 'Paramètres du champ…', icon: 'ic-settings', action: () => openDimSettings(cuid), disabled: !f});
+  }
+  items.push('-');
+  if (index > 0) items.push({label: 'Monter', icon: 'ic-up', action: () => moveChip(cuid, zone, index - 1)});
+  if (index < arr.length - 1) items.push({label: 'Descendre', icon: 'ic-down', action: () => moveChip(cuid, zone, index + 2)});
+  for (const z of Object.keys(ZONES)) if (z !== zone && !(z !== 'vals' && f && f.kind === 'count')) items.push({label: 'Déplacer vers ' + ZONES[z], icon: {filters: 'ic-filter', cols: 'ic-col', rows: 'ic-rowz', vals: 'ic-sigma'}[z], action: () => moveChip(cuid, z)});
+  items.push('-', {label: 'Supprimer', icon: 'ic-delete', action: () => removeChip(cuid)});
+  openMenu(anchor, items);
+}
+
+/* ================= Modales ================= */
+let modalStack = [];
+function openModal({title, icon, body, buttons = [], wide, onOpen}) {
+  const back = document.createElement('div'); back.className = 'modal-back';
+  const prevFocus = document.activeElement;
+  back.innerHTML = `<div class="modal${wide ? ' wide' : ''}" role="dialog" aria-modal="true" aria-labelledby="mh${modalStack.length}"><div class="modal-close"><button class="btn sm ter-no" data-x title="Fermer"><span>Fermer</span><span class="ic ic-close"></span></button></div><h1 class="modal-h" id="mh${modalStack.length}">${icon ? `<span class="ic ${icon}"></span>` : ''}${esc(title)}</h1><div class="modal-b"></div>${buttons.length ? '<div class="modal-f"></div>' : ''}</div>`;
+  const b = back.querySelector('.modal-b');
+  if (typeof body === 'string') b.innerHTML = body; else b.appendChild(body);
+  const close = () => { back.remove(); modalStack = modalStack.filter(x => x !== back); if (prevFocus && prevFocus.focus) prevFocus.focus(); };
+  const f = back.querySelector('.modal-f');
+  buttons.forEach(bt => {
+    if (bt === '|') { const s = document.createElement('span'); s.className = 'sp'; f.appendChild(s); return; }
+    const e = document.createElement('button'); e.className = 'btn ' + (bt.cls || 'sec'); e.innerHTML = (bt.icon ? `<span class="ic ${bt.icon}"></span>` : '') + esc(bt.label);
+    e.onclick = async () => { if (bt.action) { const r = await bt.action(b); if (r === false) return; } close(); };
+    f.appendChild(e);
+  });
+  back.querySelector('[data-x]').onclick = close;
+  back.addEventListener('mousedown', e => { if (e.target === back) close(); });
+  back.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { e.stopPropagation(); close(); }
+    if (e.key === 'Tab') {
+      const fs = $$('button,input,select,textarea,[tabindex]:not([tabindex="-1"])', back).filter(x => !x.disabled && x.offsetParent);
+      if (!fs.length) return;
+      if (e.shiftKey && document.activeElement === fs[0]) { e.preventDefault(); fs[fs.length - 1].focus(); }
+      else if (!e.shiftKey && document.activeElement === fs[fs.length - 1]) { e.preventDefault(); fs[0].focus(); }
+    }
+  });
+  document.body.appendChild(back); modalStack.push(back);
+  if (onOpen) onOpen(b, close);
+  const first = b.querySelector('input,select,textarea') || back.querySelector('.modal-f .btn.pri') || back.querySelector('[data-x]');
+  setTimeout(() => first && first.focus(), 0);
+  return {close, el: back};
+}
+function sel(id, opts, cur) { return `<select class="inp" id="${id}">${Object.entries(opts).map(([k, l]) => `<option value="${esc(k)}"${String(k) === String(cur) ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`; }
+
+function openDimSettings(cuid) {
+  const {chip} = findChip(cuid); const f = fieldById(chip.field);
+  const s = chip.sort || {by: 'label', dir: 1};
+  const sortVal = s.by + ':' + (s.dir || 1);
+  const vOpts = S.cfg.vals.length ? Object.fromEntries(S.cfg.vals.map((v, i) => [i, valLabel(v)])) : {0: 'Nombre d\u2019enregistrements'};
+  let h = `<div class="field"><label for="dLab">Nom personnalisé</label><input class="inp" id="dLab" value="${esc(chip.label || '')}" placeholder="${esc(f.label)}"><span class="hint">Champ source : ${esc(f.label)} (${esc(f.id)})</span></div>`;
+  if (isDateField(f)) {
+    const g = Object.assign({}, GROUPS); if (f.kind !== 'datetime') delete g.hour;
+    h += `<div class="field"><label for="dGrp">Regrouper les dates par</label>${sel('dGrp', g, chip.group || 'none')}<span class="hint">Astuce : ajoutez le même champ deux fois (Année puis Mois de l\u2019année) pour une hiérarchie.</span></div>`;
+  }
+  if (isNumField(f)) h += `<div class="field"><label for="dBin">Regrouper par tranches de</label><input class="inp" id="dBin" type="number" min="0" step="any" value="${esc(chip.bin || '')}" placeholder="Pas de regroupement"><span class="hint">Ex. 1000 → [0 ; 1 000[, [1 000 ; 2 000[…</span></div>`;
+  h += `<div class="row2"><div class="field"><label for="dSort">Trier</label>${sel('dSort', {'label:1': 'Par libellé (A → Z)', 'label:-1': 'Par libellé (Z → A)', 'value:-1': 'Par valeur décroissante', 'value:1': 'Par valeur croissante'}, sortVal)}</div>`;
+  h += `<div class="field"><label for="dSortV">Valeur utilisée pour le tri</label>${sel('dSortV', vOpts, s.val || 0)}</div></div>`;
+  openModal({title: 'Paramètres du champ', icon: 'ic-settings', body: h, buttons: [{label: 'Annuler', cls: 'sec'}, {label: 'Appliquer', cls: 'pri', action: b => {
+    chip.label = $('#dLab', b).value.trim() || undefined;
+    if ($('#dGrp', b)) chip.group = $('#dGrp', b).value;
+    if ($('#dBin', b)) { const v = parseFloat($('#dBin', b).value); chip.bin = v > 0 ? v : undefined; }
+    const [by, dir] = $('#dSort', b).value.split(':'); chip.sort = {by, dir: +dir, val: +$('#dSortV', b).value};
+    if (chip.filter && chip.filter.mode !== 'range') delete chip.filter; // les clés changent avec le regroupement
+    changed();
+  }}]});
+}
+function openValSettings(cuid) {
+  const {chip} = findChip(cuid); const f = fieldById(chip.field);
+  const aggs = f.kind === 'count' ? {count: AGGS.count} : (isNumField(f) || isDateField(f) ? AGGS : {counta: AGGS.counta, count: AGGS.count, distinct: AGGS.distinct, sum: AGGS.sum + ' (valeurs numériques)', avg: AGGS.avg + ' (valeurs numériques)', min: AGGS.min, max: AGGS.max});
+  let h = `<div class="field"><label for="vLab">Nom personnalisé</label><input class="inp" id="vLab" value="${esc(chip.label || '')}" placeholder="${esc(valLabel(Object.assign({}, chip, {label: ''})))}"></div>`;
+  h += `<div class="row2"><div class="field"><label for="vAgg">Synthèse par</label>${sel('vAgg', aggs, chip.agg)}</div><div class="field"><label for="vShow">Afficher les valeurs</label>${sel('vShow', SHOWS, chip.show || 'raw')}</div></div>`;
+  h += `<div class="row2"><div class="field"><label for="vDec">Décimales</label>${sel('vDec', {'': 'Automatique', 0: '0', 1: '1', 2: '2', 3: '3'}, chip.dec ?? '')}</div><div class="field"><label for="vUnit">Unité (suffixe)</label><input class="inp" id="vUnit" value="${esc(chip.unit || '')}" placeholder="ex. ha, t, kWh"></div></div>`;
+  h += `<p class="hint">Les formats monétaires et pourcentages définis dans Grist sur la colonne sont repris automatiquement.</p>`;
+  openModal({title: 'Paramètres du champ de valeur', icon: 'ic-sigma', body: h, buttons: [{label: 'Annuler', cls: 'sec'}, {label: 'Appliquer', cls: 'pri', action: b => {
+    chip.label = $('#vLab', b).value.trim() || undefined;
+    chip.agg = $('#vAgg', b).value; chip.show = $('#vShow', b).value;
+    const d = $('#vDec', b).value; chip.dec = d === '' ? undefined : +d;
+    chip.unit = $('#vUnit', b).value.trim() || undefined;
+    changed();
+  }}]});
+}
+function openFilter(cuid) {
+  const loc = findChip(cuid); if (!loc) return;
+  const {chip} = loc, f = fieldById(chip.field); if (!f) return;
+  const dim = makeDim(chip);
+  const counts = new Map();
+  for (const r of currentRecords()) for (const k of dim.keys(r)) counts.set(k, (counts.get(k) || 0) + 1);
+  const keys = [...counts.keys()].sort((a, b) => { if (a === EMPTY) return 1; if (b === EMPTY) return -1; return cmpSort(dim.info.get(a).s, dim.info.get(b).s); });
+  S._labelCache = S._labelCache || {}; S._labelCache[chip.uid] = Object.fromEntries(keys.map(k => [k, dim.info.get(k).l]));
+  const flt = chip.filter || {};
+  const excluded = new Set(flt.include ? keys.filter(k => !flt.include.includes(k)) : (flt.exclude || []));
+  const canRange = (isNumField(f) || isDateField(f)) && f.kind !== 'count';
+  const isDate = isDateField(f);
+  const toInput = v => { if (v === '' || v === null || v === undefined) return ''; if (isDate) { const d = new Date(+v * 1000); return d.toISOString().slice(0, 10); } return v; };
+  const MAXV = 2000;
+  let h = '';
+  if (canRange) h += `<div class="tabs" role="tablist"><button role="tab" data-tab="list" aria-selected="${flt.mode !== 'range'}">Par valeurs</button><button role="tab" data-tab="range" aria-selected="${flt.mode === 'range'}">Par plage</button></div>`;
+  h += `<div data-pane="list"${flt.mode === 'range' ? ' hidden' : ''}><div class="search"><span class="ic ic-search"></span><input type="search" id="fltQ" placeholder="Rechercher une valeur" aria-label="Rechercher une valeur"></div>
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn sm ter" id="fltAll">Tout cocher</button><button class="btn sm ter" id="fltNone">Tout décocher</button><button class="btn sm ter" id="fltInv">Inverser</button><span class="muted" style="font-size:.8rem;align-self:center" id="fltInfo"></span></div>
+    <div class="vlist" id="fltList"></div></div>`;
+  if (canRange) h += `<div data-pane="range"${flt.mode === 'range' ? '' : ' hidden'}><div class="row2"><div class="field"><label for="fMin">Minimum (inclus)</label><input class="inp" id="fMin" type="${isDate ? 'date' : 'number'}" step="any" value="${esc(toInput(flt.mode === 'range' ? flt.min : ''))}"></div><div class="field"><label for="fMax">Maximum (inclus)</label><input class="inp" id="fMax" type="${isDate ? 'date' : 'number'}" step="any" value="${esc(toInput(flt.mode === 'range' ? flt.max : ''))}"></div></div><p class="hint">Laissez un champ vide pour une borne ouverte. La plage porte sur la valeur d\u2019origine, avant regroupement.</p></div>`;
+  openModal({title: 'Filtrer : ' + dimLabel(chip), icon: 'ic-filter', body: h, onOpen: b => {
+    let mode = flt.mode === 'range' ? 'range' : 'list';
+    $$('[data-tab]', b).forEach(t => t.onclick = () => { mode = t.dataset.tab; $$('[data-tab]', b).forEach(x => x.setAttribute('aria-selected', x === t)); $$('[data-pane]', b).forEach(p => p.hidden = p.dataset.pane !== mode); });
+    const list = $('#fltList', b);
+    const draw = () => {
+      const q = $('#fltQ', b).value.trim().toLowerCase();
+      const vis = keys.filter(k => !q || dim.info.get(k).l.toLowerCase().includes(q));
+      list.innerHTML = vis.slice(0, MAXV).map(k => `<label><input type="checkbox" data-k="${esc(k)}"${excluded.has(k) ? '' : ' checked'}><span${k === EMPTY ? ' class="vide"' : ''}>${esc(dim.info.get(k).l)}</span><span class="n">${counts.get(k).toLocaleString('fr-FR')}</span></label>`).join('') || '<p class="empty-note">Aucune valeur.</p>';
+      $('#fltInfo', b).textContent = `${keys.length - excluded.size} / ${keys.length} sélectionnée(s)` + (vis.length > MAXV ? ` · ${MAXV} premières affichées` : '');
+      list._vis = vis;
+    };
+    list.addEventListener('change', e => { const k = e.target.dataset.k; if (k === undefined) return; if (e.target.checked) excluded.delete(k); else excluded.add(k); draw(); });
+    $('#fltQ', b).oninput = draw;
+    $('#fltAll', b).onclick = () => { list._vis.forEach(k => excluded.delete(k)); draw(); };
+    $('#fltNone', b).onclick = () => { list._vis.forEach(k => excluded.add(k)); draw(); };
+    $('#fltInv', b).onclick = () => { list._vis.forEach(k => excluded.has(k) ? excluded.delete(k) : excluded.add(k)); draw(); };
+    b._mode = () => mode;
+    draw();
+  }, buttons: [{label: 'Effacer le filtre', cls: 'ter', icon: 'ic-close', action: () => { delete chip.filter; changed(); }}, '|', {label: 'Annuler', cls: 'sec'}, {label: 'Appliquer', cls: 'pri', action: b => {
+    const mode = b._mode();
+    if (mode === 'range') {
+      const conv = v => { if (v === '') return ''; if (isDate) return Date.parse(v + 'T00:00:00Z') / 1000; return +v; };
+      let mx = conv($('#fMax', b).value); if (isDate && mx !== '') mx += 86399;
+      chip.filter = {mode: 'range', min: conv($('#fMin', b).value), max: mx};
+      if (chip.filter.min === '' && chip.filter.max === '') delete chip.filter;
+    } else if (!excluded.size) delete chip.filter;
+    else if (excluded.size === keys.length) { toast('Sélectionnez au moins une valeur.', 'err'); return false; }
+    else if (keys.length - excluded.size < excluded.size) chip.filter = {mode: 'list', include: keys.filter(k => !excluded.has(k))};
+    else chip.filter = {mode: 'list', exclude: [...excluded]};
+    changed();
+  }}]});
+}
+function openOptions() {
+  const o = S.cfg.opt;
+  const ck = (id, l, hint) => `<label class="check"><input type="checkbox" id="${id}"${o[id] ? ' checked' : ''}><span>${esc(l)}${hint ? `<small>${esc(hint)}</small>` : ''}</span></label>`;
+  const h = `<fieldset><legend>Disposition</legend>
+    <label class="check"><input type="radio" name="lay" value="compact"${o.layout !== 'tabular' ? ' checked' : ''}><span>Compacte<small>Une seule colonne d\u2019étiquettes, niveaux indentés (comme Excel par défaut).</small></span></label>
+    <label class="check"><input type="radio" name="lay" value="tabular"${o.layout === 'tabular' ? ' checked' : ''}><span>Tabulaire<small>Une colonne par champ de ligne, sous-totaux en bas de groupe.</small></span></label>
+    ${ck('repeat', 'Répéter les étiquettes (disposition tabulaire)')}</fieldset>
+    <fieldset><legend>Totaux</legend>${ck('subtotals', 'Sous-totaux des lignes')}${ck('colSubtotals', 'Sous-totaux des colonnes')}${ck('grandRows', 'Total général des lignes (en bas)')}${ck('grandCols', 'Total général des colonnes (à droite)')}</fieldset>
+    <fieldset><legend>Présentation</legend>${ck('heatmap', 'Carte de chaleur', 'Colore les cellules de détail selon leur valeur.')}${ck('hideEmpty', 'Masquer les éléments « (vide) »')}
+    <div class="field" style="margin-top:8px"><label for="emptyCell">Texte des cellules sans valeur</label><input class="inp" id="emptyCell" value="${esc(o.emptyCell || '')}" placeholder="(laisser vide)" style="max-width:220px"></div>
+    ${ck('brand', 'Afficher le bloc-marque « République française »', 'À réserver aux services de l\u2019État.')}</fieldset>`;
+  openModal({title: 'Options du tableau croisé', icon: 'ic-settings', body: h, buttons: [{label: 'Annuler', cls: 'sec'}, {label: 'Appliquer', cls: 'pri', action: b => {
+    o.layout = $('input[name=lay]:checked', b).value;
+    for (const k of ['repeat', 'subtotals', 'colSubtotals', 'grandRows', 'grandCols', 'heatmap', 'hideEmpty', 'brand']) o[k] = $('#' + k, b).checked;
+    o.emptyCell = $('#emptyCell', b).value;
+    changed();
+  }}]});
+}
+function openHelp() {
+  const h = `<div class="help">
+  <p>Ce widget fonctionne comme le tableau croisé dynamique d\u2019un tableur, sur n\u2019importe quelle table de votre document Grist.</p>
+  <h3>Construire le tableau</h3><ul>
+  <li><b>Source</b> : choisissez une table du document, ou « Données liées au widget » pour suivre les filtres et liaisons de la page Grist (sélectionnez la table dans « Données de la vue » du widget).</li>
+  <li><b>Lignes / Colonnes</b> : champs de regroupement. Plusieurs champs forment une hiérarchie (ex. Région › Département).</li>
+  <li><b>Valeurs</b> : champs calculés. Cliquez sur un champ pour choisir la synthèse (somme, nombre, moyenne, médiane, min, max, nombre distinct, écart type) et l\u2019affichage (% du total, de la ligne, de la colonne, du parent, cumul, rang).</li>
+  <li><b>Filtres</b> : restreignent les données. Les champs placés en lignes ou colonnes peuvent aussi être filtrés.</li></ul>
+  <h3>Types de colonnes Grist</h3><ul>
+  <li><b>Dates</b> : regroupement par année, trimestre, mois, semaine, jour de la semaine… (Paramètres du champ).</li>
+  <li><b>Nombres</b> : regroupement par tranches.</li>
+  <li><b>Références</b> : la valeur affichée de la référence est utilisée ; dépliez ▸ pour accéder aux champs de la table liée (ex. Dispositif › Programme).</li>
+  <li><b>Listes</b> (choix multiples, listes de références) : l\u2019enregistrement est compté dans chacune de ses valeurs ; les totaux ne le comptent qu\u2019une fois.</li></ul>
+  <h3>Lire et exploiter</h3><ul>
+  <li>Cliquez sur une cellule pour afficher le <b>détail des enregistrements</b>.</li>
+  <li>▾ / ▸ : réduire ou développer un niveau ; « Tout développer / réduire » dans la barre.</li>
+  <li><b>Exporter</b> : CSV (Excel), copie pour coller dans un tableur, nouvelle table Grist, impression.</li>
+  <li><b>Vues enregistrées</b> : conservez plusieurs configurations (enregistrées dans les options du widget).</li></ul>
+  <h3>Actualisation</h3><p>Le tableau se met à jour automatiquement lorsque la table liée au widget change. Pour les autres tables, utilisez « Actualiser ».</p></div>`;
+  openModal({title: 'Aide', icon: 'ic-question', body: h, wide: false, buttons: [{label: 'Fermer', cls: 'pri'}]});
+}
+
+/* ================= Détail d'une cellule ================= */
+function matchPath(dims, path) {
+  return r => path.every((k, i) => dims[i].keys(r).includes(k));
+}
+function openDrill(ri, ci, vi) {
+  const res = S.result, row = S.view.rows[ri], col = S.view.cols[ci];
+  if (!res || !row || !col) return;
+  const mr = matchPath(res.rowDims, row.path), mc = matchPath(res.colDims, col.path);
+  const recs = res.recs.filter(r => mr(r) && mc(r));
+  const parts = [...row.path.map((k, i) => dimLabel(res.rowDims[i].ch) + ' = ' + (k === EMPTY ? '(vide)' : res.rowDims[i].info.get(k).l)), ...col.path.map((k, i) => dimLabel(res.colDims[i].ch) + ' = ' + (k === EMPTY ? '(vide)' : res.colDims[i].info.get(k).l))];
+  const cols = S.fields.filter(f => f.depth === 0 && f.kind !== 'count');
+  const MAX = 500;
+  const v = res.vDefs[vi];
+  let h = `<p style="margin:0 0 6px">${parts.length ? parts.map(p => `<span class="badge blue" style="text-transform:none;margin:0 4px 4px 0">${esc(p)}</span>`).join('') : '<span class="badge">Tous les enregistrements</span>'}</p>`;
+  h += `<p class="muted" style="margin:0 0 10px;font-size:.88rem"><b style="color:var(--title)">${recs.length.toLocaleString('fr-FR')}</b> enregistrement(s) · ${esc(valLabel(v.v))} : <b style="color:var(--title)">${esc(fmtCell(res, vi, cellValue(res, row, col, vi)))}</b>${recs.length > MAX ? ` · ${MAX} premiers affichés` : ''}</p>`;
+  h += `<div style="overflow:auto;max-height:55vh;border:1px solid var(--border)"><table class="dt"><thead><tr>${cols.map(f => `<th>${esc(f.label)}</th>`).join('')}</tr></thead><tbody>`;
+  for (const r of recs.slice(0, MAX)) h += `<tr>${cols.map(f => { const t = fmtRaw(f.get(r), f); return `<td title="${esc(t)}"${isNumField(f) ? ' style="text-align:right"' : ''}>${esc(t)}</td>`; }).join('')}</tr>`;
+  h += '</tbody></table></div>';
+  openModal({title: 'Détail des enregistrements', icon: 'ic-eye', body: h, wide: true, buttons: [{label: 'Exporter en CSV', cls: 'sec', icon: 'ic-download', action: () => { downloadCsv([cols.map(f => f.label), ...recs.map(r => cols.map(f => { const x = f.get(r); return isNumField(f) && typeof x === 'number' ? x : fmtRaw(x, f); }))], 'detail'); return false; }}, {label: 'Fermer', cls: 'pri'}]});
+}
+
+/* ================= Exports ================= */
+function flatTable(leavesOnly) {
+  const res = S.result; if (!res) return null;
+  const rows = layoutRows(res, true).filter(r => !leavesOnly || r.kind === 'leaf');
+  const cols = layoutCols(res, true).filter(c => !leavesOnly || c.kind === 'leaf' || !res.C);
+  const head = res.R ? res.rowDims.map(d => dimLabel(d.ch)) : ['Total'];
+  const vh = [];
+  for (const c of cols) for (let vi = 0; vi < res.nV; vi++) {
+    const p = c.kind === 'grand' ? (res.C ? ['Total général'] : []) : c.path.map((k, i) => colLabel(res, c.path, i));
+    if (c.kind === 'sub') p[p.length - 1] = 'Total ' + p[p.length - 1];
+    vh.push([...p, ...(res.nV > 1 || !res.C ? [valLabel(res.vDefs[vi].v)] : [])].join(' / ') || valLabel(res.vDefs[vi].v));
+  }
+  const out = [head.concat(vh)];
+  for (const r of rows) {
+    const lab = [];
+    if (!res.R) lab.push('Total');
+    else for (let i = 0; i < res.R; i++) {
+      if (r.kind === 'grand') { lab.push(i === 0 ? 'Total général' : ''); continue; }
+      if (i < r.path.length) lab.push((r.kind === 'sub' && i === r.path.length - 1 ? 'Total ' : '') + rowLabel(res, r.path, i));
+      else lab.push('');
+    }
+    const vals = [];
+    for (const c of cols) for (let vi = 0; vi < res.nV; vi++) vals.push(cellValue(res, r, c, vi));
+    out.push(lab.concat(vals));
+  }
+  return out;
+}
+const csvCell = (v, sep) => {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'number') return String(+v.toPrecision(15)).replace('.', ',');
+  const s = String(v);
+  return /[";\n\r\t]/.test(s) || s.includes(sep) ? '"' + s.replace(/"/g, '""') + '"' : s;
+};
+function downloadCsv(matrix, name) {
+  const txt = '\ufeff' + matrix.map(r => r.map(v => csvCell(v, ';')).join(';')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([txt], {type: 'text/csv;charset=utf-8'}));
+  a.download = (name || 'tcd') + '_' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  toast('Fichier CSV généré.', 'ok');
+}
+async function copyTsv() {
+  const m = flatTable(false); if (!m) return;
+  const txt = m.map(r => r.map(v => (typeof v === 'number' ? String(+v.toPrecision(15)).replace('.', ',') : String(v ?? '').replace(/[\t\n]/g, ' '))).join('\t')).join('\n');
+  try { await navigator.clipboard.writeText(txt); toast('Tableau copié : collez-le dans votre tableur.', 'ok'); }
+  catch (e) {
+    const ta = document.createElement('textarea'); ta.value = txt; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); toast('Tableau copié.', 'ok'); } catch (e2) { toast('Copie impossible dans ce navigateur.', 'err'); }
+    ta.remove();
+  }
+}
+function sanitizeId(s, used) {
+  let id = String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9_]+/g, '_').replace(/^_+|_+$/g, '');
+  if (!id) id = 'Col'; if (!/^[A-Za-z]/.test(id)) id = 'C_' + id;
+  id = id.slice(0, 60); let b = id, n = 2;
+  while (used.has(id.toLowerCase())) id = b + '_' + n++;
+  used.add(id.toLowerCase()); return id;
+}
+function exportToGrist() {
+  const res = S.result; if (!res) return;
+  const base = 'TCD_' + (S.src === LINKED ? (S.linkedTableId || 'Donnees') : S.src);
+  const usedT = new Set(Object.keys(S.meta.tables).map(t => t.toLowerCase()));
+  const def = sanitizeId(base, new Set(usedT));
+  const h = `<div class="field"><label for="gtName">Nom de la nouvelle table</label><input class="inp" id="gtName" value="${esc(def)}"><span class="hint">Lettres, chiffres et « _ ». Une table existante n\u2019est jamais écrasée.</span></div>
+  <label class="check"><input type="checkbox" id="gtTot"><span>Inclure les lignes et colonnes de totaux</span></label>
+  <p class="hint" style="margin-top:10px">Chaque ligne du résultat devient un enregistrement ; chaque champ de ligne une colonne texte ; chaque valeur une colonne numérique. La table créée est un instantané : elle ne se met pas à jour.</p>`;
+  openModal({title: 'Exporter vers une table Grist', icon: 'ic-table', body: h, buttons: [{label: 'Annuler', cls: 'sec'}, {label: 'Créer la table', cls: 'pri', action: async b => {
+    const name = sanitizeId($('#gtName', b).value || def, usedT);
+    const m = flatTable(!$('#gtTot', b).checked);
+    const usedC = new Set(['id', 'manualsort']);
+    const nLab = res.R ? res.R : 1;
+    const colsDef = m[0].map((l, i) => ({id: sanitizeId(l, usedC), type: i < nLab ? 'Text' : 'Numeric', isFormula: false}));
+    const data = {}; colsDef.forEach((c, i) => { data[c.id] = m.slice(1).map(r => (r[i] === null || r[i] === undefined ? (i < nLab ? '' : null) : r[i])); });
+    try {
+      const ret = await S.backend.apply([['AddTable', name, colsDef]]);
+      const tid = (ret && ret[0] && ret[0].table_id) || name;
+      const cids = (ret && ret[0] && ret[0].columns) || colsDef.map(c => c.id);
+      const d2 = {}; cids.forEach((cid, i) => { d2[cid] = data[colsDef[i].id]; });
+      await S.backend.apply([['BulkAddRecord', tid, m.slice(1).map(() => null), d2]]);
+      S.meta = await S.backend.meta(); renderSources(); $('#src').value = S.src;
+      toast(`Table « ${tid} » créée (${m.length - 1} lignes).`, 'ok');
+    } catch (e) { toast('Création impossible : ' + (e.message || e), 'err'); return false; }
+  }}]});
+}
+function exportMenu(anchor) {
+  const ok = !!S.result && (S.cfg.rows.length || S.cfg.cols.length || S.cfg.vals.length);
+  openMenu(anchor, [
+    {label: 'Télécharger en CSV (Excel)', icon: 'ic-download', disabled: !ok, action: () => downloadCsv(flatTable(false), 'tcd_' + (S.src === LINKED ? 'lie' : S.src))},
+    {label: 'Copier pour un tableur', icon: 'ic-copy', disabled: !ok, action: copyTsv},
+    {label: 'Créer une table Grist…', icon: 'ic-table', disabled: !ok, action: exportToGrist},
+    '-',
+    {label: 'Imprimer', icon: 'ic-print', disabled: !ok, action: () => window.print()}
+  ]);
+}
+
+/* ================= Vues enregistrées ================= */
+function saveView() {
+  const cur = S.curView !== '' && S.curView !== undefined ? S.store.views[S.curView] : null;
+  const h = `<div class="field"><label for="vwName">Nom de la vue</label><input class="inp" id="vwName" value="${esc(cur ? cur.name : '')}" placeholder="ex. Montants par région et année"></div>`;
+  openModal({title: 'Enregistrer la vue', icon: 'ic-save', body: h, buttons: [{label: 'Annuler', cls: 'sec'}, {label: 'Enregistrer', cls: 'pri', action: b => {
+    const name = $('#vwName', b).value.trim(); if (!name) { toast('Indiquez un nom.', 'err'); return false; }
+    const i = S.store.views.findIndex(v => v.name === name);
+    const v = {name, src: S.src, cfg: clone(S.cfg)};
+    if (i >= 0) S.store.views[i] = v; else S.store.views.push(v);
+    S.curView = String(i >= 0 ? i : S.store.views.length - 1);
+    renderViews(); persist(); toast(`Vue « ${name} » enregistrée.`, 'ok');
+  }}]});
+}
+async function loadView(i) {
+  const v = S.store.views[i]; if (!v) return;
+  if (!validSrc(v.src)) { toast('La source de cette vue est introuvable : ' + v.src, 'err'); return; }
+  if (v.src !== S.src) await selectSource(v.src, 'view');
+  S.cfg = normCfg(v.cfg); S.curView = String(i); S.collapsed.clear();
+  renderViews(); changed();
+}
+
+/* ================= Glisser-déposer ================= */
+let drag = null;
+function zoneIndexAt(zoneEl, y) {
+  const chips = $$('.chip', zoneEl).filter(c => !c.classList.contains('dragging'));
+  for (let i = 0; i < chips.length; i++) { const r = chips[i].getBoundingClientRect(); if (y < r.top + r.height / 2) return i; }
+  return chips.length;
+}
+function clearMarks() { $$('.drop-mark').forEach(m => m.remove()); $$('.zone.over').forEach(z => z.classList.remove('over')); }
+function bindDnd() {
+  $('#fields').addEventListener('dragstart', e => {
+    const li = e.target.closest('li[data-field]'); if (!li) return;
+    drag = {type: 'field', id: li.dataset.field};
+    e.dataTransfer.setData('text/plain', li.dataset.field); e.dataTransfer.effectAllowed = 'copyMove';
+  });
+  $('#panel').addEventListener('dragstart', e => {
+    const ch = e.target.closest('.chip'); if (!ch) return;
+    drag = {type: 'chip', id: ch.dataset.uid};
+    e.dataTransfer.setData('text/plain', ch.dataset.uid); e.dataTransfer.effectAllowed = 'move';
+    setTimeout(() => ch.classList.add('dragging'), 0);
+  });
+  document.addEventListener('dragend', () => { drag = null; clearMarks(); $$('.chip.dragging').forEach(c => c.classList.remove('dragging')); });
+  $$('.zone').forEach(z => {
+    z.addEventListener('dragover', e => {
+      if (!drag) return; e.preventDefault();
+      clearMarks(); z.classList.add('over');
+      const box = $('.chips', z), idx = zoneIndexAt(box, e.clientY);
+      const chips = $$('.chip', box).filter(c => !c.classList.contains('dragging'));
+      const mark = document.createElement('div'); mark.className = 'drop-mark';
+      if (chips[idx]) box.insertBefore(mark, chips[idx]); else if (chips.length) box.appendChild(mark);
+    });
+    z.addEventListener('dragleave', e => { if (!z.contains(e.relatedTarget)) { z.classList.remove('over'); $$('.drop-mark', z).forEach(m => m.remove()); } });
+    z.addEventListener('drop', e => {
+      if (!drag) return; e.preventDefault();
+      const box = $('.chips', z), zone = z.dataset.zone;
+      let idx = zoneIndexAt(box, e.clientY);
+      const d = drag; drag = null; clearMarks();
+      if (d.type === 'field') addField(zone, d.id, idx);
+      else {
+        const loc = findChip(d.id);
+        if (loc && loc.zone === zone && idx > loc.index) idx++; // compense l'élément masqué
+        moveChip(d.id, zone, idx);
+      }
+    });
+  });
+  // Retirer un champ en le déposant sur la liste des champs
+  $('#fields').addEventListener('dragover', e => { if (drag && drag.type === 'chip') e.preventDefault(); });
+  $('#fields').addEventListener('drop', e => { if (drag && drag.type === 'chip') { e.preventDefault(); const id = drag.id; drag = null; removeChip(id); } });
+}
+
+/* ================= Suggestion automatique ================= */
+function suggest() {
+  const fs = S.fields.filter(f => f.depth === 0);
+  const recs = currentRecords();
+  const card = f => { const s = new Set(); for (const r of recs.slice(0, 2000)) { s.add(JSON.stringify(f.get(r))); if (s.size > 60) break; } return s.size; };
+  const cats = fs.filter(f => ['text', 'ref', 'bool'].includes(f.kind)).map(f => ({f, n: card(f)})).filter(x => x.n > 1 && x.n <= 40).sort((a, b) => a.n - b.n);
+  const date = fs.find(f => isDateField(f));
+  const num = fs.find(f => f.kind === 'num' && !/(^|_)id$|^n[°o]|num(e|é)ro/i.test(f.colId || ''));
+  const cfg = S.cfg; cfg.rows = []; cfg.cols = []; cfg.vals = []; cfg.filters = [];
+  if (cats[0]) cfg.rows.push(newChipFor('rows', cats[cats.length > 1 ? 1 : 0].f.id));
+  if (date) { const c = newChipFor('cols', date.id); c.group = 'year'; cfg.cols.push(c); }
+  else if (cats.length > 1) cfg.cols.push(newChipFor('cols', cats[0].f.id));
+  cfg.vals.push(num ? newChipFor('vals', num.id) : newChipFor('vals', '__count__'));
+  changed();
+}
+const newChipFor = (z, id) => newChip(z, id);
+
+/* ================= Notifications & infobulle graphique ================= */
+function toast(msg, kind) {
+  const t = document.createElement('div'); t.className = 'toast ' + (kind || ''); t.textContent = msg;
+  $('#toast').appendChild(t); setTimeout(() => t.remove(), kind === 'err' ? 6000 : 3000);
+}
+document.addEventListener('mousemove', e => {
+  const tip = $('#ctip'); const el = e.target.closest && e.target.closest('[data-tip]');
+  if (!el) { tip.style.display = 'none'; return; }
+  const [a, b, c, col] = el.dataset.tip.split('|');
+  tip.innerHTML = `<b>${esc(a)}</b><br><i style="display:inline-block;width:9px;height:9px;background:${esc(col)};margin-right:6px"></i>${esc(b)} : <b>${esc(c)}</b>`;
+  tip.style.display = 'block';
+  const w = tip.offsetWidth;
+  tip.style.left = Math.min(e.clientX + 14, innerWidth - w - 8) + 'px'; tip.style.top = (e.clientY + 14) + 'px';
+});
+
+/* ================= Événements ================= */
+function bindUi() {
+  $('#src').onchange = e => { persist(); selectSource(e.target.value); };
+  $('#viewSel').onchange = e => { if (e.target.value === '') { S.curView = ''; return; } loadView(+e.target.value); };
+  $('#bSaveView').onclick = saveView;
+  $('#bDelView').onclick = () => {
+    if (S.curView === '' || S.curView === undefined) { toast('Sélectionnez d\u2019abord une vue enregistrée.'); return; }
+    const v = S.store.views[S.curView];
+    openModal({title: 'Supprimer la vue', icon: 'ic-delete', body: `<p>Supprimer la vue « <b>${esc(v.name)}</b> » ? La configuration en cours n\u2019est pas modifiée.</p>`, buttons: [{label: 'Annuler', cls: 'sec'}, {label: 'Supprimer', cls: 'danger', action: () => { S.store.views.splice(+S.curView, 1); S.curView = ''; renderViews(); persist(); }}]});
+  };
+  $('#fSearch').oninput = renderFields;
+  $('#fields').addEventListener('click', e => {
+    const chk = e.target.closest('[data-chk]'); if (chk) { toggleField(chk.dataset.chk); return; }
+    const ex = e.target.closest('[data-exp]'); if (ex) { const id = ex.dataset.exp; S.expandedRefs.has(id) ? S.expandedRefs.delete(id) : S.expandedRefs.add(id); renderFields(); return; }
+    const mo = e.target.closest('[data-more]'); if (mo) { fieldMenu(mo, mo.dataset.more); return; }
+  });
+  $('#fields').addEventListener('dblclick', e => { const li = e.target.closest('li[data-field]'); if (li && !e.target.closest('button,input')) toggleField(li.dataset.field); });
+  $('#panel').addEventListener('click', e => {
+    const rm = e.target.closest('[data-rm]'); if (rm) { removeChip(rm.dataset.rm); return; }
+    const cl = e.target.closest('[data-chip]'); if (cl) { chipMenu(cl, cl.dataset.chip); }
+  });
+  $('#bClear').onclick = () => { S.cfg.rows = []; S.cfg.cols = []; S.cfg.vals = []; S.cfg.filters = []; S.curView = ''; renderViews(); changed(); };
+  $('#out').addEventListener('click', e => {
+    const tg = e.target.closest('[data-tg]');
+    if (tg) { const k = tg.dataset.tg; S.collapsed.has(k) ? S.collapsed.delete(k) : S.collapsed.add(k); refreshView(); return; }
+    if (e.target.closest('#bSuggest')) { suggest(); return; }
+    const td = e.target.closest('td.v'); if (td) openDrill(+td.dataset.r, +td.dataset.c, +td.dataset.v);
+  });
+  $('#bar').addEventListener('click', e => {
+    const un = e.target.closest('[data-unflt]'); if (un) { e.stopPropagation(); const l = findChip(un.dataset.unflt); if (l) { delete l.chip.filter; changed(); } return; }
+    const fl = e.target.closest('[data-flt]'); if (fl) { openFilter(fl.dataset.flt); return; }
+    const ct = e.target.closest('[data-ct]'); if (ct) { S.cfg.opt.chartType = ct.dataset.ct; changed(); return; }
+    if (e.target.closest('#bExpand')) { S.collapsed.clear(); refreshView(); return; }
+    if (e.target.closest('#bCollapse')) { const walk = n => { for (const c of n.sorted || []) if (c.sorted && c.sorted.length) { S.collapsed.add('r' + c.key); walk(c); } }; if (S.result) walk(S.result.rowTree); refreshView(); }
+  });
+  $('#bar').addEventListener('change', e => { if (e.target.id === 'chartVal') { S.cfg.opt.chartVal = +e.target.value; changed(); } });
+  $('#vTable').onclick = () => { S.cfg.opt.view = 'table'; changed(); };
+  $('#vChart').onclick = () => { S.cfg.opt.view = 'chart'; changed(); };
+  $('#bRefresh').onclick = reloadAll;
+  $('#bExport').onclick = e => exportMenu(e.currentTarget);
+  $('#bOptions').onclick = openOptions;
+  $('#bHelp').onclick = openHelp;
+  $('#bPanel').onclick = () => { const p = $('#panel'); p.classList.toggle('closed'); $('#bPanel').setAttribute('aria-expanded', !p.classList.contains('closed')); };
+  if (innerWidth < 900) { $('#panel').classList.add('closed'); $('#bPanel').setAttribute('aria-expanded', 'false'); }
+  document.addEventListener('keydown', e => { if (e.key === 'F1') { e.preventDefault(); openHelp(); } });
+  bindDnd();
+}
+
+/* ================= Démarrage ================= */
+async function start() {
+  bindUi();
+  S.backend = inGrist ? GristBackend : DemoBackend;
+  try {
+    await S.backend.init();
+    S.meta = await S.backend.meta();
+  } catch (e) {
+    console.error(e);
+    $('#out').innerHTML = `<div class="blank"><h2>Connexion à Grist impossible</h2><p>${esc(e.message || e)}</p><p class="muted">Dans le panneau Créateur du widget, réglez « Accès » sur <b>Accès complet au document</b>, puis rechargez.</p></div>`;
+    $('#svcTag').textContent = 'Non connecté';
+    return;
+  }
+  try { S.linkedTableId = await S.backend.linkedTableId(); } catch (e) { S.linkedTableId = null; }
+  if (S.linkedTableId) S.linkedAvailable = true;
+  S.store = normStore(await S.backend.load());
+  S._lastSaved = JSON.stringify(S.store);
+  renderSources();
+  let src = S.store.src;
+  if (!src || !validSrc(src)) {
+    src = S.linkedAvailable ? LINKED : (Object.keys(S.meta.tables).find(t => !S.meta.tables[t].summary && !S.meta.tables[t].hidden) || null);
+  }
+  if (!src) { S.src = null; refreshView(); return; }
+  await selectSource(src);
+  if (S.backend.mode === 'demo' && !S.store.byTable[src]) toast('Mode démonstration : ouvrez ce fichier dans un widget Grist pour utiliser vos données.');
+}
+start();
+</script>
+</body>
+</html>

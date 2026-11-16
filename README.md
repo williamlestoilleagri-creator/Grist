@@ -8,6 +8,35 @@
 | `prise-rdv-calendrier.html` | Prise de rendez-vous (calendrier) |
 | `rdv/index.html` | Formulaire public de prise de rendez-vous |
 | `duo.html` | **Duo** — interprète à deux écouteurs (ex. japonais ⇄ allemand) |
+| `tcd.html` | **Tableau croisé dynamique** (charte DSFR) — s'adapte à n'importe quel document Grist |
+
+## Tableau croisé dynamique (`tcd.html`)
+
+Un TCD « comme dans Excel », aux couleurs de l'État (DSFR : police Marianne, bleu France, bloc-marque désactivable), qui fonctionne sur **n'importe quelle table** de n'importe quel document Grist, sans configuration préalable.
+
+### Installation
+
+1. Ajoutez une vue **Widget personnalisé** à une page.
+2. Indiquez l'URL du fichier publié (GitHub Pages par exemple) ou collez son contenu dans le **Custom Widget Builder**.
+3. Réglez **Accès** sur **Accès complet au document** (nécessaire pour lister et lire toutes les tables).
+4. Facultatif : dans « Données de la vue », choisissez une table pour disposer de la source **Données liées au widget**, qui respecte les filtres, tris et liaisons de la page Grist et se met à jour en direct.
+
+Ouvert hors de Grist, le widget passe en **mode démo** (jeu de dossiers d'aides fictif).
+
+### Fonctions
+
+- **Source** : toutes les tables du document (y compris tables de synthèse) ou les données liées au widget.
+- **Zones** Filtres / Colonnes / Lignes / Valeurs, par glisser-déposer, case à cocher ou menu ⋮ (utilisable au clavier).
+- **Synthèses** : somme, nombre (lignes / non vides / distinct), moyenne, médiane, min, max, écart type, variance.
+- **Afficher en** : valeur, % du total général / de la ligne / de la colonne / du parent, cumul, rang.
+- **Dates** regroupées par année, trimestre, mois, semaine ISO, jour, jour de la semaine, heure (fuseau des colonnes DateTime respecté) ; **nombres** par tranches.
+- **Références** : valeur affichée de la référence ; dépliez ▸ pour utiliser les champs de la table liée (ex. `Client › Ville`). Les **listes** (ChoiceList, RefList) comptent l'enregistrement dans chaque valeur, une seule fois dans les totaux.
+- **Filtres** par valeurs (recherche, tout cocher, inverser) ou par plage (nombres, dates) ; tous les champs de lignes et colonnes sont aussi filtrables.
+- Tri par libellé ou par valeur, sous-totaux, totaux généraux, disposition compacte ou tabulaire, réduire / développer, carte de chaleur, formats monétaires de Grist repris.
+- **Détail** : un clic sur une cellule liste les enregistrements correspondants (export CSV).
+- **Graphique croisé** : barres, barres empilées, colonnes, courbes.
+- **Exports** : CSV (Excel FR, `;`), copie pour tableur, **nouvelle table Grist** (instantané), impression.
+- **Vues enregistrées** : plusieurs configurations nommées, stockées dans les options du widget (et la configuration de chaque table est mémorisée).
 
 ## ERP « façon SAP » (`erp-sap.html`)
 
