@@ -6,18 +6,19 @@
 <title>Registre des parcelles</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/dsfr.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/utility/icons/icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
-  :root { --bf: #000091; --bf-975: #f5f5fe; --bf-950: #ececfe; --titre: #161616; --texte: #3a3a3a; --mention: #666; --bord: #ddd; --alt: #f6f6f6;
-    --ok: #18753c; --ok-bg: #b8fec9; --att: #b34000; --att-bg: #ffe9e6; --err: #ce0500; --err-bg: #ffe9e9; --info: #0063cb; --info-bg: #e8edff; --gris: #eee; }
+  :root { --bf: #000091; --bf-975: #f5f5fe; --bf-950: #ececfe; --titre: #161616; --texte: #3a3a3a; --mention: #666; --bord: #ddd; --alt: #f6f6f6; --gris: #eee; }
   body { background: #fff; }
   .mast { padding: 1.25rem 0 1rem; border-bottom: 1px solid var(--bord); }
   .mention { color: var(--mention); }
-  .cartes { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .6rem; margin: 1.25rem 0; }
-  .carte { text-align: left; border: 1px solid var(--bord); border-top: 4px solid var(--bf); background: #fff; padding: .6rem .8rem; cursor: pointer; font: inherit; color: inherit; transition: box-shadow .15s; }
+  .cartes { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: .6rem; margin: 1.25rem 0; }
+  .carte { text-align: left; border: 1px solid var(--bord); border-top: 4px solid var(--bf); background: #fff; padding: .6rem .8rem; cursor: pointer; font: inherit; color: inherit; }
   .carte:hover, .carte:focus-visible { box-shadow: 0 4px 12px rgba(0,0,18,.16); }
   .carte.on { background: var(--bf-975); outline: 2px solid var(--bf); }
-  .carte .val { font-size: 1.7rem; font-weight: 700; color: var(--titre); line-height: 1.15; display: block; font-variant-numeric: tabular-nums; }
+  .carte .val { font-size: 1.6rem; font-weight: 700; color: var(--titre); line-height: 1.15; display: block; font-variant-numeric: tabular-nums; }
   .carte .lib { font-size: .8rem; color: var(--titre); display: block; font-weight: 500; }
   .carte .det { font-size: .72rem; color: var(--mention); display: block; }
   .filtres { background: var(--alt); padding: .75rem 1rem .25rem; margin-bottom: 1rem; border-left: 4px solid var(--bf); }
@@ -31,40 +32,25 @@
   .compte { color: var(--mention); font-size: .85rem; margin-left: auto; }
   .tab-wrap { overflow-x: auto; border: 1px solid var(--bord); }
   table.tb { width: 100%; border-collapse: collapse; font-size: .84rem; }
-  .tb th { background: var(--gris); color: var(--titre); text-align: left; padding: .5rem .55rem; border-bottom: 2px solid var(--texte); white-space: nowrap; position: sticky; top: 0; z-index: 1; }
-  .tb td { padding: .45rem .55rem; border-bottom: 1px solid var(--bord); vertical-align: top; }
-  .tb tbody tr.ligne { cursor: pointer; }
-  .tb tbody tr.ligne:hover td { background: var(--bf-975); }
+  .tb th { background: var(--gris); color: var(--titre); text-align: left; padding: .5rem .55rem; border-bottom: 2px solid var(--texte); white-space: nowrap; }
+  .tb td { padding: .4rem .55rem; border-bottom: 1px solid var(--bord); vertical-align: top; }
+  .tb tr.farm { cursor: pointer; } .tb tr.farm:hover td { background: var(--bf-975); }
   .tb tr.ouvert > td { background: var(--bf-950); }
   .tb tr.sous > td { background: var(--alt); padding: .5rem .75rem 1rem 2rem; }
   .tb .num { text-align: right; font-variant-numeric: tabular-nums; }
   .tb .cle { font-weight: 700; color: var(--titre); white-space: nowrap; }
-  .b { display: inline-block; font-size: .68rem; font-weight: 700; text-transform: uppercase; padding: 0 .4rem; line-height: 1.35rem; border-radius: 4px; white-space: nowrap; margin: 1px 2px 1px 0; }
-  .b.ok { background: var(--ok-bg); color: var(--ok); } .b.att { background: var(--att-bg); color: var(--att); } .b.err { background: var(--err-bg); color: var(--err); }
-  .b.info { background: var(--info-bg); color: var(--info); } .b.gris { background: var(--gris); color: var(--texte); } .b.bf { background: var(--bf-950); color: var(--bf); }
-  .chip { display: inline-block; background: var(--bf-975); color: var(--bf); border-radius: 99px; padding: 0 .5rem; font-size: .7rem; margin: 1px 2px 1px 0; white-space: nowrap; }
-  .chip.off { background: var(--alt); color: #aaa; text-decoration: line-through; }
+  .coord { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .8rem; white-space: nowrap; }
+  .geo { white-space: nowrap; }
+  .geo a, .geo button { font-size: .72rem; margin-right: .4rem; }
+  .geo button { background: none; border: 0; padding: 0; color: var(--bf); text-decoration: underline; cursor: pointer; font: inherit; font-size: .72rem; }
+  .sans { color: #b34000; font-size: .78rem; font-style: italic; }
+  .b { display: inline-block; font-size: .68rem; font-weight: 700; text-transform: uppercase; padding: 0 .4rem; line-height: 1.35rem; border-radius: 4px; white-space: nowrap; }
   .sub { font-size: .75rem; color: var(--mention); }
   .plus { margin: .75rem 0; }
-  .prog { display: flex; height: 10px; width: 120px; background: var(--alt); border-radius: 3px; overflow: hidden; margin-top: 3px; }
-  .prog span { height: 100%; }
-  .voile { position: fixed; inset: 0; background: rgba(22,22,22,.6); z-index: 1000; display: flex; align-items: flex-start; justify-content: center; padding: 3vh 12px; overflow-y: auto; }
-  .fenetre { background: #fff; width: min(1000px, 100%); padding: 0 1.5rem 1.5rem; box-shadow: 0 6px 24px rgba(0,0,18,.3); }
-  .fenetre-tete { position: sticky; top: 0; background: #fff; display: flex; gap: 1rem; align-items: center; padding: 1rem 0 .75rem; border-bottom: 1px solid var(--bord); z-index: 2; flex-wrap: wrap; }
-  .fenetre-tete h2 { font-size: 1.2rem; margin: 0; flex: 1 1 300px; }
-  .etapes { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: .6rem; margin: 1rem 0; }
-  .etape { border: 1px solid var(--bord); border-top: 4px solid #ccc; padding: .5rem .7rem; }
-  .etape.ok { border-top-color: var(--ok); } .etape.att { border-top-color: var(--att); } .etape.err { border-top-color: var(--err); } .etape.info { border-top-color: var(--info); }
-  .etape .t { font-size: .72rem; color: var(--mention); text-transform: uppercase; font-weight: 700; }
-  .etape .v { font-weight: 700; color: var(--titre); }
-  .etape .d { font-size: .78rem; color: var(--texte); }
-  .src { border: 1px solid var(--bord); margin-bottom: .75rem; }
-  .src > summary { cursor: pointer; padding: .5rem .75rem; background: var(--alt); font-weight: 700; color: var(--bf); }
-  .src .fg { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .4rem 1rem; padding: .6rem .75rem; }
-  .src .fg + .fg { border-top: 1px dashed var(--bord); }
-  .fg .k { font-size: .7rem; color: var(--mention); } .fg .v { font-size: .84rem; color: var(--titre); word-break: break-word; white-space: pre-wrap; }
+  #carte { height: 620px; border: 1px solid var(--bord); }
+  .legende { display: flex; flex-wrap: wrap; gap: .25rem 1rem; font-size: .78rem; margin: .5rem 0; }
+  .legende i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: .3rem; vertical-align: -1px; }
   .vide { color: var(--mention); font-style: italic; padding: 1rem; }
-  @media (max-width: 700px) { .fenetre { padding: 0 .75rem 1rem; } .carte .val { font-size: 1.4rem; } }
 </style>
 </head>
 <body>
@@ -74,7 +60,7 @@
       <div class="fr-col-12 fr-col-md-8">
         <p class="fr-badge fr-badge--sm fr-badge--info fr-mb-2w">Campagne reliquats azotés 2026</p>
         <h1 class="fr-h3 fr-mb-1v">Registre des parcelles</h1>
-        <p class="fr-text--sm fr-mb-0 mention">Chaque clé CLE (PACAGE-îlot-parcelle) une seule fois, toutes tables du document confondues : sélection, dossier, prélèvement, contrôle.</p>
+        <p class="fr-text--sm fr-mb-0 mention">Parcelles des dossiers reçus retenues pour un prélèvement, avec leurs coordonnées géographiques.</p>
       </div>
       <div class="fr-col-12 fr-col-md-4" style="text-align:right">
         <p class="fr-text--sm fr-mb-1w mention" id="maj">Connexion à Grist…</p>
@@ -88,54 +74,38 @@
     <div class="fr-grid-row fr-grid-row--gutters">
       <div class="fr-col-12 fr-col-md-4"><div class="fr-input-group"><label class="fr-label" for="fq">Recherche</label><input class="fr-input" type="search" id="fq" placeholder="CLE, PACAGE, exploitation, commune…"></div></div>
       <div class="fr-col-6 fr-col-md-2"><div class="fr-select-group"><label class="fr-label" for="fDpt">Département</label><select class="fr-select" id="fDpt"></select></div></div>
-      <div class="fr-col-6 fr-col-md-2"><div class="fr-select-group"><label class="fr-label" for="fSel">Sélection</label><select class="fr-select" id="fSel"></select></div></div>
       <div class="fr-col-6 fr-col-md-2"><div class="fr-select-group"><label class="fr-label" for="fPre">Prélèvement</label><select class="fr-select" id="fPre"></select></div></div>
       <div class="fr-col-6 fr-col-md-2"><div class="fr-select-group"><label class="fr-label" for="fCtl">Contrôle</label><select class="fr-select" id="fCtl"></select></div></div>
-      <div class="fr-col-12 fr-col-md-4"><div class="fr-select-group"><label class="fr-label" for="fSrc">Présente dans la table</label><select class="fr-select" id="fSrc"></select></div></div>
+      <div class="fr-col-6 fr-col-md-2"><div class="fr-select-group"><label class="fr-label" for="fGeo">Coordonnées</label><select class="fr-select" id="fGeo"><option value="">Toutes</option><option value="oui">Avec</option><option value="non">Sans</option></select></div></div>
     </div>
   </div>
   <div class="barre">
-    <div class="vues" role="group" aria-label="Vue"><button type="button" data-vue="parc" aria-pressed="true">Par parcelle</button><button type="button" data-vue="expl" aria-pressed="false">Par exploitation</button></div>
+    <div class="vues" role="group" aria-label="Vue"><button type="button" data-vue="parc" aria-pressed="true">Par parcelle</button><button type="button" data-vue="expl" aria-pressed="false">Par exploitation</button><button type="button" data-vue="carte" aria-pressed="false">Carte</button></div>
     <button type="button" class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline fr-icon-close-line fr-btn--icon-left" id="raz">Effacer les filtres</button>
     <button type="button" class="fr-btn fr-btn--sm fr-btn--secondary fr-icon-download-line fr-btn--icon-left" id="csv">Exporter (CSV)</button>
     <span class="compte" id="compte"></span>
   </div>
   <div id="vue"><p class="mention">Chargement des données…</p></div>
+  <div id="vueCarte" hidden><div class="legende" id="legende"></div><div id="carte"></div></div>
   <p class="fr-text--xs fr-mt-3w mention" id="pied"></p>
 </div>
-<div id="fenetre"></div>
 
 <script>
 (function () {
 'use strict';
 
 /* ============================================================
-   SOURCES : toutes les tables du document qui portent une clé parcelle
+   PARAMÈTRES
    ============================================================ */
-const SRC = [
-  {t: 'DATA_Parcelles_DEF', lib: 'Parcelles sélectionnées', keys: ['CLE', 'Cle2_2']},
-  {t: 'DATA_Parcelle_10aout', lib: 'Base du 10 août', keys: ['CLE']},
-  {t: 'CAMPAGNE_2026_Suivi_de_campagne_Reliquat_DATA_Parcelles_DEF_1_', lib: 'Suivi de campagne (copie)', keys: ['CLE']},
-  {t: 'DATA_RELIQUATCLEAN', lib: 'Dossiers reçus (parcelles à prélever)', keys: ['CLELAB']},
-  {t: 'Demarche_149963_repetable_mes_parcelles', lib: 'Saisies Démarche numérique', keys: ['CLEParc']},
-  {t: 'RDV_Prelevements', lib: 'Rendez-vous de prélèvement', keys: ['Cle_parcelle']},
-  {t: 'Suites_RDV', lib: 'Suites des rendez-vous', keys: ['CLE_pacage_ilot_parcelle_']},
-  {t: 'Q_QUADHYDRO', lib: 'Grille quad hydraulique', keys: ['Cle_PACAGE_ilot_parcelle']},
-  {t: 'Q_TAR_MANUELLE', lib: 'Grille tarière manuelle', keys: ['Cle_PACAGE_ilot_parcelle']},
-  {t: 'Erreur_preleveurs', lib: 'Erreurs préleveurs', keys: ['CLE', 'B']},
-  {t: 'Centrodes', lib: 'Centroïdes', keys: ['CLE']},
-  {t: 'Parc_REF_coord', lib: 'Coordonnées de référence', keys: ['CLE']},
-  {t: 'Parcelles_Reliquats', lib: 'Parcelles reliquats (coordonnées)', keys: ['CLE_CALCULEE', 'CLE']}
-];
-const KEY_COLS = ['CLE', 'CLELAB', 'CLE_CALCULEE', 'Cle2_2', 'CLEParc', 'Cle'];
-const T_PREL = 'DATA_Preleveur', T_INSP = 'DATA_Inspecteur';
+const T_REL = 'DATA_RELIQUATCLEAN';          // dossiers reçus : une ligne par parcelle
+const T_RDV = 'RDV_Prelevements', T_SUITE = 'Suites_RDV', T_PREL = 'DATA_Preleveur', T_INSP = 'DATA_Inspecteur';
+const GRILLES = ['Q_QUADHYDRO', 'Q_TAR_MANUELLE'];
+// tables où chercher les coordonnées, par ordre de priorité : [table, colonne clé]
+const GEO = [['DATA_Parcelles_DEF', ['CLE', 'Cle2_2']], ['Parc_REF_coord', ['CLE']], ['Plan_prelevements_labos', ['CLELAB']], ['Centrodes', ['CLE']],
+  ['Parcelles_Reliquats', ['CLE_CALCULEE', 'CLE']], ['DATA_Parcelle_10aout', ['CLE']], [T_REL, ['CLELAB']]];
 const DPT = {'22': 'Côtes-d’Armor', '29': 'Finistère', '35': 'Ille-et-Vilaine', '56': 'Morbihan'};
-const ETATS = {
-  sel: [['Principale', 'ok'], ['Supplémentaire', 'info'], ['Hors sélection', 'gris']],
-  dos: [['Dossier reçu', 'ok'], ['En attente de dossier', 'att'], ['—', 'gris']],
-  pre: [['Prélevée', 'ok'], ['Non prélevable', 'err'], ['RDV pris', 'info'], ['À planifier', 'att'], ['—', 'gris']],
-  ctl: [['Contrôlée', 'ok'], ['Contrôle prévu', 'info'], ['Non prévu', 'gris']]
-};
+const PRE = [{k: 'Prélevée', hex: '#18753c'}, {k: 'Non prélevable', hex: '#ce0500'}, {k: 'RDV pris', hex: '#0063cb'}, {k: 'À planifier', hex: '#929292'}];
+const CTL = [{k: 'Contrôlée', hex: '#18753c'}, {k: 'Contrôle prévu', hex: '#6a6af4'}, {k: 'Non prévu', hex: '#929292'}];
 
 /* ============================================================
    OUTILS
@@ -146,258 +116,208 @@ const isErr = v => Array.isArray(v) && v[0] === 'E';
 const clean = v => (v === null || v === undefined || isErr(v)) ? '' : String(v).trim();
 const norm = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const fmt = n => (n ?? 0).toLocaleString('fr-FR');
-// « 022849239-1-2 », « 22849239|1|2 » ou « 22849239-01-02 » désignent la même parcelle
+const pct = (a, b) => b ? Math.round(a / b * 100) : 0;
 const keyNorm = s => String(s || '').trim().replace(/[\s|/_.;,]+/g, '-').split('-').filter(Boolean).map(p => p.replace(/^0+(?=\d)/, '')).join('-').toLowerCase();
-const pacOf = k => { const p = String(k).split('-')[0]; return /^\d{1,9}$/.test(p) ? p.padStart(9, '0') : p.toUpperCase(); };
-const keyAff = k => { const [p, ...r] = k.split('-'); return [pacOf(p)].concat(r).join('-'); };
-const dptOf = pac => String(pac).replace(/^0+/, '').slice(0, 2);
-const dptLib = d => d ? (DPT[d] ? d + ' · ' + DPT[d] : d) : 'Non renseigné';
-const dateFr = (v, type) => { if (typeof v !== 'number') return clean(v); const o = {timeZone: type && type.startsWith('DateTime') ? 'Europe/Paris' : 'UTC'};
-  return type && type.startsWith('DateTime') ? new Date(v * 1000).toLocaleString('fr-FR', Object.assign(o, {dateStyle: 'short', timeStyle: 'short'})) : new Date(v * 1000).toLocaleDateString('fr-FR', o); };
+const pacNorm = v => { const s = clean(v).replace(/\s+/g, '').replace(/\.0+$/, ''); return /^\d{1,9}$/.test(s) ? s.padStart(9, '0') : s; };
+const keyAff = k => { const [p, ...r] = k.split('-'); return [pacNorm(p)].concat(r).join('-'); };
+const dptOf = pac => { const m = /^0([1-9]\d)\d{6}$/.exec(pac); return m ? m[1] : ''; };
+const dptLib = d => d ? (DPT[d] ? d + ' · ' + DPT[d] : d) : 'Inconnu';
+const dateHeure = sec => sec ? new Date(sec * 1000).toLocaleString('fr-FR', {timeZone: 'Europe/Paris', dateStyle: 'short', timeStyle: 'short'}) : '';
+const dateFr = sec => sec ? new Date(sec * 1000).toLocaleDateString('fr-FR', {timeZone: 'UTC'}) : '';
 const personne = p => p ? [clean(p.Prenom), clean(p.Nom)].filter(Boolean).join(' ') || clean(p.Nom_complet) : '';
 const ouiNon = v => { if (v === true) return 'oui'; if (v === false) return 'non'; const n = norm(v).trim(); if (!n) return '';
   if (/^(non|n|0|false|pas|impossible|refus|non preleve)/.test(n)) return 'non'; if (/^(oui|o|x|1|true|fait|preleve|realise)/.test(n)) return 'oui'; return ''; };
 function rows(col) { if (!col || !col.id) return []; const ks = Object.keys(col); return col.id.map((_, i) => { const r = {}; ks.forEach(k => { r[k] = col[k][i]; }); return r; }); }
-const badge = (lib, cls) => `<span class="b ${cls}">${esc(lib)}</span>`;
-const etatBadge = (grp, v) => badge(v, (ETATS[grp].find(e => e[0] === v) || [0, 'gris'])[1]);
+const badge = (list, k) => { const e = list.find(x => x.k === k) || {hex: '#929292'}; return `<span class="b" style="background:${e.hex}1f;color:${e.hex}">${esc(k)}</span>`; };
+const filled = v => v !== null && v !== undefined && v !== '' && v !== 0 && !isErr(v);
+// coordonnées d'une ligne : colonnes latitude / longitude, ou « lat, lon » dans une colonne GPS
+const numFr = v => typeof v === 'number' ? v : parseFloat(String(v ?? '').trim().replace(',', '.'));
+function latLon(r) {
+  if (!r) return null;
+  let lat = NaN, lon = NaN;
+  for (const c in r) { const n = c.toLowerCase(); if (/^(lat|latitude)$/.test(n)) lat = numFr(r[c]); else if (/^(lon|lng|long|longitude)$/.test(n)) lon = numFr(r[c]); }
+  if (!(isFinite(lat) && isFinite(lon))) for (const c in r) if (/^(gps|coord|coordonnees|coordonnees_gps)$/i.test(c)) {
+    const m = /(-?\d+[.,]\d+)\s*[;, ]\s*(-?\d+[.,]\d+)/.exec(clean(r[c])); if (m) { lat = numFr(m[1]); lon = numFr(m[2]); break; } }
+  return isFinite(lat) && isFinite(lon) && lat && lon && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? {lat, lon} : null;
+}
+const coordTxt = g => g ? g.lat.toFixed(6) + ', ' + g.lon.toFixed(6) : '';
 
 /* ============================================================
-   CHARGEMENT ET CONSTRUCTION DU REGISTRE
+   DONNÉES
    ============================================================ */
-const D = {meta: {}, data: {}, parcs: new Map(), farms: new Map(), present: []};
-const F = {q: '', dpt: '', sel: '', pre: '', ctl: '', src: '', carte: ''};
-let vue = 'parc', limite = 200, ouverts = new Set();
+const D = {meta: {}, parcs: [], farms: [], exclues: 0, filtreGarder: false};
+const F = {q: '', dpt: '', pre: '', ctl: '', geo: '', carte: ''};
+let vue = 'parc', limite = 300, ouverts = new Set();
 try { vue = localStorage.getItem('registre-vue') || 'parc'; } catch (e) { /* stockage indisponible */ }
 
-async function lire(t) { try { return rows(await grist.docApi.fetchTable(t)); } catch (e) { console.warn('Table indisponible :', t, e); return null; } }
+async function lire(t) { if (!D.meta[t]) return []; try { return rows(await grist.docApi.fetchTable(t)); } catch (e) { console.warn('Table indisponible :', t, e); return []; } }
 async function lireMeta() {
   const T = await grist.docApi.fetchTable('_grist_Tables'), C = await grist.docApi.fetchTable('_grist_Tables_column'), byRow = {}, meta = {};
   T.id.forEach((rid, i) => { const t = T.tableId[i]; if (t && !t.startsWith('_grist')) { byRow[rid] = t; meta[t] = {}; } });
-  C.id.forEach((cid, i) => { const t = byRow[C.parentId[i]]; if (!t) return; const id = C.colId[i]; if (id === 'manualSort' || id.startsWith('gristHelper_')) return;
-    meta[t][id] = {id, rowId: cid, label: (C.label || [])[i] || id, type: C.type[i] || 'Any'}; });
+  C.id.forEach((cid, i) => { const t = byRow[C.parentId[i]]; if (t) meta[t][C.colId[i]] = {type: C.type[i] || 'Any'}; });
   return meta;
 }
+
 async function charger() {
   $('rafraichir').disabled = true; $('maj').textContent = 'Actualisation…';
   D.meta = await lireMeta();
-  const need = new Set(SRC.map(s => s.t).concat([T_PREL, T_INSP]));
-  // tables référencées par les colonnes clé (ex. RDV_Prelevements.Cle_parcelle -> DATA_Parcelles_DEF)
-  SRC.forEach(s => s.keys.forEach(k => { const c = (D.meta[s.t] || {})[k]; if (c && c.type.startsWith('Ref:')) need.add(c.type.slice(4)); }));
-  const list = [...need].filter(t => D.meta[t]);
-  const res = await Promise.all(list.map(lire));
-  D.data = {}; list.forEach((t, i) => { D.data[t] = res[i] || []; });
-  construire();
+  if (!D.meta[T_REL]) { $('avis').innerHTML = `<div class="fr-alert fr-alert--error fr-alert--sm"><p>Table ${T_REL} introuvable.</p></div>`; return; }
+  const geoT = GEO.map(g => g[0]).filter((t, i, a) => a.indexOf(t) === i);
+  const noms = [T_REL, T_RDV, T_SUITE, T_PREL, T_INSP].concat(GRILLES, geoT).filter((t, i, a) => a.indexOf(t) === i);
+  const res = await Promise.all(noms.map(lire)), tb = {}; noms.forEach((t, i) => { tb[t] = res[i]; });
+  construire(tb);
   remplirFiltres(); afficher();
-  const abs = SRC.filter(s => !D.meta[s.t]).map(s => s.t);
-  $('avis').innerHTML = abs.length ? `<div class="fr-alert fr-alert--info fr-alert--sm fr-mt-2w"><p>Tables absentes du document (ignorées) : ${abs.map(esc).join(', ')}.</p></div>` : '';
+  $('avis').innerHTML = D.exclues ? `<div class="fr-alert fr-alert--info fr-alert--sm fr-mb-2w"><p>${fmt(D.exclues)} parcelle(s) de ${T_REL} ne sont pas affichées : « A garder dans la campagne » = non.</p></div>` : '';
   $('maj').textContent = 'Mis à jour à ' + new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'});
   $('rafraichir').disabled = false;
 }
-// clé brute d'une ligne : texte, ou référence vers une table qui porte la clé
-function keyOfRow(t, r, keys) {
-  const m = D.meta[t] || {};
-  for (const k of keys) {
-    const c = m[k]; if (!c) continue; const v = r[k];
-    if (typeof v === 'number' && c.type.startsWith('Ref:')) {
-      const tg = c.type.slice(4), tr = (D.idx[tg] || (D.idx[tg] = new Map((D.data[tg] || []).map(x => [x.id, x])))).get(v);
-      const kc = tr && KEY_COLS.find(x => clean(tr[x])); if (kc) return clean(tr[kc]);
-    } else if (clean(v)) return clean(v);
+
+function construire(tb) {
+  const prelById = new Map(tb[T_PREL].map(p => [p.id, p])), inspById = new Map(tb[T_INSP].map(p => [p.id, p]));
+  const relById = new Map(tb[T_REL].map(r => [r.id, r])), defById = new Map((tb.DATA_Parcelles_DEF || []).map(r => [r.id, r]));
+  // coordonnées par clé, de la table la plus fiable à la moins fiable
+  const geo = new Map();
+  for (const [t, kcs] of GEO) for (const r of tb[t] || []) { const g = latLon(r); if (!g) continue;
+    for (const kc of kcs) { const k = keyNorm(clean(r[kc])); if (k && !geo.has(k)) geo.set(k, Object.assign({src: t}, g)); } }
+  // rendez-vous : la ligne la plus renseignée par parcelle (évite les doublons vides des parcelles de référence)
+  const keyRdv = r => { const v = r.Cle_parcelle; if (typeof v === 'number') { const d = defById.get(v) || relById.get(v); return d ? clean(d.CLE) || clean(d.CLELAB) : ''; } return clean(v); };
+  const score = r => (filled(r.Date_RDV) ? 100 : 0) + (filled(r.Statut) ? 50 : 0) + (filled(r.Preleveur) ? 20 : 0) + (filled(r.Inspecteur) ? 10 : 0);
+  const rdvBy = new Map();
+  tb[T_RDV].forEach(r => { const k = keyNorm(keyRdv(r)), ex = rdvBy.get(k); if (k && (!ex || score(r) > score(ex) || (score(r) === score(ex) && r.id > ex.id))) rdvBy.set(k, r); });
+  const suiBy = new Map(); tb[T_SUITE].forEach(r => { const k = keyNorm(r.CLE_pacage_ilot_parcelle_); if (k) (suiBy.get(k) || suiBy.set(k, []).get(k)).push(r); });
+  const ctlBy = new Map();
+  GRILLES.forEach(t => (tb[t] || []).forEach(r => { const v = r.Cle_PACAGE_ilot_parcelle, d = typeof v === 'number' ? relById.get(v) : null, k = keyNorm(d ? clean(d.CLELAB) : clean(v));
+    if (k) (ctlBy.get(k) || ctlBy.set(k, []).get(k)).push({t, date: r.Date, insp: personne(inspById.get(r.Controleur))}); }));
+  // périmètre : dossiers reçus, hors parcelles explicitement retirées de la campagne
+  const garderCol = (D.meta[T_REL] || {}).A_garder_dans_la_campagne ? 'A_garder_dans_la_campagne' : '';
+  D.filtreGarder = !!garderCol && tb[T_REL].some(r => ouiNon(r[garderCol]) === 'oui');
+  D.exclues = 0;
+  const vus = new Map(), now = Date.now() / 1000;
+  for (const r of tb[T_REL]) {
+    const k = keyNorm(clean(r.CLELAB)); if (!/^\d+-\d+-\d+/.test(k)) continue;
+    if (D.filtreGarder && ouiNon(r[garderCol]) === 'non') { D.exclues++; continue; }
+    if (vus.has(k)) continue;
+    const pac = pacNorm(r.PACAGE || k.split('-')[0]), rdv = rdvBy.get(k) || null, su = suiBy.get(k) || [], on = su.map(s => ouiNon(s.Prelevement_fait)), ct = ctlBy.get(k) || [];
+    const P = {k, key: keyAff(k), pac, dpt: dptOf(pac), nom: clean(r.Nom_exploitation) || clean(r.Raison_sociale) || '', commune: clean(r.Ville) || clean(r.Commune),
+      culture: clean(r.Culture_2026), geo: geo.get(k) || null, rdv, date: rdv && typeof rdv.Date_RDV === 'number' ? rdv.Date_RDV : null,
+      prel: rdv ? personne(prelById.get(rdv.Preleveur)) : '', inspPrevu: rdv ? personne(inspById.get(rdv.Inspecteur)) : '', ctls: ct,
+      raisonNP: su.map(s => clean(s.raison_de_non_prelevement)).filter(Boolean).join(' ; ')};
+    P.pre = on.includes('oui') ? 'Prélevée' : on.includes('non') ? 'Non prélevable' : P.date ? 'RDV pris' : 'À planifier';
+    P.ctl = ct.length ? 'Contrôlée' : P.inspPrevu ? 'Contrôle prévu' : 'Non prévu';
+    P.txt = norm([P.key, P.k, P.pac, P.nom, P.commune, P.prel, P.culture].join(' '));
+    vus.set(k, P);
   }
-  return '';
-}
-function construire() {
-  D.idx = {}; D.parcs = new Map(); D.present = [];
-  const prelById = new Map((D.data[T_PREL] || []).map(p => [p.id, p])), inspById = new Map((D.data[T_INSP] || []).map(p => [p.id, p]));
-  const refPers = (v, map, list) => typeof v === 'number' ? personne(map.get(v)) : clean(v);
-  for (const s of SRC) {
-    if (!D.meta[s.t]) continue; D.present.push(s);
-    for (const r of D.data[s.t] || []) {
-      const raw = keyOfRow(s.t, r, s.keys); if (!raw) continue;
-      const k = keyNorm(raw); if (!/^\d+-\d+-\d+$/.test(k)) continue;   // clé PACAGE-îlot-parcelle valide
-      let P = D.parcs.get(k);
-      if (!P) D.parcs.set(k, P = {k, key: keyAff(k), pac: pacOf(k), src: new Map(), nom: '', commune: ''});
-      (P.src.get(s.t) || P.src.set(s.t, []).get(s.t)).push(r);
-    }
-  }
-  const now = Date.now() / 1000, m = t => D.meta[t] || {};
-  for (const P of D.parcs.values()) {
-    const g = t => P.src.get(t) || [];
-    const def = g('DATA_Parcelles_DEF'), rel = g('DATA_RELIQUATCLEAN'), rdv = g('RDV_Prelevements'), sui = g('Suites_RDV'), err = g('Erreur_preleveurs');
-    P.dpt = dptOf(P.pac);
-    P.nom = clean(def[0] && def[0].Nom) || clean(rel[0] && (rel[0].Nom_exploitation || rel[0].Raison_sociale)) || clean(rdv[0] && (rdv[0].Raison_sociale || rdv[0].Nom_exploitation))
-      || clean((g('DATA_Parcelle_10aout')[0] || {}).Nom) || clean((g('Demarche_149963_repetable_mes_parcelles')[0] || {}).Raison_sociale);
-    P.commune = clean(def[0] && def[0].Commune) || clean(rel[0] && rel[0].Ville) || clean((g('DATA_Parcelle_10aout')[0] || {}).Commune);
-    // 1. sélection
-    P.sel = def.length ? (def.some(r => clean(r.Numero_de_prelevement) !== 'Suppl') ? 'Principale' : 'Supplémentaire') : 'Hors sélection';
-    P.raison = clean(def[0] && def[0].Raison_de_la_selection);
-    // 2. dossier reçu (parcelle dans le process)
-    P.dos = rel.length ? 'Dossier reçu' : def.length ? 'En attente de dossier' : '—';
-    // 3. prélèvement
-    const dated = rdv.filter(r => typeof r.Date_RDV === 'number').sort((a, b) => b.Date_RDV - a.Date_RDV);
-    P.rdv = dated[0] || rdv[0] || null;
-    P.rdvDate = dated[0] ? dated[0].Date_RDV : null;
-    P.prel = P.rdv ? refPers(P.rdv.Preleveur, prelById) : '';
-    P.org = clean(P.rdv && P.rdv.Organisme) || clean((prelById.get(P.rdv && P.rdv.Preleveur) || {}).Organisme) || clean((sui[0] || {}).Organisme);
-    const on = sui.map(r => ouiNon(r.Prelevement_fait));
-    P.suite = sui[sui.length - 1] || null;
-    P.pre = on.includes('oui') ? 'Prélevée' : on.includes('non') ? 'Non prélevable' : P.rdvDate ? 'RDV pris' : rel.length ? 'À planifier' : '—';
-    P.raisonNP = sui.map(r => clean(r.raison_de_non_prelevement)).filter(Boolean).join(' ; ');
-    // 4. contrôle : grille d'évaluation saisie, ou inspecteur désigné sur le rendez-vous
-    P.ctls = [];
-    for (const t of ['Q_QUADHYDRO', 'Q_TAR_MANUELLE']) for (const r of g(t)) {
-      const nc = Object.entries(r).filter(([c, v]) => m(t)[c] && typeof v === 'string' && /^non conforme/.test(norm(v).trim())).length;
-      P.ctls.push({t, lib: t === 'Q_QUADHYDRO' ? 'Quad hydraulique' : 'Tarière manuelle', date: r.Date, dtype: (m(t).Date || {}).type, insp: refPers(r.Controleur, inspById), prel: refPers(r.Preleveur, prelById), nc});
-    }
-    P.inspPrevu = rdv.map(r => refPers(r.Inspecteur, inspById)).filter(Boolean)[0] || '';
-    P.ctl = P.ctls.length ? 'Contrôlée' : P.inspPrevu ? 'Contrôle prévu' : 'Non prévu';
-    P.nc = P.ctls.reduce((s, c) => s + c.nc, 0);
-    P.err = err.length;
-    P.txt = norm([P.key, P.k, P.nom, P.commune, P.prel, P.org, P.inspPrevu].concat(P.ctls.map(c => c.insp)).join(' '));
-  }
-  // exploitations (PACAGE)
-  D.farms = new Map();
-  for (const P of D.parcs.values()) { let f = D.farms.get(P.pac); if (!f) D.farms.set(P.pac, f = {pac: P.pac, dpt: P.dpt, nom: '', commune: '', parcs: []}); f.parcs.push(P); if (!f.nom && P.nom) f.nom = P.nom; if (!f.commune && P.commune) f.commune = P.commune; }
-  for (const f of D.farms.values()) { if (!f.nom) f.nom = 'PACAGE ' + f.pac; f.parcs.sort((a, b) => a.k.localeCompare(b.k, 'fr', {numeric: true})); }
+  D.parcs = [...vus.values()].sort((a, b) => a.pac.localeCompare(b.pac) || a.k.localeCompare(b.k, 'fr', {numeric: true}));
+  const fm = new Map();
+  D.parcs.forEach(P => { let f = fm.get(P.pac); if (!f) fm.set(P.pac, f = {pac: P.pac, dpt: P.dpt, nom: P.nom, commune: P.commune, parcs: []}); f.parcs.push(P); if (!f.nom) f.nom = P.nom; });
+  D.farms = [...fm.values()].map(f => { const g = f.parcs.filter(P => P.geo); if (!f.nom) f.nom = 'PACAGE ' + f.pac;
+    f.centre = g.length ? {lat: g.reduce((s, P) => s + P.geo.lat, 0) / g.length, lon: g.reduce((s, P) => s + P.geo.lon, 0) / g.length} : null; return f; })
+    .sort((a, b) => a.dpt.localeCompare(b.dpt) || a.nom.localeCompare(b.nom, 'fr'));
 }
 
 /* ============================================================
-   FILTRES, CARTES ET VUES
+   FILTRES ET VUES
    ============================================================ */
 const CARTES = [
-  ['', 'Parcelles uniques', P => true, '#000091'],
-  ['sel', 'Sélectionnées', P => P.sel !== 'Hors sélection', '#000091'],
-  ['dos', 'Dans le process', P => P.dos === 'Dossier reçu', '#18753c', 'dossier reçu'],
-  ['att', 'En attente de dossier', P => P.dos === 'En attente de dossier', '#b34000'],
-  ['rdv', 'RDV pris', P => P.pre === 'RDV pris', '#0063cb', 'non encore prélevées'],
+  ['', 'Parcelles à prélever', () => true, '#000091'],
+  ['geo', 'Avec coordonnées', P => !!P.geo, '#18753c'],
+  ['nogeo', 'Sans coordonnées', P => !P.geo, '#b34000'],
   ['pre', 'Prélevées', P => P.pre === 'Prélevée', '#18753c'],
-  ['np', 'Non prélevables', P => P.pre === 'Non prélevable', '#ce0500'],
+  ['rdv', 'RDV pris', P => P.pre === 'RDV pris', '#0063cb'],
+  ['plan', 'À planifier', P => P.pre === 'À planifier', '#929292'],
   ['prev', 'Contrôle prévu', P => P.ctl === 'Contrôle prévu', '#6a6af4'],
-  ['ctl', 'Contrôlées', P => P.ctl === 'Contrôlée', '#18753c', 'grille saisie'],
-  ['err', 'Avec erreur préleveur', P => P.err > 0, '#ce0500'],
-  ['hors', 'Hors sélection', P => P.sel === 'Hors sélection', '#929292', 'présentes ailleurs seulement']
+  ['ctl', 'Contrôlées', P => P.ctl === 'Contrôlée', '#18753c']
 ];
-const carteOk = P => { const c = CARTES.find(x => x[0] === F.carte); return !c || c[2](P); };
-const okParc = (P, sauf) => (!F.q || P.txt.includes(norm(F.q.trim()))) && (!F.dpt || P.dpt === F.dpt) && (!F.sel || P.sel === F.sel) && (!F.pre || P.pre === F.pre)
-  && (!F.ctl || P.ctl === F.ctl) && (!F.src || P.src.has(F.src)) && (sauf === 'carte' || carteOk(P));
+const ok = (P, sansCarte) => (!F.q || P.txt.includes(norm(F.q.trim()))) && (!F.dpt || P.dpt === F.dpt) && (!F.pre || P.pre === F.pre) && (!F.ctl || P.ctl === F.ctl)
+  && (!F.geo || (F.geo === 'oui') === !!P.geo) && (sansCarte || !F.carte || CARTES.find(c => c[0] === F.carte)[2](P));
 function remplirFiltres() {
-  const all = [...D.parcs.values()];
-  const opt = (id, list, cur, tous) => { $(id).innerHTML = `<option value="">${tous}</option>` + list.map(([v, l]) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(l)}</option>`).join(''); };
-  opt('fDpt', [...new Set(all.map(P => P.dpt))].sort().map(d => [d, dptLib(d)]), F.dpt, 'Tous');
-  opt('fSel', ETATS.sel.map(e => [e[0], e[0]]), F.sel, 'Toutes');
-  opt('fPre', ETATS.pre.filter(e => e[0] !== '—').map(e => [e[0], e[0]]), F.pre, 'Tous');
-  opt('fCtl', ETATS.ctl.map(e => [e[0], e[0]]), F.ctl, 'Tous');
-  opt('fSrc', D.present.map(s => [s.t, `${s.lib} (${s.t})`]), F.src, 'Toutes les tables');
+  const opt = (id, vals, cur, tous, lib) => { $(id).innerHTML = `<option value="">${tous}</option>` + vals.map(v => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(lib ? lib(v) : v)}</option>`).join(''); };
+  opt('fDpt', [...new Set(D.parcs.map(P => P.dpt).filter(Boolean))].sort(), F.dpt, 'Tous', dptLib);
+  opt('fPre', PRE.map(e => e.k), F.pre, 'Tous'); opt('fCtl', CTL.map(e => e.k), F.ctl, 'Tous');
 }
-function cartes() {
-  const base = [...D.parcs.values()].filter(P => okParc(P, 'carte'));
-  $('cartes').innerHTML = CARTES.map(([k, lib, f, c, det]) => { const n = base.filter(f).length;
-    return `<button type="button" class="carte${F.carte === k && k ? ' on' : ''}" data-carte="${k}" style="border-top-color:${c}"><span class="val">${fmt(n)}</span><span class="lib">${esc(lib)}</span>
-      <span class="det">${k ? (det ? esc(det) + ' · ' : '') + Math.round(n / Math.max(1, base.length) * 100) + ' %' : fmt(new Set(base.map(P => P.pac)).size) + ' exploitation(s)'}</span></button>`; }).join('');
-}
-const srcChips = P => D.present.map(s => `<span class="chip${P.src.has(s.t) ? '' : ' off'}" title="${esc(s.lib)} (${esc(s.t)})${P.src.has(s.t) ? ' : ' + P.src.get(s.t).length + ' ligne(s)' : ' : absente'}">${esc(abbr(s))}</span>`).join('');
-const abbr = s => ({DATA_Parcelles_DEF: 'DEF', DATA_Parcelle_10aout: '10 août', DATA_RELIQUATCLEAN: 'Dossier', Demarche_149963_repetable_mes_parcelles: 'DN', RDV_Prelevements: 'RDV',
-  Suites_RDV: 'Suite', Q_QUADHYDRO: 'Quad', Q_TAR_MANUELLE: 'Tarière', Erreur_preleveurs: 'Erreur', Centrodes: 'Centroïde', Parc_REF_coord: 'Coord.', Parcelles_Reliquats: 'Reliquats'}[s.t] || s.t.slice(0, 10));
-function cellPre(P) {
-  return etatBadge('pre', P.pre) + (P.rdvDate ? `<div class="sub">${esc(dateFr(P.rdvDate, 'DateTime'))}${P.prel ? ' · ' + esc(P.prel) : ''}</div>` : P.prel ? `<div class="sub">${esc(P.prel)}</div>` : '')
-    + (P.raisonNP ? `<div class="sub">${esc(P.raisonNP)}</div>` : '');
-}
-function cellCtl(P) {
-  if (P.ctls.length) return etatBadge('ctl', P.ctl) + P.ctls.map(c => `<div class="sub">${esc(dateFr(c.date, c.dtype))} · ${esc(c.lib)}${c.insp ? ' · ' + esc(c.insp) : ''}${c.nc ? ` · <b style="color:var(--err)">${c.nc} NC</b>` : ''}</div>`).join('');
-  return etatBadge('ctl', P.ctl) + (P.inspPrevu ? `<div class="sub">${esc(P.inspPrevu)}</div>` : '');
-}
+const geoCell = g => g ? `<span class="coord">${g.lat.toFixed(6)}<br>${g.lon.toFixed(6)}</span>` : '<span class="sans">non renseignées</span>';
+const geoLiens = g => g ? `<span class="geo"><a href="https://www.google.com/maps?q=${g.lat},${g.lon}" target="_blank" rel="noopener">Google Maps</a><a href="https://www.geoportail.gouv.fr/carte?c=${g.lon},${g.lat}&z=17&l0=ORTHOIMAGERY.ORTHOPHOTOS::GEOPORTAIL:OGC:WMTS(1)&l1=CADASTRALPARCELS.PARCELLAIRE_EXPRESS::GEOPORTAIL:OGC:WMTS(1)&permalink=yes" target="_blank" rel="noopener">Géoportail</a><button type="button" data-copie="${esc(coordTxt(g))}">Copier</button></span>` : '';
 function tableParcelles(list, avecExpl) {
-  return `<div class="tab-wrap"><table class="tb"><thead><tr><th>Parcelle (CLE)</th>${avecExpl ? '<th>Exploitation</th>' : ''}<th>Sélection</th><th>Dossier</th><th>Prélèvement</th><th>Contrôle</th><th>Erreurs</th><th>Tables</th></tr></thead><tbody>
-    ${list.map(P => `<tr class="ligne" data-parc="${esc(P.k)}"><td class="cle">${esc(P.key)}</td>
-      ${avecExpl ? `<td>${esc(P.nom)}<div class="sub">${esc(dptLib(P.dpt))}${P.commune ? ' · ' + esc(P.commune) : ''}</div></td>` : ''}
-      <td>${etatBadge('sel', P.sel)}${P.raison ? `<div class="sub">${esc(P.raison)}</div>` : ''}</td><td>${etatBadge('dos', P.dos)}</td><td>${cellPre(P)}</td><td>${cellCtl(P)}</td>
-      <td class="num">${P.err ? badge(P.err, 'err') : ''}</td><td>${srcChips(P)}</td></tr>`).join('') || `<tr><td colspan="8" class="vide">Aucune parcelle.</td></tr>`}</tbody></table></div>`;
+  return `<div class="tab-wrap"><table class="tb"><thead><tr><th>Parcelle (CLE)</th>${avecExpl ? '<th>Exploitation</th>' : ''}<th>Latitude<br>Longitude</th><th>Carte</th><th>Culture 2026</th><th>Prélèvement</th><th>Contrôle</th></tr></thead><tbody>
+    ${list.map(P => `<tr><td class="cle">${esc(P.key)}</td>
+      ${avecExpl ? `<td>${esc(P.nom)}<div class="sub">PACAGE ${esc(P.pac)}${P.commune ? ' · ' + esc(P.commune) : ''}</div></td>` : ''}
+      <td>${geoCell(P.geo)}</td><td>${geoLiens(P.geo)}</td><td>${esc(P.culture)}</td>
+      <td>${badge(PRE, P.pre)}${P.date ? `<div class="sub">${esc(dateHeure(P.date))}${P.prel ? ' · ' + esc(P.prel) : ''}</div>` : ''}${P.raisonNP ? `<div class="sub">${esc(P.raisonNP)}</div>` : ''}</td>
+      <td>${badge(CTL, P.ctl)}${P.ctls.length ? P.ctls.map(c => `<div class="sub">${esc(dateFr(c.date))}${c.insp ? ' · ' + esc(c.insp) : ''}</div>`).join('') : P.inspPrevu ? `<div class="sub">${esc(P.inspPrevu)}</div>` : ''}</td></tr>`).join('')
+      || `<tr><td colspan="7" class="vide">Aucune parcelle.</td></tr>`}</tbody></table></div>`;
 }
-const prog = (f) => { const n = f.parcs.length, seg = (k, c) => `<span style="width:${f.parcs.filter(k).length / n * 100}%;background:${c}"></span>`;
-  return `<span class="prog" title="contrôlées / prélevées / RDV / reste">${seg(P => P.ctl === 'Contrôlée', '#18753c')}${seg(P => P.ctl !== 'Contrôlée' && P.pre === 'Prélevée', '#5fb27c')}${seg(P => P.ctl !== 'Contrôlée' && P.pre === 'RDV pris', '#0063cb')}${seg(P => P.pre === 'Non prélevable', '#ce0500')}</span>`; };
 function afficher() {
   document.querySelectorAll('[data-vue]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.vue === vue)));
-  cartes();
-  const list = [...D.parcs.values()].filter(P => okParc(P)).sort((a, b) => a.pac.localeCompare(b.pac) || a.k.localeCompare(b.k, 'fr', {numeric: true}));
+  const base = D.parcs.filter(P => ok(P, true)), list = base.filter(P => ok(P));
+  $('cartes').innerHTML = CARTES.map(([k, lib, f, c]) => { const n = base.filter(f).length;
+    return `<button type="button" class="carte${F.carte === k && k ? ' on' : ''}" data-carte="${k}" style="border-top-color:${c}"><span class="val">${fmt(n)}</span><span class="lib">${esc(lib)}</span>
+      <span class="det">${k ? pct(n, base.length) + ' %' : fmt(new Set(base.map(P => P.pac)).size) + ' exploitation(s)'}</span></button>`; }).join('');
+  const pacs = new Set(list.map(P => P.pac)), farms = D.farms.filter(f => pacs.has(f.pac));
+  $('vueCarte').hidden = vue !== 'carte'; $('vue').hidden = vue === 'carte';
   if (vue === 'parc') {
-    $('compte').textContent = `${fmt(list.length)} parcelle(s) · ${fmt(new Set(list.map(P => P.pac)).size)} exploitation(s)`;
-    $('vue').innerHTML = tableParcelles(list.slice(0, limite), true) + (list.length > limite ? `<p class="plus"><button type="button" class="fr-btn fr-btn--sm fr-btn--secondary" id="plus">Afficher ${fmt(Math.min(200, list.length - limite))} de plus (${fmt(list.length - limite)} restantes)</button></p>` : '');
-  } else {
-    const pacs = new Set(list.map(P => P.pac)), farms = [...D.farms.values()].filter(f => pacs.has(f.pac)).sort((a, b) => a.dpt.localeCompare(b.dpt) || a.nom.localeCompare(b.nom, 'fr'));
+    $('compte').textContent = `${fmt(list.length)} parcelle(s) · ${fmt(pacs.size)} exploitation(s)`;
+    $('vue').innerHTML = tableParcelles(list.slice(0, limite), true) + (list.length > limite ? `<p class="plus"><button type="button" class="fr-btn fr-btn--sm fr-btn--secondary" id="plus">Afficher ${fmt(Math.min(300, list.length - limite))} de plus (${fmt(list.length - limite)} restantes)</button></p>` : '');
+  } else if (vue === 'expl') {
     $('compte').textContent = `${fmt(farms.length)} exploitation(s) · ${fmt(list.length)} parcelle(s)`;
-    const n = (f, t) => f.parcs.filter(P => okParc(P) && t(P)).length;
-    $('vue').innerHTML = `<div class="tab-wrap"><table class="tb"><thead><tr><th>Exploitation</th><th>Dpt</th><th class="num">Parcelles</th><th class="num">Sélectionnées</th><th class="num">Dans le process</th><th class="num">RDV pris</th><th class="num">Prélevées</th><th class="num">Non prélevables</th><th class="num">Contrôle prévu</th><th class="num">Contrôlées</th><th>Avancement</th></tr></thead><tbody>
-      ${farms.slice(0, limite).map(f => { const ps = f.parcs.filter(P => okParc(P)), open = ouverts.has(f.pac);
-        return `<tr class="ligne${open ? ' ouvert' : ''}" data-farm="${esc(f.pac)}"><td><b>${esc(f.nom)}</b><div class="sub">PACAGE ${esc(f.pac)}${f.commune ? ' · ' + esc(f.commune) : ''}</div></td><td>${esc(f.dpt)}</td>
-          <td class="num"><b>${ps.length}</b>${ps.length !== f.parcs.length ? `<span class="sub"> / ${f.parcs.length}</span>` : ''}</td><td class="num">${n(f, P => P.sel !== 'Hors sélection')}</td><td class="num">${n(f, P => P.dos === 'Dossier reçu')}</td>
-          <td class="num">${n(f, P => P.pre === 'RDV pris')}</td><td class="num">${n(f, P => P.pre === 'Prélevée')}</td><td class="num">${n(f, P => P.pre === 'Non prélevable')}</td>
-          <td class="num">${n(f, P => P.ctl === 'Contrôle prévu')}</td><td class="num">${n(f, P => P.ctl === 'Contrôlée')}</td><td>${prog(f)}</td></tr>
-          ${open ? `<tr class="sous"><td colspan="11">${tableParcelles(ps, false)}</td></tr>` : ''}`; }).join('') || `<tr><td colspan="11" class="vide">Aucune exploitation.</td></tr>`}</tbody></table></div>`
-      + (farms.length > limite ? `<p class="plus"><button type="button" class="fr-btn fr-btn--sm fr-btn--secondary" id="plus">Afficher ${fmt(Math.min(200, farms.length - limite))} de plus</button></p>` : '');
+    $('vue').innerHTML = `<div class="tab-wrap"><table class="tb"><thead><tr><th>Exploitation</th><th>Dpt</th><th class="num">Parcelles</th><th>Coordonnées (centre des parcelles)</th><th>Carte</th><th class="num">Géolocalisées</th><th class="num">Prélevées</th><th class="num">RDV pris</th><th class="num">Contrôlées</th></tr></thead><tbody>
+      ${farms.slice(0, limite).map(f => { const ps = f.parcs.filter(P => ok(P)), open = ouverts.has(f.pac), n = t => ps.filter(t).length;
+        return `<tr class="farm${open ? ' ouvert' : ''}" data-farm="${esc(f.pac)}"><td><b>${open ? '▾' : '▸'} ${esc(f.nom)}</b><div class="sub">PACAGE ${esc(f.pac)}${f.commune ? ' · ' + esc(f.commune) : ''}</div></td><td>${esc(f.dpt)}</td>
+          <td class="num"><b>${ps.length}</b></td><td>${geoCell(f.centre)}</td><td>${geoLiens(f.centre)}</td><td class="num">${n(P => P.geo)} / ${ps.length}</td>
+          <td class="num">${n(P => P.pre === 'Prélevée')}</td><td class="num">${n(P => P.pre === 'RDV pris')}</td><td class="num">${n(P => P.ctl === 'Contrôlée')}</td></tr>
+          ${open ? `<tr class="sous"><td colspan="9">${tableParcelles(ps, false)}</td></tr>` : ''}`; }).join('') || '<tr><td colspan="9" class="vide">Aucune exploitation.</td></tr>'}</tbody></table></div>`
+      + (farms.length > limite ? `<p class="plus"><button type="button" class="fr-btn fr-btn--sm fr-btn--secondary" id="plus">Afficher ${fmt(Math.min(300, farms.length - limite))} de plus</button></p>` : '');
+  } else {
+    const g = list.filter(P => P.geo);
+    $('compte').textContent = `${fmt(g.length)} parcelle(s) placée(s) sur ${fmt(list.length)}`;
+    dessinerCarte(g);
   }
-  if ($('plus')) $('plus').onclick = () => { limite += 200; afficher(); };
-  $('pied').textContent = `Tables lues : ${D.present.map(s => s.t).join(', ')}. Une parcelle = une clé PACAGE-îlot-parcelle (les zéros de tête et séparateurs sont ignorés pour rapprocher les tables). `
-    + 'Sélection : DATA_Parcelles_DEF ; dans le process : DATA_RELIQUATCLEAN ; prélèvement : RDV_Prelevements et Suites_RDV ; contrôle prévu : inspecteur du rendez-vous ; contrôlée : grille d’évaluation saisie.';
+  if ($('plus')) $('plus').onclick = () => { limite += 300; afficher(); };
+  $('pied').textContent = `Périmètre : parcelles de ${T_REL} (dossiers reçus)${D.filtreGarder ? ', hors « A garder dans la campagne » = non' : ''}, une ligne par CLE. `
+    + `Coordonnées prises dans : ${GEO.map(g => g[0]).filter(t => D.meta[t]).join(', ')} (dans cet ordre). Prélèvement : ${T_RDV} et ${T_SUITE} ; contrôle prévu : inspecteur du RDV ; contrôlée : grille d’évaluation saisie.`;
 }
 
-/* ---------- Fiche d'une parcelle : toutes les tables ---------- */
-function fiche(k) {
-  const P = D.parcs.get(k); if (!P) return;
-  const etape = (t, v, cls, d) => `<div class="etape ${cls}"><div class="t">${esc(t)}</div><div class="v">${esc(v)}</div>${d ? `<div class="d">${d}</div>` : ''}</div>`;
-  const cls = (grp, v) => (ETATS[grp].find(e => e[0] === v) || [0, 'gris'])[1];
-  const champ = (t, c, v) => { const m = (D.meta[t] || {})[c]; if (!m || c === 'id') return ''; let s;
-    if (typeof v === 'number' && m.type.startsWith('Ref:')) { const tg = m.type.slice(4), r = (D.idx[tg] || new Map()).get(v) || (D.data[tg] || []).find(x => x.id === v);
-      s = r ? (personne(r) && /Preleveur|Inspecteur/.test(tg) ? personne(r) : clean(r[KEY_COLS.find(x => clean(r[x]))]) || clean(r.Ville) || clean(r.Nom) || '#' + v) : (v ? '#' + v : ''); }
-    else if (typeof v === 'number' && /^Date/.test(m.type)) s = dateFr(v, m.type);
-    else if (typeof v === 'boolean') s = v ? 'Oui' : 'Non';
-    else if (Array.isArray(v)) s = v[0] === 'L' ? v.slice(1).join(', ') : '';
-    else s = clean(v);
-    if (!s || s === '0' && m.type.startsWith('Ref:')) return '';
-    return `<div><div class="k">${esc(m.label.replace(/_/g, ' '))}</div><div class="v">${esc(s.length > 400 ? s.slice(0, 400) + '…' : s)}</div></div>`; };
-  $('fenetre').innerHTML = `<div class="voile" id="voile"><div class="fenetre" role="dialog" aria-modal="true" aria-label="Parcelle ${esc(P.key)}">
-    <div class="fenetre-tete"><h2>Parcelle ${esc(P.key)}<div class="sub" style="font-weight:400">${esc(P.nom)} · PACAGE ${esc(P.pac)} · ${esc(dptLib(P.dpt))}${P.commune ? ' · ' + esc(P.commune) : ''}</div></h2>
-      <button type="button" class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline fr-icon-close-line fr-btn--icon-left" id="ffermer">Fermer</button></div>
-    <div class="etapes">
-      ${etape('1. Sélection', P.sel, cls('sel', P.sel), P.raison ? esc(P.raison) : '')}
-      ${etape('2. Dossier', P.dos, cls('dos', P.dos))}
-      ${etape('3. Prélèvement', P.pre, cls('pre', P.pre), [P.rdvDate && esc(dateFr(P.rdvDate, 'DateTime')), P.prel && esc(P.prel), P.org && esc(P.org), P.raisonNP && esc(P.raisonNP)].filter(Boolean).join('<br>'))}
-      ${etape('4. Contrôle', P.ctl, cls('ctl', P.ctl), P.ctls.length ? P.ctls.map(c => `${esc(dateFr(c.date, c.dtype))} · ${esc(c.lib)} · ${esc(c.insp)}${c.nc ? ` · ${c.nc} non-conformité(s)` : ' · conforme'}`).join('<br>') : P.inspPrevu ? 'Inspecteur : ' + esc(P.inspPrevu) : '')}
-      ${P.err ? etape('Erreurs préleveurs', P.err + ' signalement(s)', 'err') : ''}
-    </div>
-    <h3 class="fr-h6 fr-mb-1w">Présence dans les tables du document</h3>
-    ${D.present.map(s => { const l = P.src.get(s.t) || [];
-      return `<details class="src"${l.length && l.length <= 3 && ['DATA_Parcelles_DEF', 'RDV_Prelevements', 'Suites_RDV', 'Q_QUADHYDRO', 'Q_TAR_MANUELLE', 'Erreur_preleveurs'].includes(s.t) ? ' open' : ''}>
-        <summary>${l.length ? '✅' : '—'} ${esc(s.lib)} <span class="sub">(${esc(s.t)}) · ${l.length} ligne(s)</span></summary>
-        ${l.map(r => `<div class="fg">${Object.keys(r).map(c => champ(s.t, c, r[c])).join('')}</div>`).join('') || '<p class="vide">Absente de cette table.</p>'}</details>`; }).join('')}
-  </div></div>`;
-  $('ffermer').onclick = fermer; $('voile').onclick = e => { if (e.target.id === 'voile') fermer(); };
+/* ---------- Carte (Leaflet / OpenStreetMap) ---------- */
+let carte = null, couche = null;
+function dessinerCarte(list) {
+  $('legende').innerHTML = PRE.map(e => `<span><i style="background:${e.hex}"></i>${esc(e.k)}</span>`).join('') + '<span class="sub">Cliquez sur un point pour le détail.</span>';
+  if (!window.L) { $('carte').innerHTML = '<p class="vide">La bibliothèque de carte n’a pas pu être chargée (cdnjs.cloudflare.com).</p>'; return; }
+  if (!carte) {
+    carte = L.map('carte', {preferCanvas: true}).setView([48.2, -2.9], 8);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19, attribution: '© OpenStreetMap'}).addTo(carte);
+  }
+  setTimeout(() => carte.invalidateSize(), 50);
+  if (couche) couche.remove();
+  couche = L.layerGroup(list.map(P => L.circleMarker([P.geo.lat, P.geo.lon], {radius: 6, weight: 1, color: '#fff', fillOpacity: .9, fillColor: (PRE.find(e => e.k === P.pre) || {}).hex})
+    .bindPopup(`<b>${esc(P.key)}</b><br>${esc(P.nom)}<br><span class="coord">${esc(coordTxt(P.geo))}</span><br>${esc(P.pre)}${P.date ? ' · ' + esc(dateHeure(P.date)) : ''}<br>${geoLiens(P.geo)}`))).addTo(carte);
+  if (list.length) carte.fitBounds(L.latLngBounds(list.map(P => [P.geo.lat, P.geo.lon])).pad(.05), {maxZoom: 15});
 }
-const fermer = () => { $('fenetre').innerHTML = ''; };
 
+/* ---------- Export ---------- */
 function exporter() {
-  const list = [...D.parcs.values()].filter(P => okParc(P)).sort((a, b) => a.pac.localeCompare(b.pac) || a.k.localeCompare(b.k, 'fr', {numeric: true}));
-  const H = ['CLE', 'PACAGE', 'Exploitation', 'Département', 'Commune', 'Sélection', 'Raison de la sélection', 'Dossier', 'Prélèvement', 'Date RDV', 'Préleveur', 'Organisme', 'Raison non prélèvement',
-    'Contrôle', 'Inspecteur prévu', 'Contrôles saisis', 'Non-conformités', 'Erreurs préleveurs'].concat(D.present.map(s => 'Table ' + s.t));
-  const L = list.map(P => [P.key, P.pac, P.nom, P.dpt, P.commune, P.sel, P.raison, P.dos, P.pre, P.rdvDate ? dateFr(P.rdvDate, 'DateTime') : '', P.prel, P.org, P.raisonNP,
-    P.ctl, P.inspPrevu, P.ctls.map(c => dateFr(c.date, c.dtype) + ' ' + c.lib + ' ' + c.insp).join(' ; '), P.nc, P.err].concat(D.present.map(s => (P.src.get(s.t) || []).length)));
-  const csv = '﻿' + [H].concat(L).map(l => l.map(x => '"' + String(x ?? '').replace(/"/g, '""') + '"').join(';')).join('\r\n');
+  const list = D.parcs.filter(P => ok(P));
+  const H = ['CLE', 'PACAGE', 'Exploitation', 'Commune', 'Département', 'Latitude', 'Longitude', 'Source des coordonnées', 'Culture 2026', 'Prélèvement', 'Date RDV', 'Préleveur', 'Raison non prélèvement', 'Contrôle', 'Inspecteur'];
+  const L2 = list.map(P => [P.key, P.pac, P.nom, P.commune, P.dpt, P.geo ? P.geo.lat.toFixed(6).replace('.', ',') : '', P.geo ? P.geo.lon.toFixed(6).replace('.', ',') : '', P.geo ? P.geo.src : '',
+    P.culture, P.pre, dateHeure(P.date), P.prel, P.raisonNP, P.ctl, P.ctls.map(c => c.insp).join(', ') || P.inspPrevu]);
+  const csv = '﻿' + [H].concat(L2).map(l => l.map(x => '"' + String(x ?? '').replace(/"/g, '""') + '"').join(';')).join('\r\n');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], {type: 'text/csv;charset=utf-8'})); a.download = 'registre-parcelles.csv';
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
 
 /* ---------- Événements ---------- */
-const relancer = () => { limite = 200; afficher(); };
+const relancer = () => { limite = 300; afficher(); };
 let tq; $('fq').addEventListener('input', e => { F.q = e.target.value; clearTimeout(tq); tq = setTimeout(relancer, 250); });
-[['fDpt', 'dpt'], ['fSel', 'sel'], ['fPre', 'pre'], ['fCtl', 'ctl'], ['fSrc', 'src']].forEach(([id, k]) => { $(id).onchange = e => { F[k] = e.target.value; relancer(); }; });
-$('raz').onclick = () => { Object.assign(F, {q: '', dpt: '', sel: '', pre: '', ctl: '', src: '', carte: ''}); $('fq').value = ''; remplirFiltres(); relancer(); };
+[['fDpt', 'dpt'], ['fPre', 'pre'], ['fCtl', 'ctl'], ['fGeo', 'geo']].forEach(([id, k]) => { $(id).onchange = e => { F[k] = e.target.value; relancer(); }; });
+$('raz').onclick = () => { Object.assign(F, {q: '', dpt: '', pre: '', ctl: '', geo: '', carte: ''}); $('fq').value = ''; $('fGeo').value = ''; remplirFiltres(); relancer(); };
 $('csv').onclick = exporter;
 $('rafraichir').onclick = () => charger().catch(err => console.error(err));
 document.addEventListener('click', e => {
+  const cp = e.target.closest('[data-copie]'); if (cp) { e.stopPropagation(); const t = cp.dataset.copie;
+    (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => { cp.textContent = 'Copié ✓'; setTimeout(() => { cp.textContent = 'Copier'; }, 1200); }).catch(() => prompt('Coordonnées :', t)); return; }
+  if (e.target.closest('a')) return;
   const c = e.target.closest('[data-carte]'); if (c) { F.carte = F.carte === c.dataset.carte ? '' : c.dataset.carte; relancer(); return; }
   const v = e.target.closest('[data-vue]'); if (v) { vue = v.dataset.vue; try { localStorage.setItem('registre-vue', vue); } catch (err) { /* stockage indisponible */ } relancer(); return; }
-  const p = e.target.closest('[data-parc]'); if (p) { fiche(p.dataset.parc); return; }
   const f = e.target.closest('[data-farm]'); if (f) { const k = f.dataset.farm; ouverts.has(k) ? ouverts.delete(k) : ouverts.add(k); afficher(); }
 });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') fermer(); });
 
 if (window.grist) {
   grist.ready({requiredAccess: 'full'});
