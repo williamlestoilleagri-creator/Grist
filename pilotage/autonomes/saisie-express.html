@@ -1,0 +1,1520 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-scheme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Saisie express</title>
+<style>
+/* ==========================================================================
+   Pilotage de projets – socle graphique commun (charte de l'État / DSFR)
+   ========================================================================== */
+@font-face{font-family:Marianne;font-style:normal;font-weight:300;font-display:swap;src:url(https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14.2/dist/fonts/Marianne-Light.woff2) format("woff2")}
+@font-face{font-family:Marianne;font-style:normal;font-weight:400;font-display:swap;src:url(https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14.2/dist/fonts/Marianne-Regular.woff2) format("woff2")}
+@font-face{font-family:Marianne;font-style:italic;font-weight:400;font-display:swap;src:url(https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14.2/dist/fonts/Marianne-Regular_Italic.woff2) format("woff2")}
+@font-face{font-family:Marianne;font-style:normal;font-weight:500;font-display:swap;src:url(https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14.2/dist/fonts/Marianne-Medium.woff2) format("woff2")}
+@font-face{font-family:Marianne;font-style:normal;font-weight:700;font-display:swap;src:url(https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.14.2/dist/fonts/Marianne-Bold.woff2) format("woff2")}
+
+:root{
+  color-scheme:light;
+  --bf:#000091; --bf-hover:#1212ff; --bf-active:#2323ff;
+  --bf-975:#f5f5fe; --bf-950:#ececfe; --bf-925:#e3e3fd; --bf-850:#cacafb;
+  --rm:#e1000f;
+  --title:#161616; --text:#3a3a3a; --mention:#666; --disabled:#929292;
+  --border:#ddd; --alt:#f6f6f6; --contrast:#eee; --surface:#fff;
+  --success:#18753c; --success-bg:#b8fec9; --success-soft:#dffee6;
+  --error:#ce0500; --error-bg:#ffe9e9;
+  --warning:#b34000; --warning-bg:#ffe9e6;
+  --info:#0063cb; --info-bg:#e8edff;
+  --new:#695240; --new-bg:#feebd0;
+  --yellow:#fceeac; --yellow-text:#716043;
+  --focus:#0a76f6; --text-black-white-grey:#000;
+  --shadow:0 1px 3px rgba(0,0,18,.16);
+  --shadow-lg:0 6px 18px rgba(0,0,18,.16),0 2px 6px rgba(0,0,18,.12);
+  --font:Marianne,arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--surface);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--bf);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+h1,h2,h3,h4{color:var(--title);line-height:1.3;margin:0}
+.muted{color:var(--mention)}
+.small{font-size:.8rem}
+.mono{font-family:var(--mono);font-size:.85em}
+.sr{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.hidden{display:none!important}
+
+/* ---------- Structure ---------- */
+.pl-app{display:flex;flex-direction:column;min-height:100vh}
+.pl-entete{display:flex;align-items:center;gap:14px;padding:8px 14px;border-bottom:1px solid var(--border);box-shadow:0 2px 6px rgba(0,0,18,.08);background:var(--surface);position:sticky;top:0;z-index:40}
+.pl-marque{flex:0 0 auto;padding-right:14px;border-right:1px solid var(--border)}
+.pl-titre{min-width:0;flex:0 1 auto}
+.pl-titre h1{font-size:1.1rem;font-weight:700}
+.pl-titre p{margin:0;font-size:.78rem;color:var(--mention);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl-outils{flex:1;display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0}
+#pl-outils{flex:1;min-width:0}
+.pl-corps{flex:1;padding:16px;min-width:0}
+.pl-demo{background:var(--yellow);color:var(--yellow-text);font-size:.8rem;padding:4px 14px;display:flex;gap:12px;align-items:center}
+.pl-demo button{background:none;border:0;text-decoration:underline;color:inherit;cursor:pointer;padding:0}
+@media (max-width:700px){.pl-marque{display:none}.pl-entete{flex-wrap:wrap}}
+
+/* ---------- Boutons ---------- */
+.btn{display:inline-flex;align-items:center;gap:.4rem;min-height:2.25rem;padding:.35rem .9rem;border:0;border-radius:0;background:transparent;color:var(--bf);font-weight:500;font-size:.875rem;line-height:1.4;cursor:pointer;white-space:nowrap;text-decoration:none}
+.btn.pri{background:var(--bf);color:#fff}
+.btn.pri:hover{background:var(--bf-hover)}
+.btn.sec{box-shadow:inset 0 0 0 1px var(--bf)}
+.btn.sec:hover,.btn.ter:hover{background:var(--alt)}
+.btn.ter{box-shadow:inset 0 0 0 1px var(--border)}
+.btn.danger{color:var(--error);box-shadow:inset 0 0 0 1px var(--error)}
+.btn.danger:hover{background:var(--error-bg)}
+.btn.sm{min-height:1.85rem;padding:.15rem .6rem;font-size:.8rem}
+.btn.ic{padding:.35rem;min-width:2.25rem;justify-content:center}
+.btn.sm.ic{min-width:1.85rem;padding:.15rem}
+.btn:disabled{background:var(--contrast);color:var(--disabled);box-shadow:none;cursor:not-allowed}
+.btn svg{width:1rem;height:1rem;flex:0 0 auto}
+.grp{display:inline-flex}
+.grp .btn{box-shadow:inset 0 0 0 1px var(--border)}
+.grp .btn[aria-pressed=true]{background:var(--bf);color:#fff;box-shadow:inset 0 0 0 1px var(--bf)}
+
+/* ---------- Formulaires ---------- */
+.champ{display:flex;flex-direction:column;gap:4px;min-width:0}
+.champ>label,.champ>.lbl{font-size:.82rem;color:var(--title);font-weight:500}
+.champ .aide{font-size:.75rem;color:var(--mention)}
+.in,select.in,textarea.in{width:100%;border:0;border-radius:4px 4px 0 0;background:var(--contrast);box-shadow:inset 0 -2px 0 var(--text);padding:.45rem .65rem;font-size:.875rem;min-height:2.25rem}
+textarea.in{min-height:4.5rem;resize:vertical}
+.in:focus{outline:2px solid var(--focus);outline-offset:2px}
+.in.sm{min-height:1.85rem;padding:.2rem .5rem;font-size:.8rem}
+.in.err{box-shadow:inset 0 -2px 0 var(--error)}
+.case{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:.85rem}
+.case input{width:1rem;height:1rem;accent-color:var(--bf)}
+.grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px 16px}
+.grille .large{grid-column:1/-1}
+
+/* ---------- Badges / tags ---------- */
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:.72rem;font-weight:700;text-transform:uppercase;line-height:1.4;padding:1px 8px;border-radius:4px;background:var(--contrast);color:var(--text);white-space:nowrap}
+.badge.ok{background:var(--success-bg);color:var(--success)}
+.badge.err{background:var(--error-bg);color:var(--error)}
+.badge.warn{background:var(--warning-bg);color:var(--warning)}
+.badge.info{background:var(--info-bg);color:var(--info)}
+.badge.new{background:var(--new-bg);color:var(--new)}
+.badge.jaune{background:var(--yellow);color:var(--yellow-text)}
+.tag{display:inline-flex;align-items:center;font-size:.75rem;line-height:1.5rem;padding:0 .6rem;border-radius:1rem;background:var(--bf-950);color:var(--bf);white-space:nowrap;border:0}
+button.tag{cursor:pointer}
+button.tag[aria-pressed=true]{background:var(--bf);color:#fff}
+
+/* ---------- Cartes, tuiles, tableaux ---------- */
+.carte{background:var(--surface);border:1px solid var(--border);padding:14px 16px}
+.carte>h2,.carte>h3,.sec-titre{font-size:1rem;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.tuiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.tuile{border:1px solid var(--border);border-bottom:3px solid var(--bf);padding:10px 12px;background:var(--surface)}
+.tuile .v{font-size:1.5rem;font-weight:700;color:var(--title);line-height:1.2}
+.tuile .l{font-size:.78rem;color:var(--mention)}
+.tuile.err{border-bottom-color:var(--error)} .tuile.err .v{color:var(--error)}
+.tuile.warn{border-bottom-color:var(--warning)} .tuile.warn .v{color:var(--warning)}
+.tuile.ok{border-bottom-color:var(--success)}
+table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
+.tab th{text-align:left;font-weight:700;color:var(--title);background:var(--alt);border-bottom:2px solid var(--text);padding:6px 8px;white-space:nowrap}
+.tab td{padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+.tab tr:nth-child(even) td{background:#fafafa}
+.tab .num{text-align:right;font-variant-numeric:tabular-nums}
+.vide{padding:24px;text-align:center;color:var(--mention);border:1px dashed var(--border)}
+.barre{height:8px;background:var(--contrast);position:relative;min-width:60px}
+.barre>span{position:absolute;inset:0 auto 0 0;background:var(--bf)}
+.barre.ok>span{background:var(--success)} .barre.warn>span{background:var(--warning)} .barre.err>span{background:var(--error)}
+.alerte{border-left:4px solid var(--info);background:var(--info-bg);padding:8px 12px;font-size:.85rem}
+.alerte.err{border-color:var(--error);background:var(--error-bg)}
+.alerte.warn{border-color:var(--warning);background:var(--warning-bg)}
+.alerte.ok{border-color:var(--success);background:var(--success-soft)}
+.liste-nue{list-style:none;margin:0;padding:0}
+
+/* ---------- Fenêtre modale ---------- */
+.pl-voile{position:fixed;inset:0;background:rgba(22,22,22,.64);z-index:100;display:flex;align-items:flex-start;justify-content:center;padding:4vh 12px;overflow:auto}
+.pl-modale{background:var(--surface);width:min(760px,100%);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;max-height:none}
+.pl-modale.large{width:min(1000px,100%)}
+.pl-modale header{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)}
+.pl-modale header h2{font-size:1.15rem;flex:1}
+.pl-modale .contenu{padding:16px 18px;display:flex;flex-direction:column;gap:14px}
+.pl-modale footer{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;border-top:1px solid var(--border);background:var(--alt);flex-wrap:wrap}
+
+/* ---------- Notifications ---------- */
+.pl-toasts{position:fixed;right:12px;bottom:12px;display:flex;flex-direction:column;gap:8px;z-index:200}
+.pl-toast{background:var(--surface);box-shadow:var(--shadow-lg);border-left:4px solid var(--info);padding:8px 12px;font-size:.85rem;max-width:360px}
+.pl-toast.ok{border-color:var(--success)} .pl-toast.err{border-color:var(--error)} .pl-toast.warn{border-color:var(--warning)}
+
+/* ---------- Configuration ---------- */
+.cfg-ent{border:1px solid var(--border)}
+.cfg-ent>summary{padding:8px 12px;cursor:pointer;font-weight:700;color:var(--title);display:flex;gap:8px;align-items:center;background:var(--alt)}
+.cfg-ent>div{padding:10px 12px;display:grid;grid-template-columns:minmax(150px,1fr) 2fr;gap:6px 12px;align-items:center}
+.cfg-ent label{font-size:.82rem}
+.cfg-ent .req::after{content:" *";color:var(--error)}
+
+/* ---------- Infobulle ---------- */
+.pl-bulle{position:fixed;z-index:150;background:var(--title);color:#fff;font-size:.78rem;padding:6px 9px;max-width:320px;pointer-events:none;box-shadow:var(--shadow-lg);line-height:1.4}
+
+/* ---------- Impression ---------- */
+.print-only{display:none}
+@media print{
+  @page{size:A4;margin:12mm}
+  body{font-size:11px}
+  .no-print,.pl-outils,.pl-demo,.pl-toasts{display:none!important}
+  .print-only{display:block}
+  .pl-entete{position:static;box-shadow:none}
+  .pl-corps{padding:0}
+  .carte{break-inside:avoid}
+  a{color:inherit;text-decoration:none}
+}
+
+/* ---------- Bloc-marque République française (DSFR) ---------- */
+.fr-logo{--text-spacing:0;--underline-img:none;color:var(--text-black-white-grey);display:inline-block;font-size:1.05rem;font-weight:700;letter-spacing:-.01em;line-height:1.0317460317em;text-indent:-.1em;text-transform:uppercase;vertical-align:middle}
+.fr-logo:before{background-image:url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 44 18'%3E%3Cpath fill='%23fff' d='M11.3 10.2c-.9.6-1.7 1.3-2.3 2.1v-.1c.4-.5.7-1 1-1.5.4-.2.7-.5 1-.8.5-.5 1-1 1.7-1.3.3-.1.5-.1.8 0-.1.1-.2.1-.4.2H13v-.1c-.3.3-.7.5-1 .9-.1.2-.2.6-.7.6 0 .1.1 0 0 0zm1.6 4.6c0-.1-.1 0-.2 0l-.1.1-.1.1-.2.2s.1.1.2 0l.1-.1c.1 0 .2-.1.2-.2.1 0 .1 0 .1-.1 0 .1 0 0 0 0zm-1.6-4.3c.1 0 .2 0 .2-.1s.1-.1.1-.1v-.1c-.2.1-.3.2-.3.3zm2.4 1.9s0-.1 0 0c.1-.1.2-.1.3-.1.7-.1 1.4-.3 2.1-.6-.8-.5-1.7-.9-2.6-1h.1c-.1-.1-.3-.1-.5-.2h.1c-.2-.1-.5-.1-.7-.2.1 0 .2-.2.2-.3h-.1c-.4.2-.6.5-.8.9.2.1.5 0 .7.1h-.3c-.1 0-.2.1-.2.2h.1c-.1 0-.1.1-.2.1.1.1.2 0 .4 0 0 .1.1.1.1.1-.1 0-.2.1-.3.3-.1.2-.2.2-.3.3v.1c-.3.2-.6.5-.9.8v.1c-.1.1-.2.1-.2.2v.1c.4-.1.6-.4 1-.5l.6-.3c.2 0 .3-.1.5-.1v.1h.2c0 .1-.2 0-.1.1s.3.1.4 0c.2-.2.3-.2.4-.2zM12.4 14c-.4.2-.9.2-1.2.4 0 0 0 .1-.1.1 0 0-.1 0-.1.1-.1 0-.1.1-.2.2l-.1.1s0 .1.1 0l.1-.1s-.1.1-.1.2V15.3l-.1.1s0 .1-.1.1l-.1.1.2-.2.1-.1h.2s0-.1.1-.1c.1-.1.2-.2.3-.2h.1c.1-.1.3-.1.4-.2.1-.1.2-.2.3-.2.2-.2.5-.3.8-.5-.1 0-.2-.1-.3-.1 0 .1-.2 0-.3 0zM30 9.7c-.1.2-.4.2-.6.3-.2.2 0 .4.1.5.1.3-.2.5-.4.5.1.1.2.1.2.1 0 .2.2.2.1.4s-.5.3-.3.5c.1.2.1.5 0 .7-.1.2-.3.4-.5.5-.2.1-.4.1-.6 0-.1 0-.1-.1-.2-.1-.5-.1-1-.2-1.5-.2-.1 0-.3.1-.4.1-.1.1-.3.2-.4.3l-.1.1c-.1.1-.2.2-.2.3-.1.2-.2.4-.2.6-.2.5-.2 1 0 1.4 0 0 1 .3 1.7.6.2.1.5.2.7.4l1.7 1H13.2l1.6-1c.6-.4 1.3-.7 2-1 .5-.2 1.1-.5 1.5-.9.2-.2.3-.4.5-.5.3-.4.6-.7 1-1l.3-.3s0-.1.1-.1c-.2.1-.2.2-.4.2 0 0-.1 0 0-.1s.2-.2.3-.2v-.1c-.4 0-.7.2-1 .5h-.2c-.5.2-.8.5-1.2.7v-.1c-.2.1-.4.2-.5.2-.2 0-.5.1-.8 0-.4 0-.7.1-1.1.2-.2.1-.4.1-.6.2v.1l-.2.2c-.2.1-.3.2-.5.4l-.5.5h-.1l.1-.1.1-.1c0-.1.1-.1.1-.2.2-.1.3-.3.5-.4 0 0-.1 0 0 0 0 0 0-.1.1-.1l-.1.1c-.1.1-.1.2-.2.2v-.1-.1l.2-.2c.1-.1.2-.1.3-.2h.1c-.2.1-.3.1-.5.2H14h-.1c0-.1.1-.1.2-.2h.1c1-.8 2.3-.6 3.4-1 .1-.1.2-.1.3-.2.1-.1.3-.2.5-.3.2-.2.4-.4.5-.7v-.1c-.4.4-.8.7-1.3 1-.6.2-1.3.4-2 .4 0-.1.1-.1.1-.1 0-.1.1-.1.1-.2h.1s0-.1.1-.1h.1c-.1-.1-.3.1-.4 0 .1-.1 0-.2.1-.2h.1s0-.1.1-.1c.5-.3.9-.5 1.3-.7-.1 0-.1.1-.2 0 .1 0 0-.1.1-.1.3-.1.6-.3.9-.4-.1 0-.2.1-.3 0 .1 0 .1-.1.2-.1v-.1h0c0-.1.1 0 .2-.1h-.1c.1-.1.2-.2.4-.2 0-.1-.1 0-.1-.1h.1-.5c-.1 0 0-.1 0-.1.1-.2.2-.5.3-.7h-.1c-.3.3-.8.5-1.2.6h-.2c-.2.1-.4.1-.5 0-.1-.1-.2-.2-.3-.2-.2-.1-.5-.3-.8-.4-.7-.2-1.5-.4-2.3-.3.3-.1.7-.2 1.1-.3.5-.2 1-.3 1.5-.3h-.3c-.4 0-.9.1-1.3.2-.3.1-.6.2-.9.2-.2.1-.3.2-.5.2v-.1c.3-.4.7-.7 1.1-.8.5-.1 1.1 0 1.6.1.4 0 .8.1 1.1.2.1 0 .2.2.3.3.2.1.4 0 .5.1v-.2c.1-.1.3 0 .4 0 .2-.2-.2-.4-.3-.6v-.1c.2.2.5.4.7.6.1.1.5.2.5 0-.2-.3-.4-.6-.7-.9v-.2c-.1 0-.1 0-.1-.1-.1-.1-.1-.2-.1-.3-.1-.2 0-.4-.1-.5-.1-.2-.1-.3-.1-.5-.1-.5-.2-1-.3-1.4-.1-.6.3-1 .6-1.5.2-.4.5-.7.8-1 .1-.4.3-.7.6-1 .3-.3.6-.5.9-.6.3-.1.5-.2.8-.3l2.5-.4H25l1.8.3c.1 0 .2 0 .2.1.1.1.3.2.4.2.2.1.4.3.6.5.1.1.2.3.1.4-.1.1-.1.4-.2.4-.2.1-.4.1-.6.1-.1 0-.2 0-.4-.1.5.2.9.4 1.2.8 0 .1.2.1.3.1v.1c-.1.1-.1.1-.1.2h.1c.1-.1.1-.4.3-.3.2.1.2.3.1.4-.1.1-.2.2-.4.3v.2c.1.1.1.2.2.4s.1.5.2.7c.1.5.2.9.2 1.4 0 .2-.1.5 0 .7l.3.6c.1.2.2.3.3.5.2.3.6.6.4 1zm-15.6 5.2c-.1 0-.1.1-.1.1s.1 0 .1-.1zm5.8-1.8c-.1.1 0 0 0 0zm-6.7-.2c0 .1.1 0 .1 0 .2-.1.5 0 .6-.2-.1-.1-.2 0-.2-.1-.1 0-.2 0-.2.1-.1.1-.3.1-.3.2z'/%3E%3Cpath fill='gray' d='M27.9 6.8c.1 0 .3 0 .3.1-.1.2-.4.3-.6.5h-.1c-.1.1-.1.2-.1.2h-.3c.1.1.3.2.5.2l.1.1h.2V8c-.1.1-.2.1-.4.1.2.1.5.1.7 0 .2-.1 0-.4.1-.5-.1 0 0-.1-.1-.1.1-.1.1-.2.2-.2s.1 0 .2-.1c0-.1-.1-.1-.1-.2.2-.1.3-.3.3-.5 0-.1-.3-.1-.4-.2h-.5c-.2 0-.3.1-.5.1l-.6.3c.2-.1.4-.1.7-.2 0 .3.2.3.4.3'/%3E%3C/svg%3E"),linear-gradient(90deg,#000091,#000091 50%,#e1000f 0,#e1000f),linear-gradient(90deg,#000,#000);background-position:0 -.0625rem,0 0,0 0;background-repeat:no-repeat,no-repeat,no-repeat;background-size:2.75rem 1.125rem,2.75rem 1rem,0;content:"";display:block;forced-color-adjust:none;height:1rem;margin-bottom:.3333333333rem;width:2.75rem}
+.fr-logo:after{background-image:url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 252 180'%3E%3Cdefs%3E%3Csymbol id='a' viewBox='0 0 11 15.5'%3E%3Cpath d='M10.4 5.3C11.9 1.5 10.1 0 7.9 0 4.2 0 0 6.5 0 11.7c0 2.5 1.2 3.8 3 3.8 2.1 0 4.3-2 6.2-5.5h-1c-1.2 1.5-2.6 2.6-3.9 2.6-1.3 0-2-.8-2-2.6a10.7 10.7 0 01.3-2.2zm-4-3.1c1.1 0 2 .8 1.5 2.6L3.1 6.1c.8-2.2 2.2-4 3.4-4z'/%3E%3C/symbol%3E%3Csymbol id='b' viewBox='0 0 12.4 21.8'%3E%3Cuse width='11' height='15.5' y='6.4' href='%23a'/%3E%3Cpath d='M7.9 4.7L12.4.6V0h-3L6.7 4.7H8z'/%3E%3C/symbol%3E%3Csymbol id='c' viewBox='0 0 11.5 19'%3E%3Cpath d='M1.7 5.7h2.6L.1 17.1a1.3 1.3 0 001.2 2c3 0 6.4-2.6 7.8-6.2h-.7a9.4 9.4 0 01-5.1 3.5L7 5.7H11l.5-1.6H7.7L9 0H7.6L4.9 4.1l-3.2.4v1.2z'/%3E%3C/symbol%3E%3Csymbol id='d' viewBox='0 0 9.8 21.9'%3E%3Cpath d='M7.6 8c.3-1-.4-1.6-1-1.6-2.2 0-5 2.1-6 5h.7A5.6 5.6 0 014.4 9L.1 20.3a1.1 1.1 0 001 1.6c2.2 0 4.7-2 5.8-5H6A5.6 5.6 0 013 19.5zM8 3.7a1.8 1.8 0 001.8-1.8A1.8 1.8 0 008 0a1.8 1.8 0 00-1.8 1.8A1.8 1.8 0 008 3.6'/%3E%3C/symbol%3E%3Csymbol id='e' viewBox='0 0 14.8 15.5'%3E%3Cpath d='M3.3 3.1c.7 0 1 1 0 3.4l-3 6.8c-.7 1.3 0 2.2 1.2 2.2a1.3 1.3 0 001.5-1l3-8C7.4 4.8 10 3 11 3s.8.6.3 1.6l-4.6 9a1.3 1.3 0 001.1 1.9c2.3 0 5-2 6-5h-.6A5.6 5.6 0 0110 13l4-8a6.1 6.1 0 00.8-2.8A2 2 0 0012.6 0c-2 0-3.6 2.2-6 5V2.8C6.6 1.4 6.1 0 4.8 0 3.2 0 1.8 2.5.7 4.9h.7c.7-1.1 1.3-1.8 2-1.8'/%3E%3C/symbol%3E%3Csymbol id='f' viewBox='0 0 12 15.5'%3E%3Cpath d='M11.8 3.5c.5-1.9.2-3.5-1.2-3.5-1.8 0-2.3 1.2-4 5V2.8C6.5 1.3 6 0 4.6 0 3.1 0 1.7 2.5.5 5h.8C2 3.7 2.8 3 3.3 3c.7 0 1 1 0 3.4l-3 6.8c-.7 1.3 0 2.1 1.2 2.1a1.3 1.3 0 001.5-1l3-8a50.3 50.3 0 012.6-3h3.2z'/%3E%3C/symbol%3E%3Csymbol id='g' viewBox='0 0 14.7 16.2'%3E%3Cpath d='M10.5 13.1c-.6 0-1-1 0-3.4L14.6.1 13.4 0l-1.3 1.3h-.3C6.1 1.3 0 8.6 0 14.2a2 2 0 002.1 2.1c1.7 0 3.3-2.4 5.2-5l-.1 1c-.3 2.6.6 4 2 4 1.5 0 3-2.4 4-4.9h-.7c-.7 1.1-1.5 1.8-2 1.8zM7.9 9.8c-1.3 1.6-3.4 3.5-4.3 3.5-.5 0-.9-.5-.9-1.6 0-3.5 4-8.2 6-8.2a4.2 4.2 0 011.4.2z'/%3E%3C/symbol%3E%3Csymbol id='h' viewBox='0 0 21.9 19.8'%3E%3Cpath d='M11.2 19.8l.3-.9c-3.8-.7-4.3-.7-2.7-4.8l1.4-3.9h3c1.9 0 1.9.9 1.6 3h1l2.6-6.9h-1c-1 1.6-1.8 2.9-3.8 2.9h-3l2-5.6c.8-2 1.1-2.4 3.7-2.4h.7c2.6 0 3 .7 3 3.5h1l.9-4.7H7.3L7 .9c3 .6 3.3.9 2 4.8L5.7 14c-1.5 3.9-2 4.2-5.5 4.8l-.3.9z'/%3E%3C/symbol%3E%3Csymbol id='i' viewBox='0 0 10.1 21.9'%3E%3Cpath d='M2.9 19.4L10.1.3 9.8 0l-5 .6v.6l1 .7c.9.7.6 1.3-.2 3.4L.2 19.9a1.3 1.3 0 001.1 2c2.3 0 4.7-2.1 5.8-5h-.7a6.5 6.5 0 01-3.5 2.5'/%3E%3C/symbol%3E%3Csymbol id='j' viewBox='0 0 18 22'%3E%3Cpath d='M18 .6h-4.3a3.8 3.8 0 00-2.1-.6A6.6 6.6 0 005 6.5a3.3 3.3 0 003 3.6c-1.9.8-3 1.8-3 2.9a1.7 1.7 0 00.9 1.5c-4.3 1.3-6 2.8-6 4.7 0 2 2.6 2.8 5.6 2.8 5.3 0 9.6-2.7 9.6-5.1 0-1.8-1.6-2.5-4.3-3.3-2.2-.7-3.2-.8-3.2-1.6A2.4 2.4 0 019 10.2a6.6 6.6 0 006.1-6.5 4.5 4.5 0 00-.2-1.5h2.5zM9.8 16.2c2.1.7 3 1 3 1.6 0 1.4-2 2.5-5.6 2.5-2.7 0-4-.6-4-2 0-1.5 1.4-2.5 3.5-3.3a21.5 21.5 0 003 1.2zM9 9c-1 0-1.3-.8-1.3-1.7 0-2.8 1.4-6.2 3.5-6.2 1 0 1.3.8 1.3 1.6 0 2.9-1.4 6.3-3.5 6.3z'/%3E%3C/symbol%3E%3Csymbol id='k' viewBox='0 0 23 25.1'%3E%3Cpath d='M14.3 15.6c1.9 0 2 .8 1.6 2.8H17l2.5-6.8h-1c-1 1.6-1.7 2.9-3.8 2.9h-4.1l2-5.6c.7-2 1-2.4 3.7-2.4H18c2.6 0 3 .7 3 3.5h1l.9-4.7H7.3l-.3.9c3 .6 3.3.9 2 4.8l-3.2 8.4c-1.5 3.9-2 4.2-5.6 4.8l-.2 1h17.4l3.2-5h-1.2c-2 2-4 3.8-8 3.8-4.7 0-4.3-.3-2.7-4.6l1.4-3.8h4.2zm2.3-11.8L21 .6V0h-3l-2.6 3.9h1.2v-.1z'/%3E%3C/symbol%3E%3Csymbol id='l' viewBox='0 0 13.6 21.8'%3E%3Cpath d='M11.4 6.4c-2 0-4 2.2-5.8 4.8L9.6.3 9.4 0l-5 .6V1l1 .8c.9.7.6 1.3-.2 3.4L.8 16.8A13.9 13.9 0 000 19c0 1.4 1.8 2.7 3.5 2.7 3.8 0 10-6.9 10-12.2 0-2.3-.5-3.2-2.1-3.2zM4.8 19.5c-.8 0-1.9-.7-1.9-1.3a15.5 15.5 0 01.8-2.2L5 12.7C6.3 11 8.4 9.3 9.6 9.3c.7 0 1.2.4 1.2 1.5 0 3.1-2.9 8.7-6 8.7z'/%3E%3C/symbol%3E%3Csymbol id='m' viewBox='0 0 19.2 19.9'%3E%3Cpath d='M17.6 0H7.3L7 .9c3 .6 3.3.9 2 4.8l-3.2 8.5c-1.5 3.9-2 4.2-5.5 4.8L0 20h15.7l3.5-6H18c-2 2-4.2 4.8-7.7 4.8-2.7 0-3-.5-1.6-4.5l3.1-8.5c1.4-3.9 2-4.2 5.5-4.8z'/%3E%3C/symbol%3E%3Csymbol id='n' viewBox='0 0 126 90'%3E%3Cuse width='12.4' height='21.8' x='112.7' y='66.1' href='%23b'/%3E%3Cuse width='11.5' height='19' x='102.2' y='69' href='%23c'/%3E%3Cuse width='9.8' height='21.9' x='93.6' y='66.1' href='%23d'/%3E%3Cuse width='14.8' height='15.5' x='77.2' y='72.5' href='%23e'/%3E%3Cuse width='12' height='15.5' x='65.7' y='72.5' href='%23f'/%3E%3Cuse width='11' height='15.5' x='54.3' y='72.5' href='%23a'/%3E%3Cuse width='11.5' height='19' x='43.7' y='69' href='%23c'/%3E%3Cuse width='14.7' height='16.2' x='28.9' y='71.8' href='%23g'/%3E%3Cuse width='12' height='15.5' x='19.6' y='72.5' href='%23f'/%3E%3Cuse width='21.9' height='19.8' y='67.6' href='%23h'/%3E%3Cuse width='12.4' height='21.8' x='77.3' y='33.1' href='%23b'/%3E%3Cuse width='11.5' height='19' x='66.8' y='36' href='%23c'/%3E%3Cuse width='9.8' height='21.9' x='58.2' y='33' href='%23d'/%3E%3Cuse width='10.1' height='21.9' x='49.4' y='33.1' href='%23i'/%3E%3Cuse width='14.7' height='16.2' x='34.9' y='38.8' href='%23g'/%3E%3Cuse width='18' height='22' x='18.6' y='39.4' href='%23j'/%3E%3Cuse width='23' height='25.1' y='29.3' href='%23k'/%3E%3Cuse width='12.4' height='21.8' x='76.8' y='.1' href='%23b'/%3E%3Cuse width='11.5' height='19' x='66.2' y='2.9' href='%23c'/%3E%3Cuse width='12' height='15.5' x='54.8' y='6.5' href='%23f'/%3E%3Cuse width='11' height='15.5' x='43.4' y='6.4' href='%23a'/%3E%3Cuse width='13.6' height='21.8' x='29.4' y='.1' href='%23l'/%3E%3Cuse width='9.8' height='21.9' x='20.6' href='%23d'/%3E%3Cuse width='19.2' height='19.9' y='1.4' href='%23m'/%3E%3C/symbol%3E%3C/defs%3E%3Cuse fill='%23000' width='126' height='90' x='0' y='0' href='%23n'/%3E%3Cuse fill='%23fff' width='126' height='90' x='126' y='90' href='%23n'/%3E%3C/svg%3E");background-position:0 calc(100% + 1.875rem);background-repeat:no-repeat;background-size:5.25rem 3.75rem;content:"";display:block;min-width:2.625rem;padding-top:2.2083333333rem}
+.fr-logo--sm{font-size:.7875rem}
+.fr-logo--sm:before{background-position:0 -.046875rem,0 0,0 0;background-size:2.0625rem .84375rem,2.0625rem .75rem,0;height:.75rem;margin-bottom:.25rem;width:2.0625rem}
+.fr-logo--sm:after{background-position:0 calc(100% + 1.40625rem);background-size:3.9375rem 2.8125rem;min-width:1.96875rem;padding-top:1.65625rem}
+
+</style>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<script>
+/* Données fictives pour le mode démonstration (dates relatives au jour courant) */
+(function(){
+  const MODELE = {"tables": {"DATA_Equipe": {"cols": {"Nom": {"type": "Text"}, "Prenom": {"type": "Text", "label": "Prénom"}, "Service": {"type": "Text"}, "Fonction": {"type": "ChoiceList", "choix": ["Gestion informatique", "Gestion Logistique", "Comptabilité", "Chef de pôle", "Chef de service", "Adjoint", "Gestion Comptable"]}, "Mail": {"type": "Text"}, "Nom_Complet": {"type": "Text", "label": "Nom complet", "formule": true}}, "rows": [{"Nom": "Le Floch", "Prenom": "Hélène", "Service": "SG", "Fonction": ["L", "Chef de service"], "Mail": "helene.lefloch@exemple.gouv.fr", "id": 1}, {"Nom": "Le Goff", "Prenom": "Anne", "Service": "Pôle SSI-Log", "Fonction": ["L", "Chef de pôle"], "Mail": "anne.legoff@exemple.gouv.fr", "id": 2}, {"Nom": "Kervella", "Prenom": "Yann", "Service": "Pôle SSI-Log", "Fonction": ["L", "Adjoint", "Gestion informatique"], "Mail": "yann.kervella@exemple.gouv.fr", "id": 3}, {"Nom": "Morvan", "Prenom": "Sophie", "Service": "Pôle SSI-Log", "Fonction": ["L", "Gestion informatique"], "Mail": "sophie.morvan@exemple.gouv.fr", "id": 4}, {"Nom": "Riou", "Prenom": "Thomas", "Service": "Pôle SSI-Log", "Fonction": ["L", "Gestion informatique"], "Mail": "thomas.riou@exemple.gouv.fr", "id": 5}, {"Nom": "Guillou", "Prenom": "Marie", "Service": "Pôle SSI-Log", "Fonction": ["L", "Gestion Logistique"], "Mail": "marie.guillou@exemple.gouv.fr", "id": 6}, {"Nom": "Le Bihan", "Prenom": "Erwan", "Service": "Pôle SSI-Log", "Fonction": ["L", "Gestion Logistique"], "Mail": "erwan.lebihan@exemple.gouv.fr", "id": 7}, {"Nom": "Tanguy", "Prenom": "Claire", "Service": "Pôle SSI-Log", "Fonction": ["L", "Gestion Comptable"], "Mail": "claire.tanguy@exemple.gouv.fr", "id": 8}, {"Nom": "Cadiou", "Prenom": "Lucas", "Service": "Pôle SSI-Log", "Fonction": ["L", "Comptabilité"], "Mail": "lucas.cadiou@exemple.gouv.fr", "id": 9}], "next": 10}, "DATA_Partie_prenantes": {"cols": {"Service": {"type": "Text"}}, "rows": [{"Service": "Direction", "id": 1}, {"Service": "SG", "id": 2}, {"Service": "SRAL", "id": 3}, {"Service": "SRFD", "id": 4}, {"Service": "SREAF", "id": 5}, {"Service": "SRISE", "id": 6}, {"Service": "DDTM 29", "id": 7}, {"Service": "DDTM 22", "id": 8}, {"Service": "DDTM 35", "id": 9}, {"Service": "DDTM 56", "id": 10}, {"Service": "SNUM (DSI ministère)", "id": 11}, {"Service": "Préfecture de région", "id": 12}], "next": 13}, "DATA_Themes": {"cols": {"Liste": {"type": "Text"}}, "rows": [{"Liste": "🔐 Sécurité SI – Politique & conformité", "id": 1}, {"Liste": "🔐 Habilitations & comptes", "id": 2}, {"Liste": "🔐 Sensibilisation & formation SSI", "id": 3}, {"Liste": "🔐 Incidents de sécurité", "id": 4}, {"Liste": "🔐 Sauvegarde & continuité (PCA/PRA)", "id": 5}, {"Liste": "🔐 Antivirus & mises à jour", "id": 6}, {"Liste": "🌐 Réseau & Wi-Fi", "id": 7}, {"Liste": "🌐 Messagerie & outils collaboratifs", "id": 8}, {"Liste": "🌐 Applications métier", "id": 9}, {"Liste": "💻 Postes de travail", "id": 10}, {"Liste": "💻 Matériel mobile (portables, smartphones)", "id": 11}, {"Liste": "🖨️ Impression & copieurs", "id": 12}, {"Liste": "☎️ Téléphonie & visio", "id": 13}, {"Liste": "🏢 Bâtiment & maintenance", "id": 14}, {"Liste": "🏢 Aménagement & déménagement", "id": 15}, {"Liste": "🔑 Sûreté & contrôle d'accès", "id": 16}, {"Liste": "🧯 Hygiène, sécurité & prévention", "id": 17}, {"Liste": "🚗 Parc automobile", "id": 18}, {"Liste": "📦 Fournitures & stocks", "id": 19}, {"Liste": "🧹 Nettoyage & services généraux", "id": 20}, {"Liste": "📑 Marchés & commandes publiques", "id": 21}, {"Liste": "💶 Budget & facturation", "id": 22}, {"Liste": "♻️ Développement durable & déchets", "id": 23}, {"Liste": "📋 Inventaire & patrimoine", "id": 24}, {"Liste": "🗂️ Archives & courrier", "id": 25}], "next": 26}, "DATA_Prestataires": {"cols": {"Specialite": {"type": "ChoiceList", "label": "Spécialité", "choix": ["Réseau", "Sécurité informatique", "Téléphonie", "Matériel informatique", "Impression", "Déménagement", "Nettoyage", "Maintenance bâtiment", "Véhicules", "Fournitures"]}, "Raison_sociale": {"type": "Text", "label": "Raison sociale"}, "Representant": {"type": "Text", "label": "Représentant"}, "Telephone": {"type": "Text", "label": "Téléphone"}, "Mail": {"type": "Text"}, "Marche_ref": {"type": "Text", "label": "Réf. marché"}, "Fin_de_contrat": {"type": "Date", "label": "Fin de contrat"}, "Type_relation": {"type": "Choice", "label": "Type de relation", "choix": ["📑 Marché public", "📝 Contrat / convention", "🛒 Ponctuel", "🔍 Démarché"]}, "Debut_de_contrat": {"type": "Date", "label": "Début de contrat"}, "Montant_du_marche": {"type": "Numeric", "label": "Montant du marché"}, "Alerte_contrat": {"type": "Text", "formule": true}}, "rows": [{"Specialite": ["L", "Réseau", "Sécurité informatique"], "Raison_sociale": "Réseaux Armor SAS", "Representant": "Jean Quéré", "Telephone": "02 98 00 00 01", "Mail": "contact@reseaux-armor.example", "Marche_ref": "MAR-2024-017", "Fin_de_contrat": {"j": 415}, "Type_relation": "📑 Marché public", "Debut_de_contrat": {"j": -680}, "Montant_du_marche": 180000, "id": 1}, {"Specialite": ["L", "Téléphonie"], "Raison_sociale": "Ouest Télécom Pro", "Representant": "Laura Prigent", "Telephone": "02 99 00 00 02", "Mail": "pro@ouest-telecom.example", "Marche_ref": "CTR-2023-004", "Fin_de_contrat": {"j": 45}, "Type_relation": "📝 Contrat / convention", "Debut_de_contrat": {"j": -1050}, "Montant_du_marche": 36000, "id": 2}, {"Specialite": ["L", "Impression"], "Raison_sociale": "Imprim'Ouest", "Representant": "Hervé Salaün", "Telephone": "02 97 00 00 03", "Mail": "service@imprimouest.example", "Marche_ref": "CTR-2022-011", "Fin_de_contrat": {"j": -20}, "Type_relation": "📝 Contrat / convention", "Debut_de_contrat": {"j": -1400}, "Montant_du_marche": 24000, "id": 3}, {"Specialite": ["L", "Déménagement"], "Raison_sociale": "Déménagements du Léon", "Representant": "Patrick Abiven", "Telephone": "02 98 00 00 04", "Mail": "devis@demenagements-leon.example", "Marche_ref": "", "Fin_de_contrat": null, "Type_relation": "🛒 Ponctuel", "Debut_de_contrat": null, "Montant_du_marche": null, "id": 4}, {"Specialite": ["L", "Nettoyage"], "Raison_sociale": "Nettoyage Iroise", "Representant": "Nadia Le Roux", "Telephone": "02 98 00 00 05", "Mail": "agence@nettoyage-iroise.example", "Marche_ref": "MAR-2025-003", "Fin_de_contrat": {"j": 430}, "Type_relation": "📑 Marché public", "Debut_de_contrat": {"j": -300}, "Montant_du_marche": 95000, "id": 5}, {"Specialite": ["L", "Véhicules"], "Raison_sociale": "Garage Électro Breizh", "Representant": "Marc Le Gall", "Telephone": "02 96 00 00 06", "Mail": "flotte@electro-breizh.example", "Marche_ref": "", "Fin_de_contrat": null, "Type_relation": "🛒 Ponctuel", "Debut_de_contrat": null, "Montant_du_marche": null, "id": 6}, {"Specialite": ["L", "Sécurité informatique"], "Raison_sociale": "SécuNum Conseil", "Representant": "Élodie Bernard", "Telephone": "06 00 00 00 07", "Mail": "contact@secunum.example", "Marche_ref": "", "Fin_de_contrat": null, "Type_relation": "🔍 Démarché", "Debut_de_contrat": null, "Montant_du_marche": null, "id": 7}, {"Specialite": ["L", "Fournitures", "Matériel informatique"], "Raison_sociale": "Bureau & Co Bretagne", "Representant": "Olivier Jaouen", "Telephone": "02 99 00 00 08", "Mail": "commandes@bureauco.example", "Marche_ref": "", "Fin_de_contrat": null, "Type_relation": "🛒 Ponctuel", "Debut_de_contrat": null, "Montant_du_marche": null, "id": 8}], "next": 9}, "DATA_Projets": {"cols": {"Code": {"type": "Text"}, "Intitule": {"type": "Text", "label": "Intitulé"}, "Domaine": {"type": "Choice", "choix": ["🔐 SSI", "📦 Logistique", "🔀 Transverse"]}, "Priorite": {"type": "Choice", "label": "Priorité", "choix": ["P1 – Critique", "P2 – Haute", "P3 – Normale", "P4 – Basse"]}, "Partie_prenantes": {"type": "RefList:DATA_Partie_prenantes", "label": "Parties prenantes", "visible": "Service"}, "Objectifs": {"type": "Text"}, "Criteres_de_reussite": {"type": "Text", "label": "Critères de réussite"}, "Description": {"type": "Text"}, "Contraintes": {"type": "Text"}, "Risques": {"type": "Text"}, "Date_de_debut": {"type": "Date", "label": "Date de début"}, "Deadline": {"type": "Date"}, "Budget_prevu": {"type": "Numeric", "label": "Budget prévu"}, "Charge_estimee": {"type": "Numeric", "label": "Charge estimée"}, "Date_de_fin_reelle": {"type": "Date", "label": "Date de fin réelle"}, "Prestataires": {"type": "RefList:DATA_Prestataires", "visible": "Raison_sociale"}, "Besoin_de_formation": {"type": "Text", "label": "Besoin de formation"}, "Charge_de_mission": {"type": "RefList:DATA_Equipe", "label": "Chargé(s) de mission", "visible": "Nom_Complet"}, "Phase": {"type": "Choice", "choix": ["💡 À cadrer", "♻️ En cours", "⏸️ En pause", "✅ Terminé", "❌ Abandonné"]}, "Statut": {"type": "Choice", "formule": true, "choix": ["⛈️ Critique", "🌧️ Charge dépassée", "🌥️ Tendu", "☀️ OK", "⏸️ En pause", "⚪ Clos"]}}, "rows": [{"Code": "SSI-2026-01", "Intitule": "Renouvellement du pare-feu", "Domaine": "🔐 SSI", "Phase": "♻️ En cours", "Priorite": "P1 – Critique", "Partie_prenantes": ["L", 1, 11], "Objectifs": "Remplacer le pare-feu arrivé en fin de support", "Criteres_de_reussite": "Bascule sans coupure > 1 h ; règles validées par le RSSI", "Description": "Achat, installation et migration des règles du pare-feu principal", "Contraintes": "Intervention hors heures ouvrées ; validation SNUM", "Risques": "Coupure réseau pendant la bascule", "Date_de_debut": {"j": -60}, "Deadline": {"j": 20}, "Budget_prevu": 25000, "Charge_estimee": 30, "Date_de_fin_reelle": null, "Prestataires": ["L", 1], "Besoin_de_formation": "Formation administration du nouveau pare-feu", "Charge_de_mission": ["L", 3, 4], "id": 1}, {"Code": "SSI-2026-02", "Intitule": "Campagne de sensibilisation hameçonnage", "Domaine": "🔐 SSI", "Phase": "♻️ En cours", "Priorite": "P2 – Haute", "Partie_prenantes": ["L", 1, 2, 3, 4, 5, 6], "Objectifs": "Réduire le taux de clic sur les mails piégés", "Criteres_de_reussite": "Taux de clic < 5 % à la 2e campagne", "Description": "Deux campagnes de faux mails + session de sensibilisation", "Contraintes": "Accord de la direction ; information des représentants du personnel", "Risques": "Mauvaise perception par les agents", "Date_de_debut": {"j": -30}, "Deadline": {"j": 45}, "Budget_prevu": 0, "Charge_estimee": 12, "Date_de_fin_reelle": null, "Prestataires": null, "Besoin_de_formation": "", "Charge_de_mission": ["L", 3, 5], "id": 2}, {"Code": "LOG-2026-01", "Intitule": "Déménagement du SRAL au 2e étage", "Domaine": "📦 Logistique", "Phase": "💡 À cadrer", "Priorite": "P2 – Haute", "Partie_prenantes": ["L", 3, 2], "Objectifs": "Regrouper le SRAL sur un seul plateau", "Criteres_de_reussite": "Déménagement réalisé en 2 jours max, postes opérationnels J+1", "Description": "Déménagement de 25 postes, mobilier et archives", "Contraintes": "Pas de déménagement en période de contrôles", "Risques": "Retard du câblage réseau", "Date_de_debut": {"j": 10}, "Deadline": {"j": 120}, "Budget_prevu": 8000, "Charge_estimee": 15, "Date_de_fin_reelle": null, "Prestataires": ["L", 4], "Besoin_de_formation": "", "Charge_de_mission": ["L", 6, 7], "id": 3}, {"Code": "LOG-2026-02", "Intitule": "Renouvellement de 2 véhicules de service", "Domaine": "📦 Logistique", "Phase": "♻️ En cours", "Priorite": "P3 – Normale", "Partie_prenantes": ["L", 2], "Objectifs": "Remplacer 2 véhicules thermiques par des électriques", "Criteres_de_reussite": "Véhicules livrés et bornes opérationnelles", "Description": "Commande de 2 véhicules électriques et installation de bornes", "Contraintes": "Respect de la circulaire flotte verte", "Risques": "Délai de livraison constructeur", "Date_de_debut": {"j": -90}, "Deadline": {"j": -5}, "Budget_prevu": 62000, "Charge_estimee": 8, "Date_de_fin_reelle": null, "Prestataires": ["L", 6], "Besoin_de_formation": "Prise en main des véhicules électriques", "Charge_de_mission": ["L", 7], "id": 4}, {"Code": "TRA-2026-01", "Intitule": "Équipement visio des salles de réunion", "Domaine": "🔀 Transverse", "Phase": "⏸️ En pause", "Priorite": "P3 – Normale", "Partie_prenantes": ["L", 1, 2, 7, 9], "Objectifs": "Équiper 4 salles en visioconférence", "Criteres_de_reussite": "4 salles opérationnelles avec l'outil ministériel", "Description": "Écrans, caméras, micros et configuration", "Contraintes": "Budget à confirmer en fin de gestion", "Risques": "Incompatibilité avec l'outil ministériel", "Date_de_debut": {"j": -45}, "Deadline": {"j": 75}, "Budget_prevu": 18000, "Charge_estimee": 10, "Date_de_fin_reelle": null, "Prestataires": ["L", 2], "Besoin_de_formation": "Tutoriel utilisateurs", "Charge_de_mission": ["L", 5, 8], "id": 5}, {"Code": "SSI-2025-04", "Intitule": "Mise à jour du PCA / PRA", "Domaine": "🔐 SSI", "Phase": "✅ Terminé", "Priorite": "P2 – Haute", "Partie_prenantes": ["L", 1, 2, 11], "Objectifs": "Disposer d'un PCA/PRA à jour et testé", "Criteres_de_reussite": "Exercice de restauration réussi", "Description": "Révision du plan et exercice de restauration des sauvegardes", "Contraintes": "", "Risques": "Indisponibilité des référents", "Date_de_debut": {"j": -200}, "Deadline": {"j": -40}, "Budget_prevu": 0, "Charge_estimee": 20, "Date_de_fin_reelle": {"j": -35}, "Prestataires": null, "Besoin_de_formation": "", "Charge_de_mission": ["L", 2, 3], "id": 6}], "next": 7}, "DATA_Roles_projet": {"cols": {"Projet": {"type": "Ref:DATA_Projets", "visible": "Intitule"}, "Personne": {"type": "Ref:DATA_Equipe", "visible": "Nom_Complet"}, "Role": {"type": "Choice", "label": "Rôle", "choix": ["R – Réalise", "A – Approuve", "C – Consulté", "I – Informé"]}, "Temps_consacre": {"type": "Numeric", "label": "Temps consacré"}, "Commentaire": {"type": "Text"}}, "rows": [{"Projet": 1, "Personne": 2, "Role": "A – Approuve", "Temps_consacre": 0.05, "Commentaire": "Valide l'achat", "id": 1}, {"Projet": 1, "Personne": 3, "Role": "R – Réalise", "Temps_consacre": 0.3, "Commentaire": "Pilote technique", "id": 2}, {"Projet": 1, "Personne": 4, "Role": "R – Réalise", "Temps_consacre": 0.4, "Commentaire": "Migration des règles", "id": 3}, {"Projet": 2, "Personne": 3, "Role": "A – Approuve", "Temps_consacre": 0.1, "Commentaire": "RSSI", "id": 4}, {"Projet": 2, "Personne": 5, "Role": "R – Réalise", "Temps_consacre": 0.2, "Commentaire": "", "id": 5}, {"Projet": 2, "Personne": 8, "Role": "I – Informé", "Temps_consacre": 0, "Commentaire": "Communication interne", "id": 6}, {"Projet": 3, "Personne": 2, "Role": "A – Approuve", "Temps_consacre": 0.05, "Commentaire": "", "id": 7}, {"Projet": 3, "Personne": 6, "Role": "R – Réalise", "Temps_consacre": 0.3, "Commentaire": "Coordination", "id": 8}, {"Projet": 3, "Personne": 5, "Role": "C – Consulté", "Temps_consacre": 0.05, "Commentaire": "Câblage et postes", "id": 9}, {"Projet": 4, "Personne": 7, "Role": "R – Réalise", "Temps_consacre": 0.15, "Commentaire": "", "id": 10}, {"Projet": 4, "Personne": 8, "Role": "R – Réalise", "Temps_consacre": 0.1, "Commentaire": "Commande et facturation", "id": 11}, {"Projet": 5, "Personne": 5, "Role": "R – Réalise", "Temps_consacre": 0.15, "Commentaire": "", "id": 12}, {"Projet": 6, "Personne": 2, "Role": "A – Approuve", "Temps_consacre": 0.05, "Commentaire": "", "id": 13}, {"Projet": 6, "Personne": 3, "Role": "R – Réalise", "Temps_consacre": 0.2, "Commentaire": "", "id": 14}], "next": 15}, "DATA_Jalons": {"cols": {"Date_reelle": {"type": "Date", "label": "Date réelle"}, "Projet": {"type": "Ref:DATA_Projets", "visible": "Intitule"}, "Jalon": {"type": "Text"}, "Date_prevue": {"type": "Date", "label": "Date prévue"}, "Atteint": {"type": "Bool"}, "Commentaire": {"type": "Text"}}, "rows": [{"Projet": 1, "Jalon": "Pare-feu : commande validée", "Date_prevue": {"j": -40}, "Atteint": true, "Date_reelle": {"j": -38}, "Commentaire": "", "id": 1}, {"Projet": 1, "Jalon": "Pare-feu : bascule en production", "Date_prevue": {"j": 12}, "Atteint": false, "Date_reelle": null, "Commentaire": "Prévue un samedi", "id": 2}, {"Projet": 1, "Jalon": "Pare-feu : recette finale", "Date_prevue": {"j": 20}, "Atteint": false, "Date_reelle": null, "Commentaire": "", "id": 3}, {"Projet": 2, "Jalon": "Hameçonnage : 1re campagne", "Date_prevue": {"j": -10}, "Atteint": true, "Date_reelle": {"j": -10}, "Commentaire": "", "id": 4}, {"Projet": 2, "Jalon": "Hameçonnage : 2e campagne", "Date_prevue": {"j": 40}, "Atteint": false, "Date_reelle": null, "Commentaire": "", "id": 5}, {"Projet": 3, "Jalon": "SRAL : plan d'implantation validé", "Date_prevue": {"j": 30}, "Atteint": false, "Date_reelle": null, "Commentaire": "", "id": 6}, {"Projet": 3, "Jalon": "SRAL : jour du déménagement", "Date_prevue": {"j": 110}, "Atteint": false, "Date_reelle": null, "Commentaire": "", "id": 7}, {"Projet": 4, "Jalon": "Véhicules : commande passée", "Date_prevue": {"j": -70}, "Atteint": true, "Date_reelle": {"j": -60}, "Commentaire": "Retard de validation", "id": 8}, {"Projet": 4, "Jalon": "Véhicules : livraison", "Date_prevue": {"j": -5}, "Atteint": false, "Date_reelle": null, "Commentaire": "Livraison reportée", "id": 9}, {"Projet": 5, "Jalon": "Visio : choix du matériel", "Date_prevue": null, "Atteint": false, "Date_reelle": null, "Commentaire": "En attente de budget", "id": 10}, {"Projet": 6, "Jalon": "PCA : exercice de restauration", "Date_prevue": {"j": -45}, "Atteint": true, "Date_reelle": {"j": -42}, "Commentaire": "", "id": 11}], "next": 12}, "DATA_Taches": {"cols": {"Action": {"type": "Text"}, "Suite_donnees": {"type": "Text", "label": "Suites données"}, "Date_de_debut": {"type": "Date", "label": "Date de début"}, "Echeance": {"type": "Date", "label": "Échéance"}, "Derniere_mise_a_jour_par": {"type": "Text"}, "Theme": {"type": "RefList:DATA_Themes", "label": "Thème", "visible": "Liste"}, "Statut": {"type": "Choice", "choix": ["📋 À faire", "♻️ En cours", "⏳ En attente", "✅ Terminé", "❌ Abandonné"]}, "Priorite": {"type": "Choice", "label": "Priorité", "choix": ["P1 – Critique", "P2 – Haute", "P3 – Normale", "P4 – Basse"]}, "Date_de_fin_reelle": {"type": "Date", "label": "Date de fin réelle"}, "Avancement": {"type": "Numeric"}, "Cree_le": {"type": "DateTime:Europe/Paris", "label": "Créé le"}, "Derniere_mise_a_jour": {"type": "DateTime:Europe/Paris", "label": "Dernière mise à jour"}, "Charge_estimee": {"type": "Numeric", "label": "Charge estimée (J/H)"}, "Cree_par": {"type": "Text", "label": "Créé par"}, "Responsable": {"type": "Ref:DATA_Equipe", "visible": "Nom_Complet"}, "Jalon": {"type": "Ref:DATA_Jalons", "visible": "Jalon"}, "Projet": {"type": "Ref:DATA_Projets", "visible": "Intitule"}, "Details": {"type": "Text", "label": "Détails"}, "Appuis": {"type": "RefList:DATA_Equipe", "visible": "Nom_Complet"}, "Prestataire": {"type": "Ref:DATA_Prestataires", "visible": "Raison_sociale"}, "Pieces_jointes": {"type": "Attachments", "label": "Pièces jointes"}, "Urgence": {"type": "Choice", "formule": true}, "Charge_reelle": {"type": "Numeric", "formule": true, "label": "Charge réelle (J/H)"}}, "rows": [{"Action": "Rédiger le cahier des charges du pare-feu", "Projet": 1, "Jalon": 1, "Details": "", "Responsable": 3, "Appuis": ["L", 2], "Prestataire": 0, "Theme": ["L", 1, 21], "Priorite": "P1 – Critique", "Statut": "✅ Terminé", "Date_de_debut": {"j": -60}, "Echeance": {"j": -45}, "Date_de_fin_reelle": {"j": -46}, "Charge_estimee": 3, "Avancement": 1, "Suite_donnees": "Validé par la direction", "Cree_le": {"jt": -60}, "Derniere_mise_a_jour": {"jt": -1}, "Cree_par": "Démo", "Derniere_mise_a_jour_par": "Démo", "id": 1}, {"Action": "Exporter et nettoyer les règles actuelles", "Projet": 1, "Jalon": 2, "Details": "Inventaire des règles obsolètes", "Responsable": 4, "Appuis": ["L", 3], "Prestataire": 0, "Theme": ["L", 7], "Priorite": "P1 – Critique", "Statut": "♻️ En cours", "Date_de_debut": {"j": -20}, "Echeance": {"j": 5}, "Date_de_fin_reelle": null, "Charge_estimee": 5, "Avancement": 0.6, "Suite_donnees": "", "Cree_le": {"jt": -50}, "Derniere_mise_a_jour": {"jt": -2}, "Cree_par": "Démo", "Derniere_mise_a_jour_par": "Démo", "id": 2}, {"Action": "Planifier la bascule avec le prestataire", "Projet": 1, "Jalon": 2, "Details": "", "Responsable": 3, "Appuis": null, "Prestataire": 1, "Theme": ["L", 7], "Priorite": "P1 – Critique", "Statut": "⏳ En attente", "Date_de_debut": {"j": -5}, "Echeance": {"j": 8}, "Date_de_fin_reelle": null, "Charge_estimee": 1, "Avancement": 0.2, "Suite_donnees": "Attente créneau prestataire", "Cree_le": {"jt": -8}, "Derniere_mise_a_jour": {"jt": -3}, "Cree_par": "Démo", "Derniere_mise_a_jour_par": "Démo", "id": 3}, {"Action": "Informer les agents de la coupure", "Projet": 1, "Jalon": 2, "Details": "Mail + affichage", "Responsable": 8, "Appuis": null, "Prestataire": 0, "Theme": ["L", 8], "Priorite": "P2 – Haute", "Statut": "📋 À faire", "Date_de_debut": {"j": 0}, "Echeance": {"j": 10}, "Date_de_fin_reelle": null, "Charge_estimee": 0.5, "Avancement": 0, "Suite_donnees": "", "Cree_le": {"jt": -3}, "Derniere_mise_a_jour": {"jt": -5}, "Cree_par": "Démo", "Derniere_mise_a_jour_par": "Démo", "id": 4}, {"Action": "Préparer les modèles de faux mails", "Projet": 2, "Jalon": 5, "Details": "", "Responsable": 5, "Appuis": ["L", 3], "Prestataire": 0, "Theme": ["L", 3], "Priorite": "P2 – Haute", "Statut": "♻️ En cours", "Date_de_debut": {"j": -10}, "Echeance": {"j": 25}, "Date_de_fin_reelle": null, "Charge_estimee": 2, "Avancement": 0.3, "Suite_donnees": "", "Cree_le": {"jt": -12}, "Derniere_mise_a_jour": {"jt": -9}, "Cree_par": "Démo", "Derniere_mise_a_jour_par": "Démo", "id": 5}, {"Action": "Analyser les résultats de la 1re campagne", "Projet": 2, "Jalon": 4, "Details": "", "Responsable": 5, "Appuis": null, "Prestataire": 0, "Theme": ["L", 3], "Priorite": "P2 – Haute", "Statut": "✅ Terminé", "Date_de_debut": {"j": -9}, "Echeance": {"j": -3}, "Date_de_fin_reelle": {"j": -4}, "Charge_estimee": 1, "Avancement": 1, "Suite_donnees": "Taux de clic : 14 %", "Cree_le": {"jt": -15}, "Derniere_mise_a_jour": {"jt": -20}, "Cree_par": "Démo", "Derniere_mise_a_jour_par": "Démo", "id": 6}, {"Action": "Organiser la session de sensibilisation", "Projet": 2, "Jalon": 0, "Details": "Réserver la salle, inviter les services", "Responsable": 8, "Appuis": ["L", 3], "Prestataire": 0, "Theme": ["L", 3], "Priorite": "P3 – Normale", "Statut": "📋 À faire", "Date_de_debut": null, "Echeance": null, "Date_de_fin_reelle": null, "Charge_estimee": 1, "Avancement": 0, "Suite_donnees": "", "Cree_le": {"jt": -2}, "Derniere_mise_a_jour": {"jt": -30}, "Cree_par": "Démo", "Derniere_mise_a_jour_par": "Démo", "id": 7}, {"Action": "Relever les besoins du SRAL", "Projet": 3, "Jalon": 6, "Details": "", "Responsable": 6, "Appuis": null, "Prestataire": 0, "Theme": ["L", 15], "Priorite": "P2 – Haute", "Statut": "📋 À faire", "Date_de_debut": {"j": 10}, "Echeance": {"j": 25}, "Date_de_fin_reelle": null, "Charge_estimee": 2, "Avancement": 0, "Suite_donnees": "", "Cree_le": {"jt": -4}, "Derniere_mise_a_jour": {"jt": -2}, "Cree_par": "Démo", "Derniere_mise_a_jour_par": "Démo", "id": 8}, {"Action": "Demander 3 devis de déménagement", "Projet": 3, "Jalon": 0, "Details": "", "Responsable": 7, "Appuis": null, "Prestataire": 4, "Theme": ["L", 15, 21], "Priorite": "P3 – Normale", "Statut": "📋 À faire", "Date_de_debut": {"j": 15}, "Echeance": {"j": 45}, "Date_de_fin_reelle": null, "Charge_estimee": 1, "Avancement": 0, "Suite_donnees": "", "Cree_le": {"jt": -5}, "Derniere_mise_a_jour": {"jt": -4}, "Cree_par": "Démo", "Derniere_mise_a_jour_par": "Démo", "id": 9}, {"Action": "Vérifier le câblage du 2e étage", "Projet": 3, "Jalon": 6, "Details": "", "Responsable": 5, "Appuis": null, "Prestataire": 0, "Theme": ["L", 7, 14], "Priorite": "P3 – Normale", "Statut": "📋 À faire", "Date_de_debut": {"j": 20}, "Echeance": {"j": 60}, "Date_de_fin_reelle": null, "Charge_estimee": 1, "Avancement": 0, "Suite_donnees": "", "Cree_le": {"jt": -6}, "Derniere_mise_a_jour": {"jt": -1}, "Cree_par": "Démo", "Derniere_mise_a_jour_par": "Démo", "id": 10}, {"Action": "Relancer le garage pour la livraison", "Projet": 4, "Jalon": 9, "Details": "", "Responsable": 7, "Appuis": null, "Prestataire": 6, "Theme": ["L", 18], "Priorite": "P3 – Normale", "Statut": "♻️ En cours", "Date_de_debut": {"j": -15}, "Echeance": {"j": -3}, "Date_de_fin_reelle": null, "Charge_estimee": 0.5, "Avancement": 0.5, "Suite_donnees": "Relance faite, pas de réponse", "Cree_le": {"jt": -30}, "Derniere_mise_a_jour": {"jt": -6}, "Cree_par": "Démo", "Derniere_mise_a_jour_par": "Démo", "id": 11}, {"Action": "Faire installer les bornes de recharge", "Projet": 4, "Jalon": 9, "Details": "", "Responsable": 7, "Appuis": ["L", 6], "Prestataire": 0, "Theme": ["L", 18, 14], "Priorite": "P3 – Normale", "Statut": "⏳ En attente", "Date_de_debut": {"j": -30}, "Echeance": {"j": -8}, "Date_de_fin_reelle": null, "Charge_estimee": 2, "Avancement": 0.4, "Suite_donnees": "", "Cree_le": {"jt": -28}, "Derniere_mise_a_jour": {"jt": -25}, "Cree_par": "Démo", "Derniere_mise_a_jour_par": "Démo", "id": 12}, {"Action": "Recenser les salles à équiper", "Projet": 5, "Jalon": 10, "Details": "", "Responsable": 5, "Appuis": null, "Prestataire": 0, "Theme": ["L", 13], "Priorite": "P3 – Normale", "Statut": "✅ Terminé", "Date_de_debut": {"j": -40}, "Echeance": {"j": -30}, "Date_de_fin_reelle": {"j": -32}, "Charge_estimee": 1, "Avancement": 1, "Suite_donnees": "4 salles retenues", "Cree_le": {"jt": -40}, "Derniere_mise_a_jour": {"jt": -3}, "Cree_par": "Démo", "Derniere_mise_a_jour_par": "Démo", "id": 13}, {"Action": "Obtenir le devis matériel visio", "Projet": 5, "Jalon": 10, "Details": "", "Responsable": 8, "Appuis": null, "Prestataire": 2, "Theme": ["L", 13, 22], "Priorite": "P3 – Normale", "Statut": "⏳ En attente", "Date_de_debut": {"j": -20}, "Echeance": {"j": 90}, "Date_de_fin_reelle": null, "Charge_estimee": 0.5, "Avancement": 0.2, "Suite_donnees": "Budget à confirmer", "Cree_le": {"jt": -10}, "Derniere_mise_a_jour": {"jt": -12}, "Cree_par": "Démo", "Derniere_mise_a_jour_par": "Démo", "id": 14}, {"Action": "Réaliser l'exercice de restauration", "Projet": 6, "Jalon": 11, "Details": "", "Responsable": 3, "Appuis": ["L", 4], "Prestataire": 0, "Theme": ["L", 5], "Priorite": "P2 – Haute", "Statut": "✅ Terminé", "Date_de_debut": {"j": -50}, "Echeance": {"j": -45}, "Date_de_fin_reelle": {"j": -42}, "Charge_estimee": 2, "Avancement": 1, "Suite_donnees": "Restauration OK en 3 h", "Cree_le": {"jt": -60}, "Derniere_mise_a_jour": {"jt": -40}, "Cree_par": "Démo", "Derniere_mise_a_jour_par": "Démo", "id": 15}], "next": 16}, "DATA_Temps": {"cols": {"Date": {"type": "Date"}, "Agent": {"type": "Ref:DATA_Equipe", "visible": "Nom_Complet"}, "Projet": {"type": "Ref:DATA_Projets", "visible": "Intitule"}, "Type_activite": {"type": "Choice", "label": "Type d'activité", "choix": ["📁 Projet", "🛠️ Support / assistance", "🔧 Maintenance courante", "👥 Réunion / coordination", "🎓 Formation", "📄 Administratif", "➕ Autre"]}, "Tache": {"type": "Ref:DATA_Taches", "label": "Tâche", "visible": "Action"}, "Duree_JH": {"type": "Numeric", "label": "Durée (J/H)"}, "Commentaires": {"type": "Text"}, "Mois": {"type": "Text", "formule": true}}, "rows": [{"Date": {"j": -46}, "Agent": 3, "Type_activite": "📁 Projet", "Tache": 1, "Projet": 1, "Duree_JH": 2, "Commentaires": "", "id": 1}, {"Date": {"j": -45}, "Agent": 3, "Type_activite": "📁 Projet", "Tache": 1, "Projet": 1, "Duree_JH": 1.5, "Commentaires": "", "id": 2}, {"Date": {"j": -18}, "Agent": 4, "Type_activite": "📁 Projet", "Tache": 2, "Projet": 1, "Duree_JH": 1, "Commentaires": "", "id": 3}, {"Date": {"j": -11}, "Agent": 4, "Type_activite": "📁 Projet", "Tache": 2, "Projet": 1, "Duree_JH": 1.5, "Commentaires": "", "id": 4}, {"Date": {"j": -4}, "Agent": 4, "Type_activite": "📁 Projet", "Tache": 2, "Projet": 1, "Duree_JH": 1, "Commentaires": "", "id": 5}, {"Date": {"j": -3}, "Agent": 3, "Type_activite": "📁 Projet", "Tache": 3, "Projet": 1, "Duree_JH": 0.5, "Commentaires": "", "id": 6}, {"Date": {"j": -8}, "Agent": 5, "Type_activite": "📁 Projet", "Tache": 6, "Projet": 2, "Duree_JH": 1.5, "Commentaires": "Plus long que prévu", "id": 7}, {"Date": {"j": -6}, "Agent": 5, "Type_activite": "📁 Projet", "Tache": 5, "Projet": 2, "Duree_JH": 0.5, "Commentaires": "", "id": 8}, {"Date": {"j": -12}, "Agent": 7, "Type_activite": "📁 Projet", "Tache": 11, "Projet": 4, "Duree_JH": 0.5, "Commentaires": "", "id": 9}, {"Date": {"j": -25}, "Agent": 7, "Type_activite": "📁 Projet", "Tache": 12, "Projet": 4, "Duree_JH": 1, "Commentaires": "", "id": 10}, {"Date": {"j": -35}, "Agent": 5, "Type_activite": "📁 Projet", "Tache": 13, "Projet": 5, "Duree_JH": 1, "Commentaires": "", "id": 11}, {"Date": {"j": -48}, "Agent": 3, "Type_activite": "📁 Projet", "Tache": 15, "Projet": 6, "Duree_JH": 2.5, "Commentaires": "", "id": 12}, {"Date": {"j": -14}, "Agent": 5, "Type_activite": "🛠️ Support / assistance", "Tache": 0, "Projet": 0, "Duree_JH": 2, "Commentaires": "Tickets utilisateurs", "id": 13}, {"Date": {"j": -7}, "Agent": 5, "Type_activite": "🛠️ Support / assistance", "Tache": 0, "Projet": 0, "Duree_JH": 1.5, "Commentaires": "Tickets utilisateurs", "id": 14}, {"Date": {"j": -13}, "Agent": 4, "Type_activite": "🔧 Maintenance courante", "Tache": 0, "Projet": 0, "Duree_JH": 1, "Commentaires": "Mises à jour serveurs", "id": 15}, {"Date": {"j": -9}, "Agent": 6, "Type_activite": "🔧 Maintenance courante", "Tache": 0, "Projet": 0, "Duree_JH": 1, "Commentaires": "Fuite salle 104", "id": 16}, {"Date": {"j": -5}, "Agent": 2, "Type_activite": "👥 Réunion / coordination", "Tache": 0, "Projet": 0, "Duree_JH": 0.5, "Commentaires": "Comité de direction", "id": 17}, {"Date": {"j": -2}, "Agent": 9, "Type_activite": "🎓 Formation", "Tache": 0, "Projet": 0, "Duree_JH": 1, "Commentaires": "Formation école", "id": 18}, {"Date": {"j": -1}, "Agent": 8, "Type_activite": "📄 Administratif", "Tache": 0, "Projet": 0, "Duree_JH": 1, "Commentaires": "Factures et bons de commande", "id": 19}, {"Date": {"j": -40}, "Agent": 7, "Type_activite": "➕ Autre", "Tache": 0, "Projet": 0, "Duree_JH": 0.5, "Commentaires": "Inventaire fournitures", "id": 20}], "next": 21}, "DATA_Sous_taches": {"cols": {"Tache": {"type": "Ref:DATA_Taches", "label": "Tâche", "visible": "Action"}, "Libelle": {"type": "Text", "label": "Libellé"}, "Fait": {"type": "Bool"}, "Ordre": {"type": "Numeric"}, "Responsable": {"type": "Ref:DATA_Equipe", "visible": "Nom_Complet"}, "Echeance": {"type": "Date", "label": "Échéance"}}, "rows": [{"Tache": 2, "Libelle": "Exporter la configuration actuelle", "Fait": true, "Ordre": 1, "Responsable": 0, "Echeance": null, "id": 1}, {"Tache": 2, "Libelle": "Lister les règles inutilisées depuis 6 mois", "Fait": true, "Ordre": 2, "Responsable": 0, "Echeance": null, "id": 2}, {"Tache": 2, "Libelle": "Valider la liste avec le RSSI", "Fait": false, "Ordre": 3, "Responsable": 0, "Echeance": null, "id": 3}, {"Tache": 2, "Libelle": "Supprimer les règles obsolètes", "Fait": false, "Ordre": 4, "Responsable": 0, "Echeance": null, "id": 4}, {"Tache": 5, "Libelle": "Modèle « colis en attente »", "Fait": true, "Ordre": 1, "Responsable": 0, "Echeance": null, "id": 5}, {"Tache": 5, "Libelle": "Modèle « mise à jour du mot de passe »", "Fait": false, "Ordre": 2, "Responsable": 0, "Echeance": null, "id": 6}, {"Tache": 5, "Libelle": "Modèle « facture impayée »", "Fait": false, "Ordre": 3, "Responsable": 0, "Echeance": null, "id": 7}, {"Tache": 12, "Libelle": "Visite technique du site", "Fait": true, "Ordre": 1, "Responsable": 0, "Echeance": null, "id": 8}, {"Tache": 12, "Libelle": "Devis électricien", "Fait": true, "Ordre": 2, "Responsable": 0, "Echeance": null, "id": 9}, {"Tache": 12, "Libelle": "Pose des bornes", "Fait": false, "Ordre": 3, "Responsable": 0, "Echeance": null, "id": 10}, {"Tache": 12, "Libelle": "Mise en service", "Fait": false, "Ordre": 4, "Responsable": 0, "Echeance": null, "id": 11}], "next": 12}}};
+  function jourUTC(n){ const d=new Date(); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()+n)/1000; }
+  function instant(n){ const d=new Date(); d.setDate(d.getDate()+n); d.setHours(10,0,0,0); return d.getTime()/1000; }
+  function convertir(v){ if(v && typeof v==='object' && !Array.isArray(v)){ if('j' in v) return jourUTC(v.j); if('jt' in v) return instant(v.jt); } return v; }
+  window.PILOTAGE_DEMO = {
+    construire(){
+      const base = JSON.parse(JSON.stringify(MODELE));
+      Object.values(base.tables).forEach(t => t.rows.forEach(r => Object.keys(r).forEach(k => { r[k] = convertir(r[k]); })));
+      return base;
+    },
+    formule(base, tid, col, r){
+      if (tid==='DATA_Equipe' && col==='Nom_Complet') return `${r.Prenom||''} ${r.Nom||''}`.trim();
+      if (tid==='DATA_Temps' && col==='Mois') { if(!r.Date) return ''; const d=new Date(r.Date*1000); return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0'); }
+      if (tid==='DATA_Taches' && col==='Charge_reelle') return base.tables.DATA_Temps.rows.filter(x=>x.Tache===r.id).reduce((s,x)=>s+(x.Duree_JH||0),0);
+      return null;
+    }
+  };
+})();
+
+</script>
+<script>
+/* ==========================================================================
+   Pilotage de projets – socle commun des widgets Grist
+   - lecture de la structure du document et détection automatique
+     des tables / colonnes (projets, tâches, jalons, équipe, temps…)
+   - écran de configuration partagé (association rôles ↔ colonnes)
+   - lecture normalisée des données et écriture typée
+   - mode démonstration hors de Grist (données fictives en mémoire)
+   ========================================================================== */
+(function () {
+  'use strict';
+  const P = window.Pilotage = {};
+  const SCRIPT_URL = document.currentScript ? document.currentScript.src : '';
+
+  /* ------------------------------------------------------------------ */
+  /* Utilitaires                                                         */
+  /* ------------------------------------------------------------------ */
+  const norm = s => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g,
+    c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+  const pad = n => String(n).padStart(2, '0');
+  P.norm = norm; P.esc = esc;
+
+  P.$ = (sel, root) => (root || document).querySelector(sel);
+  P.$$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+  P.debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+  P.uniq = a => Array.from(new Set(a));
+  P.somme = a => a.reduce((s, x) => s + (Number(x) || 0), 0);
+  P.fmtNb = (n, dec) => n == null || isNaN(n) ? '–' : Number(n).toLocaleString('fr-FR', {maximumFractionDigits: dec == null ? 1 : dec});
+  P.fmtPct = n => n == null || isNaN(n) ? '–' : Math.round(n * 100) + ' %';
+  P.fmtEuro = n => n == null || isNaN(n) ? '–' : Number(n).toLocaleString('fr-FR', {style: 'currency', currency: 'EUR', maximumFractionDigits: 0});
+
+  /* ----- Dates (toujours à minuit, heure locale) ----- */
+  P.today = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); };
+  P.jour = d => d ? new Date(d.getFullYear(), d.getMonth(), d.getDate()) : null;
+  P.addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+  P.addMonths = (d, n) => new Date(d.getFullYear(), d.getMonth() + n, Math.min(d.getDate(), 28));
+  P.diffDays = (a, b) => Math.round((Date.UTC(a.getFullYear(), a.getMonth(), a.getDate()) -
+    Date.UTC(b.getFullYear(), b.getMonth(), b.getDate())) / 864e5);
+  P.iso = d => d ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` : '';
+  P.fromIso = s => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || ''); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; };
+  P.fmtDate = d => d ? `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}` : '';
+  P.fmtDateCourt = d => d ? d.toLocaleDateString('fr-FR', {day: 'numeric', month: 'short'}) : '';
+  P.fmtDateLong = d => d ? d.toLocaleDateString('fr-FR', {weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'}) : '';
+  P.fmtDateHeure = d => d ? d.toLocaleString('fr-FR', {day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'}) : '';
+  P.lundi = d => { const j = (d.getDay() + 6) % 7; return P.addDays(P.jour(d), -j); };
+  P.semaineIso = d => {
+    const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const n = (t.getUTCDay() + 6) % 7; t.setUTCDate(t.getUTCDate() - n + 3);
+    const p = new Date(Date.UTC(t.getUTCFullYear(), 0, 4));
+    return 1 + Math.round(((t - p) / 864e5 - 3 + ((p.getUTCDay() + 6) % 7)) / 7);
+  };
+  P.parseDateTexte = s => {
+    if (!s) return null;
+    s = String(s).trim();
+    let m = /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/.exec(s);
+    if (m) { let y = +m[3]; if (y < 100) y += 2000; return new Date(y, +m[2] - 1, +m[1]); }
+    m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+    if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+    return null;
+  };
+  /* Jours fériés en France métropolitaine */
+  const feriesCache = {};
+  P.feries = annee => {
+    if (feriesCache[annee]) return feriesCache[annee];
+    const a = annee % 19, b = Math.floor(annee / 100), c = annee % 100, d = Math.floor(b / 4), e = b % 4,
+      f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30,
+      i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451),
+      mois = Math.floor((h + l - 7 * m + 114) / 31), jour = ((h + l - 7 * m + 114) % 31) + 1;
+    const paques = new Date(annee, mois - 1, jour);
+    const liste = [[0, 1], [4, 1], [4, 8], [6, 14], [7, 15], [10, 1], [10, 11], [11, 25]].map(([mo, j]) => new Date(annee, mo, j));
+    liste.push(P.addDays(paques, 1), P.addDays(paques, 39), P.addDays(paques, 50));
+    return (feriesCache[annee] = new Set(liste.map(P.iso)));
+  };
+  P.estOuvre = d => { const j = d.getDay(); return j !== 0 && j !== 6 && !P.feries(d.getFullYear()).has(P.iso(d)); };
+  P.joursOuvres = (debut, fin) => { const r = []; for (let d = P.jour(debut); d <= fin; d = P.addDays(d, 1)) if (P.estOuvre(d)) r.push(d); return r; };
+  P.relatif = n => {
+    if (n == null) return '';
+    if (n === 0) return "aujourd'hui";
+    if (n === 1) return 'demain';
+    if (n === -1) return 'hier';
+    return n > 0 ? `dans ${n} j` : `il y a ${-n} j`;
+  };
+
+  /* ----- Sémantique métier (statuts, priorités, rôles) ----- */
+  P.estAbandon = s => /abandon|annul/i.test(s || '');
+  P.estTermine = s => /termin|fait\b|clos|ferm|done|achev|livr|realis|réalis|valid/i.test(s || '') && !P.estAbandon(s);
+  P.estClos = s => P.estTermine(s) || P.estAbandon(s);
+  P.estAttente = s => /attente|bloqu|suspend/i.test(s || '');
+  P.estPause = s => /pause|suspend|gel/i.test(s || '');
+  P.estEnCours = s => /cours|progress|demarr|démarr/i.test(s || '');
+  P.rangPriorite = p => {
+    const s = norm(p);
+    if (!s) return 9;
+    const m = /p(\d)/.exec(s); if (m) return +m[1];
+    if (/critique|urgent|tres/.test(s)) return 1;
+    if (/haut|forte|eleve/.test(s)) return 2;
+    if (/normal|moyen/.test(s)) return 3;
+    if (/bas|faible/.test(s)) return 4;
+    const d = /(\d)/.exec(s); return d ? +d[1] : 9;
+  };
+  P.lettreRole = r => { const m = /[RACI]/.exec(String(r || '').toUpperCase().replace(/^[^A-Z]*/, '')); return m ? m[0] : ''; };
+
+  /** Urgence d'une tâche (mêmes règles que la formule Grist) */
+  P.urgence = t => {
+    if (P.estClos(t.statut)) return {code: 'clos', libelle: '⚪ Clos', rang: 9, classe: ''};
+    if (!t.echeance) return {code: 'sans', libelle: '⚪ Sans échéance', rang: 4, classe: ''};
+    const j = P.diffDays(t.echeance, P.today());
+    if (j < 0) return {code: 'retard', libelle: '🔴 En retard', rang: 0, classe: 'err', jours: j};
+    if (j <= 7 || P.rangPriorite(t.priorite) === 1) return {code: 'urgent', libelle: '🟠 Urgent', rang: 1, classe: 'warn', jours: j};
+    if (j <= 30) return {code: 'surveiller', libelle: '🟡 À surveiller', rang: 2, classe: 'jaune', jours: j};
+    return {code: 'ok', libelle: '🟢 Dans les temps', rang: 3, classe: 'ok', jours: j};
+  };
+  /** Avancement d'une tâche borné entre 0 et 1 */
+  P.avancement = t => {
+    if (P.estTermine(t.statut)) return 1;
+    const a = Number(t.avancement); return isNaN(a) ? 0 : Math.max(0, Math.min(1, a > 1.0001 && a <= 100 ? a / 100 : a));
+  };
+
+  /* Indicateurs d'un projet calculés à partir des tâches et des temps */
+  P.tachesDuProjet = id => P.liste('tache').filter(t => t.projet === id);
+  P.avancementProjet = id => {
+    const t = P.tachesDuProjet(id).filter(x => !P.estAbandon(x.statut));
+    if (!t.length) return 0;
+    const poids = t.map(x => Math.max(x.charge || 0, 0) || 1);
+    return t.reduce((s, x, i) => s + poids[i] * P.avancement(x), 0) / P.somme(poids);
+  };
+  P.chargeReelleProjet = id => P.somme(P.liste('temps').filter(x => x.projet === id || (x.tache && (P.get('tache', x.tache) || {}).projet === id && !x.projet)).map(x => x.duree));
+  P.chargePlanifieeProjet = id => P.somme(P.tachesDuProjet(id).map(t => Math.max(t.charge || 0, 0)));
+  P.santeProjet = p => {
+    if (P.estClos(p.phase)) return {l: '⚪ Clos', c: '', rang: 5};
+    if (P.estPause(p.phase)) return {l: '⏸️ En pause', c: '', rang: 4};
+    const retards = P.tachesDuProjet(p.id).filter(t => P.urgence(t).code === 'retard').length;
+    const j = p.fin ? P.diffDays(p.fin, P.today()) : null;
+    if (retards || (j != null && j < 0)) return {l: '⛈️ Critique', c: 'err', rang: 0};
+    if (p.charge && P.chargeReelleProjet(p.id) > p.charge) return {l: '🌧️ Charge dépassée', c: 'warn', rang: 1};
+    if (j != null && j <= 15 && P.avancementProjet(p.id) < .8) return {l: '🌥️ Tendu', c: 'jaune', rang: 2};
+    return {l: '☀️ OK', c: 'ok', rang: 3};
+  };
+
+  /* ------------------------------------------------------------------ */
+  /* Catalogue des entités métier et de leurs champs                     */
+  /* kind : texte | nombre | date | datetime | bool | choix | choix_multi */
+  /*        | ref:<entité> | refs:<entité>                                 */
+  /* ------------------------------------------------------------------ */
+  const E = P.ENTITES = {
+    projet: {libelle: 'Projets', tables: ['projets', 'projet', 'portefeuille'], champs: {
+      titre: {l: 'Intitulé', k: 'texte', req: true, syn: ['intitule', 'titre', 'nom', 'libelle', 'projet', 'nomduprojet', 'name']},
+      code: {l: 'Code', k: 'texte', syn: ['code', 'reference', 'ref', 'numero']},
+      domaine: {l: 'Domaine', k: 'choix', syn: ['domaine', 'pole', 'categorie', 'thematique']},
+      phase: {l: 'Phase / statut', k: 'choix', ecrit: true, syn: ['phase', 'statut', 'etat', 'status', 'avancementphase']},
+      priorite: {l: 'Priorité', k: 'choix', syn: ['priorite', 'priority', 'importance']},
+      chefs: {l: 'Chef(s) de projet', k: 'refs:agent', syn: ['chargedemission', 'chefdeprojet', 'chefsdeprojet', 'responsable', 'pilote', 'referent', 'chef']},
+      debut: {l: 'Date de début', k: 'date', syn: ['datededebut', 'datedebut', 'debut', 'start', 'lancement']},
+      fin: {l: 'Deadline', k: 'date', syn: ['deadline', 'datefinprevue', 'datedefinprevue', 'echeance', 'datedefin', 'datefin', 'fin', 'delai']},
+      fin_reelle: {l: 'Date de fin réelle', k: 'date', syn: ['datedefinreelle', 'datefinreelle', 'finreelle', 'cloture']},
+      charge: {l: 'Charge estimée (J/H)', k: 'nombre', syn: ['chargeestimee', 'chargeestimeejh', 'charge', 'chargejh', 'jourshomme']},
+      objectifs: {l: 'Objectifs', k: 'texte', syn: ['objectifs', 'objectif', 'but']},
+      criteres: {l: 'Critères de réussite', k: 'texte', syn: ['criteresdereussite', 'objectifderealisation', 'objectifrealisation', 'criteres', 'indicateurs']},
+      description: {l: 'Description', k: 'texte', syn: ['description', 'contexte', 'details']},
+      contraintes: {l: 'Contraintes', k: 'texte', syn: ['contraintes', 'contrainte']},
+      risques: {l: 'Risques', k: 'texte', syn: ['risques', 'risque']},
+      formation: {l: 'Besoins de formation', k: 'texte', syn: ['besoindeformation', 'besoinsdeformation', 'formation']},
+      parties: {l: 'Parties prenantes', k: 'refs:partie', syn: ['partieprenantes', 'partiesprenantes', 'partieprenante', 'services', 'beneficiaires']},
+      prestataires: {l: 'Prestataires', k: 'refs:prestataire', syn: ['prestataires', 'prestataire', 'fournisseurs']},
+      budget: {l: 'Budget prévu', k: 'nombre', syn: ['budgetprevu', 'budget']},
+    }},
+    tache: {libelle: 'Tâches', tables: ['taches', 'tache', 'todolist', 'todo', 'actions', 'action', 'tasks'], champs: {
+      titre: {l: 'Intitulé de la tâche', k: 'texte', req: true, syn: ['action', 'intitule', 'titre', 'tache', 'libelle', 'nom', 'task']},
+      projet: {l: 'Projet', k: 'ref:projet', syn: ['projet', 'project', 'dossier']},
+      jalon: {l: 'Jalon', k: 'ref:jalon', syn: ['jalon', 'milestone', 'etape']},
+      responsable: {l: 'Responsable', k: 'ref:agent', syn: ['responsable', 'piloteaction', 'pilote', 'assigne', 'porteur', 'agent']},
+      appuis: {l: 'Appuis', k: 'refs:agent', syn: ['appuis', 'appuiaction', 'appui', 'contributeurs', 'participants']},
+      statut: {l: 'Statut', k: 'choix', ecrit: true, syn: ['statut', 'etat', 'status']},
+      priorite: {l: 'Priorité', k: 'choix', syn: ['priorite', 'priority', 'importance']},
+      debut: {l: 'Date de début', k: 'date', syn: ['datededebut', 'datedebut', 'debut', 'start']},
+      echeance: {l: 'Échéance', k: 'date', syn: ['echeance', 'dateecheance', 'datelimite', 'deadline', 'datedefin', 'fin']},
+      fin_reelle: {l: 'Date de fin réelle', k: 'date', syn: ['datedefinreelle', 'datefinreelle', 'finreelle', 'realiseele']},
+      charge: {l: 'Charge estimée (J/H)', k: 'nombre', syn: ['chargeestimee', 'chargeestimeejh', 'charge', 'chargejh', 'jourshomme', 'duree']},
+      avancement: {l: 'Avancement', k: 'nombre', syn: ['avancement', 'progression', 'pourcentage', 'progress']},
+      details: {l: 'Détails', k: 'texte', syn: ['details', 'detailsdelaction', 'description', 'commentaire']},
+      suites: {l: 'Suites données', k: 'texte', syn: ['suitedonnees', 'suitesdonnees', 'suites', 'suivi']},
+      theme: {l: 'Thème', k: 'refs:theme', syn: ['theme', 'themes', 'categorie']},
+      prestataire: {l: 'Prestataire', k: 'ref:prestataire', syn: ['prestataire', 'fournisseur']},
+      maj: {l: 'Dernière mise à jour', k: 'datetime', syn: ['dernieremiseajour', 'dernieremaj', 'majle', 'modifiele', 'updated']},
+      cree_le: {l: 'Créé le', k: 'datetime', syn: ['creele', 'datecreation', 'datedecreation', 'created']},
+    }},
+    jalon: {libelle: 'Jalons', tables: ['jalons', 'jalon', 'milestones', 'etapes'], champs: {
+      titre: {l: 'Intitulé du jalon', k: 'texte', req: true, syn: ['jalon', 'libelle', 'intitule', 'titre', 'nom']},
+      projet: {l: 'Projet', k: 'ref:projet', syn: ['projet']},
+      date: {l: 'Date prévue', k: 'date', syn: ['dateprevue', 'date', 'echeance']},
+      atteint: {l: 'Atteint', k: 'bool', syn: ['atteint', 'fait', 'valide', 'realise']},
+      date_reelle: {l: 'Date réelle', k: 'date', syn: ['datereelle', 'datedereelle', 'realisele']},
+    }},
+    agent: {libelle: 'Équipe', tables: ['equipe', 'intervenants', 'agents', 'personnes', 'membres', 'interne', 'acteurs', 'collaborateurs'], champs: {
+      nom_complet: {l: 'Nom affiché', k: 'texte', syn: ['nomcomplet', 'nomprenom', 'prenomnom', 'acteurs', 'acteurtrice', 'agent', 'personne', 'identite']},
+      prenom: {l: 'Prénom', k: 'texte', syn: ['prenom', 'firstname']},
+      nom: {l: 'Nom', k: 'texte', syn: ['nom', 'lastname', 'name']},
+      mail: {l: 'Mail', k: 'texte', syn: ['mail', 'email', 'courriel', 'adressemail']},
+      fonction: {l: 'Fonction', k: 'choix_multi', syn: ['fonction', 'fonctions', 'poste', 'role']},
+      service: {l: 'Service', k: 'texte', syn: ['service', 'structure', 'unite']},
+    }},
+    temps: {libelle: 'Temps passés', tables: ['temps', 'saisietemps', 'feuilledetemps', 'activite', 'activites', 'timesheet', 'imputations'], champs: {
+      date: {l: 'Date', k: 'date', req: true, syn: ['date', 'jour']},
+      agent: {l: 'Agent', k: 'ref:agent', syn: ['agent', 'personne', 'collaborateur', 'utilisateur']},
+      duree: {l: 'Durée (J/H)', k: 'nombre', req: true, syn: ['dureejh', 'duree', 'temps', 'jours', 'charge']},
+      type: {l: "Type d'activité", k: 'choix', syn: ['typeactivite', 'typedactivite', 'activite', 'type', 'nature']},
+      tache: {l: 'Tâche', k: 'ref:tache', syn: ['tache', 'action']},
+      projet: {l: 'Projet', k: 'ref:projet', syn: ['projet']},
+      commentaire: {l: 'Commentaire', k: 'texte', syn: ['commentaires', 'commentaire', 'description']},
+    }},
+    role: {libelle: 'Rôles (RACI)', tables: ['rolesprojet', 'roles', 'raci', 'affectations'], champs: {
+      projet: {l: 'Projet', k: 'ref:projet', req: true, syn: ['projet']},
+      personne: {l: 'Personne', k: 'ref:agent', req: true, syn: ['personne', 'agent', 'membre', 'acteur']},
+      role: {l: 'Rôle (R/A/C/I)', k: 'choix', req: true, syn: ['role', 'raci', 'fonction']},
+      part: {l: 'Temps consacré', k: 'nombre', syn: ['tempsconsacre', 'parttemps', 'part', 'pourcentage']},
+      commentaire: {l: 'Commentaire', k: 'texte', syn: ['commentaire', 'commentaires']},
+    }},
+    prestataire: {libelle: 'Prestataires', tables: ['prestataires', 'prestataire', 'fournisseurs', 'titulaires'], champs: {
+      nom: {l: 'Raison sociale', k: 'texte', req: true, syn: ['raisonsociale', 'libelle', 'nom', 'societe', 'entreprise']},
+      type: {l: 'Type de relation', k: 'choix', syn: ['typerelation', 'typederelation', 'relation', 'type']},
+      marche: {l: 'Réf. marché / contrat', k: 'texte', syn: ['marcheref', 'refmarche', 'referencemarche', 'marche', 'contrat', 'numero']},
+      debut: {l: 'Début de contrat', k: 'date', syn: ['debutdecontrat', 'datedebutcontrat', 'debutcontrat', 'debut']},
+      fin: {l: 'Fin de contrat', k: 'date', syn: ['findecontrat', 'datefincontrat', 'fincontrat', 'echeance', 'fin']},
+      montant: {l: 'Montant', k: 'nombre', syn: ['montantdumarche', 'montantmarche', 'montant']},
+      specialite: {l: 'Spécialité', k: 'choix_multi', syn: ['specialite', 'specialites', 'domaine']},
+      representant: {l: 'Représentant', k: 'texte', syn: ['representant', 'contact', 'interlocuteur']},
+      mail: {l: 'Mail', k: 'texte', syn: ['mail', 'email', 'courriel']},
+      telephone: {l: 'Téléphone', k: 'texte', syn: ['telephone', 'tel', 'phone']},
+    }},
+    sous_tache: {libelle: 'Sous-tâches', tables: ['soustaches', 'soustache', 'checklist', 'checklists', 'subtasks'], creable: true, champs: {
+      tache: {l: 'Tâche parente', k: 'ref:tache', req: true, syn: ['tache', 'parent', 'action']},
+      libelle: {l: 'Libellé', k: 'texte', req: true, syn: ['libelle', 'intitule', 'titre', 'nom']},
+      fait: {l: 'Fait', k: 'bool', req: true, syn: ['fait', 'termine', 'coche', 'done', 'realise']},
+      ordre: {l: 'Ordre', k: 'nombre', syn: ['ordre', 'position', 'rang']},
+      responsable: {l: 'Responsable', k: 'ref:agent', syn: ['responsable', 'agent', 'pilote']},
+      echeance: {l: 'Échéance', k: 'date', syn: ['echeance', 'date', 'datelimite']},
+    }},
+    partie: {libelle: 'Parties prenantes', tables: ['partieprenantes', 'partiesprenantes', 'services'], champs: {
+      nom: {l: 'Libellé', k: 'texte', req: true, syn: ['service', 'nom', 'libelle', 'intitule']},
+    }},
+    theme: {libelle: 'Thèmes', tables: ['themes', 'theme', 'categories'], champs: {
+      nom: {l: 'Libellé', k: 'texte', req: true, syn: ['liste', 'theme', 'libelle', 'nom', 'intitule']},
+    }},
+  };
+  /* Structure créée automatiquement pour les entités « créables » */
+  P.STRUCTURES = {
+    sous_tache: {table: 'DATA_Sous_taches', cols: (cible) => [
+      {id: 'Tache', type: 'Ref:' + cible.tache, champ: 'tache'},
+      {id: 'Libelle', type: 'Text', champ: 'libelle'},
+      {id: 'Fait', type: 'Bool', champ: 'fait'},
+      {id: 'Ordre', type: 'Numeric', champ: 'ordre'},
+      {id: 'Responsable', type: cible.agent ? 'Ref:' + cible.agent : 'Text', champ: 'responsable'},
+      {id: 'Echeance', type: 'Date', champ: 'echeance'},
+    ]},
+  };
+
+  const baseKind = k => k.split(':')[0];
+  const cibleKind = k => k.split(':')[1];
+
+  /* Compatibilité type de colonne Grist ↔ nature du champ */
+  function compat(kind, type) {
+    const t = (type || 'Any').split(':')[0];
+    const k = baseKind(kind);
+    const table = {
+      texte: ['Text', 'Choice', 'Any'],
+      nombre: ['Numeric', 'Int'],
+      date: ['Date', 'DateTime', 'Text'],
+      datetime: ['DateTime', 'Date'],
+      bool: ['Bool'],
+      choix: ['Choice', 'Text'],
+      choix_multi: ['ChoiceList', 'Choice', 'Text', 'RefList', 'Ref'],
+      ref: ['Ref', 'RefList', 'Text', 'Choice'],
+      refs: ['RefList', 'Ref', 'ChoiceList', 'Text', 'Choice'],
+    }[k] || [];
+    const i = table.indexOf(t);
+    return i < 0 ? 0 : (i === 0 ? 3 : 2);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Accès aux données : Grist ou démonstration                          */
+  /* ------------------------------------------------------------------ */
+  const enGrist = () => typeof window.grist !== 'undefined' && window.self !== window.top;
+
+  function schemaDepuisMeta(T, C) {
+    const tables = {};
+    const colParRef = {};
+    T.id.forEach((id, i) => {
+      const tid = T.tableId[i];
+      if (!tid || /^GristHidden_/.test(tid) || (T.summarySourceTable && T.summarySourceTable[i]) || /^_grist/.test(tid)) return;
+      tables[id] = {id: tid, cols: []};
+    });
+    C.id.forEach((id, i) => {
+      const t = tables[C.parentId[i]];
+      const colId = C.colId[i];
+      colParRef[id] = {colId, parent: C.parentId[i]};
+      if (!t || colId === 'manualSort' || /^gristHelper_/.test(colId)) return;
+      t.cols.push({ref: id, colId, label: (C.label && C.label[i]) || colId, type: C.type[i] || 'Any',
+        isFormula: !!C.isFormula[i], formula: (C.formula && C.formula[i]) || '', widgetOptions: (C.widgetOptions && C.widgetOptions[i]) || '',
+        visibleColRef: (C.visibleCol && C.visibleCol[i]) || 0});
+    });
+    const res = {};
+    Object.values(tables).forEach(t => {
+      t.cols.forEach(c => { const v = colParRef[c.visibleColRef]; c.visibleCol = v ? v.colId : ''; });
+      res[t.id] = t;
+    });
+    return res;
+  }
+
+  const GristBackend = {
+    nom: 'grist',
+    async init(onChange, onCurseur) {
+      let optsRecues = false;
+      this.options = null;
+      const premieresOptions = new Promise(res => {
+        grist.onOptions(opts => {
+          this.options = opts || null;
+          if (!optsRecues) { optsRecues = true; res(); } else onChange('options');
+        });
+        setTimeout(res, 2500);
+      });
+      grist.ready({requiredAccess: 'full', allowSelectBy: false, onEditOptions: () => P.ouvrirConfig()});
+      grist.onRecords(() => onChange('records'));
+      grist.onRecord(async rec => {
+        if (!rec) return;
+        let tableId = null;
+        try { tableId = await (grist.selectedTable || grist.getTable()).getTableId(); } catch (e) { /* ignoré */ }
+        onCurseur(tableId, rec.id);
+      });
+      await premieresOptions;
+    },
+    async schema() {
+      const T = await grist.docApi.fetchTable('_grist_Tables');
+      const C = await grist.docApi.fetchTable('_grist_Tables_column');
+      return schemaDepuisMeta(T, C);
+    },
+    fetch: t => grist.docApi.fetchTable(t),
+    apply: a => grist.docApi.applyUserActions(a),
+    async docName() { try { return await grist.docApi.getDocName(); } catch (e) { return 'document'; } },
+    async setOptions(o) { await grist.setOptions(o); this.options = o; },
+    getOptions() { return this.options; },
+  };
+
+  /* Base de démonstration : mêmes formats que Grist (colonnes, dates en secondes…) */
+  const CLE_DEMO = 'pilotage-demo-v3';
+  const DemoBackend = {
+    nom: 'demo',
+    async init(onChange) {
+      if (!window.PILOTAGE_DEMO) await chargerScript(new URL('demo-data.js', SCRIPT_URL || location.href).href);
+      let base = null;
+      try { base = JSON.parse(localStorage.getItem(CLE_DEMO) || 'null'); } catch (e) { /* ignoré */ }
+      this.base = base || window.PILOTAGE_DEMO.construire();
+      try { this.options = JSON.parse(localStorage.getItem(CLE_DEMO + ':opts:' + P.cfg.id) || 'null'); } catch (e) { this.options = null; }
+      window.addEventListener('storage', ev => {
+        if (ev.key === CLE_DEMO && ev.newValue) { this.base = JSON.parse(ev.newValue); onChange('records'); }
+      });
+    },
+    sauver() { try { localStorage.setItem(CLE_DEMO, JSON.stringify(this.base)); } catch (e) { /* ignoré */ } },
+    reinitialiser() { localStorage.removeItem(CLE_DEMO); this.base = window.PILOTAGE_DEMO.construire(); },
+    async schema() {
+      const res = {};
+      Object.entries(this.base.tables).forEach(([tid, t]) => {
+        res[tid] = {id: tid, cols: Object.entries(t.cols).map(([colId, c]) => ({colId, label: c.label || colId, type: c.type,
+          isFormula: !!c.formule, formula: c.formule ? 'calculée' : '', widgetOptions: c.choix ? JSON.stringify({choices: c.choix}) : '',
+          visibleCol: c.visible || ''}))};
+      });
+      return res;
+    },
+    async fetch(tid) {
+      const t = this.base.tables[tid];
+      if (!t) throw new Error('Table inconnue : ' + tid);
+      const out = {id: t.rows.map(r => r.id)};
+      Object.entries(t.cols).forEach(([c, def]) => {
+        out[c] = t.rows.map(r => def.formule ? window.PILOTAGE_DEMO.formule(this.base, tid, c, r) : (r[c] === undefined ? null : r[c]));
+      });
+      return out;
+    },
+    async apply(actions) {
+      const ret = [];
+      for (const a of actions) {
+        const [op, tid] = a;
+        const t = this.base.tables[tid];
+        if (op === 'AddTable') {
+          this.base.tables[tid] = {cols: {}, rows: [], next: 1};
+          a[2].forEach(c => { this.base.tables[tid].cols[c.id] = {type: c.type}; });
+          ret.push({table_id: tid}); continue;
+        }
+        if (!t) throw new Error('Table inconnue : ' + tid);
+        const nouveau = vals => { const id = t.next++; const r = {id}; Object.assign(r, vals); t.rows.push(r); return id; };
+        if (op === 'AddRecord') ret.push(nouveau(a[3]));
+        else if (op === 'BulkAddRecord') {
+          const ids = a[2].map((_, i) => { const v = {}; Object.keys(a[3]).forEach(c => { v[c] = a[3][c][i]; }); return nouveau(v); });
+          ret.push(ids);
+        } else if (op === 'UpdateRecord') { const r = t.rows.find(x => x.id === a[2]); if (r) Object.assign(r, a[3]); ret.push(null); }
+        else if (op === 'BulkUpdateRecord') {
+          a[2].forEach((id, i) => { const r = t.rows.find(x => x.id === id); if (r) Object.keys(a[3]).forEach(c => { r[c] = a[3][c][i]; }); });
+          ret.push(null);
+        } else if (op === 'RemoveRecord') { t.rows = t.rows.filter(x => x.id !== a[2]); ret.push(null); }
+        else if (op === 'BulkRemoveRecord') { const s = new Set(a[2]); t.rows = t.rows.filter(x => !s.has(x.id)); ret.push(null); }
+        else ret.push(null);
+      }
+      this.sauver();
+      return {retValues: ret};
+    },
+    async docName() { return 'Démonstration'; },
+    async setOptions(o) { this.options = o; localStorage.setItem(CLE_DEMO + ':opts:' + P.cfg.id, JSON.stringify(o)); },
+    getOptions() { return this.options; },
+  };
+
+  function chargerScript(src) {
+    return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('Impossible de charger ' + src)); document.head.appendChild(s); });
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Détection automatique                                               */
+  /* ------------------------------------------------------------------ */
+  function nomTableNorm(tid) { return norm(tid).replace(/^data/, '').replace(/^tbl/, ''); }
+
+  function scoreChamp(def, col) {
+    const n1 = norm(col.colId), n2 = norm(col.label);
+    let s = 0;
+    def.syn.forEach((syn, i) => {
+      const bonus = Math.max(0, 3 - i * 0.15);
+      if (n1 === syn || n2 === syn) s = Math.max(s, 10 + bonus);
+      else if (syn.length > 3 && (n1.startsWith(syn) || n2.startsWith(syn))) s = Math.max(s, 6 + bonus);
+      else if (syn.length > 4 && (n1.includes(syn) || n2.includes(syn))) s = Math.max(s, 4 + bonus);
+    });
+    if (!s) return 0;
+    const c = compat(def.k, col.type);
+    if (!c) return 0;
+    s += c;
+    if (col.isFormula && col.formula && def.ecrit) s -= 3;
+    return s;
+  }
+
+  function detecterChamps(entite, table) {
+    const defs = E[entite].champs;
+    const cand = [];
+    Object.entries(defs).forEach(([ch, def]) => table.cols.forEach(col => { const s = scoreChamp(def, col); if (s > 0) cand.push({ch, col: col.colId, s}); }));
+    cand.sort((a, b) => b.s - a.s);
+    const pris = new Set(), res = {};
+    cand.forEach(c => { if (res[c.ch] || pris.has(c.col)) return; res[c.ch] = c.col; pris.add(c.col); });
+    return res;
+  }
+
+  P.detecter = function (schema, entites) {
+    const tous = Object.keys(E);
+    const scores = [];
+    tous.forEach(ent => Object.values(schema).forEach(t => {
+      const n = nomTableNorm(t.id);
+      let s = 0;
+      E[ent].tables.forEach((syn, i) => { if (n === syn) s = Math.max(s, 20 - i * .2); else if (n.startsWith(syn) || n.endsWith(syn)) s = Math.max(s, 12 - i * .2); });
+      const ch = detecterChamps(ent, t);
+      const reqOk = Object.entries(E[ent].champs).filter(([, d]) => d.req).every(([k]) => ch[k]);
+      if (!reqOk) return;
+      s += Object.keys(ch).length * 0.8;
+      if (s >= 10) scores.push({ent, table: t.id, s});
+    }));
+    scores.sort((a, b) => b.s - a.s);
+    const map = {}, prises = new Set();
+    scores.forEach(x => { if (map[x.ent] || prises.has(x.table)) return; map[x.ent] = {table: x.table, champs: {}}; prises.add(x.table); });
+    // Affinage par les références : la colonne « Projet » d'une tâche pointe sur la table des projets, etc.
+    for (let passe = 0; passe < 2; passe++) {
+      Object.entries(map).forEach(([ent, m]) => {
+        const t = schema[m.table];
+        const ch = detecterChamps(ent, t);
+        Object.entries(ch).forEach(([k, colId]) => {
+          const kind = E[ent].champs[k].k;
+          const cible = cibleKind(kind);
+          const col = t.cols.find(c => c.colId === colId);
+          const refT = /^Ref(List)?:/.test(col.type) ? col.type.split(':')[1] : null;
+          if (cible && refT && schema[refT] && (!map[cible] || map[cible].table !== refT)) {
+            if (!map[cible]) { map[cible] = {table: refT, champs: {}}; prises.add(refT); }
+            else if (!Object.values(map).some(x => x.table === refT)) map[cible].table = refT;
+          }
+        });
+      });
+    }
+    Object.entries(map).forEach(([ent, m]) => {
+      m.champs = detecterChamps(ent, schema[m.table]);
+      // Libellé d'une table auxiliaire : colonne affichée par les références
+      if ((ent === 'partie' || ent === 'theme') && !m.champs.nom) {
+        const t = schema[m.table]; const c = t.cols.find(x => x.type === 'Text');
+        if (c) m.champs.nom = c.colId;
+      }
+    });
+    if (entites) Object.keys(map).forEach(k => { if (!entites.includes(k) && !dependances(entites).includes(k)) delete map[k]; });
+    return map;
+  };
+
+  function dependances(entites) {
+    const res = new Set(entites);
+    let change = true;
+    while (change) {
+      change = false;
+      Array.from(res).forEach(ent => Object.values(E[ent].champs).forEach(d => { const c = cibleKind(d.k); if (c && !res.has(c)) { res.add(c); change = true; } }));
+    }
+    return Array.from(res);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Lecture et normalisation                                            */
+  /* ------------------------------------------------------------------ */
+  const estListe = v => Array.isArray(v) && v[0] === 'L';
+  const dateDepuisGrist = (v, type) => {
+    if (v == null || v === '') return null;
+    if (typeof v === 'number') {
+      const d = new Date(v * 1000);
+      return /^DateTime/.test(type) ? new Date(d.getFullYear(), d.getMonth(), d.getDate()) : new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+    }
+    if (typeof v === 'string') return P.parseDateTexte(v);
+    return null;
+  };
+
+  function lireValeur(v, kind, col) {
+    const k = baseKind(kind);
+    const type = col.type || 'Any';
+    if (Array.isArray(v) && v[0] === 'E') v = null; // valeur en erreur
+    switch (k) {
+      case 'texte': if (estListe(v)) return v.slice(1).join(', '); return v == null ? '' : String(v);
+      case 'nombre': { if (v == null || v === '') return null; if (typeof v === 'number') return v; const n = parseFloat(String(v).replace(',', '.')); return isNaN(n) ? null : n; }
+      case 'date': return dateDepuisGrist(v, type);
+      case 'datetime': return typeof v === 'number' ? new Date(v * 1000) : (typeof v === 'string' ? P.parseDateTexte(v) : null);
+      case 'bool': return v === true || v === 1 || /^(oui|true|vrai|x|1)$/i.test(String(v || ''));
+      case 'choix': if (estListe(v)) return v[1] || ''; return v == null ? '' : String(v);
+      case 'choix_multi': if (estListe(v)) return v.slice(1).map(String); if (v == null || v === '') return []; return String(v).split(/\s*[,;]\s*/).filter(Boolean);
+      case 'ref': {
+        if (/^Ref:/.test(type)) return v || null;
+        if (/^RefList:/.test(type)) return estListe(v) && v.length > 1 ? v[1] : null;
+        return v ? {texte: String(v)} : null;
+      }
+      case 'refs': {
+        if (/^RefList:/.test(type)) return estListe(v) ? v.slice(1) : [];
+        if (/^Ref:/.test(type)) return v ? [v] : [];
+        if (estListe(v)) return v.slice(1).map(x => ({texte: String(x)}));
+        return v ? String(v).split(/\s*[,;]\s*/).filter(Boolean).map(x => ({texte: x})) : [];
+      }
+    }
+    return v;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Contexte d'exécution                                                */
+  /* ------------------------------------------------------------------ */
+  const etat = {schema: null, mapping: null, donnees: {}, index: {}, signature: '', backend: null, reglages: {}, docName: ''};
+  P.etat = etat;
+
+  P.colonne = (ent, ch) => {
+    const m = etat.mapping && etat.mapping[ent];
+    if (!m || !m.champs[ch] || !etat.schema[m.table]) return null;
+    return etat.schema[m.table].cols.find(c => c.colId === m.champs[ch]) || null;
+  };
+  P.a = (ent, ch) => !!P.colonne(ent, ch);
+  P.modifiable = (ent, ch) => { const c = P.colonne(ent, ch); return !!c && !(c.isFormula && c.formula); };
+  P.choix = (ent, ch) => {
+    const c = P.colonne(ent, ch);
+    let l = [];
+    if (c) { try { l = JSON.parse(c.widgetOptions || '{}').choices || []; } catch (e) { l = []; } }
+    if (!l.length && etat.donnees[ent]) l = P.uniq(etat.donnees[ent].flatMap(r => Array.isArray(r[ch]) ? r[ch] : [r[ch]]).filter(x => x && typeof x === 'string')).sort();
+    return l;
+  };
+  P.table = ent => etat.mapping && etat.mapping[ent] ? etat.mapping[ent].table : null;
+  P.liste = ent => etat.donnees[ent] || [];
+  P.get = (ent, id) => (etat.index[ent] && etat.index[ent].get(id)) || null;
+  P.libelle = (ent, id) => {
+    if (id == null) return '';
+    if (typeof id === 'object' && id.texte) return id.texte;
+    const r = P.get(ent, id);
+    if (!r) return '';
+    return r._libelle || '';
+  };
+  P.libelles = (ent, ids) => (ids || []).map(id => P.libelle(ent, id)).filter(Boolean);
+  P.choixStatut = (ent, ch, test) => P.choix(ent, ch).find(test) || '';
+
+  function libelleDe(ent, r) {
+    switch (ent) {
+      case 'agent': return r.nom_complet || [r.prenom, r.nom].filter(Boolean).join(' ') || r.mail || ('#' + r.id);
+      case 'prestataire': case 'partie': case 'theme': return r.nom || ('#' + r.id);
+      case 'role': return [P.libelle('agent', r.personne), P.lettreRole(r.role)].filter(Boolean).join(' – ');
+      case 'sous_tache': return r.libelle;
+      case 'temps': return P.fmtDate(r.date);
+      default: return r.titre || r.code || ('#' + r.id);
+    }
+  }
+
+  async function chargerDonnees() {
+    const brut = {};
+    const tables = P.uniq(Object.values(etat.mapping).map(m => m.table)).filter(t => etat.schema[t]);
+    await Promise.all(tables.map(async t => { brut[t] = await etat.backend.fetch(t); }));
+    const sig = JSON.stringify(brut);
+    const change = sig !== etat.signature;
+    etat.signature = sig;
+    if (!change) return false;
+    const donnees = {}, index = {};
+    Object.entries(etat.mapping).forEach(([ent, m]) => {
+      const raw = brut[m.table];
+      if (!raw || !E[ent]) return;
+      const cols = etat.schema[m.table].cols;
+      const lignes = raw.id.map((id, i) => {
+        const r = {id, _raw: {}};
+        Object.entries(E[ent].champs).forEach(([ch, def]) => {
+          const colId = m.champs[ch];
+          const col = colId && cols.find(c => c.colId === colId);
+          r[ch] = col ? lireValeur(raw[colId] ? raw[colId][i] : null, def.k, col) : (baseKind(def.k) === 'refs' || baseKind(def.k) === 'choix_multi' ? [] : null);
+        });
+        Object.keys(raw).forEach(c => { r._raw[c] = raw[c][i]; });
+        return r;
+      });
+      donnees[ent] = lignes;
+      index[ent] = new Map(lignes.map(r => [r.id, r]));
+    });
+    etat.donnees = donnees; etat.index = index;
+    // Libellés puis résolution des références saisies en texte
+    Object.entries(donnees).forEach(([ent, l]) => l.forEach(r => { if (ent !== 'role') r._libelle = libelleDe(ent, r); }));
+    const parTexte = {};
+    const chercher = (cible, txt) => {
+      if (!donnees[cible]) return txt;
+      if (!parTexte[cible]) { parTexte[cible] = new Map(); donnees[cible].forEach(x => { parTexte[cible].set(norm(x._libelle), x.id); if (x.code) parTexte[cible].set(norm(x.code), x.id); }); }
+      return parTexte[cible].get(norm(txt.texte)) || txt;
+    };
+    Object.entries(donnees).forEach(([ent, l]) => Object.entries(E[ent].champs).forEach(([ch, def]) => {
+      const cible = cibleKind(def.k); if (!cible) return;
+      l.forEach(r => {
+        if (baseKind(def.k) === 'ref' && r[ch] && typeof r[ch] === 'object') r[ch] = chercher(cible, r[ch]);
+        if (baseKind(def.k) === 'refs') r[ch] = r[ch].map(x => typeof x === 'object' ? chercher(cible, x) : x);
+      });
+    }));
+    (donnees.role || []).forEach(r => { r._libelle = libelleDe('role', r); });
+    return true;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Écriture                                                            */
+  /* ------------------------------------------------------------------ */
+  function versGrist(val, kind, col) {
+    const k = baseKind(kind), type = col.type || 'Any', t = type.split(':')[0];
+    if (val === undefined) return undefined;
+    switch (k) {
+      case 'date': case 'datetime': {
+        if (!val) return null;
+        if (t === 'Date') return Date.UTC(val.getFullYear(), val.getMonth(), val.getDate()) / 1000;
+        if (t === 'DateTime') return val.getTime() / 1000;
+        return P.fmtDate(val);
+      }
+      case 'nombre': return val === '' || val == null || isNaN(val) ? null : Number(val);
+      case 'bool': return !!val;
+      case 'choix_multi': { const a = Array.isArray(val) ? val : (val ? [val] : []); return t === 'ChoiceList' ? (a.length ? ['L', ...a] : null) : a.join(', '); }
+      case 'ref': {
+        const cible = cibleKind(kind);
+        if (t === 'Ref') return val || 0;
+        if (t === 'RefList') return val ? ['L', val] : null;
+        return val ? P.libelle(cible, val) : '';
+      }
+      case 'refs': {
+        const cible = cibleKind(kind); const a = (val || []).filter(x => typeof x === 'number');
+        if (t === 'RefList') return a.length ? ['L', ...a] : null;
+        if (t === 'Ref') return a[0] || 0;
+        const noms = a.map(id => P.libelle(cible, id));
+        return t === 'ChoiceList' ? (noms.length ? ['L', ...noms] : null) : noms.join(', ');
+      }
+      default: return val == null ? '' : String(val);
+    }
+  }
+
+  P.valeursGrist = (ent, vals) => {
+    const out = {}; const ignores = [];
+    Object.entries(vals).forEach(([ch, v]) => {
+      const def = E[ent].champs[ch]; const col = P.colonne(ent, ch);
+      if (!def || !col) return;
+      if (col.isFormula && col.formula) { ignores.push(def.l); return; }
+      const g = versGrist(v, def.k, col);
+      if (g !== undefined) out[col.colId] = g;
+    });
+    return {out, ignores};
+  };
+  P.actionAjout = (ent, vals) => ['AddRecord', P.table(ent), null, P.valeursGrist(ent, vals).out];
+  P.actionMaj = (ent, id, vals) => ['UpdateRecord', P.table(ent), id, P.valeursGrist(ent, vals).out];
+  P.actionSuppr = (ent, id) => ['RemoveRecord', P.table(ent), id];
+
+  P.appliquer = async (actions, message) => {
+    actions = actions.filter(a => a && a[1] && (a[0] !== 'UpdateRecord' || Object.keys(a[3]).length));
+    if (!actions.length) return [];
+    try {
+      const r = await etat.backend.apply(actions);
+      if (message) P.toast(message, 'ok');
+      await P.rafraichir(true);
+      return (r && r.retValues) || r || [];
+    } catch (e) {
+      console.error(e);
+      P.toast('Échec de l’enregistrement : ' + (e.message || e), 'err');
+      throw e;
+    }
+  };
+  P.ajouter = async (ent, vals, message) => (await P.appliquer([P.actionAjout(ent, vals)], message))[0];
+  P.modifier = (ent, id, vals, message) => P.appliquer([P.actionMaj(ent, id, vals)], message);
+  P.supprimer = (ent, id, message) => P.appliquer([P.actionSuppr(ent, id)], message);
+
+  /* Création d'une table manquante (ex. sous-tâches) */
+  P.creerStructure = async ent => {
+    const st = P.STRUCTURES[ent]; if (!st) return;
+    const cibles = {tache: P.table('tache'), agent: P.table('agent')};
+    if (!cibles.tache) { P.toast('Associez d’abord la table des tâches.', 'warn'); return; }
+    let nom = st.table; let i = 2;
+    while (etat.schema[nom]) nom = st.table + '_' + i++;
+    const cols = st.cols(cibles);
+    await etat.backend.apply([['AddTable', nom, cols.map(c => ({id: c.id, type: c.type, isFormula: false}))]]);
+    etat.schema = await etat.backend.schema();
+    // Colonne affichée des références (« Montrer la colonne ») : meilleur effort
+    if (etat.backend.nom === 'grist') {
+      try {
+        const t = etat.schema[nom];
+        const acts = [];
+        cols.filter(c => /^Ref:/.test(c.type)).forEach(c => {
+          const cibleT = c.type.split(':')[1];
+          const ent2 = Object.keys(cibles).find(k => cibles[k] === cibleT);
+          const vis = ent2 === 'tache' ? (etat.mapping.tache || {}).champs.titre : ((etat.mapping.agent || {}).champs.nom_complet || (etat.mapping.agent || {}).champs.nom);
+          const colRef = (t.cols.find(x => x.colId === c.id) || {}).ref;
+          const visRef = (etat.schema[cibleT].cols.find(x => x.colId === vis) || {}).ref;
+          if (colRef && visRef) acts.push(['SetDisplayFormula', nom, null, colRef, `$${c.id}.${vis}`], ['UpdateRecord', '_grist_Tables_column', colRef, {visibleCol: visRef}]);
+        });
+        if (acts.length) await etat.backend.apply(acts);
+      } catch (e) { console.warn('Colonne affichée non réglée', e); }
+    }
+    etat.mapping[ent] = {table: nom, champs: Object.fromEntries(cols.map(c => [c.champ, c.id]))};
+    await P.enregistrerConfig();
+    P.toast(`Table ${nom} créée.`, 'ok');
+    await P.rafraichir(true);
+  };
+
+  /* ------------------------------------------------------------------ */
+  /* Configuration (enregistrée dans les options du widget)              */
+  /* ------------------------------------------------------------------ */
+  const cleLocale = () => 'pilotage-mapping:' + etat.docName;
+  P.enregistrerConfig = async () => {
+    const o = Object.assign({}, etat.backend.getOptions() || {}, {mapping: etat.mapping, reglages: etat.reglages, version: 1});
+    try { await etat.backend.setOptions(o); } catch (e) { P.toast('Réglages non enregistrés dans Grist (droits insuffisants ?) : conservés pour cette session.', 'warn'); }
+    try { localStorage.setItem(cleLocale(), JSON.stringify(etat.mapping)); } catch (e) { /* ignoré */ }
+  };
+  P.reglage = (cle, defaut) => etat.reglages[cle] === undefined ? defaut : etat.reglages[cle];
+  P.setReglage = async (cle, val) => { etat.reglages[cle] = val; await P.enregistrerConfig(); };
+
+  function mappingValide(m) {
+    if (!m) return false;
+    return Object.values(m).every(x => x && etat.schema[x.table]);
+  }
+
+  P.manquants = () => {
+    const res = [];
+    (P.cfg.entites || []).forEach(ent => {
+      const opt = (P.cfg.optionnelles || []).includes(ent);
+      const m = etat.mapping[ent];
+      if (!m) { if (!opt) res.push(`Table « ${E[ent].libelle} » non trouvée`); return; }
+      (P.cfg.champsRequis && P.cfg.champsRequis[ent] || Object.entries(E[ent].champs).filter(([, d]) => d.req).map(([k]) => k))
+        .forEach(ch => { if (!m.champs[ch]) res.push(`${E[ent].libelle} : colonne « ${E[ent].champs[ch].l} » non associée`); });
+    });
+    return res;
+  };
+
+  P.ouvrirConfig = () => {
+    const ents = dependances(P.cfg.entites || []);
+    const tablesOpts = Object.keys(etat.schema).sort();
+    const corps = document.createElement('div');
+    corps.innerHTML = `
+      <p class="muted small" style="margin:0">Le widget s'adapte à la structure de votre document : choisissez pour chaque élément la table et les colonnes à utiliser.
+      La détection automatique propose une association à partir des noms. Les colonnes calculées (formules) sont lues mais jamais modifiées.</p>
+      <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn sec sm" data-act="auto">Détection automatique</button>
+        ${P.cfg.reglages ? '' : ''}
+      </div>
+      <div id="cfg-ents" style="display:flex;flex-direction:column;gap:8px"></div>
+      ${P.cfg.reglagesHtml ? `<div class="carte"><h3>Réglages du widget</h3><div id="cfg-reglages">${P.cfg.reglagesHtml()}</div></div>` : ''}
+      <div class="carte"><h3>Affichage</h3><label class="case"><input type="checkbox" id="cfg-marque" ${P.reglage('marque', true) ? 'checked' : ''}> Afficher le bloc-marque « République française »</label></div>`;
+    const travail = JSON.parse(JSON.stringify(etat.mapping || {}));
+    const dessiner = () => {
+      const zone = corps.querySelector('#cfg-ents');
+      zone.innerHTML = ents.map(ent => {
+        const m = travail[ent] || {table: '', champs: {}};
+        const t = etat.schema[m.table];
+        const principal = (P.cfg.entites || []).includes(ent);
+        const champs = Object.entries(E[ent].champs).filter(([ch]) => principal || ch === 'titre' || ch === 'nom' || ch === 'nom_complet' || ch === 'prenom');
+        return `<details class="cfg-ent" ${principal ? 'open' : ''}><summary>${esc(E[ent].libelle)} ${t ? `<span class="badge ok">${esc(m.table)}</span>` : '<span class="badge warn">non associée</span>'}${principal ? '' : ' <span class="muted small">(table liée)</span>'}</summary>
+          <div>
+            <label>Table</label>
+            <select class="in sm" data-ent="${ent}" data-role="table"><option value="">— Aucune —</option>${tablesOpts.map(x => `<option ${x === m.table ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>
+            ${!t && E[ent].creable ? `<span></span><button class="btn sec sm" data-act="creer" data-ent="${ent}">Créer la table ${esc(P.STRUCTURES[ent].table)}</button>` : ''}
+            ${t ? champs.map(([ch, def]) => `<label class="${def.req ? 'req' : ''}" title="${esc(def.k)}">${esc(def.l)}</label>
+              <select class="in sm" data-ent="${ent}" data-ch="${ch}"><option value="">— Non utilisé —</option>${t.cols.slice().sort((a, b) => compat(def.k, b.type) - compat(def.k, a.type)).map(c => `<option value="${esc(c.colId)}" ${m.champs[ch] === c.colId ? 'selected' : ''}>${esc(c.label)} (${esc(c.colId)} · ${esc(c.type)}${c.isFormula && c.formula ? ' · formule' : ''})${compat(def.k, c.type) ? '' : ' ⚠'}</option>`).join('')}</select>`).join('') : ''}
+          </div></details>`;
+      }).join('');
+    };
+    dessiner();
+    corps.addEventListener('change', e => {
+      const s = e.target;
+      if (s.dataset.role === 'table') {
+        const ent = s.dataset.ent;
+        if (!s.value) delete travail[ent];
+        else travail[ent] = {table: s.value, champs: detecterChamps(ent, etat.schema[s.value])};
+        dessiner();
+      } else if (s.dataset.ch) {
+        const m = travail[s.dataset.ent];
+        if (s.value) m.champs[s.dataset.ch] = s.value; else delete m.champs[s.dataset.ch];
+      }
+    });
+    corps.addEventListener('click', async e => {
+      const b = e.target.closest('button[data-act]'); if (!b) return;
+      if (b.dataset.act === 'auto') { const d = P.detecter(etat.schema); ents.forEach(k => { if (d[k]) travail[k] = d[k]; else delete travail[k]; }); dessiner(); }
+      if (b.dataset.act === 'creer') { etat.mapping = travail; fermer(); await P.creerStructure(b.dataset.ent); }
+    });
+    const fermer = P.modale({titre: 'Paramètres du widget', contenu: corps, large: true, boutons: [
+      {libelle: 'Annuler', classe: 'ter'},
+      {libelle: 'Enregistrer', classe: 'pri', action: async () => {
+        etat.mapping = travail;
+        etat.reglages.marque = corps.querySelector('#cfg-marque').checked;
+        if (P.cfg.lireReglages) P.cfg.lireReglages(corps.querySelector('#cfg-reglages'), etat.reglages);
+        await P.enregistrerConfig();
+        etat.signature = '';
+        await P.rafraichir(true);
+        P.toast('Paramètres enregistrés.', 'ok');
+      }},
+    ]});
+  };
+
+  /* ------------------------------------------------------------------ */
+  /* Interface commune                                                   */
+  /* ------------------------------------------------------------------ */
+  P.ICONES = {
+    reglages: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 1l9.5 5.5v11L12 23l-9.5-5.5v-11L12 1zm0 2.3L4.5 7.65v8.7L12 20.7l7.5-4.35v-8.7L12 3.3zM12 16a4 4 0 110-8 4 4 0 010 8zm0-2a2 2 0 100-4 2 2 0 000 4z"/></svg>',
+    actualiser: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5.46 4.43A9.95 9.95 0 0112 2c5.52 0 10 4.48 10 10 0 2.14-.67 4.12-1.81 5.74L17 12h3A8 8 0 006.46 6.12l-1-1.69zm13.08 15.14A9.95 9.95 0 0112 22C6.48 22 2 17.52 2 12c0-2.14.67-4.12 1.81-5.74L7 12H4a8 8 0 0013.54 5.88l1 1.69z"/></svg>',
+    imprimer: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 19H3a1 1 0 01-1-1V8a1 1 0 011-1h3V3a1 1 0 011-1h10a1 1 0 011 1v4h3a1 1 0 011 1v10a1 1 0 01-1 1h-3v2a1 1 0 01-1 1H7a1 1 0 01-1-1v-2zm0-2v-1a1 1 0 011-1h10a1 1 0 011 1v1h2V9H4v8h2zM8 4v3h8V4H8zm0 13v3h8v-3H8zm-3-7h3v2H5v-2z"/></svg>',
+    copier: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 6V3a1 1 0 011-1h12a1 1 0 011 1v14a1 1 0 01-1 1h-3v3c0 .55-.45 1-1 1H4a1 1 0 01-1-1V7a1 1 0 011-1h3zM5 8v12h10V8H5zm4-4v2h8v10h2V4H9z"/></svg>',
+    plus: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11 11V5h2v6h6v2h-6v6h-2v-6H5v-2h6z"/></svg>',
+    fermer: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 10.59l4.95-4.95 1.41 1.41L13.41 12l4.95 4.95-1.41 1.41L12 13.41l-4.95 4.95-1.41-1.41L10.59 12 5.64 7.05l1.41-1.41L12 10.59z"/></svg>',
+    modifier: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.76 3.83l3.41 3.41-11 11H5.76v-3.41l11-11zm0 2.83l-9 9v.58h.59l9-9-.59-.58zM4 21h16v2H4v-2z"/></svg>',
+    supprimer: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17 6h5v2h-2v13a1 1 0 01-1 1H5a1 1 0 01-1-1V8H2V6h5V3a1 1 0 011-1h8a1 1 0 011 1v3zm1 2H6v12h12V8zM9 11h2v6H9v-6zm4 0h2v6h-2v-6zM9 4v2h6V4H9z"/></svg>',
+    gauche: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M10.83 12l4.95 4.95-1.41 1.41L8 12l6.37-6.36 1.41 1.41L10.83 12z"/></svg>',
+    droite: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13.17 12L8.22 7.05l1.41-1.41L16 12l-6.37 6.36-1.41-1.41L13.17 12z"/></svg>',
+    glisser: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9 5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm6 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3zM9 13.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm6 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3zM9 22a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm6 0a1.5 1.5 0 110-3 1.5 1.5 0 010 3z"/></svg>',
+  };
+  P.ic = n => P.ICONES[n] || '';
+
+  P.toast = (msg, type) => {
+    let z = P.$('.pl-toasts'); if (!z) { z = document.createElement('div'); z.className = 'pl-toasts'; z.setAttribute('role', 'status'); document.body.appendChild(z); }
+    const t = document.createElement('div'); t.className = 'pl-toast ' + (type || ''); t.textContent = msg; z.appendChild(t);
+    setTimeout(() => t.remove(), type === 'err' ? 8000 : 3500);
+  };
+
+  P.modale = ({titre, contenu, boutons, large, surFermeture}) => {
+    const voile = document.createElement('div'); voile.className = 'pl-voile';
+    voile.innerHTML = `<div class="pl-modale ${large ? 'large' : ''}" role="dialog" aria-modal="true" aria-label="${esc(titre)}">
+      <header><h2>${esc(titre)}</h2><button class="btn ic ter sm" data-fermer title="Fermer">${P.ic('fermer')}<span class="sr">Fermer</span></button></header>
+      <div class="contenu"></div><footer></footer></div>`;
+    const c = voile.querySelector('.contenu');
+    if (typeof contenu === 'string') c.innerHTML = contenu; else c.appendChild(contenu);
+    const pied = voile.querySelector('footer');
+    const fermer = () => { voile.remove(); document.removeEventListener('keydown', clavier); if (surFermeture) surFermeture(); };
+    const clavier = e => { if (e.key === 'Escape') fermer(); };
+    (boutons || []).forEach(b => {
+      const el = document.createElement('button'); el.className = 'btn ' + (b.classe || 'sec'); el.textContent = b.libelle;
+      el.addEventListener('click', async () => {
+        if (b.action) { el.disabled = true; try { const r = await b.action(c); if (r === false) { el.disabled = false; return; } } catch (e) { el.disabled = false; return; } }
+        fermer();
+      });
+      pied.appendChild(el);
+    });
+    if (!pied.children.length) pied.remove();
+    voile.querySelector('[data-fermer]').addEventListener('click', fermer);
+    voile.addEventListener('mousedown', e => { if (e.target === voile) fermer(); });
+    document.addEventListener('keydown', clavier);
+    document.body.appendChild(voile);
+    const f = c.querySelector('input,select,textarea'); if (f) setTimeout(() => f.focus(), 30);
+    return fermer;
+  };
+  P.confirmer = (message, libelle) => new Promise(res => {
+    let ok = false;
+    P.modale({titre: 'Confirmation', contenu: `<p style="margin:0">${esc(message)}</p>`, surFermeture: () => res(ok), boutons: [
+      {libelle: 'Annuler', classe: 'ter'}, {libelle: libelle || 'Confirmer', classe: 'pri', action: () => { ok = true; }}]});
+  });
+
+  /* Infobulle simple : attribut data-bulle */
+  let bulle;
+  document.addEventListener('mouseover', e => {
+    const el = e.target.closest && e.target.closest('[data-bulle]');
+    if (!el) { if (bulle) bulle.remove(); bulle = null; return; }
+    if (!bulle) { bulle = document.createElement('div'); bulle.className = 'pl-bulle'; document.body.appendChild(bulle); }
+    bulle.innerHTML = el.getAttribute('data-bulle');
+    const r = el.getBoundingClientRect(); const bw = bulle.offsetWidth, bh = bulle.offsetHeight;
+    let x = Math.min(window.innerWidth - bw - 6, Math.max(6, r.left + r.width / 2 - bw / 2));
+    let y = r.top - bh - 6; if (y < 4) y = r.bottom + 6;
+    bulle.style.left = x + 'px'; bulle.style.top = y + 'px';
+  });
+
+  /* Champ de formulaire générique d'après le catalogue */
+  P.champFormulaire = (ent, ch, valeur, opts) => {
+    opts = opts || {};
+    const def = E[ent].champs[ch]; const col = P.colonne(ent, ch);
+    if (!def || !col) return '';
+    const id = `f-${ent}-${ch}`;
+    const ro = col.isFormula && col.formula;
+    const k = baseKind(def.k);
+    const lbl = `<label for="${id}">${esc(opts.libelle || def.l)}${def.req ? ' <span style="color:var(--error)">*</span>' : ''}</label>`;
+    let input;
+    if (ro) input = `<div class="in" style="background:var(--alt);box-shadow:none">${esc(Array.isArray(valeur) ? valeur.join(', ') : (valeur instanceof Date ? P.fmtDate(valeur) : (valeur ?? '')))}</div><span class="aide">Valeur calculée par une formule</span>`;
+    else if (k === 'texte' && opts.long) input = `<textarea class="in" id="${id}" data-ch="${ch}">${esc(valeur || '')}</textarea>`;
+    else if (k === 'texte') input = `<input class="in" id="${id}" data-ch="${ch}" value="${esc(valeur || '')}">`;
+    else if (k === 'nombre') input = `<input class="in" id="${id}" data-ch="${ch}" type="number" step="any" value="${valeur ?? ''}">`;
+    else if (k === 'date' || k === 'datetime') input = `<input class="in" id="${id}" data-ch="${ch}" type="date" value="${valeur ? P.iso(valeur) : ''}">`;
+    else if (k === 'bool') input = `<label class="case"><input type="checkbox" id="${id}" data-ch="${ch}" ${valeur ? 'checked' : ''}> Oui</label>`;
+    else if (k === 'choix') {
+      const l = P.choix(ent, ch); if (valeur && !l.includes(valeur)) l.push(valeur);
+      input = `<select class="in" id="${id}" data-ch="${ch}"><option value=""></option>${l.map(x => `<option ${x === valeur ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>`;
+    } else if (k === 'choix_multi') {
+      const l = P.choix(ent, ch); const v = valeur || [];
+      input = `<div class="multi" data-ch="${ch}" data-multi="txt" style="display:flex;flex-wrap:wrap;gap:4px">${l.map(x => `<button type="button" class="tag" aria-pressed="${v.includes(x)}" data-v="${esc(x)}">${esc(x)}</button>`).join('')}</div>`;
+    } else if (k === 'ref' || k === 'refs') {
+      const cible = cibleKind(def.k);
+      const l = P.liste(cible).slice().sort((a, b) => a._libelle.localeCompare(b._libelle, 'fr'));
+      if (k === 'ref') input = `<select class="in" id="${id}" data-ch="${ch}" data-num="1"><option value=""></option>${l.map(x => `<option value="${x.id}" ${x.id === valeur ? 'selected' : ''}>${esc(x._libelle)}</option>`).join('')}</select>`;
+      else { const v = (valeur || []); input = `<div class="multi" data-ch="${ch}" data-multi="ids" style="display:flex;flex-wrap:wrap;gap:4px">${l.map(x => `<button type="button" class="tag" aria-pressed="${v.includes(x.id)}" data-v="${x.id}">${esc(x._libelle)}</button>`).join('') || '<span class="muted small">Aucun élément</span>'}</div>`; }
+    }
+    return `<div class="champ ${opts.large ? 'large' : ''}">${lbl}${input}</div>`;
+  };
+  /* Lecture d'un formulaire construit avec champFormulaire */
+  P.lireFormulaire = (ent, racine) => {
+    const vals = {};
+    racine.querySelectorAll('[data-ch]').forEach(el => {
+      const ch = el.dataset.ch; const def = E[ent].champs[ch]; if (!def) return;
+      const k = baseKind(def.k);
+      if (el.dataset.multi) { const v = Array.from(el.querySelectorAll('[aria-pressed=true]')).map(b => b.dataset.v); vals[ch] = el.dataset.multi === 'ids' ? v.map(Number) : v; }
+      else if (el.type === 'checkbox') vals[ch] = el.checked;
+      else if (k === 'date' || k === 'datetime') vals[ch] = P.fromIso(el.value);
+      else if (k === 'nombre') vals[ch] = el.value === '' ? null : Number(el.value);
+      else if (el.dataset.num) vals[ch] = el.value ? Number(el.value) : null;
+      else vals[ch] = el.value;
+    });
+    return vals;
+  };
+  document.addEventListener('click', e => {
+    const b = e.target.closest('.multi .tag'); if (!b) return;
+    b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+  });
+
+  /* ------------------------------------------------------------------ */
+  /* Démarrage                                                           */
+  /* ------------------------------------------------------------------ */
+  let curseurCb = null;
+  P.surCurseur = cb => { curseurCb = cb; };
+
+  P.rafraichir = async (force) => {
+    if (!etat.mapping) return;
+    try {
+      if (force) etat.signature = '';
+      const change = await chargerDonnees();
+      if (change || force) dessinerApp();
+    } catch (e) { console.error(e); afficherErreur(e); }
+  };
+
+  function afficherErreur(e) {
+    P.$('#pl-corps').innerHTML = `<div class="alerte err"><strong>Erreur :</strong> ${esc(e.message || e)}</div>`;
+  }
+
+  function dessinerApp() {
+    P.$('.pl-marque').classList.toggle('hidden', !P.reglage('marque', true));
+    const manq = P.manquants();
+    const corps = P.$('#pl-corps');
+    if (manq.length) {
+      corps.innerHTML = `<div class="alerte warn" style="max-width:720px"><strong>Configuration à compléter</strong>
+        <ul style="margin:6px 0">${manq.map(m => `<li>${esc(m)}</li>`).join('')}</ul>
+        <button class="btn pri sm" id="pl-cfg-go">Ouvrir les paramètres</button></div>`;
+      P.$('#pl-cfg-go').addEventListener('click', P.ouvrirConfig);
+      return;
+    }
+    try { P.cfg.rendu(corps); } catch (e) { console.error(e); afficherErreur(e); }
+  }
+
+  /**
+   * Point d'entrée d'un widget.
+   * cfg = {id, titre, sousTitre, entites:[...], optionnelles:[...], champsRequis:{ent:[...]},
+   *        outils(html), init(), rendu(conteneur), reglagesHtml(), lireReglages(el, reglages)}
+   */
+  P.demarrer = async cfg => {
+    P.cfg = cfg;
+    document.title = cfg.titre;
+    document.body.innerHTML = `<div class="pl-app">
+      <header class="pl-entete">
+        <div class="pl-marque"><p class="fr-logo fr-logo--sm" style="margin:0">République<br>française</p></div>
+        <div class="pl-titre"><h1>${esc(cfg.titre)}</h1><p id="pl-sous-titre">${esc(cfg.sousTitre || '')}</p></div>
+        <div class="pl-outils"><div id="pl-outils" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end"></div>
+          <button class="btn ter ic" id="pl-actualiser" data-bulle="Actualiser les données">${P.ic('actualiser')}<span class="sr">Actualiser</span></button>
+          <button class="btn ter ic" id="pl-config" data-bulle="Paramètres : tables, colonnes et réglages">${P.ic('reglages')}<span class="sr">Paramètres</span></button>
+        </div>
+      </header>
+      <div id="pl-demo" class="pl-demo hidden"></div>
+      <main class="pl-corps" id="pl-corps"><p class="muted">Chargement…</p></main>
+    </div>`;
+    P.$('#pl-actualiser').addEventListener('click', () => P.rafraichir(true));
+    P.$('#pl-config').addEventListener('click', () => P.ouvrirConfig());
+    try {
+      etat.backend = enGrist() ? GristBackend : DemoBackend;
+      const surChange = P.debounce(type => { if (type === 'options') { lireOptions(); P.rafraichir(true); } else P.rafraichir(false); }, 400);
+      await etat.backend.init(surChange, (tableId, rowId) => { if (curseurCb) curseurCb(tableId, rowId); });
+      if (etat.backend.nom === 'demo') {
+        const d = P.$('#pl-demo'); d.classList.remove('hidden');
+        d.innerHTML = `<span><strong>Mode démonstration</strong> : données fictives enregistrées dans ce navigateur. Dans Grist, le widget utilise vos tables.</span><button id="pl-reset">Réinitialiser les données</button>`;
+        P.$('#pl-reset').addEventListener('click', async () => { etat.backend.reinitialiser(); etat.schema = await etat.backend.schema(); P.rafraichir(true); });
+      }
+      etat.docName = await etat.backend.docName();
+      etat.schema = await etat.backend.schema();
+      lireOptions();
+      if (cfg.init) await cfg.init();
+      if (cfg.outils) { P.$('#pl-outils').innerHTML = cfg.outils(); if (cfg.surOutils) cfg.surOutils(P.$('#pl-outils')); }
+      await P.rafraichir(true);
+      setInterval(() => { if (!document.hidden && !P.$('.pl-voile')) P.rafraichir(false); }, 20000);
+    } catch (e) { console.error(e); afficherErreur(e); }
+  };
+
+  function lireOptions() {
+    const o = etat.backend.getOptions() || {};
+    etat.reglages = o.reglages || etat.reglages || {};
+    let m = o.mapping;
+    if (!mappingValide(m)) {
+      let local = null; try { local = JSON.parse(localStorage.getItem(cleLocale()) || 'null'); } catch (e) { /* ignoré */ }
+      m = mappingValide(local) ? local : P.detecter(etat.schema);
+    }
+    // Entités nouvellement requises : complétées par détection
+    const auto = P.detecter(etat.schema);
+    dependances(P.cfg.entites || []).forEach(k => { if (!m[k] && auto[k]) m[k] = auto[k]; });
+    etat.mapping = m;
+  }
+})();
+
+</script>
+<style>
+  .se{max-width:980px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+  .se-zone{position:relative}
+  .se-zone textarea{font-size:1.05rem;min-height:3.2rem;padding:.7rem .9rem;line-height:1.5}
+  .se-ac{position:absolute;z-index:20;background:var(--surface);box-shadow:var(--shadow-lg);border:1px solid var(--border);min-width:260px;max-height:260px;overflow:auto}
+  .se-ac button{display:flex;gap:8px;width:100%;text-align:left;background:none;border:0;padding:6px 10px;cursor:pointer;font-size:.85rem}
+  .se-ac button[aria-selected=true],.se-ac button:hover{background:var(--bf-950)}
+  .se-ac .k{color:var(--mention);font-size:.75rem;margin-left:auto}
+  .se-apercu{display:flex;flex-direction:column;gap:8px}
+  .se-carte{border:1px solid var(--border);border-left:4px solid var(--bf);padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+  .se-carte.ko{border-left-color:var(--warning)}
+  .se-carte .titre{font-weight:700;color:var(--title)}
+  .se-puces{display:flex;flex-wrap:wrap;gap:6px}
+  .se-puce{font-size:.75rem;background:var(--alt);border:1px solid var(--border);padding:1px 8px;border-radius:12px}
+  .se-puce b{color:var(--mention);font-weight:500;margin-right:4px}
+  .se-puce.warn{background:var(--warning-bg);border-color:#f5c3b3;color:var(--warning)}
+  .se-aide{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px 14px;font-size:.8rem}
+  .se-aide code{background:var(--bf-950);color:var(--bf);padding:0 5px;font-family:var(--mono);font-size:.78rem}
+  .se-hist li{display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid var(--contrast);font-size:.85rem}
+  .se-hist li .t{flex:1;min-width:0}
+  .se-def{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+  .se-def .champ{min-width:200px;flex:1}
+</style>
+</head>
+<body>
+<script>
+(function () {
+  const P = Pilotage, esc = P.esc;
+  const ui = {texte: '', ac: null, historique: []};
+  let defauts = {projet: null, responsable: null};
+  try { defauts = Object.assign(defauts, JSON.parse(localStorage.getItem('saisie-express-defauts') || '{}')); } catch (e) { /* ignoré */ }
+
+  P.demarrer({
+    id: 'saisie-express',
+    titre: 'Saisie express',
+    sousTitre: 'Une ligne de texte devient une tâche complète',
+    entites: ['tache', 'projet'],
+    optionnelles: ['projet'],
+    rendu: () => { if (P.$('#se-in')) { apercu(); historique(); } else dessiner(); },
+  });
+
+  /* ---------- Correspondances floues ---------- */
+  const compact = s => P.norm(String(s).replace(/_/g, ' '));
+  function chercher(ent, val) {
+    const v = compact(val); if (!v) return {res: null, liste: []};
+    const sc = P.liste(ent).map(r => {
+      const lib = compact(r._libelle), code = compact(r.code || ''), mots = String(r._libelle).split(/[\s'’-]+/).filter(Boolean);
+      const init = P.norm(mots.map(m => m[0]).join(''));
+      let s = 0;
+      if (lib === v || code === v) s = 100;
+      else if (code && code.startsWith(v)) s = 80;
+      else if (lib.startsWith(v)) s = 70;
+      else if (mots.some(m => P.norm(m).startsWith(v))) s = 60;
+      else if (init === v) s = 55;
+      else if (lib.includes(v)) s = 40;
+      return {r, s};
+    }).filter(x => x.s).sort((a, b) => b.s - a.s || a.r._libelle.localeCompare(b.r._libelle, 'fr'));
+    return {res: sc[0] ? sc[0].r : null, ambigu: sc.length > 1 && sc[1].s === sc[0].s, liste: sc.map(x => x.r)};
+  }
+  function chercherChoix(liste, val) {
+    const v = compact(val);
+    return liste.find(x => compact(x) === v) || liste.find(x => compact(x).includes(v)) || liste.find(x => compact(x).replace(/^p/, '') === v) || null;
+  }
+  const jeton = (s) => s.replace(/\s+/g, '_');
+  const themeEnt = () => { const c = P.colonne('tache', 'theme'); return c && /^Ref/.test(c.type) ? 'theme' : null; };
+
+  /* ---------- Dates en français ---------- */
+  const JOURS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+  const MOIS = ['janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin', 'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre'];
+  function lireDate(txt) {
+    const auj = P.today(); const t = P.norm(txt.replace(/\s+/g, ' ')) ; const s = txt.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+    let m;
+    if (/^(aujourd'?hui|auj)$/.test(s)) return auj;
+    if (s === 'demain') return P.addDays(auj, 1);
+    if (/^apres-?demain$/.test(s)) return P.addDays(auj, 2);
+    if ((m = /^j\+(\d+)$/.exec(s))) return P.addDays(auj, +m[1]);
+    if ((m = /^s\+(\d+)$/.exec(s))) return P.addDays(auj, 7 * m[1]);
+    if ((m = /^dans (\d+) ?(j|jours?|sem|semaines?|mois)$/.exec(s))) return /^m/.test(m[2]) ? P.addMonths(auj, +m[1]) : P.addDays(auj, (/^s/.test(m[2]) ? 7 : 1) * m[1]);
+    if (/^fin (de (la )?)?semaine$/.test(s)) { let d = P.addDays(P.lundi(auj), 4); if (d < auj) d = P.addDays(d, 7); return d; }
+    if (/^fin (du )?mois$/.test(s)) return new Date(auj.getFullYear(), auj.getMonth() + 1, 0);
+    if ((m = /^(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)( prochain)?$/.exec(s))) { let n = (JOURS.indexOf(m[1]) - auj.getDay() + 7) % 7; if (n === 0 || m[2]) n = n || 7; return P.addDays(auj, n); }
+    if ((m = /^(\d{1,2})[\/.-](\d{1,2})(?:[\/.-](\d{2,4}))?$/.exec(s))) {
+      let y = m[3] ? +m[3] : auj.getFullYear(); if (y < 100) y += 2000;
+      let d = new Date(y, +m[2] - 1, +m[1]);
+      if (!m[3] && P.diffDays(auj, d) > 60) d = new Date(y + 1, +m[2] - 1, +m[1]);
+      return d.getMonth() === +m[2] - 1 ? d : null;
+    }
+    if ((m = /^(\d{1,2}) (janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)( \d{4})?$/.exec(s))) {
+      let y = m[3] ? +m[3] : auj.getFullYear(); let d = new Date(y, MOIS.indexOf(m[2]), +m[1]);
+      if (!m[3] && P.diffDays(auj, d) > 60) d = new Date(y + 1, MOIS.indexOf(m[2]), +m[1]);
+      return d;
+    }
+    return t ? null : null;
+  }
+  const RX_DATE = "(?:aujourd'?hui|demain|apr[eè]s-?demain|j\\+\\d+|s\\+\\d+|dans \\d+ ?(?:j|jours?|sem|semaines?|mois)|fin (?:de (?:la )?)?semaine|fin (?:du )?mois|(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)(?: prochain)?|\\d{1,2}[\\/.-]\\d{1,2}(?:[\\/.-]\\d{2,4})?|\\d{1,2} (?:janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[ée]cembre)(?: \\d{4})?)";
+
+  /* ---------- Analyse d'une ligne ---------- */
+  function analyser(ligne) {
+    let txt = ' ' + ligne + ' ';
+    const vals = {}, puces = [], alertes = [];
+    const appuis = [], themes = [];
+    // Plage de dates « du X au Y »
+    txt = txt.replace(new RegExp(`\\s(?:du|de) (${RX_DATE}) (?:au|à|a) (${RX_DATE})(?=\\s)`, 'i'), (all, a, b) => {
+      const d1 = lireDate(a), d2 = lireDate(b);
+      if (d1) vals.debut = d1; if (d2) vals.echeance = d2; return ' ';
+    });
+    // Échéance : « pour le X », « avant le X », « le X », « X »
+    txt = txt.replace(new RegExp(`\\s(?:(?:pour|avant|d'ici|d’ici|au plus tard)\\s(?:le\\s)?|le\\s|pour\\s)?(${RX_DATE})(?=\\s|[,.;]|$)`, 'i'), (all, a) => {
+      const d = lireDate(a); if (d && !vals.echeance) { vals.echeance = d; return ' '; } return all;
+    });
+    // Jetons préfixés
+    txt = txt.replace(/(^|\s)([@+#*=!~])([^\s]*)/g, (all, sp, pre, val) => {
+      if (pre === '!') {
+        const prios = P.choix('tache', 'priorite');
+        const rang = val === '' || val === '!' ? 1 : /^\d$/.test(val) ? +val : null;
+        const p = rang ? prios.find(x => P.rangPriorite(x) === rang) : chercherChoix(prios, val);
+        if (p) vals.priorite = p; else alertes.push(`Priorité « ${val} » inconnue`);
+        return sp;
+      }
+      if (pre === '~') {
+        const m = /^(\d+(?:[.,]\d+)?)(j|jh|h)?$/i.exec(val);
+        if (m) { let n = parseFloat(m[1].replace(',', '.')); if (m[2] && m[2].toLowerCase() === 'h') n = Math.round(n / 7 * 100) / 100; vals.charge = n; }
+        else alertes.push(`Charge « ${val} » illisible`);
+        return sp;
+      }
+      if (!val) return all;
+      if (pre === '@' || pre === '+') {
+        const r = chercher('agent', val);
+        if (r.res) { if (pre === '@') vals.responsable = r.res.id; else appuis.push(r.res.id); if (r.ambigu) alertes.push(`« ${val} » : plusieurs personnes possibles`); }
+        else alertes.push(`Personne « ${val} » introuvable`);
+        return sp;
+      }
+      if (pre === '#') {
+        const r = chercher('projet', val);
+        if (r.res) { vals.projet = r.res.id; if (r.ambigu) alertes.push(`« ${val} » : plusieurs projets possibles`); } else alertes.push(`Projet « ${val} » introuvable`);
+        return sp;
+      }
+      if (pre === '*') {
+        const te = themeEnt();
+        if (te) { const r = chercher('theme', val); if (r.res) themes.push(r.res.id); else alertes.push(`Thème « ${val} » introuvable`); }
+        else { const c = chercherChoix(P.choix('tache', 'theme'), val); if (c) themes.push(c); else alertes.push(`Thème « ${val} » introuvable`); }
+        return sp;
+      }
+      if (pre === '=') {
+        const c = chercherChoix(P.choix('tache', 'statut'), val);
+        if (c) vals.statut = c; else alertes.push(`Statut « ${val} » inconnu`);
+        return sp;
+      }
+      return all;
+    });
+    if (appuis.length) vals.appuis = appuis;
+    if (themes.length) vals.theme = themes;
+    if (!vals.projet && defauts.projet && P.get('projet', defauts.projet)) { vals.projet = defauts.projet; vals._projetDefaut = true; }
+    if (!vals.responsable && defauts.responsable && P.get('agent', defauts.responsable)) { vals.responsable = defauts.responsable; vals._respDefaut = true; }
+    if (!vals.priorite && vals.projet && P.a('tache', 'priorite')) { const pp = (P.get('projet', vals.projet) || {}).priorite; if (pp && P.choix('tache', 'priorite').includes(pp)) vals.priorite = pp; }
+    let titre = txt.replace(/\s+/g, ' ').replace(/\s([,.;])/g, '$1').trim().replace(/[,;]$/, '');
+    titre = titre.charAt(0).toUpperCase() + titre.slice(1);
+    vals.titre = titre;
+    if (!titre) alertes.push('Intitulé vide');
+    if (vals.debut && vals.echeance && vals.echeance < vals.debut) alertes.push('Échéance avant le début');
+    const auj = P.today();
+    if (vals.projet) puces.push(['Projet', P.libelle('projet', vals.projet) + (vals._projetDefaut ? ' (par défaut)' : '')]);
+    if (vals.responsable) puces.push(['Responsable', P.libelle('agent', vals.responsable) + (vals._respDefaut ? ' (par défaut)' : '')]);
+    if (appuis.length) puces.push(['Appuis', P.libelles('agent', appuis).join(', ')]);
+    if (vals.debut) puces.push(['Début', P.fmtDateLong(vals.debut)]);
+    if (vals.echeance) puces.push(['Échéance', `${P.fmtDateLong(vals.echeance)} (${P.relatif(P.diffDays(vals.echeance, auj))})`]);
+    if (vals.priorite) puces.push(['Priorité', vals.priorite]);
+    if (vals.statut) puces.push(['Statut', vals.statut]);
+    if (themes.length) puces.push(['Thème', themeEnt() ? P.libelles('theme', themes).join(', ') : themes.join(', ')]);
+    if (vals.charge != null) puces.push(['Charge', P.fmtNb(vals.charge, 2) + ' J/H']);
+    return {vals, puces, alertes};
+  }
+
+  /* ---------- Interface ---------- */
+  function dessiner() {
+    const corps = P.$('#pl-corps');
+    const projets = P.liste('projet').filter(p => !P.estClos(p.phase)).sort((a, b) => a._libelle.localeCompare(b._libelle, 'fr'));
+    const agents = P.liste('agent').slice().sort((a, b) => a._libelle.localeCompare(b._libelle, 'fr'));
+    corps.innerHTML = `<div class="se">
+      <div class="se-zone"><label for="se-in" class="sr">Nouvelle tâche</label>
+        <textarea class="in" id="se-in" rows="1" placeholder="Ex. : Relancer le garage pour la livraison @Erwan #LOG-2026-02 vendredi !2 ~0,5 *parc">${esc(ui.texte)}</textarea>
+        <div class="se-ac hidden" id="se-ac" role="listbox"></div></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn pri" id="se-ok">${P.ic('plus')} Créer la tâche</button>
+        <span class="muted small"><kbd>Entrée</kbd> crée la tâche · <kbd>Maj</kbd>+<kbd>Entrée</kbd> nouvelle ligne (une tâche par ligne) · <kbd>Tab</kbd> complète</span></div>
+      <div class="se-apercu" id="se-apercu" aria-live="polite"></div>
+      <details class="carte" ${ui.texte ? '' : 'open'}><summary style="cursor:pointer;font-weight:700">Mémo de saisie</summary>
+        <div class="se-aide" style="margin-top:10px">
+          <span><code>@nom</code> responsable</span><span><code>+nom</code> personne en appui</span>
+          ${P.table('projet') ? '<span><code>#code</code> ou <code>#mot</code> projet</span>' : ''}<span><code>!1</code> … <code>!4</code> priorité (<code>!!</code> = P1)</span>
+          ${P.a('tache', 'theme') ? '<span><code>*thème</code> thème</span>' : ''}<span><code>~2</code> charge en jours (<code>~3h</code>)</span>
+          <span><code>=en cours</code> statut</span><span><code>vendredi</code>, <code>demain</code>, <code>25/11</code></span>
+          <span><code>j+5</code>, <code>s+2</code>, <code>dans 3 semaines</code></span><span><code>fin du mois</code>, <code>fin de semaine</code></span>
+          <span><code>du 20/11 au 28/11</code> début et échéance</span><span>Coller plusieurs lignes = plusieurs tâches</span>
+        </div></details>
+      <div class="carte se-def"><div class="champ"><label for="se-dp">Projet par défaut</label><select class="in sm" id="se-dp"><option value="">— Aucun —</option>${projets.map(p => `<option value="${p.id}" ${p.id === defauts.projet ? 'selected' : ''}>${esc(p._libelle)}</option>`).join('')}</select></div>
+        <div class="champ"><label for="se-dr">Responsable par défaut</label><select class="in sm" id="se-dr"><option value="">— Aucun —</option>${agents.map(a => `<option value="${a.id}" ${a.id === defauts.responsable ? 'selected' : ''}>${esc(a._libelle)}</option>`).join('')}</select></div></div>
+      <section class="carte"><h2>Créées dans cette session</h2><ul class="liste-nue se-hist" id="se-hist"></ul></section>
+    </div>`;
+    const ta = P.$('#se-in');
+    if (!P.table('projet')) P.$('#se-dp').closest('.champ').classList.add('hidden');
+    ta.addEventListener('input', () => { ui.texte = ta.value; ajuster(); apercu(); autoComplete(); });
+    ta.addEventListener('keydown', clavier);
+    ta.addEventListener('click', autoComplete);
+    ta.addEventListener('blur', () => setTimeout(() => cacherAc(), 150));
+    P.$('#se-ok').addEventListener('click', creer);
+    P.$('#se-dp').addEventListener('change', e => { defauts.projet = +e.target.value || null; sauverDef(); apercu(); });
+    P.$('#se-dr').addEventListener('change', e => { defauts.responsable = +e.target.value || null; sauverDef(); apercu(); });
+    P.$('#se-ac').addEventListener('mousedown', e => { const b = e.target.closest('button'); if (b) { e.preventDefault(); inserer(b.dataset.v); } });
+    ajuster(); apercu(); historique(); ta.focus();
+  }
+  const sauverDef = () => { try { localStorage.setItem('saisie-express-defauts', JSON.stringify(defauts)); } catch (e) { /* ignoré */ } };
+  function ajuster() { const ta = P.$('#se-in'); ta.style.height = 'auto'; ta.style.height = Math.min(320, ta.scrollHeight + 4) + 'px'; }
+  const lignes = () => ui.texte.split('\n').map(l => l.trim()).filter(Boolean);
+
+  function apercu() {
+    const zone = P.$('#se-apercu');
+    const ls = lignes();
+    zone.innerHTML = ls.map(l => { const a = analyser(l); return `<div class="se-carte ${a.alertes.length ? 'ko' : ''}"><div class="titre">${esc(a.vals.titre || '(sans intitulé)')}</div>
+      <div class="se-puces">${a.puces.map(([k, v]) => `<span class="se-puce"><b>${esc(k)}</b>${esc(v)}</span>`).join('')}${a.alertes.map(x => `<span class="se-puce warn">⚠ ${esc(x)}</span>`).join('')}</div></div>`; }).join('');
+    P.$('#se-ok').innerHTML = `${P.ic('plus')} ${ls.length > 1 ? `Créer les ${ls.length} tâches` : 'Créer la tâche'}`;
+    P.$('#se-ok').disabled = !ls.length;
+  }
+
+  /* ---------- Autocomplétion ---------- */
+  function jetonCourant() {
+    const ta = P.$('#se-in'); const pos = ta.selectionStart; const avant = ta.value.slice(0, pos);
+    const m = /(^|\s)([@+#*=])([^\s]*)$/.exec(avant);
+    return m ? {pre: m[2], val: m[3], debut: pos - m[3].length, fin: pos} : null;
+  }
+  function autoComplete() {
+    const j = jetonCourant(); const ac = P.$('#se-ac');
+    if (!j) return cacherAc();
+    let items = [];
+    if (j.pre === '@' || j.pre === '+') items = (j.val ? chercher('agent', j.val).liste : P.liste('agent')).map(r => ({v: jeton(r._libelle), l: r._libelle, k: 'personne'}));
+    else if (j.pre === '#') items = (j.val ? chercher('projet', j.val).liste : P.liste('projet')).filter(p => !P.estClos(p.phase)).map(r => ({v: jeton(r.code || r._libelle), l: r._libelle, k: r.code || 'projet'}));
+    else if (j.pre === '*') items = themeEnt() ? (j.val ? chercher('theme', j.val).liste : P.liste('theme')).map(r => ({v: jeton(r._libelle.replace(/^\W+\s*/u, '')), l: r._libelle, k: 'thème'})) : P.choix('tache', 'theme').filter(x => !j.val || compact(x).includes(compact(j.val))).map(x => ({v: jeton(x), l: x, k: 'thème'}));
+    else if (j.pre === '=') items = P.choix('tache', 'statut').filter(x => !j.val || compact(x).includes(compact(j.val))).map(x => ({v: jeton(x.replace(/^\W+\s*/u, '')), l: x, k: 'statut'}));
+    items = items.slice(0, 8);
+    if (!items.length) return cacherAc();
+    ui.ac = {j, items, sel: 0};
+    ac.innerHTML = items.map((it, i) => `<button type="button" role="option" aria-selected="${i === 0}" data-v="${esc(it.v)}">${esc(it.l)}<span class="k">${esc(it.k)}</span></button>`).join('');
+    const ta = P.$('#se-in'); ac.style.left = '8px'; ac.style.top = (ta.offsetHeight + 2) + 'px';
+    ac.classList.remove('hidden');
+  }
+  function cacherAc() { ui.ac = null; const ac = P.$('#se-ac'); if (ac) ac.classList.add('hidden'); }
+  function inserer(v) {
+    const ta = P.$('#se-in'); const j = ui.ac ? ui.ac.j : jetonCourant(); if (!j) return;
+    ta.value = ta.value.slice(0, j.debut) + v + ' ' + ta.value.slice(j.fin);
+    const pos = j.debut + v.length + 1; ta.setSelectionRange(pos, pos); ui.texte = ta.value;
+    cacherAc(); ajuster(); apercu(); ta.focus();
+  }
+  function clavier(e) {
+    if (ui.ac) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); ui.ac.sel = (ui.ac.sel + (e.key === 'ArrowDown' ? 1 : -1) + ui.ac.items.length) % ui.ac.items.length; P.$$('#se-ac button').forEach((b, i) => b.setAttribute('aria-selected', i === ui.ac.sel)); return; }
+      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) { e.preventDefault(); inserer(ui.ac.items[ui.ac.sel].v); return; }
+      if (e.key === 'Escape') { cacherAc(); return; }
+    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); creer(); }
+  }
+
+  /* ---------- Création ---------- */
+  async function creer() {
+    const ls = lignes(); if (!ls.length) return;
+    const analyses = ls.map(analyser);
+    if (analyses.some(a => !a.vals.titre)) { P.toast('Une ligne n’a pas d’intitulé.', 'warn'); return; }
+    const acts = analyses.map(a => { const v = Object.assign({}, a.vals); delete v._projetDefaut; delete v._respDefaut; return P.actionAjout('tache', v); });
+    const bouton = P.$('#se-ok'); bouton.disabled = true;
+    try {
+      const ids = await P.appliquer(acts);
+      analyses.forEach((a, i) => ui.historique.unshift({id: ids[i], titre: a.vals.titre, projet: a.vals.projet, echeance: a.vals.echeance}));
+      ui.texte = '';
+      P.toast(ls.length > 1 ? `${ls.length} tâches créées.` : 'Tâche créée.', 'ok');
+      dessiner();
+    } catch (e) { bouton.disabled = false; }
+  }
+  function historique() {
+    const ul = P.$('#se-hist');
+    const l = ui.historique.filter(h => P.get('tache', h.id));
+    ul.innerHTML = l.length ? l.map(h => `<li><span class="t"><strong>${esc(h.titre)}</strong><br><span class="muted small">${esc(P.libelle('projet', h.projet) || 'Sans projet')}${h.echeance ? ' · ' + P.fmtDate(h.echeance) : ''}</span></span>
+      <button class="btn ter sm" data-annuler="${h.id}">Annuler</button></li>`).join('') : '<li class="muted small">Aucune tâche créée pour l’instant.</li>';
+    ul.onclick = async e => { const b = e.target.closest('[data-annuler]'); if (!b) return; await P.supprimer('tache', +b.dataset.annuler, 'Tâche supprimée.'); ui.historique = ui.historique.filter(h => h.id !== +b.dataset.annuler); };
+  }
+})();
+</script>
+</body>
+</html>
