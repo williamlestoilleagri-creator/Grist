@@ -537,8 +537,13 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
         });
         setTimeout(res, 2500);
       });
-      grist.ready({requiredAccess: 'full', allowSelectBy: false, onEditOptions: () => P.ouvrirConfig()});
-      grist.onRecords(() => onChange('records'));
+      const pret = {requiredAccess: 'full', allowSelectBy: false, onEditOptions: () => P.ouvrirConfig()};
+      if (P.cfg.colonnes) pret.columns = P.cfg.colonnes; // colonnes choisies dans le panneau de droite de Grist
+      grist.ready(pret);
+      grist.onRecords((recs, mappings) => {
+        if (P.cfg.surLignes) P.cfg.surLignes(recs || [], mappings || null);
+        onChange('records');
+      }, {keepEncoded: true, expandRefs: false});
       grist.onRecord(async rec => {
         if (!rec) return;
         let tableId = null;
@@ -983,12 +988,10 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
     const tablesOpts = Object.keys(etat.schema).sort();
     const corps = document.createElement('div');
     corps.innerHTML = `
-      <p class="muted small" style="margin:0">Le widget s'adapte à la structure de votre document : choisissez pour chaque élément la table et les colonnes à utiliser.
+      ${ents.length ? `<p class="muted small" style="margin:0">Le widget s'adapte à la structure de votre document : choisissez pour chaque élément la table et les colonnes à utiliser.
       La détection automatique propose une association à partir des noms. Les colonnes calculées (formules) sont lues mais jamais modifiées.</p>
-      <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn sec sm" data-act="auto">Détection automatique</button>
-        ${P.cfg.reglages ? '' : ''}
-      </div>
+      <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sec sm" data-act="auto">Détection automatique</button></div>`
+      : `<p class="muted small" style="margin:0">${P.cfg.texteConfig || 'Les colonnes utilisées se choisissent dans le panneau de droite de Grist (onglet « Widget »).'}</p>`}
       <div id="cfg-ents" style="display:flex;flex-direction:column;gap:8px"></div>
       ${P.cfg.reglagesHtml ? `<div class="carte"><h3>Réglages du widget</h3><div id="cfg-reglages">${P.cfg.reglagesHtml()}</div></div>` : ''}
       <div class="carte"><h3>Affichage</h3><label class="case"><input type="checkbox" id="cfg-marque" ${P.reglage('marque', true) ? 'checked' : ''}> Afficher le bloc-marque « République française »</label></div>`;
@@ -1238,6 +1241,7 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
   function lireOptions() {
     const o = etat.backend.getOptions() || {};
     etat.reglages = o.reglages || etat.reglages || {};
+    if (P.cfg.sansDetection) { etat.mapping = {}; return; }
     let m = o.mapping;
     if (!mappingValide(m)) {
       let local = null; try { local = JSON.parse(localStorage.getItem(cleLocale()) || 'null'); } catch (e) { /* ignoré */ }

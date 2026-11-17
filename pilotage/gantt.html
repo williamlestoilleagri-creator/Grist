@@ -9,245 +9,349 @@
 <script src="socle.js"></script>
 <style>
   .pl-corps{padding:0}
-  .gt-barre-outils{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  .gt-wrap{overflow:auto;height:calc(100vh - 66px);position:relative;border-top:1px solid var(--border)}
-  .pl-demo:not(.hidden) ~ .pl-corps .gt-wrap{height:calc(100vh - 92px)}
-  .gt{position:relative;min-width:100%}
-  .gt-row{display:flex;height:30px;border-bottom:1px solid var(--contrast)}
-  .gt-row.proj{background:var(--bf-975);height:34px;border-bottom:1px solid var(--bf-925)}
-  .gt-lbl{position:sticky;left:0;z-index:3;width:var(--lw);flex:0 0 var(--lw);background:var(--surface);border-right:1px solid var(--border);padding:0 8px;display:flex;align-items:center;gap:6px;font-size:.8rem;overflow:hidden;white-space:nowrap}
-  .gt-row.proj .gt-lbl{background:var(--bf-975);font-weight:700;color:var(--title)}
-  .gt-lbl .t{overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
-  .gt-lbl .who{color:var(--mention);font-size:.7rem;flex:0 0 auto}
-  .gt-lbl button.rep{background:none;border:0;cursor:pointer;padding:0 2px;color:var(--bf);display:flex}
-  .gt-lbl button.rep svg{width:16px;height:16px;transition:transform .15s}
+  .gt-outils{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .gt-leg{display:flex;gap:16px;flex-wrap:wrap;align-items:center;padding:8px 16px;font-size:.78rem;color:var(--text);border-bottom:1px solid var(--border);background:var(--alt)}
+  .gt-leg i{display:inline-block;width:22px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle}
+  .gt-leg .los{width:11px;height:11px;transform:rotate(45deg);border-radius:1px}
+  .gt-wrap{overflow:auto;height:calc(100vh - 106px);position:relative}
+  .gt{position:relative;--lw:360px;--rh:52px;--bh:24px;--gh:50px}
+  .gt.compact{--lw:300px;--rh:34px;--bh:16px;--gh:38px}
+  .gt-row{display:flex;height:var(--rh);border-bottom:1px solid #f0f0f0}
+  .gt-row:nth-child(even) .gt-trk{background:rgba(0,0,145,.012)}
+  .gt-row.grp{height:var(--gh);background:var(--bf-975);border-bottom:1px solid var(--bf-925);border-top:8px solid var(--surface)}
+  .gt-lbl{position:sticky;left:0;z-index:3;width:var(--lw);flex:0 0 var(--lw);background:var(--surface);border-right:1px solid var(--border);padding:0 14px 0 18px;display:flex;flex-direction:column;justify-content:center;min-width:0;cursor:pointer}
+  .gt-lbl:hover .t{color:var(--bf)}
+  .gt-row.grp .gt-lbl{background:var(--bf-975);flex-direction:row;align-items:center;gap:8px;padding-left:8px;border-left:4px solid var(--bf)}
+  .gt-lbl .t{font-size:.9rem;font-weight:500;color:var(--title);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .gt.compact .gt-lbl .t{font-size:.82rem}
+  .gt-lbl .s{font-size:.74rem;color:var(--mention);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+  .gt.compact .gt-lbl .s{display:none}
+  .gt-row.grp .gt-lbl .t{font-size:1rem;font-weight:700;flex:1}
+  .gt-row.grp .gt-lbl .n{font-size:.72rem;background:var(--bf);color:#fff;border-radius:10px;padding:0 8px;line-height:1.5}
+  .gt-lbl button.rep{background:none;border:0;cursor:pointer;padding:2px;color:var(--bf);display:flex}
+  .gt-lbl button.rep svg{width:20px;height:20px;transition:transform .15s}
   .gt-lbl button.rep[aria-expanded=true] svg{transform:rotate(90deg)}
   .gt-trk{position:relative;flex:0 0 auto}
-  .gt-head{position:sticky;top:0;z-index:5;background:var(--surface);box-shadow:0 1px 0 var(--text)}
-  .gt-head .gt-lbl{z-index:6;font-weight:700;color:var(--title);height:100%}
-  .gt-h1,.gt-h2{position:relative;height:22px}
-  .gt-h1 span,.gt-h2 span{position:absolute;top:0;bottom:0;border-left:1px solid var(--border);font-size:.72rem;padding:3px 4px;overflow:hidden;white-space:nowrap;color:var(--title)}
-  .gt-h1 span{font-weight:700}
-  .gt-h2 span{color:var(--mention)}
+  .gt-head{position:sticky;top:0;z-index:6;background:var(--surface);box-shadow:0 2px 0 var(--text)}
+  .gt-head .gt-row{height:56px;border:0}
+  .gt-head .gt-lbl{z-index:7;cursor:default;font-weight:700;color:var(--title);font-size:.85rem}
+  .gt-h1,.gt-h2{position:relative;height:28px}
+  .gt-h1 span,.gt-h2 span{position:absolute;top:0;bottom:0;border-left:1px solid var(--border);padding:5px 6px;overflow:hidden;white-space:nowrap}
+  .gt-h1 span{font-weight:700;color:var(--title);font-size:.82rem}
+  .gt-h2 span{color:var(--mention);font-size:.75rem}
   .gt-h2 span.we{background:var(--alt)}
+  .gt-h2 span.auj{color:#fff;background:var(--rm);font-weight:700}
   .gt-grid{position:absolute;top:0;bottom:0;pointer-events:none;z-index:0}
-  .gt-grid i{position:absolute;top:0;bottom:0;border-left:1px solid var(--contrast)}
-  .gt-grid i.we{background:rgba(0,0,0,.025);border:0}
+  .gt-grid i{position:absolute;top:0;bottom:0;border-left:1px solid #f1f1f1}
+  .gt-grid i.m{border-left:1px solid #d6d6d6}
+  .gt-grid i.we{background:rgba(0,0,0,.022);border:0}
   .gt-today{position:absolute;top:0;bottom:0;width:2px;background:var(--rm);z-index:2;pointer-events:none}
-  .gt-today::before{content:"Aujourd’hui";position:absolute;top:2px;left:4px;font-size:.65rem;color:var(--rm);font-weight:700;white-space:nowrap}
-  .gt-bar{position:absolute;top:7px;height:16px;background:var(--bf);color:#fff;font-size:.68rem;line-height:16px;white-space:nowrap;cursor:grab;z-index:1;border-radius:2px;overflow:visible;touch-action:none;user-select:none}
-  .gt-bar .pg{position:absolute;inset:0 auto 0 0;background:rgba(0,0,0,.28);pointer-events:none}
-  .gt-bar .lb{position:absolute;left:calc(100% + 6px);color:var(--text);pointer-events:none;font-size:.7rem}
-  .gt-bar .h{position:absolute;top:0;bottom:0;width:7px;cursor:ew-resize}
-  .gt-bar .h.g{left:-3px} .gt-bar .h.d{right:-3px}
+  .gt-bar{position:absolute;top:calc((var(--rh) - var(--bh)) / 2);height:var(--bh);border-radius:5px;color:#fff;font-size:.75rem;line-height:var(--bh);white-space:nowrap;cursor:grab;z-index:1;touch-action:none;user-select:none;box-shadow:0 1px 2px rgba(0,0,0,.18)}
+  .gt.compact .gt-bar{font-size:.68rem;border-radius:3px}
+  .gt-bar .pg{position:absolute;inset:0 auto 0 0;background:rgba(255,255,255,.28);border-radius:5px 0 0 5px;pointer-events:none}
+  .gt-bar .gt-in{position:absolute;left:8px;right:8px;overflow:hidden;text-overflow:ellipsis;pointer-events:none;font-weight:500}
+  .gt-bar .gt-out{position:absolute;left:calc(100% + 8px);color:var(--text);pointer-events:none;font-weight:500}
+  .gt-bar .h{position:absolute;top:0;bottom:0;width:9px;cursor:ew-resize}
+  .gt-bar .h.g{left:-4px} .gt-bar .h.d{right:-4px}
+  .gt-bar .h::after{content:"";position:absolute;top:25%;bottom:25%;left:3px;width:2px;border-radius:1px;background:rgba(255,255,255,.7);opacity:0}
+  .gt-bar:hover .h::after{opacity:1}
   .gt-bar.ro{cursor:pointer}
-  .gt-bar.err{background:var(--error)} .gt-bar.warn{background:#d64d00} .gt-bar.jaune{background:#b7a73f} .gt-bar.ok{background:var(--bf)} .gt-bar.clos{background:#929292}
-  .gt-bar.estime{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.35) 0 4px,transparent 4px 8px)}
-  .gt-bar.proj{top:9px;height:12px;background:var(--title)}
-  .gt-bar.proj::before,.gt-bar.proj::after{content:"";position:absolute;bottom:-5px;border:5px solid transparent;border-top-color:var(--title)}
-  .gt-bar.proj::before{left:0;border-left-color:var(--title)} .gt-bar.proj::after{right:0;border-right-color:var(--title)}
-  .gt-bar.proj .pg{background:var(--bf-hover)}
-  .gt-bar.drag{opacity:.75;cursor:grabbing;box-shadow:var(--shadow-lg)}
-  .gt-jal{position:absolute;top:9px;width:14px;height:14px;transform:translateX(-7px) rotate(45deg);background:var(--warning);z-index:2;cursor:grab;border:2px solid #fff;touch-action:none}
-  .gt-jal.ok{background:var(--success)} .gt-jal.err{background:var(--error)}
-  .gt-vide{position:absolute;inset:0;cursor:copy}
-  .gt-vide:hover::after{content:"Cliquer pour planifier";position:absolute;left:8px;top:7px;font-size:.7rem;color:var(--mention)}
-  .gt-leg{display:flex;gap:10px;align-items:center;font-size:.72rem;color:var(--mention)}
-  .gt-leg i{display:inline-block;width:12px;height:8px;margin-right:3px;vertical-align:middle}
-  @media print{.gt-wrap{height:auto;overflow:visible}}
+  .gt-bar.estime{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.3) 0 5px,transparent 5px 10px)}
+  .gt-bar.drag{opacity:.8;cursor:grabbing;box-shadow:var(--shadow-lg);z-index:4}
+  .gt-som{position:absolute;top:calc(var(--gh) / 2 - 4px);height:8px;background:var(--bf);border-radius:4px;opacity:.85;pointer-events:none}
+  .gt-som::before,.gt-som::after{content:"";position:absolute;top:-3px;width:3px;height:14px;background:var(--bf);border-radius:1px}
+  .gt-som::before{left:0} .gt-som::after{right:0}
+  .gt-som-l{position:absolute;top:calc(var(--gh) / 2 - 22px);font-size:.7rem;color:var(--bf);font-weight:500;white-space:nowrap;pointer-events:none}
+  .gt-jal{position:absolute;top:calc(var(--rh) / 2 - 9px);width:18px;height:18px;transform:translateX(-9px) rotate(45deg);border-radius:2px;z-index:2;cursor:grab;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3);touch-action:none}
+  .gt-jal-l{position:absolute;top:0;bottom:0;display:flex;align-items:center;font-size:.75rem;font-weight:500;color:var(--text);pointer-events:none;white-space:nowrap}
+  .gt-vide{position:absolute;inset:6px 0;cursor:copy;border:1px dashed transparent;border-radius:5px}
+  .gt-vide:hover{border-color:var(--bf-850);background:var(--bf-975)}
+  .gt-vide::after{content:"Non planifiée – cliquer sur un jour pour la placer";position:sticky;left:calc(var(--lw) + 12px);display:inline-block;margin-left:12px;font-size:.74rem;color:var(--mention);line-height:calc(var(--rh) - 14px);font-style:italic}
+  .gt-msg{max-width:720px;margin:24px}
+  .gt-msg ol li{margin-bottom:4px}
+  @media print{.gt-wrap{height:auto;overflow:visible}.gt-leg{display:none}}
 </style>
 </head>
 <body>
 <script>
 (function () {
   const P = Pilotage, esc = P.esc;
-  const ZOOMS = {jour: 30, semaine: 12, mois: 4, trimestre: 1.6};
-  const ui = {zoom: 'semaine', domaine: '', agent: '', clos: false, replies: new Set(), scrollToToday: true};
-  try { Object.assign(ui, JSON.parse(localStorage.getItem('gantt-ui') || '{}')); ui.replies = new Set(ui.replies || []); ui.scrollToToday = true; } catch (e) { /* ignoré */ }
-  const sauverUi = () => { try { localStorage.setItem('gantt-ui', JSON.stringify(Object.assign({}, ui, {replies: Array.from(ui.replies)}))); } catch (e) { /* ignoré */ } };
-  let geo = null; // géométrie courante (début de l'axe, px par jour)
+  const ZOOMS = {jour: 36, semaine: 16, mois: 5, trimestre: 1.9};
+  const COULEURS = ['#000091', '#6a6af4', '#009081', '#c08c65', '#a558a0', '#417dc4', '#d1335b', '#5e2a2b', '#3a3a3a', '#716043'];
+  const ROUGE = '#ce0500', ORANGE = '#c3592d', GRIS = '#929292', BLEU = '#000091';
+  /* Colonnes à choisir dans le panneau de droite de Grist */
+  const COLONNES = [
+    {name: 'Titre', title: 'Intitulé', description: 'Texte affiché sur chaque barre (ex. Action, Intitulé)', type: 'Any'},
+    {name: 'Fin', title: 'Date de fin / échéance', description: 'Fin de la barre (ex. Échéance, Deadline)', type: 'Date'},
+    {name: 'Debut', title: 'Date de début', description: 'Début de la barre ; sans elle, la durée est estimée', type: 'Date', optional: true},
+    {name: 'Groupe', title: 'Regrouper par', description: 'Ex. Projet : une section par valeur', type: 'Any', optional: true},
+    {name: 'Responsable', title: 'Sous-titre', description: 'Affiché sous l’intitulé (ex. Responsable)', type: 'Any', optional: true},
+    {name: 'Avancement', title: 'Avancement', description: 'Nombre entre 0 et 1 (ou en %), affiché dans la barre', type: 'Numeric', optional: true},
+    {name: 'Statut', title: 'Statut', description: 'Sert à repérer les éléments terminés et en retard', type: 'Choice', optional: true},
+    {name: 'Couleur', title: 'Couleur des barres', description: 'Colonne Choix : les barres prennent la couleur de chaque choix', type: 'Choice', optional: true},
+    {name: 'Jalon', title: 'Jalon', description: 'Case à cocher : la ligne s’affiche en losange', type: 'Bool', optional: true},
+    {name: 'Charge', title: 'Charge (jours)', description: 'Sert à estimer la durée quand il manque une date', type: 'Numeric', optional: true},
+  ];
+  /* Correspondance utilisée en mode démonstration */
+  const DEMO = {table: 'DATA_Taches', mapping: {Titre: 'Action', Fin: 'Echeance', Debut: 'Date_de_debut', Groupe: 'Projet', Responsable: 'Responsable', Avancement: 'Avancement', Statut: 'Statut', Charge: 'Charge_estimee'}};
+
+  const ui = {zoom: 'semaine', compact: false, clos: false, q: '', replies: [], allerAuj: true};
+  try { Object.assign(ui, JSON.parse(localStorage.getItem('gantt2-ui') || '{}')); ui.allerAuj = true; } catch (e) { /* ignoré */ }
+  const sauverUi = () => { try { localStorage.setItem('gantt2-ui', JSON.stringify(Object.assign({}, ui, {allerAuj: false}))); } catch (e) { /* ignoré */ } };
+  const src = {tableId: null, mapping: null, recs: [], refs: {}};
+  let geo = null, items = [];
+  const redessiner = P.debounce(() => { if (!P.$('.pl-voile') && !P.$('.gt-bar.drag')) P.cfg.rendu(); }, 250);
 
   P.demarrer({
     id: 'gantt',
     titre: 'Gantt',
-    sousTitre: 'Projets, tâches et jalons – glisser pour replanifier',
-    entites: ['tache', 'projet', 'jalon'],
-    optionnelles: ['jalon'],
-    champsRequis: {tache: ['titre'], projet: ['titre']},
-    outils: () => `<div class="gt-barre-outils">
+    sousTitre: 'Planning sur une frise – glisser pour replanifier',
+    entites: [],
+    sansDetection: true,
+    colonnes: COLONNES,
+    texteConfig: 'Les colonnes du Gantt (intitulé, dates, regroupement, couleur…) se choisissent dans le panneau de droite de Grist : onglet « Widget », rubrique des colonnes. La table utilisée est celle choisie comme données du widget.',
+    surLignes: (recs, mapping) => { src.recs = recs; src.mapping = mapping; redessiner(); },
+    outils: () => `<div class="gt-outils">
       <div class="grp" role="group" aria-label="Échelle">${Object.keys(ZOOMS).map(z => `<button class="btn sm" data-zoom="${z}" aria-pressed="${z === ui.zoom}">${z[0].toUpperCase() + z.slice(1)}</button>`).join('')}</div>
       <button class="btn ter sm" id="gt-auj">Aujourd’hui</button>
-      <select class="in sm" id="gt-dom" style="width:auto"><option value="">Tous domaines</option></select>
-      <select class="in sm" id="gt-ag" style="width:auto"><option value="">Toute l’équipe</option></select>
-      <label class="case small"><input type="checkbox" id="gt-clos" ${ui.clos ? 'checked' : ''}> Éléments clos</label>
+      <div class="grp" role="group" aria-label="Densité"><button class="btn sm" data-dens="0" aria-pressed="${!ui.compact}">Confortable</button><button class="btn sm" data-dens="1" aria-pressed="${ui.compact}">Compact</button></div>
+      <input class="in sm" id="gt-q" placeholder="Filtrer…" value="${esc(ui.q)}" style="width:150px" aria-label="Filtrer">
+      <label class="case small"><input type="checkbox" id="gt-clos" ${ui.clos ? 'checked' : ''}> Terminés</label>
       <button class="btn ter sm" id="gt-tout">Tout replier</button></div>`,
     surOutils: el => {
       el.addEventListener('click', e => {
         const z = e.target.closest('[data-zoom]');
-        if (z) { ui.zoom = z.dataset.zoom; P.$$('[data-zoom]', el).forEach(b => b.setAttribute('aria-pressed', b === z)); ui.scrollToToday = true; sauverUi(); dessiner(); }
+        if (z) { ui.zoom = z.dataset.zoom; P.$$('[data-zoom]', el).forEach(b => b.setAttribute('aria-pressed', b === z)); ui.allerAuj = true; sauverUi(); dessiner(); }
+        const d = e.target.closest('[data-dens]');
+        if (d) { ui.compact = d.dataset.dens === '1'; P.$$('[data-dens]', el).forEach(b => b.setAttribute('aria-pressed', b === d)); sauverUi(); dessiner(); }
         if (e.target.closest('#gt-auj')) allerAujourdhui();
-        if (e.target.closest('#gt-tout')) {
-          const ids = P.liste('projet').map(p => p.id).concat([0]);
-          const toutReplie = ids.every(id => ui.replies.has(id));
-          ui.replies = toutReplie ? new Set() : new Set(ids); sauverUi(); dessiner();
-        }
+        if (e.target.closest('#gt-tout')) { const g = P.uniq(items.map(i => i.groupe.cle)); ui.replies = g.every(x => ui.replies.includes(x)) ? [] : g; sauverUi(); dessiner(); }
       });
-      el.querySelector('#gt-dom').addEventListener('change', e => { ui.domaine = e.target.value; sauverUi(); dessiner(); });
-      el.querySelector('#gt-ag').addEventListener('change', e => { ui.agent = e.target.value ? +e.target.value : ''; sauverUi(); dessiner(); });
+      el.querySelector('#gt-q').addEventListener('input', P.debounce(e => { ui.q = e.target.value; dessiner(); }, 250));
       el.querySelector('#gt-clos').addEventListener('change', e => { ui.clos = e.target.checked; sauverUi(); dessiner(); });
     },
-    rendu: () => { filtres(); dessiner(); },
+    rendu: () => charger().then(dessiner).catch(e => { console.error(e); P.$('#pl-corps').innerHTML = `<div class="alerte err gt-msg">${esc(e.message || e)}</div>`; }),
   });
 
-  function filtres() {
-    const doms = P.uniq(P.liste('projet').map(p => p.domaine).filter(Boolean)).sort();
-    const d = P.$('#gt-dom'); d.innerHTML = '<option value="">Tous domaines</option>' + doms.map(x => `<option ${x === ui.domaine ? 'selected' : ''}>${esc(x)}</option>`).join(''); d.classList.toggle('hidden', !doms.length);
-    P.$('#gt-ag').innerHTML = '<option value="">Toute l’équipe</option>' + P.liste('agent').slice().sort((a, b) => a._libelle.localeCompare(b._libelle, 'fr')).map(a => `<option value="${a.id}" ${a.id === ui.agent ? 'selected' : ''}>${esc(a._libelle)}</option>`).join('');
+  /* ---------- Lecture des lignes et des colonnes ---------- */
+  const colonne = nom => { const id = src.mapping && src.mapping[nom]; const t = P.etat.schema[src.tableId]; return id && t ? t.cols.find(c => c.colId === id) || null : null; };
+  const ecrivable = nom => { const c = colonne(nom); return !!c && !(c.isFormula && c.formula); };
+
+  async function charger() {
+    if (P.etat.backend.nom === 'demo') {
+      src.tableId = DEMO.table; src.mapping = DEMO.mapping;
+      const raw = await P.etat.backend.fetch(DEMO.table);
+      src.recs = raw.id.map((id, i) => { const r = {id}; Object.keys(raw).forEach(k => { r[k] = raw[k][i]; }); return r; });
+    } else if (!src.tableId) {
+      try { src.tableId = await grist.selectedTable.getTableId(); } catch (e) { src.tableId = null; }
+    }
+    // Libellés des colonnes de référence (Projet, Responsable…)
+    const besoins = ['Titre', 'Groupe', 'Responsable'].map(colonne).filter(c => c && /^Ref(List)?:/.test(c.type));
+    await Promise.all(besoins.map(async c => {
+      const cible = c.type.split(':')[1]; const t = P.etat.schema[cible]; if (!t) return;
+      const vis = c.visibleCol || (t.cols.find(x => x.type === 'Text') || {}).colId;
+      const raw = await P.etat.backend.fetch(cible);
+      src.refs[c.colId] = new Map(raw.id.map((id, i) => [id, vis && raw[vis] ? String(raw[vis][i] ?? '') : '#' + id]));
+    }));
   }
 
-  /* Dates affichées d'une tâche : début/échéance, ou durée estimée avant l'échéance */
-  function periodeTache(t) {
-    let d = t.debut, f = t.echeance, estime = false;
-    if (d && f && f < d) { const x = d; d = f; f = x; }
-    if (!d && f) { d = P.addDays(f, -Math.max(1, Math.ceil((t.charge || 1) * 1.4)) + 1); estime = true; }
-    if (d && !f) { f = P.addDays(d, Math.max(1, Math.ceil((t.charge || 1) * 1.4)) - 1); estime = true; }
-    return d ? {d, f, estime} : null;
+  function texte(nom, r) {
+    const c = colonne(nom); if (!c) return '';
+    const v = r[c.colId];
+    if (v == null || v === '' || (Array.isArray(v) && v[0] === 'E')) return '';
+    if (/^Ref:/.test(c.type)) return v ? (src.refs[c.colId] && src.refs[c.colId].get(v)) || '' : '';
+    if (/^RefList:/.test(c.type)) return Array.isArray(v) ? v.slice(1).map(id => (src.refs[c.colId] && src.refs[c.colId].get(id)) || '').filter(Boolean).join(', ') : '';
+    if (Array.isArray(v) && v[0] === 'L') return v.slice(1).join(', ');
+    if (/^Date/.test(c.type) && typeof v === 'number') return P.fmtDate(date(nom, r));
+    return String(v);
+  }
+  function date(nom, r) {
+    const c = colonne(nom); if (!c) return null; const v = r[c.colId];
+    if (typeof v === 'number') { const d = new Date(v * 1000); return /^DateTime/.test(c.type) ? P.jour(d) : new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()); }
+    if (typeof v === 'string') return P.parseDateTexte(v);
+    return null;
+  }
+  function nombre(nom, r) { const c = colonne(nom); if (!c) return null; const v = r[c.colId]; return typeof v === 'number' ? v : (v ? parseFloat(String(v).replace(',', '.')) : null); }
+  const echelleAvancement = () => { const c = colonne('Avancement'); if (!c) return 1; return src.recs.some(r => typeof r[c.colId] === 'number' && r[c.colId] > 1.5) ? 100 : 1; };
+
+  function couleurChoix(nom, valeur) {
+    const c = colonne(nom); if (!c || !valeur) return null;
+    let wo = {}; try { wo = JSON.parse(c.widgetOptions || '{}'); } catch (e) { /* ignoré */ }
+    const opt = (wo.choiceOptions || {})[valeur];
+    if (opt && opt.fillColor) return {fond: opt.fillColor, texte: opt.textColor || null};
+    const i = (wo.choices || []).indexOf(valeur);
+    return {fond: COULEURS[(i >= 0 ? i : Math.abs([...valeur].reduce((s, ch) => s + ch.charCodeAt(0), 0))) % COULEURS.length]};
+  }
+  const clair = hex => { const m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return false; const n = parseInt(m[1], 16); return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) > 170; };
+
+  function construireItems() {
+    const auj = P.today(); const ech = echelleAvancement();
+    return src.recs.map(r => {
+      const statut = texte('Statut', r);
+      const clos = P.estClos(statut);
+      let debut = date('Debut', r), fin = date('Fin', r), estime = false;
+      if (debut && fin && fin < debut) { const x = debut; debut = fin; fin = x; }
+      const duree = Math.max(1, Math.ceil((nombre('Charge', r) || 1) * 1.4));
+      if (!debut && fin) { debut = P.addDays(fin, -duree + 1); estime = true; }
+      if (debut && !fin) { fin = P.addDays(debut, duree - 1); estime = true; }
+      const av = nombre('Avancement', r);
+      const g = texte('Groupe', r);
+      const jalon = colonne('Jalon') ? !!r[colonne('Jalon').colId] : false;
+      let coul = colonne('Couleur') ? couleurChoix('Couleur', texte('Couleur', r)) : null;
+      const retard = !clos && fin && date('Fin', r) && date('Fin', r) < auj;
+      if (!coul) coul = {fond: clos ? GRIS : retard ? ROUGE : (fin && P.diffDays(fin, auj) <= 7 ? ORANGE : BLEU)};
+      return {id: r.id, r, titre: texte('Titre', r) || '(sans intitulé)', sous: texte('Responsable', r), statut, clos, retard, debut, fin, estime: estime && !jalon,
+        av: av == null ? null : Math.max(0, Math.min(1, av / ech)), groupe: {cle: g || '—', libelle: g || (colonne('Groupe') ? 'Sans regroupement' : '')}, jalon, coul};
+    });
   }
 
+  /* ---------- Dessin ---------- */
   function dessiner() {
     const corps = P.$('#pl-corps');
-    const auj = P.today();
-    const ppd = ZOOMS[ui.zoom];
-    const projetOk = p => (!ui.domaine || p.domaine === ui.domaine) && (ui.clos || !P.estClos(p.phase));
-    const agentOk = t => !ui.agent || t.responsable === ui.agent || (t.appuis || []).includes(ui.agent);
-    const projets = P.liste('projet').filter(projetOk).sort((a, b) => ((a.debut || a.fin || 9e15) - (b.debut || b.fin || 9e15)) || a.titre.localeCompare(b.titre, 'fr'));
-    const idsProjets = new Set(projets.map(p => p.id));
-    const taches = P.liste('tache').filter(t => (ui.clos || !P.estClos(t.statut)) && agentOk(t) && (t.projet ? idsProjets.has(t.projet) : !ui.domaine));
-    const groupes = projets.map(p => ({p, t: taches.filter(t => t.projet === p.id)})).filter(g => !ui.agent || g.t.length);
-    const orphelines = taches.filter(t => !t.projet || !P.get('projet', t.projet));
-    if (orphelines.length) groupes.push({p: null, t: orphelines});
-    groupes.forEach(g => g.t.sort((a, b) => ((periodeTache(a) || {d: 9e15}).d - (periodeTache(b) || {d: 9e15}).d)));
+    const manque = ['Titre', 'Fin'].filter(n => !src.mapping || !src.mapping[n]);
+    if (P.etat.backend.nom !== 'demo' && manque.length) {
+      corps.innerHTML = `<div class="carte gt-msg"><h2>Choisissez les colonnes du Gantt</h2>
+        <ol><li>Ouvrez le <strong>panneau de droite</strong> de Grist (onglet <strong>Widget</strong>).</li>
+        <li>Dans la rubrique des <strong>colonnes</strong>, choisissez au minimum l’<strong>Intitulé</strong> et la <strong>Date de fin / échéance</strong>.</li>
+        <li>Complétez si vous le souhaitez : date de début, regroupement (ex. Projet), sous-titre (ex. Responsable), avancement, statut, couleur, jalon.</li></ol>
+        <p class="small muted">Colonnes manquantes : ${manque.map(n => COLONNES.find(c => c.name === n).title).join(', ')}.</p></div>`;
+      return;
+    }
+    items = construireItems();
+    const auj = P.today(), ppd = ZOOMS[ui.zoom];
+    const q = P.norm(ui.q);
+    const visibles = items.filter(i => (ui.clos || !i.clos) && (!q || P.norm(i.titre + ' ' + i.sous + ' ' + i.groupe.libelle + ' ' + i.statut).includes(q)));
+    const groupes = new Map();
+    visibles.forEach(i => { if (!groupes.has(i.groupe.cle)) groupes.set(i.groupe.cle, {cle: i.groupe.cle, libelle: i.groupe.libelle, items: []}); groupes.get(i.groupe.cle).items.push(i); });
+    const ordreDate = i => i.debut ? i.debut.getTime() : 9e15;
+    const listeG = Array.from(groupes.values());
+    listeG.forEach(g => { g.items.sort((a, b) => ordreDate(a) - ordreDate(b) || a.titre.localeCompare(b.titre, 'fr')); const d = g.items.filter(i => i.debut); g.debut = d.length ? new Date(Math.min(...d.map(i => i.debut))) : null; g.fin = d.length ? new Date(Math.max(...d.map(i => i.fin))) : null; });
+    listeG.sort((a, b) => (a.cle === '—') - (b.cle === '—') || (a.debut || 9e15) - (b.debut || 9e15) || a.libelle.localeCompare(b.libelle, 'fr'));
 
     // Étendue de l'axe
-    const dates = [auj];
-    groupes.forEach(g => { if (g.p) [g.p.debut, g.p.fin].forEach(x => x && dates.push(x)); g.t.forEach(t => { const pr = periodeTache(t); if (pr) dates.push(pr.d, pr.f); }); });
-    P.liste('jalon').forEach(j => { if (j.date && idsProjets.has(j.projet)) dates.push(j.date); });
-    let debut = new Date(Math.min(...dates)), fin = new Date(Math.max(...dates));
-    debut = P.addDays(P.lundi(debut), -14); fin = P.addDays(fin, 45);
+    const dates = [auj, ...visibles.flatMap(i => i.debut ? [i.debut, i.fin] : [])];
+    let debut = P.addDays(P.lundi(new Date(Math.min(...dates))), -14), fin = P.addDays(new Date(Math.max(...dates)), 45);
     if (P.diffDays(fin, debut) < 120) fin = P.addDays(debut, 120);
-    if (ui.zoom === 'mois' || ui.zoom === 'trimestre') { debut = new Date(debut.getFullYear(), debut.getMonth(), 1); }
-    const nbJours = P.diffDays(fin, debut) + 1, W = Math.round(nbJours * ppd);
+    if (ui.zoom === 'mois' || ui.zoom === 'trimestre') debut = new Date(debut.getFullYear(), debut.getMonth(), 1);
+    const W = Math.round((P.diffDays(fin, debut) + 1) * ppd);
     geo = {debut, ppd};
     const x = d => Math.round(P.diffDays(d, debut) * ppd);
 
-    // En-têtes
+    // En-têtes et grille
     const h1 = [], h2 = [], grille = [];
-    const mois = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+    const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
     for (let d = new Date(debut.getFullYear(), debut.getMonth(), 1); d <= fin; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
       const a = Math.max(0, x(d)), b = Math.min(W, x(new Date(d.getFullYear(), d.getMonth() + 1, 1)));
-      if (ui.zoom === 'trimestre' || ui.zoom === 'mois') {
-        if (ui.zoom === 'mois' || d.getMonth() % 3 === 0) {
-          const finSeg = ui.zoom === 'mois' ? b : Math.min(W, x(new Date(d.getFullYear(), d.getMonth() + 3, 1)));
-          h2.push(`<span style="left:${a}px;width:${finSeg - a}px">${ui.zoom === 'mois' ? mois[d.getMonth()] : 'T' + (Math.floor(d.getMonth() / 3) + 1)}</span>`);
-          grille.push(`<i style="left:${a}px"></i>`);
-        }
-        if (d.getMonth() === 0 || d.getTime() === new Date(debut.getFullYear(), debut.getMonth(), 1).getTime()) {
-          const fa = Math.min(W, x(new Date(d.getFullYear() + 1, 0, 1)));
-          h1.push(`<span style="left:${a}px;width:${fa - a}px">${d.getFullYear()}</span>`);
-        }
-      } else {
-        h1.push(`<span style="left:${a}px;width:${b - a}px">${mois[d.getMonth()]} ${d.getFullYear()}</span>`);
+      grille.push(`<i class="m" style="left:${a}px"></i>`);
+      if (ui.zoom === 'jour' || ui.zoom === 'semaine') h1.push(`<span style="left:${a}px;width:${b - a}px">${MOIS[d.getMonth()]} ${d.getFullYear()}</span>`);
+      else {
+        if (ui.zoom === 'mois') h2.push(`<span style="left:${a}px;width:${b - a}px">${MOIS[d.getMonth()].slice(0, ui.zoom === 'mois' && ppd < 6 ? 4 : 20)}</span>`);
+        else if (d.getMonth() % 3 === 0) h2.push(`<span style="left:${a}px;width:${Math.min(W, x(new Date(d.getFullYear(), d.getMonth() + 3, 1))) - a}px">T${d.getMonth() / 3 + 1}</span>`);
+        if (d.getMonth() === 0 || a === 0) h1.push(`<span style="left:${a}px;width:${Math.min(W, x(new Date(d.getFullYear() + 1, 0, 1))) - a}px">${d.getFullYear()}</span>`);
       }
     }
-    if (ui.zoom === 'jour') {
-      for (let d = debut; d <= fin; d = P.addDays(d, 1)) {
-        const we = !P.estOuvre(d);
-        h2.push(`<span class="${we ? 'we' : ''}" style="left:${x(d)}px;width:${ppd}px;text-align:center;padding:3px 0">${d.getDate()}</span>`);
-        grille.push(`<i class="${we ? 'we' : ''}" style="left:${x(d)}px;${we ? `width:${ppd}px` : ''}"></i>`);
-      }
-    } else if (ui.zoom === 'semaine') {
-      for (let d = P.lundi(debut); d <= fin; d = P.addDays(d, 7)) {
-        h2.push(`<span style="left:${x(d)}px;width:${7 * ppd}px">S${P.semaineIso(d)} · ${d.getDate()}</span>`);
-        grille.push(`<i style="left:${x(d)}px"></i>`);
-        grille.push(`<i class="we" style="left:${x(P.addDays(d, 5))}px;width:${2 * ppd}px"></i>`);
-      }
+    if (ui.zoom === 'jour') for (let d = debut; d <= fin; d = P.addDays(d, 1)) {
+      const we = !P.estOuvre(d), today = +d === +auj;
+      h2.push(`<span class="${we ? 'we' : ''} ${today ? 'auj' : ''}" style="left:${x(d)}px;width:${ppd}px;text-align:center;padding:5px 0">${d.getDate()}</span>`);
+      if (we) grille.push(`<i class="we" style="left:${x(d)}px;width:${ppd}px"></i>`);
+    }
+    if (ui.zoom === 'semaine') for (let d = P.lundi(debut); d <= fin; d = P.addDays(d, 7)) {
+      const cour = +d === +P.lundi(auj);
+      h2.push(`<span class="${cour ? 'auj' : ''}" style="left:${x(d)}px;width:${7 * ppd}px">S${P.semaineIso(d)} · ${d.getDate()}</span>`);
+      grille.push(`<i style="left:${x(d)}px"></i><i class="we" style="left:${x(P.addDays(d, 5))}px;width:${2 * ppd}px"></i>`);
     }
 
-    const modT = {d: P.modifiable('tache', 'debut'), f: P.modifiable('tache', 'echeance')};
-    const modP = {d: P.modifiable('projet', 'debut'), f: P.modifiable('projet', 'fin')};
+    const modD = ecrivable('Debut'), modF = ecrivable('Fin');
     const lignes = [];
-    groupes.forEach(g => {
-      const pid = g.p ? g.p.id : 0;
-      const replie = ui.replies.has(pid);
-      const av = g.p ? P.avancementProjet(g.p.id) : 0;
-      let barreP = '';
-      if (g.p && (g.p.debut || g.p.fin)) {
-        const d = g.p.debut || g.p.fin, f = g.p.fin || g.p.debut;
-        barreP = `<div class="gt-bar proj ${modP.d || modP.f ? '' : 'ro'}" data-type="projet" data-id="${g.p.id}" style="left:${x(d)}px;width:${Math.max(ppd, x(P.addDays(f, 1)) - x(d))}px"
-          data-bulle="<strong>${esc(g.p.titre)}</strong><br>${P.fmtDate(g.p.debut)} → ${P.fmtDate(g.p.fin)}<br>Avancement ${P.fmtPct(av)}">
-          <span class="pg" style="width:${Math.round(av * 100)}%"></span>${modP.d ? '<span class="h g"></span>' : ''}${modP.f ? '<span class="h d"></span>' : ''}</div>`;
+    listeG.forEach(g => {
+      const replie = ui.replies.includes(g.cle);
+      const avs = g.items.filter(i => i.av != null);
+      const avG = avs.length ? P.somme(avs.map(i => i.av)) / avs.length : null;
+      if (colonne('Groupe') || listeG.length > 1) {
+        lignes.push(`<div class="gt-row grp"><div class="gt-lbl" data-rep="${esc(g.cle)}"><button class="rep" aria-expanded="${!replie}" title="Replier / déplier">${P.ic('droite')}</button>
+          <span class="t" title="${esc(g.libelle)}">${esc(g.libelle)}</span><span class="n">${g.items.length}</span></div>
+          <div class="gt-trk" style="width:${W}px">${g.debut ? `<div class="gt-som" style="left:${x(g.debut)}px;width:${Math.max(4, x(P.addDays(g.fin, 1)) - x(g.debut))}px"></div>
+            <div class="gt-som-l" style="left:${x(g.debut)}px">${P.fmtDateCourt(g.debut)} → ${P.fmtDateCourt(g.fin)}${avG != null ? ' · ' + P.fmtPct(avG) : ''}</div>` : ''}</div></div>`);
       }
-      const jal = g.p ? P.liste('jalon').filter(j => j.projet === g.p.id && j.date).map(j => {
-        const c = j.atteint ? 'ok' : j.date < auj ? 'err' : '';
-        return `<div class="gt-jal ${c}" data-type="jalon" data-id="${j.id}" style="left:${x(j.date) + ppd / 2}px" data-bulle="🏁 <strong>${esc(j.titre)}</strong><br>${P.fmtDate(j.date)}${j.atteint ? ' · atteint' : ''}"></div>`;
-      }).join('') : '';
-      lignes.push(`<div class="gt-row proj"><div class="gt-lbl"><button class="rep" data-rep="${pid}" aria-expanded="${!replie}" title="Replier / déplier">${P.ic('droite')}</button>
-        <span class="t" data-bulle="${esc(g.p ? g.p.titre : 'Tâches sans projet')}">${esc(g.p ? (g.p.code ? g.p.code + ' · ' : '') + g.p.titre : 'Sans projet')}</span><span class="who">${g.t.length}</span></div>
-        <div class="gt-trk" style="width:${W}px">${barreP}${jal}</div></div>`);
       if (replie) return;
-      g.t.forEach(t => {
-        const pr = periodeTache(t); const u = P.urgence(t); const av = P.avancement(t);
-        const resp = P.libelle('agent', t.responsable);
-        const cls = P.estClos(t.statut) ? 'clos' : u.classe || 'ok';
-        let barre = `<div class="gt-vide" data-type="planifier" data-id="${t.id}"></div>`;
-        if (pr) {
-          barre = `<div class="gt-bar ${cls} ${pr.estime ? 'estime' : ''} ${modT.d || modT.f ? '' : 'ro'}" data-type="tache" data-id="${t.id}" style="left:${x(pr.d)}px;width:${Math.max(ppd, x(P.addDays(pr.f, 1)) - x(pr.d))}px"
-            data-bulle="<strong>${esc(t.titre)}</strong><br>${resp ? esc(resp) + '<br>' : ''}${P.fmtDate(t.debut) || '?'} → ${P.fmtDate(t.echeance) || '?'}${pr.estime ? ' (durée estimée)' : ''}<br>${esc(t.statut || '')} · ${P.fmtPct(av)} · ${esc(u.libelle)}">
-            <span class="pg" style="width:${Math.round(av * 100)}%"></span>${modT.d ? '<span class="h g"></span>' : ''}${modT.f ? '<span class="h d"></span>' : ''}<span class="lb">${esc(resp.split(' ')[0] || '')}</span></div>`;
+      g.items.forEach(i => {
+        const sous = [i.sous, i.debut ? `${P.fmtDateCourt(i.debut)} → ${P.fmtDateCourt(i.fin)}` : 'non planifiée', i.statut].filter(Boolean).join(' · ');
+        let piste;
+        if (!i.debut) piste = `<div class="gt-vide" data-plan="${i.id}"></div>`;
+        else if (i.jalon) {
+          piste = `<div class="gt-jal" data-id="${i.id}" style="left:${x(i.fin) + ppd / 2}px;background:${i.clos ? GRIS : i.coul.fond}" data-bulle="◆ <strong>${esc(i.titre)}</strong><br>${P.fmtDateLong(i.fin)}"></div>
+            <div class="gt-jal-l" style="left:${x(i.fin) + ppd / 2 + 16}px">${esc(i.titre)}</div>`;
+        } else {
+          const l = x(i.debut), w = Math.max(ppd, x(P.addDays(i.fin, 1)) - l);
+          const dedans = w > Math.min(240, i.titre.length * 6.5 + 20);
+          const txt = i.coul.texte || (clair(i.coul.fond) ? '#161616' : '#fff');
+          piste = `<div class="gt-bar ${i.estime ? 'estime' : ''} ${modD || modF ? '' : 'ro'}" data-id="${i.id}" style="left:${l}px;width:${w}px;background:${i.coul.fond};color:${txt}"
+            data-bulle="<strong>${esc(i.titre)}</strong><br>${esc(i.sous)}${i.sous ? '<br>' : ''}${P.fmtDateLong(i.debut)} → ${P.fmtDateLong(i.fin)}${i.estime ? '<br><em>durée estimée</em>' : ''}${i.statut ? '<br>' + esc(i.statut) : ''}${i.av != null ? ' · ' + P.fmtPct(i.av) : ''}${i.retard ? '<br>⚠️ échéance dépassée' : ''}">
+            ${i.av != null ? `<span class="pg" style="width:${Math.round(i.av * 100)}%"></span>` : ''}${modD ? '<span class="h g"></span>' : ''}${modF ? '<span class="h d"></span>' : ''}
+            ${dedans ? `<span class="gt-in">${esc(i.titre)}</span>` : `<span class="gt-out">${esc(i.titre)}</span>`}</div>`;
         }
-        lignes.push(`<div class="gt-row"><div class="gt-lbl" style="padding-left:30px"><span class="t" data-bulle="${esc(t.titre)}">${esc(t.titre)}</span><span class="who">${esc(resp.split(' ').map(s => s[0]).join(''))}</span></div>
-          <div class="gt-trk" style="width:${W}px">${barre}</div></div>`);
+        lignes.push(`<div class="gt-row"><div class="gt-lbl" data-ouvrir="${i.id}" style="padding-left:${colonne('Groupe') ? 36 : 18}px"><span class="t" title="${esc(i.titre)}">${i.retard ? '<span style="color:var(--error)">● </span>' : ''}${esc(i.titre)}</span><span class="s">${esc(sous)}</span></div>
+          <div class="gt-trk" style="width:${W}px">${piste}</div></div>`);
       });
     });
 
+    const coulLeg = colonne('Couleur')
+      ? (() => { let wo = {}; try { wo = JSON.parse(colonne('Couleur').widgetOptions || '{}'); } catch (e) { /* ignoré */ } return (wo.choices || []).map(ch => `<span><i style="background:${couleurChoix('Couleur', ch).fond}"></i>${esc(ch)}</span>`).join(''); })()
+      : `<span><i style="background:${BLEU}"></i>Dans les temps</span><span><i style="background:${ORANGE}"></i>Échéance sous 7 jours</span><span><i style="background:${ROUGE}"></i>En retard</span><span><i style="background:${GRIS}"></i>Terminé</span>`;
     const ancien = P.$('.gt-wrap'); const scroll = ancien ? {l: ancien.scrollLeft, t: ancien.scrollTop} : null;
-    corps.innerHTML = `<div class="gt-wrap"><div class="gt" style="--lw:300px;width:${W + 300}px">
-      <div class="gt-head"><div class="gt-row" style="height:44px;border:0"><div class="gt-lbl"><span class="t">Projet / tâche</span>
-        <span class="gt-leg no-print"><span><i style="background:var(--error)"></i>retard</span><span><i style="background:#d64d00"></i>urgent</span><span><i style="background:var(--bf)"></i>ok</span></span></div>
-        <div class="gt-trk" style="width:${W}px"><div class="gt-h1">${h1.join('')}</div><div class="gt-h2">${h2.join('')}</div></div></div></div>
-      <div style="position:relative">
-        <div class="gt-grid" style="left:300px;width:${W}px">${grille.join('')}</div>
-        <div class="gt-today" style="left:${300 + x(auj) + ppd / 2}px"></div>
-        ${lignes.join('') || '<div class="vide" style="margin:16px">Aucun projet ni tâche à afficher avec ces filtres.</div>'}
-      </div></div></div>`;
+    corps.innerHTML = `<div class="gt-leg no-print">${coulLeg}<span><i class="estime" style="background:${BLEU};background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.35) 0 4px,transparent 4px 8px)"></i>Durée estimée</span>
+        ${colonne('Jalon') ? `<span><i class="los" style="background:${BLEU}"></i>Jalon</span>` : ''}<span><i style="background:var(--rm);width:3px"></i>Aujourd’hui</span>
+        <span class="muted">${visibles.length} élément(s) · glisser une barre pour la décaler, étirer un bord pour changer une date, cliquer pour modifier</span></div>
+      <div class="gt-wrap"><div class="gt ${ui.compact ? 'compact' : ''}" style="width:calc(var(--lw) + ${W}px)">
+        <div class="gt-head"><div class="gt-row"><div class="gt-lbl">${esc(src.tableId || '')}</div>
+          <div class="gt-trk" style="width:${W}px"><div class="gt-h1">${h1.join('')}</div><div class="gt-h2">${h2.join('')}</div></div></div></div>
+        <div style="position:relative">
+          <div class="gt-grid" style="left:var(--lw);width:${W}px">${grille.join('')}</div>
+          <div class="gt-today" style="left:calc(var(--lw) + ${x(auj) + ppd / 2}px)"></div>
+          ${lignes.join('') || '<div class="vide" style="margin:16px">Aucun élément à afficher.</div>'}
+        </div></div></div>`;
     const wrap = P.$('.gt-wrap');
-    if (ui.scrollToToday) { ui.scrollToToday = false; wrap.scrollLeft = Math.max(0, x(auj) - 200); }
+    if (ui.allerAuj) { ui.allerAuj = false; wrap.scrollLeft = Math.max(0, x(auj) - 240); }
     else if (scroll) { wrap.scrollLeft = scroll.l; wrap.scrollTop = scroll.t; }
     brancher(wrap);
   }
 
-  function allerAujourdhui() { const w = P.$('.gt-wrap'); if (w && geo) w.scrollTo({left: Math.max(0, P.diffDays(P.today(), geo.debut) * geo.ppd - 200), behavior: 'smooth'}); }
+  function allerAujourdhui() { const w = P.$('.gt-wrap'); if (w && geo) w.scrollTo({left: Math.max(0, P.diffDays(P.today(), geo.debut) * geo.ppd - 240), behavior: 'smooth'}); }
+
+  /* ---------- Écriture ---------- */
+  function valeurDate(nom, d) {
+    const c = colonne(nom); if (!c) return undefined;
+    if (!d) return null;
+    if (/^DateTime/.test(c.type)) return d.getTime() / 1000;
+    if (/^Date/.test(c.type)) return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 1000;
+    return P.fmtDate(d);
+  }
+  async function ecrire(id, vals, message) {
+    const champs = {};
+    Object.entries(vals).forEach(([nom, v]) => { if (ecrivable(nom)) champs[colonne(nom).colId] = v; });
+    if (!Object.keys(champs).length) return;
+    await P.appliquer([['UpdateRecord', src.tableId, id, champs]], message);
+  }
 
   function brancher(wrap) {
     wrap.addEventListener('click', e => {
       const r = e.target.closest('[data-rep]');
-      if (r) { const id = +r.dataset.rep; ui.replies.has(id) ? ui.replies.delete(id) : ui.replies.add(id); sauverUi(); dessiner(); return; }
-      const v = e.target.closest('.gt-vide');
-      if (v && P.modifiable('tache', 'echeance')) {
-        const t = P.get('tache', +v.dataset.id);
-        const jour = P.addDays(geo.debut, Math.floor((e.clientX - v.getBoundingClientRect().left) / geo.ppd));
-        const duree = Math.max(1, Math.ceil((t.charge || 3) * 1.4));
-        const vals = {echeance: P.addDays(jour, duree - 1)}; if (P.modifiable('tache', 'debut')) vals.debut = jour;
-        P.modifier('tache', t.id, vals, `« ${t.titre} » planifiée du ${P.fmtDate(vals.debut || jour)} au ${P.fmtDate(vals.echeance)}.`);
+      if (r) { const k = r.dataset.rep; ui.replies = ui.replies.includes(k) ? ui.replies.filter(x => x !== k) : ui.replies.concat([k]); sauverUi(); dessiner(); return; }
+      const o = e.target.closest('[data-ouvrir]'); if (o) { ouvrir(+o.dataset.ouvrir); return; }
+      const v = e.target.closest('[data-plan]');
+      if (v && ecrivable('Fin')) {
+        const it = items.find(i => i.id === +v.dataset.plan);
+        const jour = P.addDays(geo.debut, Math.floor((e.clientX - v.parentNode.getBoundingClientRect().left) / geo.ppd));
+        const duree = Math.max(1, Math.ceil((nombre('Charge', it.r) || 3) * 1.4));
+        const vals = {Fin: valeurDate('Fin', P.addDays(jour, duree - 1))}; if (ecrivable('Debut')) vals.Debut = valeurDate('Debut', jour);
+        ecrire(it.id, vals, `« ${it.titre} » planifiée à partir du ${P.fmtDate(jour)}.`);
       }
     });
     wrap.addEventListener('pointerdown', e => {
       const el = e.target.closest('.gt-bar,.gt-jal'); if (!el || e.button !== 0) return;
-      const type = el.dataset.type, id = +el.dataset.id;
+      const it = items.find(i => i.id === +el.dataset.id); if (!it) return;
       const mode = e.target.classList.contains('g') ? 'g' : e.target.classList.contains('d') ? 'd' : 'm';
-      const ent = type === 'projet' ? 'projet' : type === 'jalon' ? 'jalon' : 'tache';
-      const chD = {projet: 'debut', tache: 'debut', jalon: 'date'}[ent], chF = {projet: 'fin', tache: 'echeance', jalon: 'date'}[ent];
-      const peut = ent === 'jalon' ? P.modifiable('jalon', 'date') : (mode === 'g' ? P.modifiable(ent, chD) : mode === 'd' ? P.modifiable(ent, chF) : (P.modifiable(ent, chD) || P.modifiable(ent, chF)));
+      const peut = it.jalon ? ecrivable('Fin') : mode === 'g' ? ecrivable('Debut') : mode === 'd' ? ecrivable('Fin') : (ecrivable('Debut') || ecrivable('Fin'));
       const x0 = e.clientX, left0 = el.offsetLeft, w0 = el.offsetWidth;
       let delta = 0, bouge = false;
       if (peut) el.setPointerCapture(e.pointerId);
@@ -256,44 +360,53 @@
         delta = Math.round((ev.clientX - x0) / geo.ppd);
         if (Math.abs(ev.clientX - x0) > 3) bouge = true;
         if (!bouge) return;
-        el.classList.add('drag');
-        const px = delta * geo.ppd;
-        if (mode === 'm') el.style.left = (left0 + px) + 'px';
+        el.classList.add('drag'); const px = delta * geo.ppd;
+        if (mode === 'm' || it.jalon) el.style.left = (left0 + px) + 'px';
         else if (mode === 'g') { el.style.left = Math.min(left0 + px, left0 + w0 - geo.ppd) + 'px'; el.style.width = Math.max(geo.ppd, w0 - px) + 'px'; }
         else el.style.width = Math.max(geo.ppd, w0 + px) + 'px';
       };
       const up = async () => {
         el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up);
-        if (!bouge) { ouvrir(ent, id); return; }
+        if (!bouge) { ouvrir(it.id); return; }
         if (!delta) { dessiner(); return; }
-        const r = P.get(ent, id); const vals = {};
-        if (ent === 'jalon') vals.date = P.addDays(r.date, delta);
+        const vals = {};
+        if (it.jalon) vals.Fin = valeurDate('Fin', P.addDays(it.fin, delta));
         else {
-          const pr = ent === 'tache' ? periodeTache(r) : {d: r.debut || r.fin, f: r.fin || r.debut};
-          if (mode !== 'd' && P.modifiable(ent, chD)) vals[chD] = P.addDays(pr.d, delta);
-          if (mode !== 'g' && P.modifiable(ent, chF)) vals[chF] = P.addDays(pr.f, delta);
-          if (mode === 'm' && ent === 'tache' && !r.debut) delete vals.debut;
-          if (vals[chD] && vals[chF] && vals[chF] < vals[chD]) { P.toast('La fin ne peut pas précéder le début.', 'warn'); dessiner(); return; }
+          if (mode !== 'd' && ecrivable('Debut') && (date('Debut', it.r) || mode === 'g')) vals.Debut = valeurDate('Debut', P.addDays(it.debut, delta));
+          if (mode !== 'g' && ecrivable('Fin')) vals.Fin = valeurDate('Fin', P.addDays(it.fin, delta));
         }
-        const txt = Object.entries(vals).map(([k, v]) => `${P.ENTITES[ent].champs[k].l} : ${P.fmtDate(v)}`).join(' · ');
-        try { await P.modifier(ent, id, vals, `${r._libelle} → ${txt}`); } catch (err) { dessiner(); }
+        const nd = mode === 'd' ? it.debut : P.addDays(it.debut, delta), nf = mode === 'g' ? it.fin : P.addDays(it.fin, delta);
+        try { await ecrire(it.id, vals, `« ${it.titre} » : ${P.fmtDate(nd)} → ${P.fmtDate(nf)}`); } catch (err) { dessiner(); }
       };
       el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
       e.preventDefault();
     });
   }
 
-  /* Édition rapide au clic */
-  function ouvrir(ent, id) {
-    const r = P.get(ent, id); if (!r) return;
-    const champs = {tache: ['titre', 'statut', 'responsable', 'debut', 'echeance', 'avancement', 'charge', 'suites'], projet: ['titre', 'phase', 'debut', 'fin'], jalon: ['titre', 'date', 'atteint', 'date_reelle']}[ent];
-    const div = document.createElement('form'); div.className = 'grille'; div.onsubmit = () => false;
-    div.innerHTML = champs.map(ch => P.champFormulaire(ent, ch, r[ch], {large: ch === 'titre' || ch === 'suites'})).join('') +
-      (ent === 'tache' ? `<p class="small muted large" style="margin:0">Projet : ${esc(P.libelle('projet', r.projet) || '—')} · ${esc(P.urgence(r).libelle)}</p>` : '');
-    P.modale({titre: ent === 'tache' ? 'Tâche' : ent === 'projet' ? 'Projet' : 'Jalon', contenu: div, boutons: [
-      {libelle: 'Annuler', classe: 'ter'},
-      {libelle: 'Enregistrer', classe: 'pri', action: async () => { await P.modifier(ent, id, P.lireFormulaire(ent, div), 'Modifications enregistrées.'); }},
-    ]});
+  /* Fenêtre de modification d'une ligne */
+  function ouvrir(id) {
+    const it = items.find(i => i.id === id); if (!it) return;
+    const ech = echelleAvancement();
+    const f = document.createElement('form'); f.className = 'grille'; f.onsubmit = () => false;
+    const champ = (nom, html, large) => colonne(nom) ? `<div class="champ ${large ? 'large' : ''}"><label for="gt-f-${nom}">${esc(COLONNES.find(c => c.name === nom).title)}</label>${ecrivable(nom) ? html : `<div class="in" style="background:var(--alt);box-shadow:none">${esc(texte(nom, it.r)) || '–'}</div>`}</div>` : '';
+    const titreSimple = colonne('Titre') && /^(Text|Any)$/.test(colonne('Titre').type);
+    let choixStatut = []; try { choixStatut = JSON.parse((colonne('Statut') || {}).widgetOptions || '{}').choices || []; } catch (e) { /* ignoré */ }
+    f.innerHTML = (titreSimple ? champ('Titre', `<input class="in" id="gt-f-Titre" value="${esc(texte('Titre', it.r))}">`, true) : `<p class="large" style="margin:0"><strong>${esc(it.titre)}</strong></p>`) +
+      champ('Debut', `<input class="in" type="date" id="gt-f-Debut" value="${date('Debut', it.r) ? P.iso(date('Debut', it.r)) : ''}">`) +
+      champ('Fin', `<input class="in" type="date" id="gt-f-Fin" value="${date('Fin', it.r) ? P.iso(date('Fin', it.r)) : ''}">`) +
+      champ('Statut', `<select class="in" id="gt-f-Statut"><option value=""></option>${P.uniq(choixStatut.concat(it.statut ? [it.statut] : [])).map(c => `<option ${c === it.statut ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`) +
+      champ('Avancement', `<input class="in" type="number" min="0" max="100" step="5" id="gt-f-Avancement" value="${it.av != null ? Math.round(it.av * 100) : ''}"><span class="aide">En pourcentage</span>`) +
+      (it.sous ? `<p class="large small muted" style="margin:0">${esc(COLONNES.find(c => c.name === 'Responsable').title)} : ${esc(it.sous)}${it.groupe.libelle ? ' · ' + esc(it.groupe.libelle) : ''}</p>` : '');
+    P.modale({titre: 'Modifier', contenu: f, boutons: [{libelle: 'Annuler', classe: 'ter'}, {libelle: 'Enregistrer', classe: 'pri', action: async () => {
+      const v = {}; const g = n => P.$('#gt-f-' + n, f);
+      if (g('Titre')) v.Titre = g('Titre').value;
+      if (g('Debut')) v.Debut = valeurDate('Debut', P.fromIso(g('Debut').value));
+      if (g('Fin')) v.Fin = valeurDate('Fin', P.fromIso(g('Fin').value));
+      if (g('Statut')) v.Statut = g('Statut').value;
+      if (g('Avancement')) v.Avancement = g('Avancement').value === '' ? null : Math.max(0, Math.min(100, +g('Avancement').value)) / 100 * ech;
+      if (g('Debut') && g('Fin') && g('Debut').value && g('Fin').value && g('Fin').value < g('Debut').value) { P.toast('La date de fin précède la date de début.', 'warn'); return false; }
+      await ecrire(id, v, 'Modifications enregistrées.');
+    }}]});
   }
 })();
 </script>
