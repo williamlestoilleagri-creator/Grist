@@ -174,6 +174,48 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
 .fr-logo--sm:before{background-position:0 -.046875rem,0 0,0 0;background-size:2.0625rem .84375rem,2.0625rem .75rem,0;height:.75rem;margin-bottom:.25rem;width:2.0625rem}
 .fr-logo--sm:after{background-position:0 calc(100% + 1.40625rem);background-size:3.9375rem 2.8125rem;min-width:1.96875rem;padding-top:1.65625rem}
 
+/* ---------- v2 : onglets, aide intégrée, lecture aérée ---------- */
+.pl-onglets{display:flex;gap:0;border-bottom:1px solid var(--border);margin:-4px 0 4px}
+.pl-onglets button{background:none;border:0;border-bottom:3px solid transparent;padding:10px 16px;font-weight:500;color:var(--text);cursor:pointer;font-size:.9rem}
+.pl-onglets button[aria-selected=true]{color:var(--bf);border-bottom-color:var(--bf)}
+.pl-onglets button:hover{background:var(--alt)}
+.pl-panneau{display:flex;flex-direction:column;gap:14px}
+.pl-etapes{padding-left:1.2rem;line-height:1.8}
+.pl-aide{display:flex;flex-direction:column;gap:16px;max-width:860px}
+.pl-aide h2{font-size:1.2rem;margin:4px 0 6px}
+.pl-aide h3{font-size:1rem;margin:0 0 4px}
+.pl-aide p,.pl-aide li{font-size:.92rem;line-height:1.65}
+.pl-aide p{margin:0 0 6px}
+.pl-aide .chapo{font-size:1.05rem;color:var(--title)}
+.pl-aide figure{display:none}
+.pl-aide .etapes{counter-reset:e;list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.pl-aide .etapes>li{counter-increment:e;display:flex;gap:12px;align-items:flex-start}
+.pl-aide .etapes>li::before{content:counter(e);flex:0 0 28px;height:28px;border-radius:50%;background:var(--bf);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center}
+.pl-aide .blocs{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.pl-aide .blocs>div{border:1px solid var(--border);border-left:4px solid var(--bf);padding:10px 12px;font-size:.86rem}
+.pl-aide .blocs strong{display:block;color:var(--title);margin-bottom:2px}
+.pl-aide .encart{border-left:4px solid var(--bf);background:var(--bf-975);padding:12px 16px}
+.pl-aide .encart.astuce{border-color:var(--success);background:var(--success-soft)}
+.pl-aide .encart.attention{border-color:var(--warning);background:var(--warning-bg)}
+.pl-aide .encart p{margin:0}
+.pl-aide .encart>strong:first-child{display:block;margin-bottom:4px}
+.pl-aide .pied{font-size:.8rem;color:var(--mention);border-top:1px solid var(--border);padding-top:10px}
+/* Mise en page aérée des widgets v2 */
+.aere{max-width:1180px;margin:0 auto;padding:8px 8px 40px;display:flex;flex-direction:column;gap:28px;font-size:15px}
+.aere .carte{padding:20px 24px}
+.aere .carte>h2{font-size:1.15rem;margin-bottom:14px}
+.aere .tuiles{grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px}
+.aere .tuile{padding:16px 18px}
+.aere .tuile .v{font-size:2rem}
+.aere .tuile .l{font-size:.85rem;margin-top:2px}
+.ligne-liste{display:flex;gap:16px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--contrast)}
+.ligne-liste:last-child{border-bottom:0}
+.ligne-liste .t{flex:1;min-width:0}
+.ligne-liste .t strong{display:block;color:var(--title);font-weight:500;font-size:.95rem}
+.ligne-liste .t span{display:block;color:var(--mention);font-size:.82rem;margin-top:2px}
+.ligne-liste .m{text-align:right;font-size:.82rem;color:var(--mention);white-space:nowrap}
+.vide-doux{color:var(--mention);font-size:.9rem;padding:8px 0}
+
 </style>
 <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
 <script>
@@ -541,8 +583,9 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
       if (P.cfg.colonnes) pret.columns = P.cfg.colonnes; // colonnes choisies dans le panneau de droite de Grist
       grist.ready(pret);
       grist.onRecords((recs, mappings) => {
+        if (P.cfg.colonnes) P.L.recevoir(recs || [], mappings || null);
         if (P.cfg.surLignes) P.cfg.surLignes(recs || [], mappings || null);
-        onChange('records');
+        onChange(P.cfg.colonnes ? 'force' : 'records');
       }, {keepEncoded: true, expandRefs: false});
       grist.onRecord(async rec => {
         if (!rec) return;
@@ -983,18 +1026,37 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
     return res;
   };
 
-  P.ouvrirConfig = () => {
+  P.ouvrirConfig = (onglet) => {
     const ents = dependances(P.cfg.entites || []);
     const tablesOpts = Object.keys(etat.schema).sort();
     const corps = document.createElement('div');
-    corps.innerHTML = `
+    const onglets = [['reglages', 'Réglages']].concat(P.cfg.ressource ? [['ressource', 'Table ressource']] : [], aideIntegree ? [['aide', 'Mode d’emploi']] : []);
+    corps.innerHTML = `${onglets.length > 1 ? `<div class="pl-onglets" role="tablist">${onglets.map(([k, l]) => `<button type="button" role="tab" data-onglet="${k}" aria-selected="${k === (onglet || 'reglages')}">${l}</button>`).join('')}</div>` : ''}
+      <div data-panneau="ressource" class="pl-panneau hidden">${P.cfg.ressource ? htmlRessource() : ''}</div>
+      <div data-panneau="aide" class="pl-panneau pl-aide hidden"></div>
+      <div data-panneau="reglages" class="pl-panneau">
       ${ents.length ? `<p class="muted small" style="margin:0">Le widget s'adapte à la structure de votre document : choisissez pour chaque élément la table et les colonnes à utiliser.
       La détection automatique propose une association à partir des noms. Les colonnes calculées (formules) sont lues mais jamais modifiées.</p>
       <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sec sm" data-act="auto">Détection automatique</button></div>`
       : `<p class="muted small" style="margin:0">${P.cfg.texteConfig || 'Les colonnes utilisées se choisissent dans le panneau de droite de Grist (onglet « Widget »).'}</p>`}
       <div id="cfg-ents" style="display:flex;flex-direction:column;gap:8px"></div>
       ${P.cfg.reglagesHtml ? `<div class="carte"><h3>Réglages du widget</h3><div id="cfg-reglages">${P.cfg.reglagesHtml()}</div></div>` : ''}
-      <div class="carte"><h3>Affichage</h3><label class="case"><input type="checkbox" id="cfg-marque" ${P.reglage('marque', true) ? 'checked' : ''}> Afficher le bloc-marque « République française »</label></div>`;
+      <div class="carte"><h3>Affichage</h3><label class="case"><input type="checkbox" id="cfg-marque" ${P.reglage('marque', true) ? 'checked' : ''}> Afficher le bloc-marque « République française »</label></div></div>`;
+    const montrer = k => {
+      P.$$('[data-onglet]', corps).forEach(b => b.setAttribute('aria-selected', b.dataset.onglet === k));
+      P.$$('[data-panneau]', corps).forEach(d => d.classList.toggle('hidden', d.dataset.panneau !== k));
+      if (k === 'aide') contenuAide().then(a => { const z = P.$('[data-panneau=aide]', corps); z.innerHTML = a.html; nettoyerAide(z); });
+    };
+    montrer(onglet || 'reglages');
+    corps.addEventListener('click', async e => {
+      const o = e.target.closest('[data-onglet]'); if (o) { montrer(o.dataset.onglet); return; }
+      const b = e.target.closest('button[data-act^=ress]'); if (!b) return;
+      if (b.dataset.act === 'ress-csv') { P.telechargerRessource(P.cfg.ressource); return; }
+      b.disabled = true;
+      try { const nom = await P.creerRessource(P.cfg.ressource, b.dataset.act === 'ress-creer-ex'); P.toast(`Table « ${nom} » créée. Choisissez-la comme données du widget, puis associez les colonnes.`, 'ok'); }
+      catch (err) { P.toast('Création impossible : ' + (err.message || err), 'err'); }
+      b.disabled = false;
+    });
     const travail = JSON.parse(JSON.stringify(etat.mapping || {}));
     const dessiner = () => {
       const zone = corps.querySelector('#cfg-ents');
@@ -1165,6 +1227,213 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
   });
 
   /* ------------------------------------------------------------------ */
+  /* Colonnes choisies dans le panneau de droite de Grist (widgets « v2 ») */
+  /* ------------------------------------------------------------------ */
+  const L = P.L = {tableId: null, mapping: null, ids: null, recs: [], refs: {}};
+  function normaliserValeur(v) {
+    if (v == null) return v;
+    if (v instanceof Date) return v.getTime() / 1000;
+    if (Array.isArray(v)) {
+      if (v[0] === 'L' || v[0] === 'E') return v;
+      if (v[0] === 'R' && v.length === 3) return v[2];
+      if (v[0] === 'r' && v.length === 3) return ['L', ...(v[2] || [])];
+      if (v[0] === 'd' || v[0] === 'D') return v[1];
+      return ['L', ...v.map(x => (x && typeof x === 'object') ? (x.rowId ?? x.id ?? x) : x)];
+    }
+    if (typeof v === 'object') {
+      if (Array.isArray(v.rowIds)) return ['L', ...v.rowIds];
+      if (v.rowId != null) return v.rowId;
+      if (typeof v.id === 'number') return v.id;
+    }
+    return v;
+  }
+  L.recevoir = (recs, mapping) => {
+    L.mapping = mapping || null;
+    L.ids = recs.map(r => r.id);
+    L.recs = recs.map(r => { const o = {}; Object.keys(r).forEach(k => { o[k] = k === 'id' ? r[k] : normaliserValeur(r[k]); }); return o; });
+  };
+  L.col = nom => { const id = L.mapping && L.mapping[nom]; const t = etat.schema && etat.schema[L.tableId]; return id && t ? t.cols.find(c => c.colId === id) || null : null; };
+  L.a = nom => !!L.col(nom);
+  L.ecrivable = nom => { const c = L.col(nom); return !!c && !(c.isFormula && c.formula); };
+  L.manquants = () => (P.cfg.colonnes || []).filter(c => !c.optional && !(L.mapping && L.mapping[c.name]));
+  L.charger = async () => {
+    if (etat.backend.nom === 'demo') {
+      const d = P.cfg.demo; L.tableId = d.table; L.mapping = d.mapping;
+      const raw = await etat.backend.fetch(d.table);
+      L.recs = raw.id.map((id, i) => { const r = {id}; Object.keys(raw).forEach(k => { r[k] = raw[k][i]; }); return r; });
+    } else {
+      if (!L.tableId) { try { L.tableId = await grist.selectedTable.getTableId(); } catch (e) { L.tableId = null; } }
+      if (L.tableId && L.ids) {
+        try {
+          const raw = await etat.backend.fetch(L.tableId); const index = new Map(raw.id.map((id, i) => [id, i]));
+          L.recs = L.ids.map(id => { const i = index.get(id); const o = {id}; if (i != null) Object.keys(raw).forEach(k => { o[k] = raw[k][i]; }); return o; });
+        } catch (e) { console.warn('Relecture brute impossible', e); }
+      }
+    }
+    // Libellés des colonnes de référence
+    const refs = (P.cfg.colonnes || []).map(c => L.col(c.name)).filter(c => c && /^Ref(List)?:/.test(c.type));
+    await Promise.all(refs.map(async c => {
+      const cible = c.type.split(':')[1]; const t = etat.schema[cible]; if (!t) return;
+      const vis = c.visibleCol || (t.cols.find(x => x.type === 'Text') || {}).colId;
+      const raw = await etat.backend.fetch(cible);
+      L.refs[c.colId] = new Map(raw.id.map((id, i) => [id, vis && raw[vis] ? String(raw[vis][i] ?? '') : '#' + id]));
+    }));
+  };
+  L.brut = (nom, r) => { const c = L.col(nom); return c ? r[c.colId] : undefined; };
+  L.texte = (nom, r) => {
+    const c = L.col(nom); if (!c) return '';
+    const v = r[c.colId];
+    if (v == null || v === '' || (Array.isArray(v) && v[0] === 'E')) return '';
+    if (/^Ref:/.test(c.type)) return typeof v === 'string' ? v : v ? (L.refs[c.colId] && L.refs[c.colId].get(v)) || '' : '';
+    if (/^RefList:/.test(c.type)) return Array.isArray(v) ? v.slice(1).map(id => (L.refs[c.colId] && L.refs[c.colId].get(id)) || '').filter(Boolean).join(', ') : String(v);
+    if (Array.isArray(v) && v[0] === 'L') return v.slice(1).join(', ');
+    if (/^Date/.test(c.type) && typeof v === 'number') return P.fmtDate(L.date(nom, r));
+    if (typeof v === 'boolean') return v ? 'Oui' : 'Non';
+    return String(v);
+  };
+  L.date = (nom, r) => {
+    const c = L.col(nom); if (!c) return null; const v = r[c.colId];
+    if (typeof v === 'number') { const d = new Date(v * 1000); return /^DateTime/.test(c.type) ? P.jour(d) : new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()); }
+    if (typeof v === 'string') return P.parseDateTexte(v);
+    return null;
+  };
+  L.instant = (nom, r) => { const c = L.col(nom); if (!c) return null; const v = r[c.colId]; return typeof v === 'number' ? new Date(v * 1000) : (typeof v === 'string' ? P.parseDateTexte(v) : null); };
+  L.nombre = (nom, r) => { const c = L.col(nom); if (!c) return null; const v = r[c.colId]; if (typeof v === 'number') return v; const n = parseFloat(String(v ?? '').replace(',', '.')); return isNaN(n) ? null : n; };
+  L.bool = (nom, r) => { const c = L.col(nom); if (!c) return false; const v = r[c.colId]; return v === true || v === 1 || /^(oui|true|vrai|x)$/i.test(String(v || '')); };
+  L.options = nom => { const c = L.col(nom); if (!c) return {}; try { return JSON.parse(c.widgetOptions || '{}'); } catch (e) { return {}; } };
+  L.choix = nom => { const l = L.options(nom).choices || []; return l.length ? l : P.uniq(L.recs.map(r => L.texte(nom, r)).filter(Boolean)).sort(); };
+  L.echelle = nom => { const c = L.col(nom); if (!c) return 1; return L.recs.some(r => typeof r[c.colId] === 'number' && r[c.colId] > 1.5) ? 100 : 1; };
+  L.fraction = (nom, r) => { const v = L.nombre(nom, r); return v == null ? null : Math.max(0, Math.min(1, v / L.echelle(nom))); };
+  L.valeur = (nom, v) => {
+    const c = L.col(nom); if (!c) return undefined; const t = c.type.split(':')[0];
+    if (v instanceof Date) return t === 'DateTime' ? v.getTime() / 1000 : t === 'Date' ? Date.UTC(v.getFullYear(), v.getMonth(), v.getDate()) / 1000 : P.fmtDate(v);
+    if (v === null || v === '') return t === 'Ref' ? 0 : null;
+    return v;
+  };
+  L.actionMaj = (id, vals) => { const o = {}; Object.entries(vals).forEach(([n, v]) => { if (L.ecrivable(n)) { const g = L.valeur(n, v); if (g !== undefined) o[L.col(n).colId] = g; } }); return Object.keys(o).length ? ['UpdateRecord', L.tableId, id, o] : null; };
+  L.actionAjout = vals => { const o = {}; Object.entries(vals).forEach(([n, v]) => { if (L.ecrivable(n)) { const g = L.valeur(n, v); if (g !== undefined) o[L.col(n).colId] = g; } }); return ['AddRecord', L.tableId, null, o]; };
+  L.ecrire = (id, vals, msg) => P.appliquer([L.actionMaj(id, vals)], msg);
+  L.couleur = (nom, valeur) => {
+    if (!valeur) return null; const o = L.options(nom); const opt = (o.choiceOptions || {})[valeur];
+    if (opt && opt.fillColor) return {fond: opt.fillColor, texte: opt.textColor || null};
+    const i = (o.choices || []).indexOf(valeur);
+    const pal = ['#000091', '#6a6af4', '#009081', '#c08c65', '#a558a0', '#417dc4', '#d1335b', '#5e2a2b', '#3a3a3a', '#716043'];
+    return {fond: pal[(i >= 0 ? i : [...valeur].reduce((s, ch) => s + ch.charCodeAt(0), 0)) % pal.length]};
+  };
+  L.titreColonne = nom => ((P.cfg.colonnes || []).find(c => c.name === nom) || {}).title || nom;
+
+  /* ------------------------------------------------------------------ */
+  /* Tables ressources (modèles de tables prêts à l'emploi)              */
+  /* ------------------------------------------------------------------ */
+  const CH = (l, couleurs) => JSON.stringify({choices: l, choiceOptions: Object.fromEntries(l.map((x, i) => [x, {fillColor: couleurs[i], textColor: '#FFFFFF'}]))});
+  P.RESSOURCES = {
+    taches: {
+      nom: 'Taches', libelle: 'Tâches',
+      description: 'Une ligne par tâche : intitulé, projet, responsable, statut, priorité, dates, avancement, charge et suivi. Les dates de création et de mise à jour se remplissent seules.',
+      colonnes: [
+        {id: 'Intitule', label: 'Intitulé', type: 'Text'},
+        {id: 'Projet', label: 'Projet', type: 'Text'},
+        {id: 'Responsable', label: 'Responsable', type: 'Text'},
+        {id: 'Statut', label: 'Statut', type: 'Choice', widgetOptions: CH(['À faire', 'En cours', 'En attente', 'Terminé', 'Abandonné'], ['#6A6AF4', '#000091', '#C3592D', '#18753C', '#929292'])},
+        {id: 'Priorite', label: 'Priorité', type: 'Choice', widgetOptions: CH(['P1 – Critique', 'P2 – Haute', 'P3 – Normale', 'P4 – Basse'], ['#CE0500', '#C3592D', '#0063CB', '#929292'])},
+        {id: 'Date_debut', label: 'Date de début', type: 'Date', widgetOptions: JSON.stringify({dateFormat: 'DD/MM/YYYY'})},
+        {id: 'Echeance', label: 'Échéance', type: 'Date', widgetOptions: JSON.stringify({dateFormat: 'DD/MM/YYYY'})},
+        {id: 'Date_realisation', label: 'Date de réalisation', type: 'Date', widgetOptions: JSON.stringify({dateFormat: 'DD/MM/YYYY'})},
+        {id: 'Avancement', label: 'Avancement', type: 'Numeric', widgetOptions: JSON.stringify({numMode: 'percent'})},
+        {id: 'Charge', label: 'Charge (jours)', type: 'Numeric'},
+        {id: 'Jalon', label: 'Jalon', type: 'Bool'},
+        {id: 'Suites', label: 'Suites données', type: 'Text', widgetOptions: JSON.stringify({wrap: true})},
+        {id: 'Cree_le', label: 'Créé le', type: 'DateTime:Europe/Paris', declencheur: 'NOW()', surCreation: true},
+        {id: 'Mis_a_jour_le', label: 'Mis à jour le', type: 'DateTime:Europe/Paris', declencheur: 'NOW()'},
+        {id: 'Mis_a_jour_par', label: 'Mis à jour par', type: 'Text', declencheur: 'user.Name'},
+      ],
+      exemples: [
+        {Intitule: 'Rédiger le cahier des charges', Projet: 'Projet A', Responsable: 'Agent 1', Statut: 'Terminé', Priorite: 'P2 – Haute', Date_debut: -30, Echeance: -15, Date_realisation: -16, Avancement: 1, Charge: 3, Jalon: false, Suites: 'Validé en comité'},
+        {Intitule: 'Consulter les fournisseurs', Projet: 'Projet A', Responsable: 'Agent 2', Statut: 'En cours', Priorite: 'P2 – Haute', Date_debut: -10, Echeance: 5, Avancement: 0.4, Charge: 4, Jalon: false, Suites: ''},
+        {Intitule: 'Choix du fournisseur', Projet: 'Projet A', Responsable: 'Agent 1', Statut: 'À faire', Priorite: 'P1 – Critique', Date_debut: 12, Echeance: 12, Avancement: 0, Charge: 0.5, Jalon: true, Suites: ''},
+        {Intitule: 'Préparer la réunion de lancement', Projet: 'Projet B', Responsable: 'Agent 3', Statut: 'En attente', Priorite: 'P3 – Normale', Date_debut: -8, Echeance: -2, Avancement: 0.5, Charge: 1, Jalon: false, Suites: 'En attente des disponibilités'},
+        {Intitule: 'Former les utilisateurs', Projet: 'Projet B', Responsable: 'Agent 2', Statut: 'À faire', Priorite: 'P3 – Normale', Date_debut: 20, Echeance: 40, Avancement: 0, Charge: 5, Jalon: false, Suites: ''},
+      ],
+    },
+  };
+  const jourDecale = n => { const d = P.addDays(P.today(), n); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 1000; };
+  function valeurExemple(col, v) { if (v == null) return null; if (col.type === 'Date') return jourDecale(v); return v; }
+
+  P.creerRessource = async (cle, avecExemples) => {
+    const R = P.RESSOURCES[cle]; let nom = R.nom; let i = 2;
+    while (etat.schema[nom]) nom = R.nom + '_' + i++;
+    const def = c => {
+      const o = {id: c.id, type: c.type, isFormula: false, label: c.label};
+      if (c.widgetOptions) o.widgetOptions = c.widgetOptions;
+      if (c.declencheur) { o.formula = c.declencheur; o.recalcWhen = c.surCreation ? 0 : 2; if (c.surCreation) o.recalcDeps = ['L']; }
+      return o;
+    };
+    try { await etat.backend.apply([['AddTable', nom, R.colonnes.map(def)]]); }
+    catch (e) {
+      console.warn('Création avec options refusée, création simple', e);
+      await etat.backend.apply([['AddTable', nom, R.colonnes.map(c => ({id: c.id, type: c.type, isFormula: false}))]]);
+      try { await etat.backend.apply(R.colonnes.map(c => ['ModifyColumn', nom, c.id, Object.assign({label: c.label}, c.widgetOptions ? {widgetOptions: c.widgetOptions} : {})])); } catch (e2) { /* ignoré */ }
+    }
+    if (avecExemples && R.exemples) {
+      const cols = R.colonnes.filter(c => !c.declencheur);
+      const vals = {}; cols.forEach(c => { vals[c.id] = R.exemples.map(x => valeurExemple(c, x[c.id])); });
+      await etat.backend.apply([['BulkAddRecord', nom, R.exemples.map(() => null), vals]]);
+    }
+    etat.schema = await etat.backend.schema();
+    return nom;
+  };
+  P.telechargerRessource = cle => {
+    const R = P.RESSOURCES[cle]; const cols = R.colonnes.filter(c => !c.declencheur);
+    const cell = (c, v) => { if (v == null) return ''; if (c.type === 'Date') return P.fmtDate(P.addDays(P.today(), v)); if (c.type === 'Bool') return v ? 'oui' : 'non'; if (c.type === 'Numeric') return String(v).replace('.', ','); return String(v); };
+    const lignes = [cols.map(c => c.label), ...(R.exemples || []).map(x => cols.map(c => cell(c, x[c.id])))];
+    const csv = lignes.map(l => l.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\r\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + csv], {type: 'text/csv;charset=utf-8'}));
+    a.download = `modele-${R.nom.toLowerCase()}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+  function htmlRessource() {
+    const R = P.RESSOURCES[P.cfg.ressource]; if (!R) return '<p class="muted">Ce widget n’a pas de table ressource.</p>';
+    const util = (P.cfg.colonnes || []);
+    return `<p style="margin:0">Pour utiliser ce widget dans un autre document ou un autre type de projet, partez d’une <strong>table ressource</strong> prête à l’emploi : <strong>${esc(R.libelle)}</strong>.</p>
+      <p class="muted small" style="margin:0">${esc(R.description)}</p>
+      <div style="overflow-x:auto"><table class="tab"><thead><tr><th>Colonne</th><th>Type</th><th>Sert pour</th></tr></thead><tbody>
+      ${R.colonnes.map(c => { const u = util.filter(x => (x.ressource || []).includes(c.id)).map(x => x.title); return `<tr><td>${esc(c.label)}</td><td class="small muted">${esc({Text: 'Texte', Choice: 'Choix', Date: 'Date', Numeric: 'Nombre', Bool: 'Case à cocher'}[c.type.split(':')[0]] || 'Date et heure')}${c.declencheur ? ' · automatique' : ''}</td><td class="small">${esc(u.join(', ') || '–')}</td></tr>`; }).join('')}</tbody></table></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn pri sm" data-act="ress-creer">Créer la table dans ce document</button>
+        <button class="btn sec sm" data-act="ress-creer-ex">Créer avec des exemples</button>
+        <button class="btn ter sm" data-act="ress-csv">Télécharger le modèle (CSV)</button></div>
+      <div class="alerte"><strong>Ensuite :</strong> dans le panneau de droite de Grist, onglet <strong>Widget</strong>, choisissez la nouvelle table comme <strong>données du widget</strong>, puis associez chaque colonne du widget à la colonne du même nom.</div>`;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Aide intégrée : mode d'emploi du widget                              */
+  /* ------------------------------------------------------------------ */
+  let aideIntegree = '';
+  async function contenuAide() {
+    // Version modifiée par l'équipe (table des modes d'emploi), sinon version d'origine
+    try {
+      const d = P.detecter(etat.schema, ['tuto']);
+      if (d.tuto && d.tuto.champs.cle && d.tuto.champs.contenu) {
+        const raw = await etat.backend.fetch(d.tuto.table);
+        const i = (raw[d.tuto.champs.cle] || []).findIndex(v => v === P.cfg.id);
+        if (i >= 0 && raw[d.tuto.champs.contenu][i]) return {html: raw[d.tuto.champs.contenu][i], source: d.tuto.table};
+      }
+    } catch (e) { /* ignoré */ }
+    return {html: aideIntegree, source: null};
+  }
+  function nettoyerAide(el) {
+    el.querySelectorAll('script,style,iframe,object,embed').forEach(x => x.parentNode.removeChild(x));
+    el.querySelectorAll('*').forEach(x => Array.from(x.attributes).forEach(at => { if (/^on/i.test(at.name) || (at.name === 'href' && /^\s*javascript:/i.test(at.value))) x.removeAttribute(at.name); }));
+  }
+  P.ouvrirAide = async () => {
+    const a = await contenuAide();
+    const div = document.createElement('div'); div.className = 'pl-aide';
+    div.innerHTML = (a.html || '<p class="muted">Aucun mode d’emploi pour ce widget.</p>') +
+      `<p class="small muted" style="margin:0">${a.source ? `Texte issu de la table ${esc(a.source)}, modifiable avec le widget « Mode d’emploi ».` : 'Mode d’emploi d’origine. Pour l’adapter à votre équipe, utilisez le widget « Mode d’emploi ».'}</p>`;
+    nettoyerAide(div);
+    P.modale({titre: 'Mode d’emploi · ' + P.cfg.titre, contenu: div, large: true});
+  };
+
+  /* ------------------------------------------------------------------ */
   /* Démarrage                                                           */
   /* ------------------------------------------------------------------ */
   let curseurCb = null;
@@ -1174,6 +1443,7 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
     if (!etat.mapping) return;
     try {
       if (force) etat.signature = '';
+      if (P.cfg.colonnes) await L.charger();
       const change = await chargerDonnees();
       if (change || force) dessinerApp();
     } catch (e) { console.error(e); afficherErreur(e); }
@@ -1187,6 +1457,17 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
     P.$('.pl-marque').classList.toggle('hidden', !P.reglage('marque', true));
     const manq = P.manquants();
     const corps = P.$('#pl-corps');
+    const manqL = P.cfg.colonnes && etat.backend.nom !== 'demo' ? L.manquants() : [];
+    if (manqL.length) {
+      corps.innerHTML = `<div class="carte" style="max-width:760px;margin:24px auto"><h2>Choisissez les colonnes du widget</h2>
+        <ol class="pl-etapes"><li>Ouvrez le <strong>panneau de droite</strong> de Grist, onglet <strong>Widget</strong>.</li>
+        <li>Associez au minimum : ${manqL.map(c => `<strong>${esc(c.title)}</strong>`).join(', ')}.</li>
+        <li>Complétez les colonnes facultatives pour profiter de toutes les fonctions.</li></ol>
+        <p class="muted small">Pas encore de table adaptée ? Ouvrez les paramètres (⚙), onglet <strong>Table ressource</strong>, pour en créer une en un clic.</p>
+        <button class="btn sec sm" id="pl-cfg-go">Ouvrir les paramètres</button></div>`;
+      P.$('#pl-cfg-go').addEventListener('click', () => P.ouvrirConfig('ressource'));
+      return;
+    }
     if (manq.length) {
       corps.innerHTML = `<div class="alerte warn" style="max-width:720px"><strong>Configuration à compléter</strong>
         <ul style="margin:6px 0">${manq.map(m => `<li>${esc(m)}</li>`).join('')}</ul>
@@ -1205,11 +1486,13 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
   P.demarrer = async cfg => {
     P.cfg = cfg;
     document.title = cfg.titre;
+    const modele = document.getElementById('pl-aide'); aideIntegree = modele ? modele.textContent : '';
     document.body.innerHTML = `<div class="pl-app">
       <header class="pl-entete">
         <div class="pl-marque"><p class="fr-logo fr-logo--sm" style="margin:0">République<br>française</p></div>
         <div class="pl-titre"><h1>${esc(cfg.titre)}</h1><p id="pl-sous-titre">${esc(cfg.sousTitre || '')}</p></div>
         <div class="pl-outils"><div id="pl-outils" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end"></div>
+          ${aideIntegree || cfg.aide !== false ? `<button class="btn ter ic" id="pl-aide-btn" data-bulle="Mode d’emploi"><span aria-hidden="true" style="font-weight:700;font-size:1.05rem;width:1rem;text-align:center">?</span><span class="sr">Mode d’emploi</span></button>` : ''}
           <button class="btn ter ic" id="pl-actualiser" data-bulle="Actualiser les données">${P.ic('actualiser')}<span class="sr">Actualiser</span></button>
           <button class="btn ter ic" id="pl-config" data-bulle="Paramètres : tables, colonnes et réglages">${P.ic('reglages')}<span class="sr">Paramètres</span></button>
         </div>
@@ -1219,9 +1502,10 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
     </div>`;
     P.$('#pl-actualiser').addEventListener('click', () => P.rafraichir(true));
     P.$('#pl-config').addEventListener('click', () => P.ouvrirConfig());
+    if (P.$('#pl-aide-btn')) P.$('#pl-aide-btn').addEventListener('click', () => P.ouvrirAide());
     try {
       etat.backend = enGrist() ? GristBackend : DemoBackend;
-      const surChange = P.debounce(type => { if (type === 'options') { lireOptions(); P.rafraichir(true); } else P.rafraichir(false); }, 400);
+      const surChange = P.debounce(type => { if (type === 'options') { lireOptions(); P.rafraichir(true); } else P.rafraichir(type === 'force'); }, 300);
       await etat.backend.init(surChange, (tableId, rowId) => { if (curseurCb) curseurCb(tableId, rowId); });
       if (etat.backend.nom === 'demo') {
         const d = P.$('#pl-demo'); d.classList.remove('hidden');
@@ -1255,49 +1539,105 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
 })();
 
 </script>
+<script type="text/html" id="pl-aide"><!--AIDE--><p class="chapo">La revue hebdomadaire prépare votre point d’équipe en un clic : sur une seule page, <strong>ce qui a été terminé, ce qui est en retard et ce qui arrive</strong>. Elle fonctionne avec n’importe quelle liste de tâches, quel que soit le type de projet.</p>
+
+<section>
+  <h2>À quoi sert-elle ?</h2>
+  <ul>
+    <li><strong>Qu’avons-nous terminé ?</strong> Pour valoriser le travail fait.</li>
+    <li><strong>Qu’est-ce qui bloque ?</strong> Pour décider ensemble des actions.</li>
+    <li><strong>Qu’est-ce qui arrive ?</strong> Pour anticiper les échéances.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Mise en place</h2>
+  <ol class="etapes">
+    <li><span>Ajoutez un <strong>widget personnalisé</strong> et choisissez votre <strong>table de tâches</strong> comme données.</span></li>
+    <li><span>Dans le <strong>panneau de droite</strong> (onglet Widget), associez au minimum l’<strong>Intitulé</strong>, l’<strong>Échéance</strong> et le <strong>Statut</strong>.</span></li>
+    <li><span>Ajoutez les colonnes facultatives pour enrichir la revue : <strong>Regrouper par</strong> (ex. projet), Responsable, Date de réalisation, Dernière mise à jour, Date de création, Avancement, Suites données, Jalon.</span></li>
+  </ol>
+</section>
+
+<div class="encart"><strong>📦 Pas encore de table de tâches ?</strong><p>Ouvrez les paramètres du widget (⚙), onglet <strong>Table ressource</strong> : créez en un clic une table « Tâches » prête à l’emploi, avec ou sans exemples, ou téléchargez son modèle au format CSV.</p></div>
+
+<section>
+  <h2>Ce que vous y trouvez</h2>
+  <div class="blocs">
+    <div><strong>📊 Les chiffres de la semaine</strong>Terminées, en retard, à rendre bientôt, sans nouvelles, nouvelles.</div>
+    <div><strong>🌦️ La synthèse par groupe</strong>Pour chaque projet (ou autre regroupement) : état, avancement, tâches en cours et en retard, prochaine échéance.</div>
+    <div><strong>✅ Terminé</strong>Les tâches terminées sur la période, avec les suites données.</div>
+    <div><strong>🔴 En retard</strong>Les échéances dépassées, avec le responsable et le nombre de jours de retard.</div>
+    <div><strong>📅 À rendre</strong>Les échéances des prochains jours.</div>
+    <div><strong>💤 Points d’attention</strong>Les tâches qui ne bougent plus, celles sans responsable ou sans échéance, les nouvelles.</div>
+  </div>
+</section>
+
+<section>
+  <h2>En réunion</h2>
+  <ol class="etapes">
+    <li><span>Choisissez la <strong>période</strong> et, si besoin, filtrez par projet ou par responsable.</span></li>
+    <li><span>Passez en revue la <strong>synthèse</strong>, puis les <strong>retards</strong> : décidez d’une action, d’une nouvelle échéance ou d’un autre responsable.</span></li>
+    <li><span>Notez les <strong>décisions</strong>, puis cliquez sur <strong>Copier</strong> (pour un mail) ou <strong>Imprimer</strong>.</span></li>
+  </ol>
+</section>
+
+<div class="encart astuce"><strong>💡 Astuce</strong><p>Une tâche en retard ou « sans nouvelles » n’est souvent qu’une tâche pas mise à jour : corriger son statut, son échéance ou ses suites dans Grist suffit à la faire sortir des alertes.</p></div>
+
+<div class="encart attention"><strong>⚠️ Bon à savoir</strong><p>Les notes de la zone « Décisions » restent dans votre navigateur : pensez à les copier dans le compte rendu.</p></div>
+
+<p class="pied">La revue ne modifie aucune donnée. Le bouton ⚙ règle le seuil « sans nouvelles » et l’horizon « à rendre » ; le bouton ? affiche ce mode d’emploi.</p><!--FIN_AIDE--></script>
 <style>
-  .rv{display:flex;flex-direction:column;gap:16px;max-width:1200px}
-  .rv h2{font-size:1.05rem}
-  .rv-titre{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
-  .rv-titre h2{font-size:1.35rem}
-  .rv-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:16px}
-  .rv-grp{margin:8px 0 2px;font-weight:700;color:var(--bf);font-size:.85rem}
-  .rv-li{display:flex;gap:8px;align-items:baseline;padding:4px 0;border-bottom:1px solid var(--contrast);font-size:.85rem}
-  .rv-li .t{flex:1;min-width:0}
-  .rv-li .m{color:var(--mention);font-size:.78rem;white-space:nowrap}
-  .rv-notes{width:100%;min-height:90px}
-  .rv-filtres{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-  .rv-filtres select,.rv-filtres input{width:auto}
-  @media (max-width:500px){.rv-cols{grid-template-columns:1fr}}
-  @media print{.rv-notes{border:1px solid #999;box-shadow:none;background:none}}
+  .rv-tete{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  .rv-tete h2{font-size:1.6rem}
+  .rv-filtres{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .rv-filtres .in{width:auto}
+  .rv-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(460px,1fr));gap:28px}
+  .rv-grp{display:grid;grid-template-columns:minmax(200px,2fr) 180px minmax(140px,1.2fr) minmax(200px,2fr);gap:18px;align-items:center;padding:14px 0;border-bottom:1px solid var(--contrast)}
+  .rv-grp:last-child{border-bottom:0}
+  .rv-grp .nom{font-weight:700;color:var(--title);font-size:1rem}
+  .rv-grp .chiffres{font-size:.85rem;color:var(--mention)}
+  .rv-grp .chiffres b{color:var(--title)}
+  .rv-sous{font-weight:700;color:var(--bf);font-size:.85rem;margin:14px 0 2px;text-transform:uppercase;letter-spacing:.03em}
+  .rv-sous:first-child{margin-top:0}
+  .rv-notes{width:100%;min-height:110px}
+  @media (max-width:700px){.rv-2{grid-template-columns:1fr}.rv-grp{grid-template-columns:1fr 1fr}}
+  @media print{.rv-notes{display:none}.rv-2{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
 <script>
 (function () {
-  const P = Pilotage, esc = P.esc;
-  const ui = {fin: P.today(), duree: 7, domaine: '', agent: ''};
+  const P = Pilotage, L = P.L, esc = P.esc;
+  const ui = {fin: P.today(), groupe: '', resp: ''};
 
   P.demarrer({
     id: 'revue-hebdo',
     titre: 'Revue hebdomadaire',
-    sousTitre: 'Ce qui a bougé, ce qui bloque, ce qui arrive',
-    entites: ['tache', 'projet', 'jalon', 'temps'],
-    optionnelles: ['jalon', 'temps'],
+    sousTitre: 'Ce qui a été fait, ce qui bloque, ce qui arrive',
+    entites: [], sansDetection: true,
+    ressource: 'taches',
+    colonnes: [
+      {name: 'Titre', title: 'Intitulé', description: 'Nom de la tâche', type: 'Any', ressource: ['Intitule']},
+      {name: 'Echeance', title: 'Échéance', description: 'Date limite de la tâche', type: 'Date', ressource: ['Echeance']},
+      {name: 'Statut', title: 'Statut', description: 'Repère les tâches terminées ou abandonnées', type: 'Choice', ressource: ['Statut']},
+      {name: 'Groupe', title: 'Regrouper par', description: 'Ex. Projet : une ligne de synthèse par valeur', type: 'Any', optional: true, ressource: ['Projet']},
+      {name: 'Responsable', title: 'Responsable', type: 'Any', optional: true, ressource: ['Responsable']},
+      {name: 'Realisation', title: 'Date de réalisation', description: 'Date à laquelle la tâche a été terminée', type: 'Date', optional: true, ressource: ['Date_realisation']},
+      {name: 'MajLe', title: 'Dernière mise à jour', description: 'Repère les tâches qui ne bougent plus', type: 'DateTime', optional: true, ressource: ['Mis_a_jour_le']},
+      {name: 'CreeLe', title: 'Date de création', description: 'Repère les nouvelles tâches', type: 'DateTime', optional: true, ressource: ['Cree_le']},
+      {name: 'Avancement', title: 'Avancement', type: 'Numeric', optional: true, ressource: ['Avancement']},
+      {name: 'Priorite', title: 'Priorité', type: 'Choice', optional: true, ressource: ['Priorite']},
+      {name: 'Suites', title: 'Suites données', description: 'Commentaire repris dans la revue', type: 'Any', optional: true, ressource: ['Suites']},
+      {name: 'Jalon', title: 'Jalon', description: 'Case à cocher : ligne affichée dans la rubrique Jalons', type: 'Bool', optional: true, ressource: ['Jalon']},
+    ],
+    demo: {table: 'DATA_Taches', mapping: {Titre: 'Action', Echeance: 'Echeance', Statut: 'Statut', Groupe: 'Projet', Responsable: 'Responsable', Realisation: 'Date_de_fin_reelle', MajLe: 'Derniere_mise_a_jour', CreeLe: 'Cree_le', Avancement: 'Avancement', Priorite: 'Priorite', Suites: 'Suite_donnees'}},
     reglagesHtml: () => `<div class="grille">
-      <div class="champ"><label for="rg-dormant">Tâche « dormante » après (jours sans mise à jour)</label><input class="in" id="rg-dormant" type="number" min="3" value="${P.reglage('dormant', 14)}"></div>
+      <div class="champ"><label for="rg-dormant">Tâche « sans nouvelles » après (jours sans mise à jour)</label><input class="in" id="rg-dormant" type="number" min="3" value="${P.reglage('dormant', 14)}"></div>
       <div class="champ"><label for="rg-avenir">Horizon « à venir » (jours)</label><input class="in" id="rg-avenir" type="number" min="1" value="${P.reglage('avenir', 7)}"></div></div>`,
     lireReglages: (el, r) => { r.dormant = +el.querySelector('#rg-dormant').value || 14; r.avenir = +el.querySelector('#rg-avenir').value || 7; },
-    outils: () => `<div class="rv-filtres no-print">
-        <div class="grp" role="group" aria-label="Période">
-          <button class="btn sm" data-per="sem-prec">Semaine précédente</button>
-          <button class="btn sm" data-per="sem">Cette semaine</button>
-          <button class="btn sm" data-per="7j" aria-pressed="true">7 derniers jours</button>
-        </div>
-        <label class="sr" for="rv-fin">Fin de période</label><input class="in sm" type="date" id="rv-fin" value="${P.iso(ui.fin)}" data-bulle="Dernier jour de la période">
-        <label class="sr" for="rv-dom">Domaine</label><select class="in sm" id="rv-dom"><option value="">Tous domaines</option></select>
-        <label class="sr" for="rv-ag">Agent</label><select class="in sm" id="rv-ag"><option value="">Toute l'équipe</option></select>
-      </div>
+    outils: () => `<div class="grp no-print" role="group" aria-label="Période">
+        <button class="btn sm" data-per="sem-prec">Semaine précédente</button><button class="btn sm" data-per="sem">Cette semaine</button><button class="btn sm" data-per="7j" aria-pressed="true">7 derniers jours</button></div>
       <button class="btn sec sm" id="rv-copier">${P.ic('copier')} Copier</button>
       <button class="btn pri sm" id="rv-imprimer">${P.ic('imprimer')} Imprimer</button>`,
     surOutils: el => {
@@ -1305,133 +1645,109 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
         const b = e.target.closest('[data-per]'); if (!b) return;
         P.$$('[data-per]', el).forEach(x => x.setAttribute('aria-pressed', x === b));
         const t = P.today();
-        if (b.dataset.per === 'sem') { ui.fin = P.addDays(P.lundi(t), 6); }
-        else if (b.dataset.per === 'sem-prec') { ui.fin = P.addDays(P.lundi(t), -1); }
-        else ui.fin = t;
-        P.$('#rv-fin').value = P.iso(ui.fin); dessiner();
+        ui.fin = b.dataset.per === 'sem' ? P.addDays(P.lundi(t), 6) : b.dataset.per === 'sem-prec' ? P.addDays(P.lundi(t), -1) : t;
+        dessiner();
       });
-      el.querySelector('#rv-fin').addEventListener('change', e => { ui.fin = P.fromIso(e.target.value) || P.today(); P.$$('[data-per]', el).forEach(x => x.setAttribute('aria-pressed', 'false')); dessiner(); });
-      el.querySelector('#rv-dom').addEventListener('change', e => { ui.domaine = e.target.value; dessiner(); });
-      el.querySelector('#rv-ag').addEventListener('change', e => { ui.agent = e.target.value ? +e.target.value : ''; dessiner(); });
       el.querySelector('#rv-imprimer').addEventListener('click', () => window.print());
       el.querySelector('#rv-copier').addEventListener('click', copier);
     },
-    rendu: () => { remplirFiltres(); dessiner(); },
+    rendu: () => dessiner(),
   });
 
-  function remplirFiltres() {
-    const dom = P.$('#rv-dom'), ag = P.$('#rv-ag');
-    const doms = P.uniq(P.liste('projet').map(p => p.domaine).filter(Boolean)).sort();
-    dom.innerHTML = '<option value="">Tous domaines</option>' + doms.map(d => `<option ${d === ui.domaine ? 'selected' : ''}>${esc(d)}</option>`).join('');
-    dom.classList.toggle('hidden', !doms.length);
-    ag.innerHTML = '<option value="">Toute l\'équipe</option>' + P.liste('agent').slice().sort((a, b) => a._libelle.localeCompare(b._libelle, 'fr'))
-      .map(a => `<option value="${a.id}" ${a.id === ui.agent ? 'selected' : ''}>${esc(a._libelle)}</option>`).join('');
+  const fermee = s => P.estClos(s);
+
+  function lignes() {
+    const auj = P.today();
+    return L.recs.map(r => {
+      const statut = L.texte('Statut', r);
+      const echeance = L.date('Echeance', r);
+      const fini = P.estTermine(statut), clos = fermee(statut);
+      return {r, id: r.id, titre: L.texte('Titre', r) || '(sans intitulé)', statut, fini, clos, echeance,
+        groupe: L.texte('Groupe', r), resp: L.texte('Responsable', r), suites: L.texte('Suites', r),
+        realise: L.date('Realisation', r) || (fini && L.instant('MajLe', r) ? P.jour(L.instant('MajLe', r)) : null),
+        maj: L.instant('MajLe', r), cree: L.instant('CreeLe', r), av: L.a('Avancement') ? (fini ? 1 : L.fraction('Avancement', r) || 0) : null,
+        prio: L.texte('Priorite', r), jalon: L.bool('Jalon', r),
+        retard: !clos && echeance && echeance < auj};
+    });
   }
 
   function dessiner() {
-    const corps = P.$('#pl-corps');
-    const fin = ui.fin, debut = P.addDays(fin, -(ui.duree - 1)), auj = P.today();
+    const corps = P.$('#pl-corps'); const auj = P.today();
+    const fin = ui.fin, debut = P.addDays(fin, -6);
     const dans = (d, a, b) => d && d >= a && d <= b;
     const avenir = P.reglage('avenir', 7), dormant = P.reglage('dormant', 14);
-    const projetOk = id => { if (!ui.domaine) return true; const p = P.get('projet', id); return p && p.domaine === ui.domaine; };
-    const agentOk = t => !ui.agent || t.responsable === ui.agent || (t.appuis || []).includes(ui.agent);
-    const taches = P.liste('tache').filter(t => projetOk(t.projet) && agentOk(t));
-    const ouvertes = taches.filter(t => !P.estClos(t.statut));
-    const projets = P.liste('projet').filter(p => !ui.domaine || p.domaine === ui.domaine);
-    const jalons = P.liste('jalon').filter(j => projetOk(j.projet));
-    const temps = P.liste('temps').filter(x => dans(x.date, debut, fin) && (!ui.agent || x.agent === ui.agent) && (!ui.domaine || !x.projet || projetOk(x.projet)));
+    const toutes = lignes();
+    const groupes = P.uniq(toutes.map(t => t.groupe).filter(Boolean)).sort((a, b) => a.localeCompare(b, 'fr'));
+    const resps = P.uniq(toutes.flatMap(t => t.resp ? t.resp.split(', ') : [])).sort((a, b) => a.localeCompare(b, 'fr'));
+    const t = toutes.filter(x => (!ui.groupe || x.groupe === ui.groupe) && (!ui.resp || x.resp.split(', ').includes(ui.resp)));
+    const ouvertes = t.filter(x => !x.clos);
+    const terminees = t.filter(x => x.fini && dans(x.realise, debut, fin)).sort((a, b) => a.realise - b.realise);
+    const retards = ouvertes.filter(x => x.retard).sort((a, b) => a.echeance - b.echeance);
+    const prochaines = ouvertes.filter(x => dans(x.echeance, auj, P.addDays(auj, avenir))).sort((a, b) => a.echeance - b.echeance);
+    const dormantes = L.a('MajLe') ? ouvertes.filter(x => x.maj && P.diffDays(auj, P.jour(x.maj)) > dormant).sort((a, b) => a.maj - b.maj) : [];
+    const incompletes = ouvertes.filter(x => (L.a('Responsable') && !x.resp) || !x.echeance);
+    const nouvelles = L.a('CreeLe') ? t.filter(x => dans(x.cree && P.jour(x.cree), debut, fin)) : [];
+    const jalons = L.a('Jalon') ? t.filter(x => x.jalon) : [];
 
-    const terminees = taches.filter(t => P.estTermine(t.statut) && (dans(t.fin_reelle, debut, fin) || (!t.fin_reelle && dans(t.maj && P.jour(t.maj), debut, fin))));
-    const nouvelles = P.a('tache', 'cree_le') ? taches.filter(t => dans(t.cree_le && P.jour(t.cree_le), debut, fin)) : [];
-    const retards = ouvertes.filter(t => t.echeance && t.echeance < auj).sort((a, b) => a.echeance - b.echeance);
-    const prochaines = ouvertes.filter(t => dans(t.echeance, auj, P.addDays(auj, avenir))).sort((a, b) => a.echeance - b.echeance);
-    const jalAtteints = jalons.filter(j => j.atteint && dans(j.date_reelle || j.date, debut, fin));
-    const jalDepasses = jalons.filter(j => !j.atteint && j.date && j.date < auj);
-    const jalAvenir = jalons.filter(j => !j.atteint && dans(j.date, auj, P.addDays(auj, 15))).sort((a, b) => a.date - b.date);
-    const dormantes = P.a('tache', 'maj') ? ouvertes.filter(t => t.maj && P.diffDays(auj, P.jour(t.maj)) > dormant).sort((a, b) => a.maj - b.maj) : [];
-    const incompletes = ouvertes.filter(t => !t.responsable || !t.echeance);
+    const meta = x => [x.groupe && !ui.groupe ? x.groupe : '', x.resp].filter(Boolean).map(esc).join(' · ');
+    const ligne = (x, droite, detail) => `<div class="ligne-liste"><div class="t"><strong>${esc(x.titre)}</strong>${meta(x) || detail ? `<span>${meta(x)}${meta(x) && detail ? ' · ' : ''}${detail ? esc(detail) : ''}</span>` : ''}</div><div class="m">${droite}</div></div>`;
+    const vide = txt => `<p class="vide-doux">${txt}</p>`;
 
-    const nomProjet = id => P.libelle('projet', id) || 'Sans projet';
-    const resp = t => t.responsable ? esc(P.libelle('agent', t.responsable)) : '<span class="badge warn">sans responsable</span>';
-    const parProjet = (liste, ligne) => {
-      if (!liste.length) return '<p class="muted small">Rien à signaler.</p>';
-      const g = new Map(); liste.forEach(t => { const k = nomProjet(t.projet); if (!g.has(k)) g.set(k, []); g.get(k).push(t); });
-      return Array.from(g.entries()).sort((a, b) => a[0].localeCompare(b[0], 'fr')).map(([k, l]) => `<div class="rv-grp">${esc(k)}</div>${l.map(ligne).join('')}`).join('');
-    };
-
-    const meteo = projets.filter(p => !P.estClos(p.phase)).map(p => {
-      const tp = P.tachesDuProjet(p.id);
-      const s = P.santeProjet(p);
-      const av = P.avancementProjet(p.id);
-      const j = p.fin ? P.diffDays(p.fin, auj) : null;
-      const pj = jalons.filter(x => x.projet === p.id && !x.atteint && x.date).sort((a, b) => a.date - b.date)[0];
-      return {p, s, av, j, nbRetard: tp.filter(t => P.urgence(t).code === 'retard').length, pj};
-    }).sort((a, b) => a.s.rang - b.s.rang);
-
-    const agents = new Map();
-    temps.forEach(x => {
-      const k = x.agent || 0; if (!agents.has(k)) agents.set(k, {tot: 0, proj: 0});
-      const a = agents.get(k); a.tot += x.duree || 0; if (x.tache || x.projet) a.proj += x.duree || 0;
-    });
-    const totalTemps = P.somme(temps.map(x => x.duree));
+    const synthese = L.a('Groupe') && !ui.groupe ? groupes.map(g => {
+      const gx = toutes.filter(x => x.groupe === g && (!ui.resp || x.resp.split(', ').includes(ui.resp)));
+      const ouv = gx.filter(x => !x.clos); if (!ouv.length) return null;
+      const ret = ouv.filter(x => x.retard).length;
+      const proch = ouv.filter(x => x.echeance && x.echeance >= auj).sort((a, b) => a.echeance - b.echeance)[0];
+      const avs = gx.filter(x => !P.estAbandon(x.statut) && x.av != null);
+      const av = avs.length ? P.somme(avs.map(x => x.av)) / avs.length : null;
+      const etat = ret ? {l: '⛈️ Retards', c: 'err'} : proch && P.diffDays(proch.echeance, auj) <= avenir ? {l: '🌥️ Échéance proche', c: 'jaune'} : {l: '☀️ OK', c: 'ok'};
+      return {g, ouv: ouv.length, ret, proch, av, etat};
+    }).filter(Boolean).sort((a, b) => b.ret - a.ret || a.g.localeCompare(b.g, 'fr')) : [];
 
     const cleNotes = 'revue-notes:' + P.etat.docName + ':' + P.iso(debut);
     let notes = ''; try { notes = localStorage.getItem(cleNotes) || ''; } catch (e) { /* ignoré */ }
 
-    corps.innerHTML = `<div class="rv" id="rv-rapport">
-      <div class="rv-titre"><h2>Revue du ${P.fmtDate(debut)} au ${P.fmtDate(fin)}</h2>
-        <span class="muted small">${ui.domaine ? esc(ui.domaine) + ' · ' : ''}${ui.agent ? esc(P.libelle('agent', ui.agent)) + ' · ' : ''}éditée le ${P.fmtDate(auj)}</span></div>
+    corps.innerHTML = `<div class="aere" id="rv-rapport">
+      <div class="rv-tete"><h2>Semaine du ${P.fmtDate(debut)} au ${P.fmtDate(fin)}</h2>
+        <div class="rv-filtres no-print" style="margin-left:auto">
+          ${L.a('Groupe') ? `<select class="in sm" id="rv-g" aria-label="${esc(L.titreColonne('Groupe'))}"><option value="">Tous</option>${groupes.map(g => `<option ${g === ui.groupe ? 'selected' : ''}>${esc(g)}</option>`).join('')}</select>` : ''}
+          ${L.a('Responsable') ? `<select class="in sm" id="rv-r" aria-label="Responsable"><option value="">Toute l’équipe</option>${resps.map(g => `<option ${g === ui.resp ? 'selected' : ''}>${esc(g)}</option>`).join('')}</select>` : ''}
+          <input class="in sm" type="date" id="rv-fin" value="${P.iso(fin)}" aria-label="Dernier jour de la période"></div></div>
+
       <div class="tuiles">
-        <div class="tuile ok"><div class="v">${terminees.length}</div><div class="l">tâche(s) terminée(s)</div></div>
-        ${P.a('tache', 'cree_le') ? `<div class="tuile"><div class="v">${nouvelles.length}</div><div class="l">nouvelle(s) tâche(s)</div></div>` : ''}
-        <div class="tuile ${retards.length ? 'err' : 'ok'}"><div class="v">${retards.length}</div><div class="l">tâche(s) en retard</div></div>
-        <div class="tuile ${prochaines.length ? 'warn' : ''}"><div class="v">${prochaines.length}</div><div class="l">échéance(s) sous ${avenir} j</div></div>
-        ${P.table('jalon') ? `<div class="tuile ok"><div class="v">${jalAtteints.length}</div><div class="l">jalon(s) atteint(s)</div></div>
-        <div class="tuile ${jalDepasses.length ? 'err' : ''}"><div class="v">${jalDepasses.length}</div><div class="l">jalon(s) dépassé(s)</div></div>` : ''}
-        ${P.table('temps') ? `<div class="tuile"><div class="v">${P.fmtNb(totalTemps)}</div><div class="l">J/H déclarés</div></div>` : ''}
+        <div class="tuile ok"><div class="v">${terminees.length}</div><div class="l">terminée(s) cette semaine</div></div>
+        <div class="tuile ${retards.length ? 'err' : 'ok'}"><div class="v">${retards.length}</div><div class="l">en retard</div></div>
+        <div class="tuile ${prochaines.length ? 'warn' : ''}"><div class="v">${prochaines.length}</div><div class="l">à rendre sous ${avenir} jours</div></div>
+        ${L.a('MajLe') ? `<div class="tuile ${dormantes.length ? 'warn' : ''}"><div class="v">${dormantes.length}</div><div class="l">sans nouvelles depuis ${dormant} jours</div></div>` : ''}
+        ${L.a('CreeLe') ? `<div class="tuile"><div class="v">${nouvelles.length}</div><div class="l">nouvelle(s) tâche(s)</div></div>` : ''}
       </div>
 
-      <section class="carte"><h2>🌦️ Météo des projets en cours</h2>
-        ${meteo.length ? `<table class="tab"><thead><tr><th>Projet</th><th>État</th><th>Phase</th><th>Avancement</th><th>Deadline</th><th class="num">Retards</th><th>Prochain jalon</th></tr></thead><tbody>
-        ${meteo.map(m => `<tr><td><strong>${esc(m.p.code ? m.p.code + ' · ' : '')}${esc(m.p.titre)}</strong></td><td><span class="badge ${m.s.c}">${esc(m.s.l)}</span></td>
-          <td>${esc(m.p.phase || '')}</td>
-          <td style="min-width:110px"><div class="barre ${m.av >= .8 ? 'ok' : ''}"><span style="width:${Math.round(m.av * 100)}%"></span></div><span class="small">${P.fmtPct(m.av)}</span></td>
-          <td>${m.p.fin ? `${P.fmtDate(m.p.fin)} <span class="small ${m.j < 0 ? '' : 'muted'}" style="${m.j < 0 ? 'color:var(--error)' : ''}">(${m.j < 0 ? 'dépassée de ' + (-m.j) + ' j' : 'J-' + m.j})</span>` : '<span class="muted">–</span>'}</td>
-          <td class="num">${m.nbRetard || ''}</td><td class="small">${m.pj ? esc(m.pj.titre) + ' · ' + P.fmtDate(m.pj.date) : ''}</td></tr>`).join('')}</tbody></table>` : '<p class="muted small">Aucun projet en cours.</p>'}
-      </section>
+      ${synthese.length ? `<section class="carte"><h2>Où en est chaque ${esc(((L.col('Groupe') || {}).label || 'groupe').toLowerCase())} ?</h2>
+        ${synthese.map(s => `<div class="rv-grp"><span class="nom">${esc(s.g)}</span><span><span class="badge ${s.etat.c}">${s.etat.l}</span></span>
+          <span>${s.av != null ? `<div class="barre ${s.av >= .8 ? 'ok' : ''}"><span style="width:${Math.round(s.av * 100)}%"></span></div><span class="small muted">${P.fmtPct(s.av)} d’avancement</span>` : ''}</span>
+          <span class="chiffres"><b>${s.ouv}</b> en cours${s.ret ? ` · <b style="color:var(--error)">${s.ret}</b> en retard` : ''}${s.proch ? `<br>Prochaine échéance : ${P.fmtDateCourt(s.proch.echeance)}` : ''}</span></div>`).join('')}</section>` : ''}
 
-      <div class="rv-cols">
-        <section class="carte"><h2>✅ Réalisé sur la période</h2>
-          ${parProjet(terminees, t => `<div class="rv-li"><span class="t">${esc(t.titre)}${t.suites ? `<br><span class="muted small">${esc(t.suites)}</span>` : ''}</span><span class="m">${resp(t)} · ${P.fmtDate(t.fin_reelle || (t.maj && P.jour(t.maj)))}</span></div>`)}
-        </section>
+      <div class="rv-2">
+        <section class="carte"><h2>✅ Terminé cette semaine</h2>
+          ${terminees.length ? terminees.map(x => ligne(x, P.fmtDateCourt(x.realise), x.suites)).join('') : vide(L.a('Realisation') || L.a('MajLe') ? 'Aucune tâche terminée sur la période.' : 'Associez la colonne « Date de réalisation » pour voir ce qui a été terminé.')}</section>
         <section class="carte"><h2>🔴 En retard</h2>
-          ${retards.length ? retards.map(t => `<div class="rv-li"><span class="t"><strong>${esc(t.titre)}</strong><br><span class="muted small">${esc(nomProjet(t.projet))}${t.suites ? ' · ' + esc(t.suites) : ''}</span></span>
-            <span class="m">${resp(t)}<br><span class="badge err">${-P.diffDays(t.echeance, auj)} j de retard</span></span></div>`).join('') : '<p class="muted small">Aucune tâche en retard. 👏</p>'}
-        </section>
-        <section class="carte"><h2>📅 À venir</h2>
-          ${prochaines.length ? prochaines.map(t => `<div class="rv-li"><span class="t">${esc(t.titre)}<br><span class="muted small">${esc(nomProjet(t.projet))}</span></span><span class="m">${resp(t)} · ${P.fmtDateCourt(t.echeance)} (${P.relatif(P.diffDays(t.echeance, auj))})</span></div>`).join('') : `<p class="muted small">Aucune échéance dans les ${avenir} prochains jours.</p>`}
-          ${jalAvenir.length ? `<div class="rv-grp">Jalons des 15 prochains jours</div>${jalAvenir.map(j => `<div class="rv-li"><span class="t">🏁 ${esc(j.titre)}<br><span class="muted small">${esc(nomProjet(j.projet))}</span></span><span class="m">${P.fmtDateCourt(j.date)}</span></div>`).join('')}` : ''}
-        </section>
-        ${P.table('jalon') ? `<section class="carte"><h2>🏁 Jalons</h2>
-          <div class="rv-grp">Atteints sur la période</div>${jalAtteints.length ? jalAtteints.map(j => `<div class="rv-li"><span class="t">${esc(j.titre)}</span><span class="m">${P.fmtDate(j.date_reelle || j.date)}</span></div>`).join('') : '<p class="muted small">Aucun.</p>'}
-          <div class="rv-grp">Dépassés et non atteints</div>${jalDepasses.length ? jalDepasses.map(j => `<div class="rv-li"><span class="t">${esc(j.titre)}<br><span class="muted small">${esc(nomProjet(j.projet))}</span></span><span class="m"><span class="badge err">prévu le ${P.fmtDate(j.date)}</span></span></div>`).join('') : '<p class="muted small">Aucun.</p>'}
-        </section>` : ''}
-        <section class="carte"><h2>💤 Points d'attention</h2>
-          ${P.a('tache', 'maj') ? `<div class="rv-grp">Sans mise à jour depuis plus de ${dormant} jours</div>${dormantes.length ? dormantes.map(t => `<div class="rv-li"><span class="t">${esc(t.titre)}</span><span class="m">${resp(t)} · ${P.diffDays(auj, P.jour(t.maj))} j</span></div>`).join('') : '<p class="muted small">Aucune.</p>'}` : ''}
-          <div class="rv-grp">Tâches ouvertes incomplètes</div>${incompletes.length ? incompletes.map(t => `<div class="rv-li"><span class="t">${esc(t.titre)}</span><span class="m">${!t.responsable ? '<span class="badge warn">sans responsable</span> ' : ''}${!t.echeance ? '<span class="badge warn">sans échéance</span>' : ''}</span></div>`).join('') : '<p class="muted small">Aucune.</p>'}
-          ${nouvelles.length ? `<div class="rv-grp">Nouvelles tâches</div>${nouvelles.map(t => `<div class="rv-li"><span class="t">${esc(t.titre)}<br><span class="muted small">${esc(nomProjet(t.projet))}</span></span><span class="m">${resp(t)}</span></div>`).join('')}` : ''}
-        </section>
-        ${P.table('temps') ? `<section class="carte"><h2>⏱️ Temps déclaré</h2>
-          ${agents.size ? `<table class="tab"><thead><tr><th>Agent</th><th class="num">Total (J/H)</th><th class="num">Projets</th><th class="num">Hors projet</th></tr></thead><tbody>
-          ${Array.from(agents.entries()).sort((a, b) => b[1].tot - a[1].tot).map(([id, a]) => `<tr><td>${id ? esc(P.libelle('agent', id)) : '<span class="badge warn">sans agent</span>'}</td><td class="num">${P.fmtNb(a.tot)}</td><td class="num">${P.fmtNb(a.proj)}</td><td class="num">${P.fmtNb(a.tot - a.proj)}</td></tr>`).join('')}
-          <tr><td><strong>Total</strong></td><td class="num"><strong>${P.fmtNb(totalTemps)}</strong></td><td class="num">${P.fmtNb(P.somme(Array.from(agents.values()).map(a => a.proj)))}</td><td class="num">${P.fmtNb(totalTemps - P.somme(Array.from(agents.values()).map(a => a.proj)))}</td></tr></tbody></table>` : '<p class="muted small">Aucun temps déclaré sur la période.</p>'}
-        </section>` : ''}
+          ${retards.length ? retards.map(x => ligne(x, `<span class="badge err">${-P.diffDays(x.echeance, auj)} j de retard</span>`, x.suites)).join('') : vide('Aucune tâche en retard. 👏')}</section>
+        <section class="carte"><h2>📅 À rendre dans les ${avenir} prochains jours</h2>
+          ${prochaines.length ? prochaines.map(x => ligne(x, `${P.fmtDateCourt(x.echeance)}<br>${P.relatif(P.diffDays(x.echeance, auj))}`)).join('') : vide('Rien d’urgent à l’horizon.')}</section>
+        <section class="carte"><h2>💤 Points d’attention</h2>
+          ${L.a('MajLe') ? `<p class="rv-sous">Sans nouvelles depuis plus de ${dormant} jours</p>${dormantes.length ? dormantes.map(x => ligne(x, `${P.diffDays(auj, P.jour(x.maj))} j`)).join('') : vide('Aucune.')}` : ''}
+          <p class="rv-sous">À compléter</p>${incompletes.length ? incompletes.map(x => ligne(x, `${L.a('Responsable') && !x.resp ? '<span class="badge warn">sans responsable</span><br>' : ''}${!x.echeance ? '<span class="badge warn">sans échéance</span>' : ''}`)).join('') : vide('Toutes les tâches ouvertes ont un responsable et une échéance.')}
+          ${nouvelles.length ? `<p class="rv-sous">Nouvelles tâches</p>${nouvelles.map(x => ligne(x, P.fmtDateCourt(P.jour(x.cree)))).join('')}` : ''}</section>
+        ${jalons.length ? `<section class="carte"><h2>🏁 Jalons</h2>${jalons.sort((a, b) => (a.echeance || 9e15) - (b.echeance || 9e15)).map(x => ligne(x, x.fini ? '<span class="badge ok">atteint</span>' : x.retard ? '<span class="badge err">dépassé</span>' : x.echeance ? P.fmtDate(x.echeance) : '–')).join('')}</section>` : ''}
       </div>
+
       <section class="carte"><h2>📝 Décisions et points à aborder</h2>
-        <textarea class="in rv-notes no-print" id="rv-notes" placeholder="Notes de la réunion (enregistrées dans ce navigateur pour cette période)">${esc(notes)}</textarea>
-        <div class="print-only" id="rv-notes-print" style="white-space:pre-wrap">${esc(notes) || '<br><br><br>'}</div>
-      </section>
+        <textarea class="in rv-notes" id="rv-notes" placeholder="Notes de la réunion (enregistrées dans ce navigateur pour cette semaine)">${esc(notes)}</textarea>
+        <div class="print-only" id="rv-notes-print" style="white-space:pre-wrap">${esc(notes)}</div></section>
     </div>`;
+    const sel = (id, k, num) => { const e = P.$(id); if (e) e.addEventListener('change', ev => { ui[k] = ev.target.value; dessiner(); }); };
+    sel('#rv-g', 'groupe'); sel('#rv-r', 'resp');
+    P.$('#rv-fin').addEventListener('change', e => { ui.fin = P.fromIso(e.target.value) || P.today(); P.$$('[data-per]').forEach(x => x.setAttribute('aria-pressed', 'false')); dessiner(); });
     const ta = P.$('#rv-notes');
     ta.addEventListener('input', P.debounce(() => { try { localStorage.setItem(cleNotes, ta.value); } catch (e) { /* ignoré */ } P.$('#rv-notes-print').textContent = ta.value; }, 300));
   }
@@ -1439,15 +1755,14 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
   async function copier() {
     const src = P.$('#rv-rapport'); if (!src) return;
     const clone = src.cloneNode(true);
-    clone.querySelectorAll('.no-print').forEach(x => x.remove());
+    clone.querySelectorAll('.no-print,textarea').forEach(x => x.parentNode.removeChild(x));
     clone.querySelectorAll('.print-only').forEach(x => { x.style.display = 'block'; });
-    const html = `<div style="font-family:Marianne,Arial,sans-serif;font-size:13px">${clone.innerHTML}</div>`;
-    const texte = clone.innerText;
+    const html = `<div style="font-family:Marianne,Arial,sans-serif;font-size:14px">${clone.innerHTML}</div>`;
     try {
-      await navigator.clipboard.write([new ClipboardItem({'text/html': new Blob([html], {type: 'text/html'}), 'text/plain': new Blob([texte], {type: 'text/plain'})})]);
+      await navigator.clipboard.write([new ClipboardItem({'text/html': new Blob([html], {type: 'text/html'}), 'text/plain': new Blob([clone.innerText], {type: 'text/plain'})})]);
       P.toast('Revue copiée : collez-la dans un mail ou un document.', 'ok');
     } catch (e) {
-      try { await navigator.clipboard.writeText(texte); P.toast('Revue copiée (texte seul).', 'ok'); }
+      try { await navigator.clipboard.writeText(clone.innerText); P.toast('Revue copiée (texte seul).', 'ok'); }
       catch (e2) { P.toast('Copie impossible dans ce navigateur : utilisez Imprimer.', 'warn'); }
     }
   }

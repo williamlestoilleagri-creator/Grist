@@ -7,6 +7,47 @@
 <link rel="stylesheet" href="socle.css">
 <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
 <script src="socle.js"></script>
+<script type="text/html" id="pl-aide"><!--AIDE--><p class="chapo">Le Gantt affiche vos tâches <strong>sur une frise, regroupées par projet</strong> : on voit d’un coup d’œil ce qui se chevauche, ce qui dérape et ce qui arrive. Les dates se modifient <strong>directement à la souris</strong>.</p>
+
+<section>
+  <h2>À quoi sert-il ?</h2>
+  <ul>
+    <li><strong>Visualiser le calendrier</strong> du pôle : quels projets tournent en même temps, et quand.</li>
+    <li><strong>Repérer les dérapages</strong> : les tâches en retard sont en rouge et signalées par un point rouge.</li>
+    <li><strong>Replanifier en quelques secondes</strong>, sans ressaisir les dates dans les tables.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Choisir ce que le Gantt affiche</h2>
+  <p>Le Gantt s’appuie sur <strong>la table choisie comme données du widget</strong> (par exemple <em>DATA_Taches</em>). Les colonnes utilisées se choisissent dans le <strong>panneau de droite de Grist</strong>, onglet <strong>Widget</strong> :</p>
+  <div class="blocs">
+    <div><strong>Intitulé et Date de fin</strong>Obligatoires : le texte de la barre et sa date de fin (l’échéance).</div>
+    <div><strong>Date de début</strong>Sans elle, la durée est estimée à partir de la charge : la barre est alors hachurée.</div>
+    <div><strong>Regrouper par</strong>Une section par valeur, par exemple par projet, par responsable ou par thème.</div>
+    <div><strong>Sous-titre</strong>Affiché sous l’intitulé, par exemple le responsable.</div>
+    <div><strong>Avancement et Statut</strong>L’avancement se voit dans la barre ; le statut repère les tâches terminées.</div>
+    <div><strong>Couleur et Jalon</strong>Une colonne Choix colore les barres avec les couleurs de Grist ; une case à cocher transforme une ligne en jalon ◆.</div>
+  </div>
+</section>
+
+<div class="encart"><strong>📦 Pas encore de table adaptée ?</strong><p>Ouvrez les paramètres du widget (⚙), onglet <strong>Table ressource</strong> : créez en un clic une table « Tâches » prête à l’emploi (avec ou sans exemples), ou téléchargez son modèle CSV. Choisissez-la ensuite comme données du widget.</p></div>
+
+<section>
+  <h2>Replanifier à la souris</h2>
+  <ol class="etapes">
+    <li><span><strong>Glissez une barre</strong> pour la décaler : début et fin bougent ensemble.</span></li>
+    <li><span><strong>Étirez son bord gauche ou droit</strong> pour changer seulement la date de début ou de fin.</span></li>
+    <li><span><strong>Cliquez sur une barre ou sur son intitulé</strong> pour modifier les dates, le statut ou l’avancement.</span></li>
+    <li><span>Pour une ligne <strong>« non planifiée »</strong>, cliquez dans la frise au jour voulu : elle y est placée.</span></li>
+  </ol>
+</section>
+
+<div class="encart astuce"><strong>💡 Astuce</strong><p>Choisissez l’échelle (<strong>Jour, Semaine, Mois, Trimestre</strong>) et la densité : <strong>Confortable</strong> pour lire en détail, <strong>Compact</strong> pour voir beaucoup de lignes. Le champ <strong>Filtrer</strong> retrouve une tâche, une personne ou un projet ; <strong>Tout replier</strong> ne garde que les sections.</p></div>
+
+<div class="encart attention"><strong>⚠️ Bon à savoir</strong><p>Chaque déplacement est <strong>enregistré immédiatement</strong> dans Grist. En cas d’erreur, utilisez la flèche « Annuler » de Grist, en haut à gauche de l’écran.</p></div>
+
+<p class="pied">Les éléments terminés sont masqués : cochez « Terminés » pour les afficher. Le bouton « Aujourd’hui » ramène la frise à la date du jour. L’échelle, la densité et les sections repliées sont mémorisées sur votre poste. Le bouton ? affiche ce mode d’emploi.</p><!--FIN_AIDE--></script>
 <style>
   .pl-corps{padding:0}
   .gt-outils{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -81,16 +122,16 @@
   const ROUGE = '#ce0500', ORANGE = '#c3592d', GRIS = '#929292', BLEU = '#000091';
   /* Colonnes à choisir dans le panneau de droite de Grist */
   const COLONNES = [
-    {name: 'Titre', title: 'Intitulé', description: 'Texte affiché sur chaque barre (ex. Action, Intitulé)', type: 'Any'},
-    {name: 'Fin', title: 'Date de fin / échéance', description: 'Fin de la barre (ex. Échéance, Deadline)', type: 'Date'},
-    {name: 'Debut', title: 'Date de début', description: 'Début de la barre ; sans elle, la durée est estimée', type: 'Date', optional: true},
-    {name: 'Groupe', title: 'Regrouper par', description: 'Ex. Projet : une section par valeur', type: 'Any', optional: true},
-    {name: 'Responsable', title: 'Sous-titre', description: 'Affiché sous l’intitulé (ex. Responsable)', type: 'Any', optional: true},
-    {name: 'Avancement', title: 'Avancement', description: 'Nombre entre 0 et 1 (ou en %), affiché dans la barre', type: 'Numeric', optional: true},
-    {name: 'Statut', title: 'Statut', description: 'Sert à repérer les éléments terminés et en retard', type: 'Choice', optional: true},
-    {name: 'Couleur', title: 'Couleur des barres', description: 'Colonne Choix : les barres prennent la couleur de chaque choix', type: 'Choice', optional: true},
-    {name: 'Jalon', title: 'Jalon', description: 'Case à cocher : la ligne s’affiche en losange', type: 'Bool', optional: true},
-    {name: 'Charge', title: 'Charge (jours)', description: 'Sert à estimer la durée quand il manque une date', type: 'Numeric', optional: true},
+    {name: 'Titre', title: 'Intitulé', description: 'Texte affiché sur chaque barre (ex. Action, Intitulé)', type: 'Any', ressource: ['Intitule']},
+    {name: 'Fin', title: 'Date de fin / échéance', description: 'Fin de la barre (ex. Échéance, Deadline)', type: 'Date', ressource: ['Echeance']},
+    {name: 'Debut', title: 'Date de début', description: 'Début de la barre ; sans elle, la durée est estimée', type: 'Date', optional: true, ressource: ['Date_debut']},
+    {name: 'Groupe', title: 'Regrouper par', description: 'Ex. Projet : une section par valeur', type: 'Any', optional: true, ressource: ['Projet']},
+    {name: 'Responsable', title: 'Sous-titre', description: 'Affiché sous l’intitulé (ex. Responsable)', type: 'Any', optional: true, ressource: ['Responsable']},
+    {name: 'Avancement', title: 'Avancement', description: 'Nombre entre 0 et 1 (ou en %), affiché dans la barre', type: 'Numeric', optional: true, ressource: ['Avancement']},
+    {name: 'Statut', title: 'Statut', description: 'Sert à repérer les éléments terminés et en retard', type: 'Choice', optional: true, ressource: ['Statut']},
+    {name: 'Couleur', title: 'Couleur des barres', description: 'Colonne Choix : les barres prennent la couleur de chaque choix', type: 'Choice', optional: true, ressource: ['Priorite']},
+    {name: 'Jalon', title: 'Jalon', description: 'Case à cocher : la ligne s’affiche en losange', type: 'Bool', optional: true, ressource: ['Jalon']},
+    {name: 'Charge', title: 'Charge (jours)', description: 'Sert à estimer la durée quand il manque une date', type: 'Numeric', optional: true, ressource: ['Charge']},
   ];
   /* Correspondance utilisée en mode démonstration */
   const DEMO = {table: 'DATA_Taches', mapping: {Titre: 'Action', Fin: 'Echeance', Debut: 'Date_de_debut', Groupe: 'Projet', Responsable: 'Responsable', Avancement: 'Avancement', Statut: 'Statut', Charge: 'Charge_estimee'}};
@@ -108,7 +149,9 @@
     sousTitre: 'Planning sur une frise – glisser pour replanifier',
     entites: [],
     sansDetection: true,
+    ressource: 'taches',
     colonnes: COLONNES,
+    demo: DEMO,
     texteConfig: 'Les colonnes du Gantt (intitulé, dates, regroupement, couleur…) se choisissent dans le panneau de droite de Grist : onglet « Widget », rubrique des colonnes. La table utilisée est celle choisie comme données du widget.',
     surLignes: (recs, mapping) => { src.recs = recs.map(normaliserLigne); src.mapping = mapping; redessiner(); },
     outils: () => `<div class="gt-outils">

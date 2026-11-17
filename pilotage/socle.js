@@ -339,8 +339,9 @@
       if (P.cfg.colonnes) pret.columns = P.cfg.colonnes; // colonnes choisies dans le panneau de droite de Grist
       grist.ready(pret);
       grist.onRecords((recs, mappings) => {
+        if (P.cfg.colonnes) P.L.recevoir(recs || [], mappings || null);
         if (P.cfg.surLignes) P.cfg.surLignes(recs || [], mappings || null);
-        onChange('records');
+        onChange(P.cfg.colonnes ? 'force' : 'records');
       }, {keepEncoded: true, expandRefs: false});
       grist.onRecord(async rec => {
         if (!rec) return;
@@ -781,18 +782,37 @@
     return res;
   };
 
-  P.ouvrirConfig = () => {
+  P.ouvrirConfig = (onglet) => {
     const ents = dependances(P.cfg.entites || []);
     const tablesOpts = Object.keys(etat.schema).sort();
     const corps = document.createElement('div');
-    corps.innerHTML = `
+    const onglets = [['reglages', 'Réglages']].concat(P.cfg.ressource ? [['ressource', 'Table ressource']] : [], aideIntegree ? [['aide', 'Mode d’emploi']] : []);
+    corps.innerHTML = `${onglets.length > 1 ? `<div class="pl-onglets" role="tablist">${onglets.map(([k, l]) => `<button type="button" role="tab" data-onglet="${k}" aria-selected="${k === (onglet || 'reglages')}">${l}</button>`).join('')}</div>` : ''}
+      <div data-panneau="ressource" class="pl-panneau hidden">${P.cfg.ressource ? htmlRessource() : ''}</div>
+      <div data-panneau="aide" class="pl-panneau pl-aide hidden"></div>
+      <div data-panneau="reglages" class="pl-panneau">
       ${ents.length ? `<p class="muted small" style="margin:0">Le widget s'adapte à la structure de votre document : choisissez pour chaque élément la table et les colonnes à utiliser.
       La détection automatique propose une association à partir des noms. Les colonnes calculées (formules) sont lues mais jamais modifiées.</p>
       <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sec sm" data-act="auto">Détection automatique</button></div>`
       : `<p class="muted small" style="margin:0">${P.cfg.texteConfig || 'Les colonnes utilisées se choisissent dans le panneau de droite de Grist (onglet « Widget »).'}</p>`}
       <div id="cfg-ents" style="display:flex;flex-direction:column;gap:8px"></div>
       ${P.cfg.reglagesHtml ? `<div class="carte"><h3>Réglages du widget</h3><div id="cfg-reglages">${P.cfg.reglagesHtml()}</div></div>` : ''}
-      <div class="carte"><h3>Affichage</h3><label class="case"><input type="checkbox" id="cfg-marque" ${P.reglage('marque', true) ? 'checked' : ''}> Afficher le bloc-marque « République française »</label></div>`;
+      <div class="carte"><h3>Affichage</h3><label class="case"><input type="checkbox" id="cfg-marque" ${P.reglage('marque', true) ? 'checked' : ''}> Afficher le bloc-marque « République française »</label></div></div>`;
+    const montrer = k => {
+      P.$$('[data-onglet]', corps).forEach(b => b.setAttribute('aria-selected', b.dataset.onglet === k));
+      P.$$('[data-panneau]', corps).forEach(d => d.classList.toggle('hidden', d.dataset.panneau !== k));
+      if (k === 'aide') contenuAide().then(a => { const z = P.$('[data-panneau=aide]', corps); z.innerHTML = a.html; nettoyerAide(z); });
+    };
+    montrer(onglet || 'reglages');
+    corps.addEventListener('click', async e => {
+      const o = e.target.closest('[data-onglet]'); if (o) { montrer(o.dataset.onglet); return; }
+      const b = e.target.closest('button[data-act^=ress]'); if (!b) return;
+      if (b.dataset.act === 'ress-csv') { P.telechargerRessource(P.cfg.ressource); return; }
+      b.disabled = true;
+      try { const nom = await P.creerRessource(P.cfg.ressource, b.dataset.act === 'ress-creer-ex'); P.toast(`Table « ${nom} » créée. Choisissez-la comme données du widget, puis associez les colonnes.`, 'ok'); }
+      catch (err) { P.toast('Création impossible : ' + (err.message || err), 'err'); }
+      b.disabled = false;
+    });
     const travail = JSON.parse(JSON.stringify(etat.mapping || {}));
     const dessiner = () => {
       const zone = corps.querySelector('#cfg-ents');
@@ -963,6 +983,213 @@
   });
 
   /* ------------------------------------------------------------------ */
+  /* Colonnes choisies dans le panneau de droite de Grist (widgets « v2 ») */
+  /* ------------------------------------------------------------------ */
+  const L = P.L = {tableId: null, mapping: null, ids: null, recs: [], refs: {}};
+  function normaliserValeur(v) {
+    if (v == null) return v;
+    if (v instanceof Date) return v.getTime() / 1000;
+    if (Array.isArray(v)) {
+      if (v[0] === 'L' || v[0] === 'E') return v;
+      if (v[0] === 'R' && v.length === 3) return v[2];
+      if (v[0] === 'r' && v.length === 3) return ['L', ...(v[2] || [])];
+      if (v[0] === 'd' || v[0] === 'D') return v[1];
+      return ['L', ...v.map(x => (x && typeof x === 'object') ? (x.rowId ?? x.id ?? x) : x)];
+    }
+    if (typeof v === 'object') {
+      if (Array.isArray(v.rowIds)) return ['L', ...v.rowIds];
+      if (v.rowId != null) return v.rowId;
+      if (typeof v.id === 'number') return v.id;
+    }
+    return v;
+  }
+  L.recevoir = (recs, mapping) => {
+    L.mapping = mapping || null;
+    L.ids = recs.map(r => r.id);
+    L.recs = recs.map(r => { const o = {}; Object.keys(r).forEach(k => { o[k] = k === 'id' ? r[k] : normaliserValeur(r[k]); }); return o; });
+  };
+  L.col = nom => { const id = L.mapping && L.mapping[nom]; const t = etat.schema && etat.schema[L.tableId]; return id && t ? t.cols.find(c => c.colId === id) || null : null; };
+  L.a = nom => !!L.col(nom);
+  L.ecrivable = nom => { const c = L.col(nom); return !!c && !(c.isFormula && c.formula); };
+  L.manquants = () => (P.cfg.colonnes || []).filter(c => !c.optional && !(L.mapping && L.mapping[c.name]));
+  L.charger = async () => {
+    if (etat.backend.nom === 'demo') {
+      const d = P.cfg.demo; L.tableId = d.table; L.mapping = d.mapping;
+      const raw = await etat.backend.fetch(d.table);
+      L.recs = raw.id.map((id, i) => { const r = {id}; Object.keys(raw).forEach(k => { r[k] = raw[k][i]; }); return r; });
+    } else {
+      if (!L.tableId) { try { L.tableId = await grist.selectedTable.getTableId(); } catch (e) { L.tableId = null; } }
+      if (L.tableId && L.ids) {
+        try {
+          const raw = await etat.backend.fetch(L.tableId); const index = new Map(raw.id.map((id, i) => [id, i]));
+          L.recs = L.ids.map(id => { const i = index.get(id); const o = {id}; if (i != null) Object.keys(raw).forEach(k => { o[k] = raw[k][i]; }); return o; });
+        } catch (e) { console.warn('Relecture brute impossible', e); }
+      }
+    }
+    // Libellés des colonnes de référence
+    const refs = (P.cfg.colonnes || []).map(c => L.col(c.name)).filter(c => c && /^Ref(List)?:/.test(c.type));
+    await Promise.all(refs.map(async c => {
+      const cible = c.type.split(':')[1]; const t = etat.schema[cible]; if (!t) return;
+      const vis = c.visibleCol || (t.cols.find(x => x.type === 'Text') || {}).colId;
+      const raw = await etat.backend.fetch(cible);
+      L.refs[c.colId] = new Map(raw.id.map((id, i) => [id, vis && raw[vis] ? String(raw[vis][i] ?? '') : '#' + id]));
+    }));
+  };
+  L.brut = (nom, r) => { const c = L.col(nom); return c ? r[c.colId] : undefined; };
+  L.texte = (nom, r) => {
+    const c = L.col(nom); if (!c) return '';
+    const v = r[c.colId];
+    if (v == null || v === '' || (Array.isArray(v) && v[0] === 'E')) return '';
+    if (/^Ref:/.test(c.type)) return typeof v === 'string' ? v : v ? (L.refs[c.colId] && L.refs[c.colId].get(v)) || '' : '';
+    if (/^RefList:/.test(c.type)) return Array.isArray(v) ? v.slice(1).map(id => (L.refs[c.colId] && L.refs[c.colId].get(id)) || '').filter(Boolean).join(', ') : String(v);
+    if (Array.isArray(v) && v[0] === 'L') return v.slice(1).join(', ');
+    if (/^Date/.test(c.type) && typeof v === 'number') return P.fmtDate(L.date(nom, r));
+    if (typeof v === 'boolean') return v ? 'Oui' : 'Non';
+    return String(v);
+  };
+  L.date = (nom, r) => {
+    const c = L.col(nom); if (!c) return null; const v = r[c.colId];
+    if (typeof v === 'number') { const d = new Date(v * 1000); return /^DateTime/.test(c.type) ? P.jour(d) : new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()); }
+    if (typeof v === 'string') return P.parseDateTexte(v);
+    return null;
+  };
+  L.instant = (nom, r) => { const c = L.col(nom); if (!c) return null; const v = r[c.colId]; return typeof v === 'number' ? new Date(v * 1000) : (typeof v === 'string' ? P.parseDateTexte(v) : null); };
+  L.nombre = (nom, r) => { const c = L.col(nom); if (!c) return null; const v = r[c.colId]; if (typeof v === 'number') return v; const n = parseFloat(String(v ?? '').replace(',', '.')); return isNaN(n) ? null : n; };
+  L.bool = (nom, r) => { const c = L.col(nom); if (!c) return false; const v = r[c.colId]; return v === true || v === 1 || /^(oui|true|vrai|x)$/i.test(String(v || '')); };
+  L.options = nom => { const c = L.col(nom); if (!c) return {}; try { return JSON.parse(c.widgetOptions || '{}'); } catch (e) { return {}; } };
+  L.choix = nom => { const l = L.options(nom).choices || []; return l.length ? l : P.uniq(L.recs.map(r => L.texte(nom, r)).filter(Boolean)).sort(); };
+  L.echelle = nom => { const c = L.col(nom); if (!c) return 1; return L.recs.some(r => typeof r[c.colId] === 'number' && r[c.colId] > 1.5) ? 100 : 1; };
+  L.fraction = (nom, r) => { const v = L.nombre(nom, r); return v == null ? null : Math.max(0, Math.min(1, v / L.echelle(nom))); };
+  L.valeur = (nom, v) => {
+    const c = L.col(nom); if (!c) return undefined; const t = c.type.split(':')[0];
+    if (v instanceof Date) return t === 'DateTime' ? v.getTime() / 1000 : t === 'Date' ? Date.UTC(v.getFullYear(), v.getMonth(), v.getDate()) / 1000 : P.fmtDate(v);
+    if (v === null || v === '') return t === 'Ref' ? 0 : null;
+    return v;
+  };
+  L.actionMaj = (id, vals) => { const o = {}; Object.entries(vals).forEach(([n, v]) => { if (L.ecrivable(n)) { const g = L.valeur(n, v); if (g !== undefined) o[L.col(n).colId] = g; } }); return Object.keys(o).length ? ['UpdateRecord', L.tableId, id, o] : null; };
+  L.actionAjout = vals => { const o = {}; Object.entries(vals).forEach(([n, v]) => { if (L.ecrivable(n)) { const g = L.valeur(n, v); if (g !== undefined) o[L.col(n).colId] = g; } }); return ['AddRecord', L.tableId, null, o]; };
+  L.ecrire = (id, vals, msg) => P.appliquer([L.actionMaj(id, vals)], msg);
+  L.couleur = (nom, valeur) => {
+    if (!valeur) return null; const o = L.options(nom); const opt = (o.choiceOptions || {})[valeur];
+    if (opt && opt.fillColor) return {fond: opt.fillColor, texte: opt.textColor || null};
+    const i = (o.choices || []).indexOf(valeur);
+    const pal = ['#000091', '#6a6af4', '#009081', '#c08c65', '#a558a0', '#417dc4', '#d1335b', '#5e2a2b', '#3a3a3a', '#716043'];
+    return {fond: pal[(i >= 0 ? i : [...valeur].reduce((s, ch) => s + ch.charCodeAt(0), 0)) % pal.length]};
+  };
+  L.titreColonne = nom => ((P.cfg.colonnes || []).find(c => c.name === nom) || {}).title || nom;
+
+  /* ------------------------------------------------------------------ */
+  /* Tables ressources (modèles de tables prêts à l'emploi)              */
+  /* ------------------------------------------------------------------ */
+  const CH = (l, couleurs) => JSON.stringify({choices: l, choiceOptions: Object.fromEntries(l.map((x, i) => [x, {fillColor: couleurs[i], textColor: '#FFFFFF'}]))});
+  P.RESSOURCES = {
+    taches: {
+      nom: 'Taches', libelle: 'Tâches',
+      description: 'Une ligne par tâche : intitulé, projet, responsable, statut, priorité, dates, avancement, charge et suivi. Les dates de création et de mise à jour se remplissent seules.',
+      colonnes: [
+        {id: 'Intitule', label: 'Intitulé', type: 'Text'},
+        {id: 'Projet', label: 'Projet', type: 'Text'},
+        {id: 'Responsable', label: 'Responsable', type: 'Text'},
+        {id: 'Statut', label: 'Statut', type: 'Choice', widgetOptions: CH(['À faire', 'En cours', 'En attente', 'Terminé', 'Abandonné'], ['#6A6AF4', '#000091', '#C3592D', '#18753C', '#929292'])},
+        {id: 'Priorite', label: 'Priorité', type: 'Choice', widgetOptions: CH(['P1 – Critique', 'P2 – Haute', 'P3 – Normale', 'P4 – Basse'], ['#CE0500', '#C3592D', '#0063CB', '#929292'])},
+        {id: 'Date_debut', label: 'Date de début', type: 'Date', widgetOptions: JSON.stringify({dateFormat: 'DD/MM/YYYY'})},
+        {id: 'Echeance', label: 'Échéance', type: 'Date', widgetOptions: JSON.stringify({dateFormat: 'DD/MM/YYYY'})},
+        {id: 'Date_realisation', label: 'Date de réalisation', type: 'Date', widgetOptions: JSON.stringify({dateFormat: 'DD/MM/YYYY'})},
+        {id: 'Avancement', label: 'Avancement', type: 'Numeric', widgetOptions: JSON.stringify({numMode: 'percent'})},
+        {id: 'Charge', label: 'Charge (jours)', type: 'Numeric'},
+        {id: 'Jalon', label: 'Jalon', type: 'Bool'},
+        {id: 'Suites', label: 'Suites données', type: 'Text', widgetOptions: JSON.stringify({wrap: true})},
+        {id: 'Cree_le', label: 'Créé le', type: 'DateTime:Europe/Paris', declencheur: 'NOW()', surCreation: true},
+        {id: 'Mis_a_jour_le', label: 'Mis à jour le', type: 'DateTime:Europe/Paris', declencheur: 'NOW()'},
+        {id: 'Mis_a_jour_par', label: 'Mis à jour par', type: 'Text', declencheur: 'user.Name'},
+      ],
+      exemples: [
+        {Intitule: 'Rédiger le cahier des charges', Projet: 'Projet A', Responsable: 'Agent 1', Statut: 'Terminé', Priorite: 'P2 – Haute', Date_debut: -30, Echeance: -15, Date_realisation: -16, Avancement: 1, Charge: 3, Jalon: false, Suites: 'Validé en comité'},
+        {Intitule: 'Consulter les fournisseurs', Projet: 'Projet A', Responsable: 'Agent 2', Statut: 'En cours', Priorite: 'P2 – Haute', Date_debut: -10, Echeance: 5, Avancement: 0.4, Charge: 4, Jalon: false, Suites: ''},
+        {Intitule: 'Choix du fournisseur', Projet: 'Projet A', Responsable: 'Agent 1', Statut: 'À faire', Priorite: 'P1 – Critique', Date_debut: 12, Echeance: 12, Avancement: 0, Charge: 0.5, Jalon: true, Suites: ''},
+        {Intitule: 'Préparer la réunion de lancement', Projet: 'Projet B', Responsable: 'Agent 3', Statut: 'En attente', Priorite: 'P3 – Normale', Date_debut: -8, Echeance: -2, Avancement: 0.5, Charge: 1, Jalon: false, Suites: 'En attente des disponibilités'},
+        {Intitule: 'Former les utilisateurs', Projet: 'Projet B', Responsable: 'Agent 2', Statut: 'À faire', Priorite: 'P3 – Normale', Date_debut: 20, Echeance: 40, Avancement: 0, Charge: 5, Jalon: false, Suites: ''},
+      ],
+    },
+  };
+  const jourDecale = n => { const d = P.addDays(P.today(), n); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 1000; };
+  function valeurExemple(col, v) { if (v == null) return null; if (col.type === 'Date') return jourDecale(v); return v; }
+
+  P.creerRessource = async (cle, avecExemples) => {
+    const R = P.RESSOURCES[cle]; let nom = R.nom; let i = 2;
+    while (etat.schema[nom]) nom = R.nom + '_' + i++;
+    const def = c => {
+      const o = {id: c.id, type: c.type, isFormula: false, label: c.label};
+      if (c.widgetOptions) o.widgetOptions = c.widgetOptions;
+      if (c.declencheur) { o.formula = c.declencheur; o.recalcWhen = c.surCreation ? 0 : 2; if (c.surCreation) o.recalcDeps = ['L']; }
+      return o;
+    };
+    try { await etat.backend.apply([['AddTable', nom, R.colonnes.map(def)]]); }
+    catch (e) {
+      console.warn('Création avec options refusée, création simple', e);
+      await etat.backend.apply([['AddTable', nom, R.colonnes.map(c => ({id: c.id, type: c.type, isFormula: false}))]]);
+      try { await etat.backend.apply(R.colonnes.map(c => ['ModifyColumn', nom, c.id, Object.assign({label: c.label}, c.widgetOptions ? {widgetOptions: c.widgetOptions} : {})])); } catch (e2) { /* ignoré */ }
+    }
+    if (avecExemples && R.exemples) {
+      const cols = R.colonnes.filter(c => !c.declencheur);
+      const vals = {}; cols.forEach(c => { vals[c.id] = R.exemples.map(x => valeurExemple(c, x[c.id])); });
+      await etat.backend.apply([['BulkAddRecord', nom, R.exemples.map(() => null), vals]]);
+    }
+    etat.schema = await etat.backend.schema();
+    return nom;
+  };
+  P.telechargerRessource = cle => {
+    const R = P.RESSOURCES[cle]; const cols = R.colonnes.filter(c => !c.declencheur);
+    const cell = (c, v) => { if (v == null) return ''; if (c.type === 'Date') return P.fmtDate(P.addDays(P.today(), v)); if (c.type === 'Bool') return v ? 'oui' : 'non'; if (c.type === 'Numeric') return String(v).replace('.', ','); return String(v); };
+    const lignes = [cols.map(c => c.label), ...(R.exemples || []).map(x => cols.map(c => cell(c, x[c.id])))];
+    const csv = lignes.map(l => l.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\r\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + csv], {type: 'text/csv;charset=utf-8'}));
+    a.download = `modele-${R.nom.toLowerCase()}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+  function htmlRessource() {
+    const R = P.RESSOURCES[P.cfg.ressource]; if (!R) return '<p class="muted">Ce widget n’a pas de table ressource.</p>';
+    const util = (P.cfg.colonnes || []);
+    return `<p style="margin:0">Pour utiliser ce widget dans un autre document ou un autre type de projet, partez d’une <strong>table ressource</strong> prête à l’emploi : <strong>${esc(R.libelle)}</strong>.</p>
+      <p class="muted small" style="margin:0">${esc(R.description)}</p>
+      <div style="overflow-x:auto"><table class="tab"><thead><tr><th>Colonne</th><th>Type</th><th>Sert pour</th></tr></thead><tbody>
+      ${R.colonnes.map(c => { const u = util.filter(x => (x.ressource || []).includes(c.id)).map(x => x.title); return `<tr><td>${esc(c.label)}</td><td class="small muted">${esc({Text: 'Texte', Choice: 'Choix', Date: 'Date', Numeric: 'Nombre', Bool: 'Case à cocher'}[c.type.split(':')[0]] || 'Date et heure')}${c.declencheur ? ' · automatique' : ''}</td><td class="small">${esc(u.join(', ') || '–')}</td></tr>`; }).join('')}</tbody></table></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn pri sm" data-act="ress-creer">Créer la table dans ce document</button>
+        <button class="btn sec sm" data-act="ress-creer-ex">Créer avec des exemples</button>
+        <button class="btn ter sm" data-act="ress-csv">Télécharger le modèle (CSV)</button></div>
+      <div class="alerte"><strong>Ensuite :</strong> dans le panneau de droite de Grist, onglet <strong>Widget</strong>, choisissez la nouvelle table comme <strong>données du widget</strong>, puis associez chaque colonne du widget à la colonne du même nom.</div>`;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Aide intégrée : mode d'emploi du widget                              */
+  /* ------------------------------------------------------------------ */
+  let aideIntegree = '';
+  async function contenuAide() {
+    // Version modifiée par l'équipe (table des modes d'emploi), sinon version d'origine
+    try {
+      const d = P.detecter(etat.schema, ['tuto']);
+      if (d.tuto && d.tuto.champs.cle && d.tuto.champs.contenu) {
+        const raw = await etat.backend.fetch(d.tuto.table);
+        const i = (raw[d.tuto.champs.cle] || []).findIndex(v => v === P.cfg.id);
+        if (i >= 0 && raw[d.tuto.champs.contenu][i]) return {html: raw[d.tuto.champs.contenu][i], source: d.tuto.table};
+      }
+    } catch (e) { /* ignoré */ }
+    return {html: aideIntegree, source: null};
+  }
+  function nettoyerAide(el) {
+    el.querySelectorAll('script,style,iframe,object,embed').forEach(x => x.parentNode.removeChild(x));
+    el.querySelectorAll('*').forEach(x => Array.from(x.attributes).forEach(at => { if (/^on/i.test(at.name) || (at.name === 'href' && /^\s*javascript:/i.test(at.value))) x.removeAttribute(at.name); }));
+  }
+  P.ouvrirAide = async () => {
+    const a = await contenuAide();
+    const div = document.createElement('div'); div.className = 'pl-aide';
+    div.innerHTML = (a.html || '<p class="muted">Aucun mode d’emploi pour ce widget.</p>') +
+      `<p class="small muted" style="margin:0">${a.source ? `Texte issu de la table ${esc(a.source)}, modifiable avec le widget « Mode d’emploi ».` : 'Mode d’emploi d’origine. Pour l’adapter à votre équipe, utilisez le widget « Mode d’emploi ».'}</p>`;
+    nettoyerAide(div);
+    P.modale({titre: 'Mode d’emploi · ' + P.cfg.titre, contenu: div, large: true});
+  };
+
+  /* ------------------------------------------------------------------ */
   /* Démarrage                                                           */
   /* ------------------------------------------------------------------ */
   let curseurCb = null;
@@ -972,6 +1199,7 @@
     if (!etat.mapping) return;
     try {
       if (force) etat.signature = '';
+      if (P.cfg.colonnes) await L.charger();
       const change = await chargerDonnees();
       if (change || force) dessinerApp();
     } catch (e) { console.error(e); afficherErreur(e); }
@@ -985,6 +1213,17 @@
     P.$('.pl-marque').classList.toggle('hidden', !P.reglage('marque', true));
     const manq = P.manquants();
     const corps = P.$('#pl-corps');
+    const manqL = P.cfg.colonnes && etat.backend.nom !== 'demo' ? L.manquants() : [];
+    if (manqL.length) {
+      corps.innerHTML = `<div class="carte" style="max-width:760px;margin:24px auto"><h2>Choisissez les colonnes du widget</h2>
+        <ol class="pl-etapes"><li>Ouvrez le <strong>panneau de droite</strong> de Grist, onglet <strong>Widget</strong>.</li>
+        <li>Associez au minimum : ${manqL.map(c => `<strong>${esc(c.title)}</strong>`).join(', ')}.</li>
+        <li>Complétez les colonnes facultatives pour profiter de toutes les fonctions.</li></ol>
+        <p class="muted small">Pas encore de table adaptée ? Ouvrez les paramètres (⚙), onglet <strong>Table ressource</strong>, pour en créer une en un clic.</p>
+        <button class="btn sec sm" id="pl-cfg-go">Ouvrir les paramètres</button></div>`;
+      P.$('#pl-cfg-go').addEventListener('click', () => P.ouvrirConfig('ressource'));
+      return;
+    }
     if (manq.length) {
       corps.innerHTML = `<div class="alerte warn" style="max-width:720px"><strong>Configuration à compléter</strong>
         <ul style="margin:6px 0">${manq.map(m => `<li>${esc(m)}</li>`).join('')}</ul>
@@ -1003,11 +1242,13 @@
   P.demarrer = async cfg => {
     P.cfg = cfg;
     document.title = cfg.titre;
+    const modele = document.getElementById('pl-aide'); aideIntegree = modele ? modele.textContent : '';
     document.body.innerHTML = `<div class="pl-app">
       <header class="pl-entete">
         <div class="pl-marque"><p class="fr-logo fr-logo--sm" style="margin:0">République<br>française</p></div>
         <div class="pl-titre"><h1>${esc(cfg.titre)}</h1><p id="pl-sous-titre">${esc(cfg.sousTitre || '')}</p></div>
         <div class="pl-outils"><div id="pl-outils" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end"></div>
+          ${aideIntegree || cfg.aide !== false ? `<button class="btn ter ic" id="pl-aide-btn" data-bulle="Mode d’emploi"><span aria-hidden="true" style="font-weight:700;font-size:1.05rem;width:1rem;text-align:center">?</span><span class="sr">Mode d’emploi</span></button>` : ''}
           <button class="btn ter ic" id="pl-actualiser" data-bulle="Actualiser les données">${P.ic('actualiser')}<span class="sr">Actualiser</span></button>
           <button class="btn ter ic" id="pl-config" data-bulle="Paramètres : tables, colonnes et réglages">${P.ic('reglages')}<span class="sr">Paramètres</span></button>
         </div>
@@ -1017,9 +1258,10 @@
     </div>`;
     P.$('#pl-actualiser').addEventListener('click', () => P.rafraichir(true));
     P.$('#pl-config').addEventListener('click', () => P.ouvrirConfig());
+    if (P.$('#pl-aide-btn')) P.$('#pl-aide-btn').addEventListener('click', () => P.ouvrirAide());
     try {
       etat.backend = enGrist() ? GristBackend : DemoBackend;
-      const surChange = P.debounce(type => { if (type === 'options') { lireOptions(); P.rafraichir(true); } else P.rafraichir(false); }, 400);
+      const surChange = P.debounce(type => { if (type === 'options') { lireOptions(); P.rafraichir(true); } else P.rafraichir(type === 'force'); }, 300);
       await etat.backend.init(surChange, (tableId, rowId) => { if (curseurCb) curseurCb(tableId, rowId); });
       if (etat.backend.nom === 'demo') {
         const d = P.$('#pl-demo'); d.classList.remove('hidden');

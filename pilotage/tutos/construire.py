@@ -79,6 +79,19 @@ def integrer_modeles():
     print("mode-emploi.html :", len(modeles), "modèle(s) intégré(s)")
 
 
+def integrer_aides():
+    """Place le mode d'emploi de chaque widget dans le widget lui-même (bouton « ? »)."""
+    aides = {cle: re.sub(r"<figure>.*?</figure>\s*", "", contenu, flags=re.S).strip() for cle, _, contenu in lire_sources()}
+    for f in sorted(ICI.parent.glob("*.html")):
+        html = f.read_text(encoding="utf-8")
+        if "<!--AIDE-->" not in html:
+            continue
+        aide = aides.get(f.stem, "")
+        html = re.sub(r"<!--AIDE-->.*?<!--FIN_AIDE-->", lambda m: "<!--AIDE-->" + aide + "<!--FIN_AIDE-->", html, flags=re.S)
+        f.write_text(html, encoding="utf-8")
+        print(f.name, ": mode d'emploi intégré" if aide else ": pas de mode d'emploi")
+
+
 def construire_autonomes():
     """Un fichier HTML par widget, sans dépendance locale."""
     racine = ICI.parent
@@ -112,4 +125,5 @@ def construire():
 if __name__ == "__main__":
     construire()
     integrer_modeles()
+    integrer_aides()
     construire_autonomes()
