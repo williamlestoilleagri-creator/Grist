@@ -1419,14 +1419,33 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
       {Code: 'PRJ-02', Intitule: 'Projet B', Domaine: 'Domaine 2', Phase: 'À cadrer', Priorite: 'P3 – Normale', Chef_de_projet: 'Agent 3', Date_debut: 10, Deadline: 120, Charge_estimee: 12, Objectifs: 'Former les équipes au nouvel outil', Criteres: '90 % des agents formés', Parties_prenantes: 'Tous les services'},
     ],
   };
+  P.RESSOURCES.sous_taches = {
+    nom: 'Sous_taches', libelle: 'Sous-tâches',
+    description: 'Une ligne par étape à cocher : la tâche concernée, le libellé de l’étape, la case « fait », l’ordre d’affichage, et si besoin un responsable et une échéance. La colonne Tâche est une référence vers votre table des tâches si elle est indiquée dans les réglages, du texte sinon.',
+    colonnes: [
+      {id: 'Tache', label: 'Tâche', type: 'Text', ref: 'tache'},
+      {id: 'Libelle', label: 'Libellé', type: 'Text'},
+      {id: 'Fait', label: 'Fait', type: 'Bool'},
+      {id: 'Ordre', label: 'Ordre', type: 'Numeric'},
+      {id: 'Responsable', label: 'Responsable', type: 'Text'},
+      {id: 'Echeance', label: 'Échéance', type: 'Date', widgetOptions: JSON.stringify({dateFormat: 'DD/MM/YYYY'})},
+    ],
+    exemples: [
+      {Tache: 'Tâche exemple', Libelle: 'Première étape', Fait: true, Ordre: 1},
+      {Tache: 'Tâche exemple', Libelle: 'Deuxième étape', Fait: false, Ordre: 2},
+      {Tache: 'Tâche exemple', Libelle: 'Troisième étape', Fait: false, Ordre: 3},
+    ],
+  };
   const jourDecale = n => { const d = P.addDays(P.today(), n); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 1000; };
   function valeurExemple(col, v) { if (v == null) return null; if (col.type === 'Date') return jourDecale(v); return v; }
 
   P.creerRessource = async (cle, avecExemples) => {
     const R = P.RESSOURCES[cle]; let nom = R.nom; let i = 2;
     while (etat.schema[nom]) nom = R.nom + '_' + i++;
+    const typeDe = c => c.ref && P.table(c.ref) ? 'Ref:' + P.table(c.ref) : c.type;
+    R.colonnes.forEach(c => { c.typeReel = typeDe(c); });
     const def = c => {
-      const o = {id: c.id, type: c.type, isFormula: false, label: c.label};
+      const o = {id: c.id, type: c.typeReel, isFormula: false, label: c.label};
       if (c.widgetOptions) o.widgetOptions = c.widgetOptions;
       if (c.declencheur) { o.formula = c.declencheur; o.recalcWhen = c.surCreation ? 0 : 2; if (c.surCreation) o.recalcDeps = ['L']; }
       return o;
@@ -1434,15 +1453,27 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
     try { await etat.backend.apply([['AddTable', nom, R.colonnes.map(def)]]); }
     catch (e) {
       console.warn('Création avec options refusée, création simple', e);
-      await etat.backend.apply([['AddTable', nom, R.colonnes.map(c => ({id: c.id, type: c.type, isFormula: false}))]]);
+      await etat.backend.apply([['AddTable', nom, R.colonnes.map(c => ({id: c.id, type: c.typeReel, isFormula: false}))]]);
       try { await etat.backend.apply(R.colonnes.map(c => ['ModifyColumn', nom, c.id, Object.assign({label: c.label}, c.widgetOptions ? {widgetOptions: c.widgetOptions} : {})])); } catch (e2) { /* ignoré */ }
     }
     if (avecExemples && R.exemples) {
-      const cols = R.colonnes.filter(c => !c.declencheur);
+      const cols = R.colonnes.filter(c => !c.declencheur && !/^Ref:/.test(c.typeReel));
       const vals = {}; cols.forEach(c => { vals[c.id] = R.exemples.map(x => valeurExemple(c, x[c.id])); });
       await etat.backend.apply([['BulkAddRecord', nom, R.exemples.map(() => null), vals]]);
     }
     etat.schema = await etat.backend.schema();
+    // Colonne affichée des références (« Montrer la colonne ») : meilleur effort
+    if (etat.backend.nom === 'grist') {
+      try {
+        const t = etat.schema[nom]; const acts = [];
+        R.colonnes.filter(c => /^Ref:/.test(c.typeReel)).forEach(c => {
+          const cibleT = c.typeReel.split(':')[1]; const vis = (etat.mapping[c.ref] || {champs: {}}).champs.titre;
+          const colRef = (t.cols.find(x => x.colId === c.id) || {}).ref, visRef = vis && (etat.schema[cibleT].cols.find(x => x.colId === vis) || {}).ref;
+          if (colRef && visRef) acts.push(['SetDisplayFormula', nom, null, colRef, `$${c.id}.${vis}`], ['UpdateRecord', '_grist_Tables_column', colRef, {visibleCol: visRef}]);
+        });
+        if (acts.length) { await etat.backend.apply(acts); etat.schema = await etat.backend.schema(); }
+      } catch (e) { console.warn('Colonne affichée non réglée', e); }
+    }
     return nom;
   };
   P.telechargerRessource = cle => {
