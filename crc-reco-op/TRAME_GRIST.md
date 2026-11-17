@@ -60,7 +60,7 @@ Contrôle (réf.), rôle (Personne rencontrée / Contrôleur), fonction ou servi
 
 | Colonne | Contenu |
 |---|---|
-| Code | ex. `7-190` (onglet + ordre) |
+| Code | ex. `7-L16` (onglet + ligne Excel d'origine, stable) |
 | Onglet, Titre_onglet, Rang_onglet | rattachement et tri (1 → 13) |
 | Portee | **Contrôle** (onglets 1 à 12), **Convention** (9.x à 12.x), **Producteur** (13) |
 | Domaine_convention | Appui technique / Tri-stockage-conditionnement / Agréage / Mise en marché |
@@ -70,8 +70,10 @@ Contrôle (réf.), rôle (Personne rencontrée / Contrôleur), fonction ou servi
 | Secteurs_concernes | liste de choix ; vide = tous les secteurs |
 | Bloc_VPC, Signe_VPC | pour le calcul automatique de la VPC (onglet 8) |
 | Actif | décocher pour retirer un point sans le supprimer |
+| Filieres_verifiees | case à cocher une fois la colonne Secteurs_concernes qualifiée |
+| Feuille, Ligne | position du critère dans l'Excel d'origine (utilisée par le futur widget d'export) |
 
-Répartition : 226 questions, 89 sous-questions, 21 consignes (« Joindre… », « Point de vigilance… »).
+Répartition : 50 titres de section, 226 questions, 89 sous-questions, 21 consignes (« Joindre… », « Point de vigilance… »). Les règles par feuille entière (4.1, 4.2, 5/5.1, 8, feuilles à dupliquer) sont dans `onglets.csv`.
 
 ### Reponses — cœur de la saisie
 - Liens : Contrôle, Point (réf. Referentiel), Convention *ou* Producteur (si le point en dépend).
@@ -113,7 +115,7 @@ Répartition : 226 questions, 89 sous-questions, 21 consignes (« Joindre… »,
 Grist ne crée pas de lignes tout seul. On utilise donc le widget officiel **« Action Button »** (Ajouter une vue → Widget personnalisé → *Action Button*, accès complet au document, colonne = `Bouton_grille`).
 
 La formule `Bouton_grille` de `Controles` sélectionne les points :
-- de portée « Contrôle », actifs, hors consignes ;
+- de portée « Contrôle », actifs, hors consignes et titres de section ;
 - applicables au secteur du contrôle ;
 - 4.2 seulement si `Multi_secteurs` est coché ; 5.1 à la place de 5 si l'OP est une **UCA** ;
 - qui ne sont pas déjà présents (le bouton peut être relancé sans créer de doublons).

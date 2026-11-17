@@ -43,7 +43,7 @@ def col(id_, type_="Text", label=None, formula=None, choices=None, **opts):
 F_BOUTON_GRILLE = '''# Génère les lignes de la grille pour ce contrôle (bouton d'action)
 pts = []
 for p in Referentiel.lookupRecords(Portee="Contrôle", sort_by="Ordre_global"):
-  if p.Niveau == "Consigne" or not p.Actif:
+  if p.Niveau in ("Consigne", "Section") or not p.Actif:
     continue
   if p.Secteurs_concernes and $Secteur not in p.Secteurs_concernes:
     continue
@@ -65,7 +65,7 @@ return {
 }'''
 
 F_BOUTON_CONVENTION = '''pts = [p.id for p in Referentiel.lookupRecords(Portee="Convention", Domaine_convention=$Domaine, sort_by="Ordre")
-       if p.Niveau != "Consigne" and p.Actif]
+       if p.Niveau not in ("Consigne", "Section") and p.Actif]
 deja = set(r.Point.id for r in Reponses.lookupRecords(Convention=$id))
 ids = [i for i in pts if i not in deja]
 n = len(ids)
@@ -75,7 +75,7 @@ return {
                {"Controle": [$Controle.id] * n, "Convention": [$id] * n, "Point": ids}]] if n else [],
 }'''
 
-F_BOUTON_PRODUCTEUR = '''pts = [p.id for p in Referentiel.lookupRecords(Portee="Producteur", sort_by="Ordre") if p.Niveau != "Consigne" and p.Actif]
+F_BOUTON_PRODUCTEUR = '''pts = [p.id for p in Referentiel.lookupRecords(Portee="Producteur", sort_by="Ordre") if p.Niveau not in ("Consigne", "Section") and p.Actif]
 deja = set(r.Point.id for r in Reponses.lookupRecords(Producteur=$id))
 ids = [i for i in pts if i not in deja]
 n = len(ids)
@@ -184,7 +184,7 @@ TABLES = [
         col("Ordre_global", "Int", formula="$Rang_onglet * 10000 + $Ordre"),
         col("Num", label="N°"),
         col("Section"),
-        col("Niveau", "Choice", choices=["Question", "Sous-question", "Consigne"]),
+        col("Niveau", "Choice", choices=["Section", "Question", "Sous-question", "Consigne"]),
         col("Libelle", label="Libellé"),
         col("Type_reponse", "Choice", choices=["Oui/Non", "Conforme/Non conforme", "Texte", "Nombre", "Pourcentage",
                                                  "Valeur n-1 / n", "Montant + C/NC", "Montant (calculé)", "Aucune"], label="Type de réponse"),
@@ -192,6 +192,9 @@ TABLES = [
         col("Bloc_VPC", "Choice", choices=["Ventes", "Achats"]),
         col("Signe_VPC", "Int"),
         col("Actif", "Bool"),
+        col("Filieres_verifiees", "Bool", label="Filières vérifiées"),
+        col("Feuille", label="Feuille Excel d'origine"),
+        col("Ligne", "Int", label="Ligne Excel d'origine"),
     ]},
     {"id": "Conventions", "columns": [
         col("Controle", "Ref:Controles", label="Contrôle"),
@@ -297,7 +300,7 @@ def charger_referentiel():
                 "Libelle": r["Libelle"], "Type_reponse": r["Type_reponse"],
                 "Secteurs_concernes": ["L"] + secs if secs else None,
                 "Bloc_VPC": r["Bloc_VPC"], "Signe_VPC": int(r["Signe_VPC"]) if r["Signe_VPC"] else None,
-                "Actif": True,
+                "Actif": True, "Feuille": r["Feuille"], "Ligne": int(r["Ligne"]),
             }})
     return recs
 

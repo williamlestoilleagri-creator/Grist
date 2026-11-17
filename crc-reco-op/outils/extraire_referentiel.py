@@ -64,13 +64,15 @@ for ws in wb.worksheets:
         t = clean(v)
         if t.startswith('→') or t.lower().startswith('joindre') : 
                         # pièce à joindre -> stored as consigne on the onglet
-            rows.append(dict(onglet=code,titre_onglet=titre,portee=portee,domaine=domaine,ordre=None,num='',section=section,niveau='Consigne',libelle=t,type='Aucune',secteurs=''))
+            rows.append(dict(feuille=ws.title,ligne=r,onglet=code,titre_onglet=titre,portee=portee,domaine=domaine,ordre=None,num='',section=section,niveau='Consigne',libelle=t,type='Aucune',secteurs=''))
             continue
         is_section = bool(re.match(r'^(I|II|III|IV|V|VI|VII)\s*[-–.]',t)) or (t.lower().startswith('secteur ') and len(t)<45) or t.lower().startswith(('op avec','op sans','a- ','b- ','a) ','b) ','c) ','cas des op','achats extérieurs','respect de l’apport','respect de l\'apport'))
         if is_section and not (isinstance(num,(int,float))):
             section=t[:120]; parent_num=''
+            if 'observations complémentaires' not in t.lower():
+                rows.append(dict(feuille=ws.title,ligne=r,onglet=code,titre_onglet=titre,portee=portee,domaine=domaine,ordre=None,num='',section=section,niveau='Section',libelle=t,type='Aucune',secteurs=''))
             if 'observations complémentaires' in t.lower():
-                rows.append(dict(onglet=code,titre_onglet=titre,portee=portee,domaine=domaine,ordre=None,num='',section=section,niveau='Question',libelle=t,type='Texte',secteurs=''))
+                rows.append(dict(feuille=ws.title,ligne=r,onglet=code,titre_onglet=titre,portee=portee,domaine=domaine,ordre=None,num='',section=section,niveau='Question',libelle=t,type='Texte',secteurs=''))
             continue
         n = '' if num is None or not str(num).strip() else str(num).strip()
         if isinstance(num,float) and num.is_integer(): n=str(int(num))
@@ -91,7 +93,7 @@ for ws in wb.worksheets:
         if code=='6':
             sl=section.lower()
             secs=['Veau','Horticulture','Lapin'] if 'autre' in sl else (['F&L'] if 'f&l' in sl else ['Lait'])
-        rows.append(dict(onglet=code,titre_onglet=titre,portee=portee,domaine=domaine,ordre=None,num=n if n else parent_num+'.'+'' ,section=section,niveau=niveau,libelle=t,type=typ,secteurs=', '.join(secs) if secs and len(secs)<5 else ''))
+        rows.append(dict(feuille=ws.title,ligne=r,onglet=code,titre_onglet=titre,portee=portee,domaine=domaine,ordre=None,num=n if n else parent_num+'.'+'' ,section=section,niveau=niveau,libelle=t,type=typ,secteurs=', '.join(secs) if secs and len(secs)<5 else ''))
 # fix numbering & order
 def okey(c):
     p=[int(x) if x.isdigit() else 0 for x in c.replace('x','0').split('.')]
@@ -107,12 +109,13 @@ for d in rows:
 # Codes
 seen={}
 for d in out_rows:
-    base=f"{d['onglet']}-{d['ordre']:03d}"
+    base=f"{d['onglet']}-L{d['ligne']:02d}"
     d['code']=base
 RANG={c:i+1 for i,c in enumerate(['1','2','3','4','4.2','5','5.1','6','7','8','9','9.x','10','10.x','11','11.x','12','12.x','13'])}
 for d in out_rows:
     l=d['libelle'].lower(); d['bloc']=''; d['signe']=''
-    if d['niveau']=='Consigne': d['type']='Aucune'
+    if d['niveau'] in ('Consigne','Section'): d['type']='Aucune'
+    if d['onglet']=='7' and l.startswith(('secteur fruits et légumes','secteur des f&l')): d['secteurs']='F&L'
     if l.startswith('si la prestation n') : d['type']='Texte'
     if l.startswith(('etablir la vpc','permettant d','contrôle du respect des dispositions statutaires')): d['type']='Aucune'; d['niveau']='Consigne'
     if d['onglet']=='12' and l.startswith(('catégorie de reconnaissance','seuil de vpc')): d['type']='Texte'
@@ -125,7 +128,7 @@ for d in out_rows:
             d['signe']='-1' if l.startswith(('déduction','déduire')) else '1'
 with open(out,'w',newline='',encoding='utf-8') as f:
     w=csv.writer(f)
-    w.writerow(['Code','Onglet','Titre_onglet','Portee','Domaine_convention','Ordre','Num','Section','Niveau','Libelle','Type_reponse','Secteurs_concernes','Rang_onglet','Bloc_VPC','Signe_VPC'])
+    w.writerow(['Code','Onglet','Titre_onglet','Portee','Domaine_convention','Ordre','Num','Section','Niveau','Libelle','Type_reponse','Secteurs_concernes','Rang_onglet','Bloc_VPC','Signe_VPC','Feuille','Ligne'])
     for d in out_rows:
-        w.writerow([d['code'],d['onglet'],d['titre_onglet'],d['portee'],d['domaine'],d['ordre'],d['num'],d['section'],d['niveau'],d['libelle'],d['type'],d['secteurs'],RANG[d['onglet']],d['bloc'],d['signe']])
+        w.writerow([d['code'],d['onglet'],d['titre_onglet'],d['portee'],d['domaine'],d['ordre'],d['num'],d['section'],d['niveau'],d['libelle'],d['type'],d['secteurs'],RANG[d['onglet']],d['bloc'],d['signe'],d['feuille'],d['ligne']])
 print(len(out_rows))
