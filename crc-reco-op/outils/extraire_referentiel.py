@@ -93,7 +93,7 @@ for ws in wb.worksheets:
         if code=='6':
             sl=section.lower()
             secs=['Veau','Horticulture','Lapin'] if 'autre' in sl else (['F&L'] if 'f&l' in sl else ['Lait'])
-        rows.append(dict(feuille=ws.title,ligne=r,onglet=code,titre_onglet=titre,portee=portee,domaine=domaine,ordre=None,num=n if n else parent_num+'.'+'' ,section=section,niveau=niveau,libelle=t,type=typ,secteurs=', '.join(secs) if secs and len(secs)<5 else ''))
+        rows.append(dict(feuille=ws.title,ligne=r,onglet=code,titre_onglet=titre,portee=portee,domaine=domaine,ordre=None,num=n if n else parent_num+'.'+'' ,section=section,niveau=niveau,libelle=t,type=typ,secteurs=', '.join(s for s in ['F&L','Veau','Horticulture','Lait','Lapin'] if s in secs)))
 # fix numbering & order
 def okey(c):
     p=[int(x) if x.isdigit() else 0 for x in c.replace('x','0').split('.')]

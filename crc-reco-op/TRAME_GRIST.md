@@ -67,7 +67,7 @@ Contrôle (réf.), rôle (Personne rencontrée / Contrôleur), fonction ou servi
 | Num, Section, Niveau | numéro Excel, section (I-, II-…), Question / Sous-question / Consigne |
 | Libelle | texte intégral du critère |
 | Type_reponse | Oui/Non, Conforme/Non conforme, Texte, Nombre, Pourcentage, Valeur n-1 / n, Montant + C/NC, Montant (calculé), Aucune |
-| Secteurs_concernes | liste de choix ; vide = tous les secteurs |
+| Secteurs_concernes | liste de choix multiple ; **vide = filières pas encore identifiées** (le critère n'apparaît dans aucune grille) ; critère commun = cocher les 5 filières |
 | Bloc_VPC, Signe_VPC | pour le calcul automatique de la VPC (onglet 8) |
 | Actif | décocher pour retirer un point sans le supprimer |
 | Filieres_verifiees | case à cocher une fois la colonne Secteurs_concernes qualifiée |
