@@ -1602,78 +1602,143 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
 })();
 
 </script>
+<script type="text/html" id="pl-aide"><!--AIDE--><p class="chapo">La saisie express crée une tâche <strong>en une seule ligne de texte</strong>, comme on l’écrirait sur un post-it : le widget reconnaît le responsable, le projet, la date, la priorité ou la charge, et remplit les bonnes colonnes.</p>
+
+<section>
+  <h2>À quoi sert-elle ?</h2>
+  <ul>
+    <li><strong>Noter une action en quelques secondes</strong>, en réunion ou au téléphone, sans ouvrir de formulaire.</li>
+    <li><strong>Saisir plusieurs tâches d’un coup</strong> : une tâche par ligne, ou un compte rendu collé.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Mise en place</h2>
+  <ol class="etapes">
+    <li><span>Ajoutez un <strong>widget personnalisé</strong> avec votre <strong>table de tâches</strong> comme données.</span></li>
+    <li><span>Dans le <strong>panneau de droite</strong>, associez l’<strong>Intitulé</strong>, puis les colonnes que vous voulez remplir : responsable, projet, échéance, date de début, priorité, statut, charge, thème, appuis.</span></li>
+  </ol>
+</section>
+
+<div class="encart"><strong>📦 Pas encore de table de tâches ?</strong><p>Paramètres (⚙), onglet <strong>Table ressource</strong> : créez en un clic une table « Tâches » prête à l’emploi, ou téléchargez son modèle CSV.</p></div>
+
+<section>
+  <h2>Le mémo de saisie</h2>
+  <div class="blocs">
+    <div><strong>@nom</strong>Le responsable. Tapez les premières lettres puis <strong>Tab</strong> pour compléter.</div>
+    <div><strong>#projet</strong>Le projet (ou autre regroupement).</div>
+    <div><strong>+nom</strong>Une personne en appui.</div>
+    <div><strong>vendredi · 25/11 · j+5</strong>L’échéance : demain, fin du mois, dans 2 semaines… <em>du 20/11 au 28/11</em> donne aussi le début.</div>
+    <div><strong>!1 à !4</strong>La priorité (<strong>!!</strong> = la plus haute).</div>
+    <div><strong>~2 · ~3h</strong>La charge en jours (ou en heures).</div>
+    <div><strong>*thème · =statut</strong>Le thème et le statut, parmi vos listes.</div>
+  </div>
+</section>
+
+<section>
+  <h2>Comment s’en servir</h2>
+  <ol class="etapes">
+    <li><span>Tapez la tâche, par exemple : <em>Relancer le fournisseur @Marie #Projet_A vendredi !2 ~0,5</em>.</span></li>
+    <li><span>Vérifiez l’<strong>aperçu</strong> sous la zone de saisie : chaque information reconnue apparaît dans une étiquette ; une étiquette orange signale ce qui n’a pas été compris.</span></li>
+    <li><span>Appuyez sur <strong>Entrée</strong>. Pour plusieurs tâches, passez à la ligne avec <strong>Maj + Entrée</strong>.</span></li>
+  </ol>
+</section>
+
+<div class="encart astuce"><strong>💡 Astuce</strong><p>Réglez un <strong>projet</strong> et un <strong>responsable par défaut</strong> en bas de page : toutes les tâches saisies s’y rattachent, sauf mention contraire dans la ligne. Pratique pendant une réunion de projet.</p></div>
+
+<div class="encart attention"><strong>⚠️ Bon à savoir</strong><p>Si la colonne est une liste fermée (choix ou référence), seules les valeurs existantes sont acceptées. Si c’est du texte libre, une valeur nouvelle est acceptée et signalée en bleu. Une erreur ? Le bouton <strong>Annuler</strong> de la liste « Créées pendant cette session » supprime la tâche.</p></div>
+
+<p class="pied">Le bouton ? affiche ce mode d’emploi ; le mémo de saisie, sous la zone de texte, ne montre que les raccourcis des colonnes associées.</p><!--FIN_AIDE--></script>
 <style>
-  .se{max-width:980px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+  .se{max-width:900px;margin:0 auto;padding:16px 8px 40px;display:flex;flex-direction:column;gap:24px;font-size:15px}
   .se-zone{position:relative}
-  .se-zone textarea{font-size:1.05rem;min-height:3.2rem;padding:.7rem .9rem;line-height:1.5}
-  .se-ac{position:absolute;z-index:20;background:var(--surface);box-shadow:var(--shadow-lg);border:1px solid var(--border);min-width:260px;max-height:260px;overflow:auto}
-  .se-ac button{display:flex;gap:8px;width:100%;text-align:left;background:none;border:0;padding:6px 10px;cursor:pointer;font-size:.85rem}
+  .se-zone textarea{font-size:1.15rem;min-height:3.6rem;padding:.9rem 1rem;line-height:1.5}
+  .se-ac{position:absolute;z-index:20;background:var(--surface);box-shadow:var(--shadow-lg);border:1px solid var(--border);min-width:300px;max-height:300px;overflow:auto}
+  .se-ac button{display:flex;gap:10px;width:100%;text-align:left;background:none;border:0;padding:10px 14px;cursor:pointer;font-size:.92rem}
   .se-ac button[aria-selected=true],.se-ac button:hover{background:var(--bf-950)}
-  .se-ac .k{color:var(--mention);font-size:.75rem;margin-left:auto}
-  .se-apercu{display:flex;flex-direction:column;gap:8px}
-  .se-carte{border:1px solid var(--border);border-left:4px solid var(--bf);padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+  .se-ac .k{color:var(--mention);font-size:.78rem;margin-left:auto}
+  .se-apercu{display:flex;flex-direction:column;gap:12px}
+  .se-carte{border:1px solid var(--border);border-left:4px solid var(--bf);padding:16px 18px;display:flex;flex-direction:column;gap:10px}
   .se-carte.ko{border-left-color:var(--warning)}
-  .se-carte .titre{font-weight:700;color:var(--title)}
-  .se-puces{display:flex;flex-wrap:wrap;gap:6px}
-  .se-puce{font-size:.75rem;background:var(--alt);border:1px solid var(--border);padding:1px 8px;border-radius:12px}
-  .se-puce b{color:var(--mention);font-weight:500;margin-right:4px}
+  .se-carte .titre{font-weight:700;color:var(--title);font-size:1.05rem}
+  .se-puces{display:flex;flex-wrap:wrap;gap:8px}
+  .se-puce{font-size:.82rem;background:var(--alt);border:1px solid var(--border);padding:3px 10px;border-radius:14px}
+  .se-puce b{color:var(--mention);font-weight:500;margin-right:5px}
   .se-puce.warn{background:var(--warning-bg);border-color:#f5c3b3;color:var(--warning)}
-  .se-aide{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px 14px;font-size:.8rem}
-  .se-aide code{background:var(--bf-950);color:var(--bf);padding:0 5px;font-family:var(--mono);font-size:.78rem}
-  .se-hist li{display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid var(--contrast);font-size:.85rem}
-  .se-hist li .t{flex:1;min-width:0}
-  .se-def{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
-  .se-def .champ{min-width:200px;flex:1}
+  .se-puce.new{background:var(--info-bg);border-color:#c5d4ff;color:var(--info)}
+  .se-aide{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px 20px;font-size:.88rem;margin-top:12px}
+  .se-aide code{background:var(--bf-950);color:var(--bf);padding:1px 6px;font-family:var(--mono);font-size:.82rem}
+  .se-def{display:flex;gap:20px;flex-wrap:wrap;align-items:flex-end}
+  .se-def .champ{min-width:220px;flex:1}
 </style>
 </head>
 <body>
 <script>
 (function () {
-  const P = Pilotage, esc = P.esc;
+  const P = Pilotage, L = P.L, esc = P.esc;
   const ui = {texte: '', ac: null, historique: []};
-  let defauts = {projet: null, responsable: null};
-  try { defauts = Object.assign(defauts, JSON.parse(localStorage.getItem('saisie-express-defauts') || '{}')); } catch (e) { /* ignoré */ }
+  let defauts = {Groupe: '', Responsable: ''};
+  try { defauts = Object.assign(defauts, JSON.parse(localStorage.getItem('saisie-express-defauts2') || '{}')); } catch (e) { /* ignoré */ }
 
   P.demarrer({
     id: 'saisie-express',
     titre: 'Saisie express',
     sousTitre: 'Une ligne de texte devient une tâche complète',
-    entites: ['tache', 'projet'],
-    optionnelles: ['projet'],
+    entites: [], sansDetection: true,
+    ressource: 'taches',
+    colonnes: [
+      {name: 'Titre', title: 'Intitulé', description: 'Reçoit le texte de la tâche', type: 'Text', ressource: ['Intitule']},
+      {name: 'Responsable', title: 'Responsable (@nom)', type: 'Any', optional: true, ressource: ['Responsable']},
+      {name: 'Groupe', title: 'Projet (#projet)', type: 'Any', optional: true, ressource: ['Projet']},
+      {name: 'Echeance', title: 'Échéance (date dans le texte)', type: 'Date', optional: true, ressource: ['Echeance']},
+      {name: 'Debut', title: 'Date de début (« du … au … »)', type: 'Date', optional: true, ressource: ['Date_debut']},
+      {name: 'Priorite', title: 'Priorité (!1 à !4)', type: 'Choice', optional: true, ressource: ['Priorite']},
+      {name: 'Statut', title: 'Statut (=statut)', type: 'Choice', optional: true, ressource: ['Statut']},
+      {name: 'Charge', title: 'Charge en jours (~2)', type: 'Numeric', optional: true, ressource: ['Charge']},
+      {name: 'Theme', title: 'Thème (*thème)', type: 'Any', optional: true},
+      {name: 'Appuis', title: 'Personnes en appui (+nom)', type: 'Any', optional: true},
+    ],
+    demo: {table: 'DATA_Taches', mapping: {Titre: 'Action', Responsable: 'Responsable', Groupe: 'Projet', Echeance: 'Echeance', Debut: 'Date_de_debut', Priorite: 'Priorite', Statut: 'Statut', Charge: 'Charge_estimee', Theme: 'Theme', Appuis: 'Appuis'}},
     rendu: () => { if (P.$('#se-in')) { apercu(); historique(); } else dessiner(); },
   });
 
-  /* ---------- Correspondances floues ---------- */
+  /* ---------- Valeurs possibles d'une colonne ---------- */
   const compact = s => P.norm(String(s).replace(/_/g, ' '));
-  function chercher(ent, val) {
-    const v = compact(val); if (!v) return {res: null, liste: []};
-    const sc = P.liste(ent).map(r => {
-      const lib = compact(r._libelle), code = compact(r.code || ''), mots = String(r._libelle).split(/[\s'’-]+/).filter(Boolean);
-      const init = P.norm(mots.map(m => m[0]).join(''));
+  const estRef = nom => { const c = L.col(nom); return !!c && /^Ref(List)?:/.test(c.type); };
+  function candidats(nom) {
+    const c = L.col(nom); if (!c) return [];
+    if (estRef(nom)) return [...(L.refs[c.colId] || new Map()).entries()].map(([id, l]) => ({id, l})).filter(x => x.l);
+    if (/^Choice/.test(c.type)) return L.choix(nom).map(l => ({l}));
+    return P.uniq(L.recs.flatMap(r => L.texte(nom, r).split(/\s*,\s*/)).filter(Boolean)).map(l => ({l}));
+  }
+  function chercher(nom, val) {
+    const v = compact(val); if (!v) return {res: null, liste: candidats(nom)};
+    const sc = candidats(nom).map(x => {
+      const lib = compact(x.l), lib2 = compact(x.l.replace(/^[^\p{L}\p{N}]+/u, '')), mots = x.l.split(/[\s'’-]+/).filter(Boolean);
       let s = 0;
-      if (lib === v || code === v) s = 100;
-      else if (code && code.startsWith(v)) s = 80;
-      else if (lib.startsWith(v)) s = 70;
-      else if (mots.some(m => P.norm(m).startsWith(v))) s = 60;
-      else if (init === v) s = 55;
-      else if (lib.includes(v)) s = 40;
-      return {r, s};
-    }).filter(x => x.s).sort((a, b) => b.s - a.s || a.r._libelle.localeCompare(b.r._libelle, 'fr'));
-    return {res: sc[0] ? sc[0].r : null, ambigu: sc.length > 1 && sc[1].s === sc[0].s, liste: sc.map(x => x.r)};
+      if (lib === v || lib2 === v) s = 100; else if (lib2.startsWith(v) || lib.startsWith(v)) s = 70;
+      else if (mots.some(m => P.norm(m).startsWith(v))) s = 60; else if (P.norm(mots.map(m => m[0]).join('')) === v) s = 55; else if (lib.includes(v)) s = 40;
+      return {x, s};
+    }).filter(y => y.s).sort((a, b) => b.s - a.s || a.x.l.localeCompare(b.x.l, 'fr'));
+    return {res: sc[0] ? sc[0].x : null, ambigu: sc.length > 1 && sc[1].s === sc[0].s, liste: sc.map(y => y.x)};
   }
-  function chercherChoix(liste, val) {
-    const v = compact(val);
-    return liste.find(x => compact(x) === v) || liste.find(x => compact(x).includes(v)) || liste.find(x => compact(x).replace(/^p/, '') === v) || null;
+  /* Valeur à écrire selon le type de colonne (texte, choix, référence, liste) */
+  function encoder(nom, items) {
+    const c = L.col(nom); if (!c || !items.length) return undefined;
+    const t = c.type.split(':')[0];
+    if (t === 'Ref') return items[0].id || undefined;
+    if (t === 'RefList') { const ids = items.map(x => x.id).filter(Boolean); return ids.length ? ['L', ...ids] : undefined; }
+    if (t === 'ChoiceList') return ['L', ...items.map(x => x.l)];
+    if (t === 'Choice') return items[0].l;
+    return items.map(x => x.l).join(', ');
   }
-  const jeton = (s) => s.replace(/\s+/g, '_');
-  const themeEnt = () => { const c = P.colonne('tache', 'theme'); return c && /^Ref/.test(c.type) ? 'theme' : null; };
+  const jeton = s => s.replace(/^[^\p{L}\p{N}]+/u, '').replace(/\s+/g, '_');
 
   /* ---------- Dates en français ---------- */
   const JOURS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
   const MOIS = ['janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin', 'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre'];
   function lireDate(txt) {
-    const auj = P.today(); const t = P.norm(txt.replace(/\s+/g, ' ')) ; const s = txt.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
-    let m;
+    const auj = P.today(); const s = txt.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim(); let m;
     if (/^(aujourd'?hui|auj)$/.test(s)) return auj;
     if (s === 'demain') return P.addDays(auj, 1);
     if (/^apres-?demain$/.test(s)) return P.addDays(auj, 2);
@@ -1682,177 +1747,111 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
     if ((m = /^dans (\d+) ?(j|jours?|sem|semaines?|mois)$/.exec(s))) return /^m/.test(m[2]) ? P.addMonths(auj, +m[1]) : P.addDays(auj, (/^s/.test(m[2]) ? 7 : 1) * m[1]);
     if (/^fin (de (la )?)?semaine$/.test(s)) { let d = P.addDays(P.lundi(auj), 4); if (d < auj) d = P.addDays(d, 7); return d; }
     if (/^fin (du )?mois$/.test(s)) return new Date(auj.getFullYear(), auj.getMonth() + 1, 0);
-    if ((m = /^(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)( prochain)?$/.exec(s))) { let n = (JOURS.indexOf(m[1]) - auj.getDay() + 7) % 7; if (n === 0 || m[2]) n = n || 7; return P.addDays(auj, n); }
-    if ((m = /^(\d{1,2})[\/.-](\d{1,2})(?:[\/.-](\d{2,4}))?$/.exec(s))) {
-      let y = m[3] ? +m[3] : auj.getFullYear(); if (y < 100) y += 2000;
-      let d = new Date(y, +m[2] - 1, +m[1]);
-      if (!m[3] && P.diffDays(auj, d) > 60) d = new Date(y + 1, +m[2] - 1, +m[1]);
-      return d.getMonth() === +m[2] - 1 ? d : null;
-    }
-    if ((m = /^(\d{1,2}) (janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)( \d{4})?$/.exec(s))) {
-      let y = m[3] ? +m[3] : auj.getFullYear(); let d = new Date(y, MOIS.indexOf(m[2]), +m[1]);
-      if (!m[3] && P.diffDays(auj, d) > 60) d = new Date(y + 1, MOIS.indexOf(m[2]), +m[1]);
-      return d;
-    }
-    return t ? null : null;
+    if ((m = /^(lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)( prochain)?$/.exec(s))) { let n = (JOURS.indexOf(m[1]) - auj.getDay() + 7) % 7; if (n === 0) n = 7; return P.addDays(auj, n); }
+    if ((m = /^(\d{1,2})[\/.-](\d{1,2})(?:[\/.-](\d{2,4}))?$/.exec(s))) { let y = m[3] ? +m[3] : auj.getFullYear(); if (y < 100) y += 2000; let d = new Date(y, +m[2] - 1, +m[1]); if (!m[3] && P.diffDays(auj, d) > 60) d = new Date(y + 1, +m[2] - 1, +m[1]); return d.getMonth() === +m[2] - 1 ? d : null; }
+    if ((m = /^(\d{1,2}) (janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)( \d{4})?$/.exec(s))) { let y = m[3] ? +m[3] : auj.getFullYear(); let d = new Date(y, MOIS.indexOf(m[2]), +m[1]); if (!m[3] && P.diffDays(auj, d) > 60) d = new Date(y + 1, MOIS.indexOf(m[2]), +m[1]); return d; }
+    return null;
   }
   const RX_DATE = "(?:aujourd'?hui|demain|apr[eè]s-?demain|j\\+\\d+|s\\+\\d+|dans \\d+ ?(?:j|jours?|sem|semaines?|mois)|fin (?:de (?:la )?)?semaine|fin (?:du )?mois|(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)(?: prochain)?|\\d{1,2}[\\/.-]\\d{1,2}(?:[\\/.-]\\d{2,4})?|\\d{1,2} (?:janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[ée]cembre)(?: \\d{4})?)";
 
   /* ---------- Analyse d'une ligne ---------- */
+  const PREFIXES = {'@': 'Responsable', '+': 'Appuis', '#': 'Groupe', '*': 'Theme', '=': 'Statut'};
   function analyser(ligne) {
     let txt = ' ' + ligne + ' ';
-    const vals = {}, puces = [], alertes = [];
-    const appuis = [], themes = [];
-    // Plage de dates « du X au Y »
-    txt = txt.replace(new RegExp(`\\s(?:du|de) (${RX_DATE}) (?:au|à|a) (${RX_DATE})(?=\\s)`, 'i'), (all, a, b) => {
-      const d1 = lireDate(a), d2 = lireDate(b);
-      if (d1) vals.debut = d1; if (d2) vals.echeance = d2; return ' ';
-    });
-    // Échéance : « pour le X », « avant le X », « le X », « X »
-    txt = txt.replace(new RegExp(`\\s(?:(?:pour|avant|d'ici|d’ici|au plus tard)\\s(?:le\\s)?|le\\s|pour\\s)?(${RX_DATE})(?=\\s|[,.;]|$)`, 'i'), (all, a) => {
-      const d = lireDate(a); if (d && !vals.echeance) { vals.echeance = d; return ' '; } return all;
-    });
-    // Jetons préfixés
+    const vals = {}, puces = [], alertes = [], items = {Responsable: [], Appuis: [], Groupe: [], Theme: [], Statut: []};
+    if (L.a('Echeance')) {
+      txt = txt.replace(new RegExp(`\\s(?:du|de) (${RX_DATE}) (?:au|à|a) (${RX_DATE})(?=\\s)`, 'i'), (all, a, b) => { const d1 = lireDate(a), d2 = lireDate(b); if (d1 && L.a('Debut')) vals.Debut = d1; if (d2) vals.Echeance = d2; return ' '; });
+      txt = txt.replace(new RegExp(`\\s(?:(?:pour|avant|d'ici|d’ici|au plus tard)\\s(?:le\\s)?|le\\s|pour\\s)?(${RX_DATE})(?=\\s|[,.;]|$)`, 'i'), (all, a) => { const d = lireDate(a); if (d && !vals.Echeance) { vals.Echeance = d; return ' '; } return all; });
+    }
     txt = txt.replace(/(^|\s)([@+#*=!~])([^\s]*)/g, (all, sp, pre, val) => {
       if (pre === '!') {
-        const prios = P.choix('tache', 'priorite');
-        const rang = val === '' || val === '!' ? 1 : /^\d$/.test(val) ? +val : null;
-        const p = rang ? prios.find(x => P.rangPriorite(x) === rang) : chercherChoix(prios, val);
-        if (p) vals.priorite = p; else alertes.push(`Priorité « ${val} » inconnue`);
-        return sp;
+        if (!L.a('Priorite')) return all;
+        const l = L.choix('Priorite'); const rang = val === '' || val === '!' ? 1 : /^\d$/.test(val) ? +val : null;
+        const p = rang ? l.find(x => P.rangPriorite(x) === rang) : (chercher('Priorite', val).res || {}).l;
+        if (p) vals.Priorite = p; else alertes.push(`Priorité « ${val} » inconnue`); return sp;
       }
       if (pre === '~') {
+        if (!L.a('Charge')) return all;
         const m = /^(\d+(?:[.,]\d+)?)(j|jh|h)?$/i.exec(val);
-        if (m) { let n = parseFloat(m[1].replace(',', '.')); if (m[2] && m[2].toLowerCase() === 'h') n = Math.round(n / 7 * 100) / 100; vals.charge = n; }
-        else alertes.push(`Charge « ${val} » illisible`);
+        if (m) { let n = parseFloat(m[1].replace(',', '.')); if (m[2] && m[2].toLowerCase() === 'h') n = Math.round(n / 7 * 100) / 100; vals.Charge = n; } else alertes.push(`Charge « ${val} » illisible`);
         return sp;
       }
-      if (!val) return all;
-      if (pre === '@' || pre === '+') {
-        const r = chercher('agent', val);
-        if (r.res) { if (pre === '@') vals.responsable = r.res.id; else appuis.push(r.res.id); if (r.ambigu) alertes.push(`« ${val} » : plusieurs personnes possibles`); }
-        else alertes.push(`Personne « ${val} » introuvable`);
-        return sp;
-      }
-      if (pre === '#') {
-        const r = chercher('projet', val);
-        if (r.res) { vals.projet = r.res.id; if (r.ambigu) alertes.push(`« ${val} » : plusieurs projets possibles`); } else alertes.push(`Projet « ${val} » introuvable`);
-        return sp;
-      }
-      if (pre === '*') {
-        const te = themeEnt();
-        if (te) { const r = chercher('theme', val); if (r.res) themes.push(r.res.id); else alertes.push(`Thème « ${val} » introuvable`); }
-        else { const c = chercherChoix(P.choix('tache', 'theme'), val); if (c) themes.push(c); else alertes.push(`Thème « ${val} » introuvable`); }
-        return sp;
-      }
-      if (pre === '=') {
-        const c = chercherChoix(P.choix('tache', 'statut'), val);
-        if (c) vals.statut = c; else alertes.push(`Statut « ${val} » inconnu`);
-        return sp;
-      }
-      return all;
+      const nom = PREFIXES[pre]; if (!val || !L.a(nom)) return all;
+      const r = chercher(nom, val);
+      if (r.res) { items[nom].push(r.res); if (r.ambigu) alertes.push(`« ${val} » : plusieurs correspondances`); }
+      else if (!estRef(nom) && !/^Choice$/.test(L.col(nom).type)) items[nom].push({l: val.replace(/_/g, ' '), nouveau: true});
+      else alertes.push(`« ${val} » introuvable dans ${L.titreColonne(nom).replace(/ \(.*/, '')}`);
+      return sp;
     });
-    if (appuis.length) vals.appuis = appuis;
-    if (themes.length) vals.theme = themes;
-    if (!vals.projet && defauts.projet && P.get('projet', defauts.projet)) { vals.projet = defauts.projet; vals._projetDefaut = true; }
-    if (!vals.responsable && defauts.responsable && P.get('agent', defauts.responsable)) { vals.responsable = defauts.responsable; vals._respDefaut = true; }
-    if (!vals.priorite && vals.projet && P.a('tache', 'priorite')) { const pp = (P.get('projet', vals.projet) || {}).priorite; if (pp && P.choix('tache', 'priorite').includes(pp)) vals.priorite = pp; }
+    // Valeurs par défaut
+    ['Groupe', 'Responsable'].forEach(nom => { if (!items[nom].length && defauts[nom] && L.a(nom)) { const r = chercher(nom, defauts[nom]); if (r.res) { items[nom].push(r.res); items[nom].defaut = true; } } });
+    Object.keys(items).forEach(nom => { const v = encoder(nom, items[nom]); if (v !== undefined) vals[nom] = v; });
     let titre = txt.replace(/\s+/g, ' ').replace(/\s([,.;])/g, '$1').trim().replace(/[,;]$/, '');
-    titre = titre.charAt(0).toUpperCase() + titre.slice(1);
-    vals.titre = titre;
-    if (!titre) alertes.push('Intitulé vide');
-    if (vals.debut && vals.echeance && vals.echeance < vals.debut) alertes.push('Échéance avant le début');
-    const auj = P.today();
-    if (vals.projet) puces.push(['Projet', P.libelle('projet', vals.projet) + (vals._projetDefaut ? ' (par défaut)' : '')]);
-    if (vals.responsable) puces.push(['Responsable', P.libelle('agent', vals.responsable) + (vals._respDefaut ? ' (par défaut)' : '')]);
-    if (appuis.length) puces.push(['Appuis', P.libelles('agent', appuis).join(', ')]);
-    if (vals.debut) puces.push(['Début', P.fmtDateLong(vals.debut)]);
-    if (vals.echeance) puces.push(['Échéance', `${P.fmtDateLong(vals.echeance)} (${P.relatif(P.diffDays(vals.echeance, auj))})`]);
-    if (vals.priorite) puces.push(['Priorité', vals.priorite]);
-    if (vals.statut) puces.push(['Statut', vals.statut]);
-    if (themes.length) puces.push(['Thème', themeEnt() ? P.libelles('theme', themes).join(', ') : themes.join(', ')]);
-    if (vals.charge != null) puces.push(['Charge', P.fmtNb(vals.charge, 2) + ' J/H']);
+    vals.Titre = titre.charAt(0).toUpperCase() + titre.slice(1);
+    if (!vals.Titre) alertes.push('Intitulé vide');
+    if (vals.Debut && vals.Echeance && vals.Echeance < vals.Debut) alertes.push('Échéance avant le début');
+    const lib = nom => L.titreColonne(nom).replace(/ \(.*/, '');
+    ['Groupe', 'Responsable', 'Appuis', 'Theme', 'Statut'].forEach(nom => { if (items[nom].length) puces.push([lib(nom), items[nom].map(x => x.l).join(', ') + (items[nom].defaut ? ' (par défaut)' : ''), items[nom].some(x => x.nouveau)]); });
+    if (vals.Debut) puces.push(['Début', P.fmtDateLong(vals.Debut)]);
+    if (vals.Echeance) puces.push(['Échéance', `${P.fmtDateLong(vals.Echeance)} (${P.relatif(P.diffDays(vals.Echeance, P.today()))})`]);
+    if (vals.Priorite) puces.push(['Priorité', vals.Priorite]);
+    if (vals.Charge != null) puces.push(['Charge', P.fmtNb(vals.Charge, 2) + ' j']);
     return {vals, puces, alertes};
   }
 
   /* ---------- Interface ---------- */
   function dessiner() {
     const corps = P.$('#pl-corps');
-    const projets = P.liste('projet').filter(p => !P.estClos(p.phase)).sort((a, b) => a._libelle.localeCompare(b._libelle, 'fr'));
-    const agents = P.liste('agent').slice().sort((a, b) => a._libelle.localeCompare(b._libelle, 'fr'));
+    const memo = [['@nom', 'Responsable', 'responsable'], ['+nom', 'Appuis', 'personne en appui'], ['#projet', 'Groupe', 'projet'], ['!1 … !4', 'Priorite', 'priorité (!! = la plus haute)'],
+      ['*thème', 'Theme', 'thème'], ['~2', 'Charge', 'charge en jours (~3h en heures)'], ['=en cours', 'Statut', 'statut'], ['vendredi, demain, 25/11', 'Echeance', 'échéance'],
+      ['j+5, s+2, dans 3 semaines', 'Echeance', 'échéance relative'], ['du 20/11 au 28/11', 'Debut', 'début et échéance']].filter(m => L.a(m[1]));
+    const sel = (nom, id) => L.a(nom) ? `<div class="champ"><label for="${id}">${esc(L.titreColonne(nom).replace(/ \(.*/, ''))} par défaut</label><select class="in sm" id="${id}"><option value="">— Aucun —</option>${candidats(nom).map(x => x.l).sort((a, b) => a.localeCompare(b, 'fr')).map(l => `<option ${l === defauts[nom] ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>` : '';
     corps.innerHTML = `<div class="se">
       <div class="se-zone"><label for="se-in" class="sr">Nouvelle tâche</label>
-        <textarea class="in" id="se-in" rows="1" placeholder="Ex. : Relancer le garage pour la livraison @Erwan #LOG-2026-02 vendredi !2 ~0,5 *parc">${esc(ui.texte)}</textarea>
+        <textarea class="in" id="se-in" rows="1" placeholder="Ex. : Relancer le fournisseur @Marie #Projet_A vendredi !2 ~0,5">${esc(ui.texte)}</textarea>
         <div class="se-ac hidden" id="se-ac" role="listbox"></div></div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button class="btn pri" id="se-ok">${P.ic('plus')} Créer la tâche</button>
-        <span class="muted small"><kbd>Entrée</kbd> crée la tâche · <kbd>Maj</kbd>+<kbd>Entrée</kbd> nouvelle ligne (une tâche par ligne) · <kbd>Tab</kbd> complète</span></div>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><button class="btn pri" id="se-ok">${P.ic('plus')} Créer la tâche</button>
+        <span class="muted small"><kbd>Entrée</kbd> crée · <kbd>Maj</kbd>+<kbd>Entrée</kbd> nouvelle ligne (une tâche par ligne) · <kbd>Tab</kbd> complète</span></div>
       <div class="se-apercu" id="se-apercu" aria-live="polite"></div>
-      <details class="carte" ${ui.texte ? '' : 'open'}><summary style="cursor:pointer;font-weight:700">Mémo de saisie</summary>
-        <div class="se-aide" style="margin-top:10px">
-          <span><code>@nom</code> responsable</span><span><code>+nom</code> personne en appui</span>
-          ${P.table('projet') ? '<span><code>#code</code> ou <code>#mot</code> projet</span>' : ''}<span><code>!1</code> … <code>!4</code> priorité (<code>!!</code> = P1)</span>
-          ${P.a('tache', 'theme') ? '<span><code>*thème</code> thème</span>' : ''}<span><code>~2</code> charge en jours (<code>~3h</code>)</span>
-          <span><code>=en cours</code> statut</span><span><code>vendredi</code>, <code>demain</code>, <code>25/11</code></span>
-          <span><code>j+5</code>, <code>s+2</code>, <code>dans 3 semaines</code></span><span><code>fin du mois</code>, <code>fin de semaine</code></span>
-          <span><code>du 20/11 au 28/11</code> début et échéance</span><span>Coller plusieurs lignes = plusieurs tâches</span>
-        </div></details>
-      <div class="carte se-def"><div class="champ"><label for="se-dp">Projet par défaut</label><select class="in sm" id="se-dp"><option value="">— Aucun —</option>${projets.map(p => `<option value="${p.id}" ${p.id === defauts.projet ? 'selected' : ''}>${esc(p._libelle)}</option>`).join('')}</select></div>
-        <div class="champ"><label for="se-dr">Responsable par défaut</label><select class="in sm" id="se-dr"><option value="">— Aucun —</option>${agents.map(a => `<option value="${a.id}" ${a.id === defauts.responsable ? 'selected' : ''}>${esc(a._libelle)}</option>`).join('')}</select></div></div>
-      <section class="carte"><h2>Créées dans cette session</h2><ul class="liste-nue se-hist" id="se-hist"></ul></section>
-    </div>`;
+      <details class="carte" ${ui.historique.length ? '' : 'open'}><summary style="cursor:pointer;font-weight:700">Mémo de saisie</summary>
+        <div class="se-aide">${memo.map(m => `<span><code>${esc(m[0])}</code> ${esc(m[2])}</span>`).join('')}<span>Coller plusieurs lignes = plusieurs tâches</span></div></details>
+      ${L.a('Groupe') || L.a('Responsable') ? `<div class="carte se-def">${sel('Groupe', 'se-dg')}${sel('Responsable', 'se-dr')}</div>` : ''}
+      <section class="carte"><h2>Créées pendant cette session</h2><div id="se-hist"></div></section></div>`;
     const ta = P.$('#se-in');
-    if (!P.table('projet')) P.$('#se-dp').closest('.champ').classList.add('hidden');
     ta.addEventListener('input', () => { ui.texte = ta.value; ajuster(); apercu(); autoComplete(); });
     ta.addEventListener('keydown', clavier);
     ta.addEventListener('click', autoComplete);
-    ta.addEventListener('blur', () => setTimeout(() => cacherAc(), 150));
+    ta.addEventListener('blur', () => setTimeout(cacherAc, 150));
     P.$('#se-ok').addEventListener('click', creer);
-    P.$('#se-dp').addEventListener('change', e => { defauts.projet = +e.target.value || null; sauverDef(); apercu(); });
-    P.$('#se-dr').addEventListener('change', e => { defauts.responsable = +e.target.value || null; sauverDef(); apercu(); });
+    [['#se-dg', 'Groupe'], ['#se-dr', 'Responsable']].forEach(([id, nom]) => { const e = P.$(id); if (e) e.addEventListener('change', ev => { defauts[nom] = ev.target.value; try { localStorage.setItem('saisie-express-defauts2', JSON.stringify(defauts)); } catch (x) { /* ignoré */ } apercu(); }); });
     P.$('#se-ac').addEventListener('mousedown', e => { const b = e.target.closest('button'); if (b) { e.preventDefault(); inserer(b.dataset.v); } });
     ajuster(); apercu(); historique(); ta.focus();
   }
-  const sauverDef = () => { try { localStorage.setItem('saisie-express-defauts', JSON.stringify(defauts)); } catch (e) { /* ignoré */ } };
   function ajuster() { const ta = P.$('#se-in'); ta.style.height = 'auto'; ta.style.height = Math.min(320, ta.scrollHeight + 4) + 'px'; }
   const lignes = () => ui.texte.split('\n').map(l => l.trim()).filter(Boolean);
-
   function apercu() {
-    const zone = P.$('#se-apercu');
     const ls = lignes();
-    zone.innerHTML = ls.map(l => { const a = analyser(l); return `<div class="se-carte ${a.alertes.length ? 'ko' : ''}"><div class="titre">${esc(a.vals.titre || '(sans intitulé)')}</div>
-      <div class="se-puces">${a.puces.map(([k, v]) => `<span class="se-puce"><b>${esc(k)}</b>${esc(v)}</span>`).join('')}${a.alertes.map(x => `<span class="se-puce warn">⚠ ${esc(x)}</span>`).join('')}</div></div>`; }).join('');
-    P.$('#se-ok').innerHTML = `${P.ic('plus')} ${ls.length > 1 ? `Créer les ${ls.length} tâches` : 'Créer la tâche'}`;
-    P.$('#se-ok').disabled = !ls.length;
+    P.$('#se-apercu').innerHTML = ls.map(l => { const a = analyser(l); return `<div class="se-carte ${a.alertes.length ? 'ko' : ''}"><div class="titre">${esc(a.vals.Titre || '(sans intitulé)')}</div>
+      <div class="se-puces">${a.puces.map(([k, v, n]) => `<span class="se-puce ${n ? 'new' : ''}"><b>${esc(k)}</b>${esc(v)}${n ? ' · nouvelle valeur' : ''}</span>`).join('')}${a.alertes.map(x => `<span class="se-puce warn">⚠ ${esc(x)}</span>`).join('')}</div></div>`; }).join('');
+    const b = P.$('#se-ok'); b.innerHTML = `${P.ic('plus')} ${ls.length > 1 ? `Créer les ${ls.length} tâches` : 'Créer la tâche'}`; b.disabled = !ls.length;
   }
 
   /* ---------- Autocomplétion ---------- */
-  function jetonCourant() {
-    const ta = P.$('#se-in'); const pos = ta.selectionStart; const avant = ta.value.slice(0, pos);
-    const m = /(^|\s)([@+#*=])([^\s]*)$/.exec(avant);
-    return m ? {pre: m[2], val: m[3], debut: pos - m[3].length, fin: pos} : null;
-  }
+  function jetonCourant() { const ta = P.$('#se-in'); const pos = ta.selectionStart; const m = /(^|\s)([@+#*=])([^\s]*)$/.exec(ta.value.slice(0, pos)); return m ? {pre: m[2], val: m[3], debut: pos - m[3].length, fin: pos} : null; }
   function autoComplete() {
-    const j = jetonCourant(); const ac = P.$('#se-ac');
-    if (!j) return cacherAc();
-    let items = [];
-    if (j.pre === '@' || j.pre === '+') items = (j.val ? chercher('agent', j.val).liste : P.liste('agent')).map(r => ({v: jeton(r._libelle), l: r._libelle, k: 'personne'}));
-    else if (j.pre === '#') items = (j.val ? chercher('projet', j.val).liste : P.liste('projet')).filter(p => !P.estClos(p.phase)).map(r => ({v: jeton(r.code || r._libelle), l: r._libelle, k: r.code || 'projet'}));
-    else if (j.pre === '*') items = themeEnt() ? (j.val ? chercher('theme', j.val).liste : P.liste('theme')).map(r => ({v: jeton(r._libelle.replace(/^\W+\s*/u, '')), l: r._libelle, k: 'thème'})) : P.choix('tache', 'theme').filter(x => !j.val || compact(x).includes(compact(j.val))).map(x => ({v: jeton(x), l: x, k: 'thème'}));
-    else if (j.pre === '=') items = P.choix('tache', 'statut').filter(x => !j.val || compact(x).includes(compact(j.val))).map(x => ({v: jeton(x.replace(/^\W+\s*/u, '')), l: x, k: 'statut'}));
-    items = items.slice(0, 8);
+    const j = jetonCourant(); const ac = P.$('#se-ac'); if (!j) return cacherAc();
+    const nom = PREFIXES[j.pre]; if (!L.a(nom)) return cacherAc();
+    const items = chercher(nom, j.val).liste.slice(0, 8).map(x => ({v: jeton(x.l), l: x.l}));
     if (!items.length) return cacherAc();
     ui.ac = {j, items, sel: 0};
-    ac.innerHTML = items.map((it, i) => `<button type="button" role="option" aria-selected="${i === 0}" data-v="${esc(it.v)}">${esc(it.l)}<span class="k">${esc(it.k)}</span></button>`).join('');
-    const ta = P.$('#se-in'); ac.style.left = '8px'; ac.style.top = (ta.offsetHeight + 2) + 'px';
-    ac.classList.remove('hidden');
+    ac.innerHTML = items.map((it, i) => `<button type="button" role="option" aria-selected="${i === 0}" data-v="${esc(it.v)}">${esc(it.l)}<span class="k">${esc(L.titreColonne(nom).replace(/ \(.*/, ''))}</span></button>`).join('');
+    ac.style.left = '8px'; ac.style.top = (P.$('#se-in').offsetHeight + 4) + 'px'; ac.classList.remove('hidden');
   }
   function cacherAc() { ui.ac = null; const ac = P.$('#se-ac'); if (ac) ac.classList.add('hidden'); }
   function inserer(v) {
     const ta = P.$('#se-in'); const j = ui.ac ? ui.ac.j : jetonCourant(); if (!j) return;
     ta.value = ta.value.slice(0, j.debut) + v + ' ' + ta.value.slice(j.fin);
-    const pos = j.debut + v.length + 1; ta.setSelectionRange(pos, pos); ui.texte = ta.value;
-    cacherAc(); ajuster(); apercu(); ta.focus();
+    const pos = j.debut + v.length + 1; ta.setSelectionRange(pos, pos); ui.texte = ta.value; cacherAc(); ajuster(); apercu(); ta.focus();
   }
   function clavier(e) {
     if (ui.ac) {
@@ -1860,30 +1859,27 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
       if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) { e.preventDefault(); inserer(ui.ac.items[ui.ac.sel].v); return; }
       if (e.key === 'Escape') { cacherAc(); return; }
     }
+    if (e.key === 'Tab' && jetonCourant()) { e.preventDefault(); return; }
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); creer(); }
   }
 
   /* ---------- Création ---------- */
   async function creer() {
     const ls = lignes(); if (!ls.length) return;
-    const analyses = ls.map(analyser);
-    if (analyses.some(a => !a.vals.titre)) { P.toast('Une ligne n’a pas d’intitulé.', 'warn'); return; }
-    const acts = analyses.map(a => { const v = Object.assign({}, a.vals); delete v._projetDefaut; delete v._respDefaut; return P.actionAjout('tache', v); });
-    const bouton = P.$('#se-ok'); bouton.disabled = true;
+    const an = ls.map(analyser);
+    if (an.some(a => !a.vals.Titre)) { P.toast('Une ligne n’a pas d’intitulé.', 'warn'); return; }
+    const b = P.$('#se-ok'); b.disabled = true;
     try {
-      const ids = await P.appliquer(acts);
-      analyses.forEach((a, i) => ui.historique.unshift({id: ids[i], titre: a.vals.titre, projet: a.vals.projet, echeance: a.vals.echeance}));
-      ui.texte = '';
-      P.toast(ls.length > 1 ? `${ls.length} tâches créées.` : 'Tâche créée.', 'ok');
-      dessiner();
-    } catch (e) { bouton.disabled = false; }
+      const ids = await P.appliquer(an.map(a => L.actionAjout(a.vals)));
+      an.forEach((a, i) => ui.historique.unshift({id: ids[i], titre: a.vals.Titre, info: a.puces.slice(0, 3).map(p => p[1]).join(' · ')}));
+      ui.texte = ''; P.toast(ls.length > 1 ? `${ls.length} tâches créées.` : 'Tâche créée.', 'ok'); dessiner();
+    } catch (e) { b.disabled = false; }
   }
   function historique() {
-    const ul = P.$('#se-hist');
-    const l = ui.historique.filter(h => P.get('tache', h.id));
-    ul.innerHTML = l.length ? l.map(h => `<li><span class="t"><strong>${esc(h.titre)}</strong><br><span class="muted small">${esc(P.libelle('projet', h.projet) || 'Sans projet')}${h.echeance ? ' · ' + P.fmtDate(h.echeance) : ''}</span></span>
-      <button class="btn ter sm" data-annuler="${h.id}">Annuler</button></li>`).join('') : '<li class="muted small">Aucune tâche créée pour l’instant.</li>';
-    ul.onclick = async e => { const b = e.target.closest('[data-annuler]'); if (!b) return; await P.supprimer('tache', +b.dataset.annuler, 'Tâche supprimée.'); ui.historique = ui.historique.filter(h => h.id !== +b.dataset.annuler); };
+    const z = P.$('#se-hist'); if (!z) return;
+    const ids = new Set(L.recs.map(r => r.id)); const l = ui.historique.filter(h => ids.has(h.id));
+    z.innerHTML = l.length ? l.map(h => `<div class="ligne-liste"><div class="t"><strong>${esc(h.titre)}</strong><span>${esc(h.info)}</span></div><button class="btn ter sm" data-annuler="${h.id}">Annuler</button></div>`).join('') : '<p class="vide-doux">Aucune tâche créée pour l’instant.</p>';
+    z.onclick = async e => { const x = e.target.closest('[data-annuler]'); if (!x) return; const id = +x.dataset.annuler; await P.appliquer([['RemoveRecord', L.tableId, id]], 'Tâche supprimée.'); ui.historique = ui.historique.filter(h => h.id !== id); };
   }
 })();
 </script>
