@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Données départementales</title>
+<style>
+  * { box-sizing: border-box; }
+
+  html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    background: #ffffff;
+  }
+
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: clamp(12px, 4vw, 40px);
+  }
+
+  .page {
+    width: 100%;
+    max-width: 900px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: clamp(18px, 4vh, 44px);
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(16px, 4vw, 40px);
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .logo {
+    height: clamp(70px, 14vw, 160px);
+    width: auto;
+    flex-shrink: 0;
+  }
+
+  .brand-block {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    text-align: left;
+    min-width: 0;
+  }
+
+  .brand-title {
+    font-size: clamp(28px, 7vw, 64px);
+    font-weight: bold;
+    line-height: 1;
+    margin: 0;
+    white-space: nowrap;
+  }
+  .blue { color: #003399; }
+  .red { color: #E1000F; }
+
+  .brand-subtitle {
+    font-size: clamp(12px, 2.2vw, 22px);
+    color: #4a4a4a;
+    margin: 8px 0 0;
+    white-space: nowrap;
+  }
+
+  .headline {
+    font-size: clamp(22px, 7.5vw, 72px);
+    font-weight: bold;
+    letter-spacing: clamp(1px, 0.4vw, 4px);
+    line-height: 1;
+    width: 100%;
+  }
+
+  .headline .line { display: block; white-space: nowrap; }
+  .headline .line + .line { margin-top: 0.12em; }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: clamp(8px, 2vw, 20px);
+    width: 100%;
+  }
+
+  .stat {
+    border-top: 4px solid #003399;
+    background: #f4f6fb;
+    padding: clamp(10px, 2vw, 18px) 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+  .stat:nth-child(even) { border-top-color: #E1000F; }
+
+  .stat-value {
+    font-size: clamp(18px, 3.6vw, 32px);
+    font-weight: bold;
+    color: #003399;
+    line-height: 1;
+  }
+  .stat:nth-child(even) .stat-value { color: #E1000F; }
+
+  .stat-label {
+    font-size: clamp(11px, 1.6vw, 15px);
+    color: #4a4a4a;
+  }
+
+  .context {
+    width: 100%;
+    text-align: left;
+    border-left: 4px solid #003399;
+    padding: 4px 0 4px clamp(12px, 2.5vw, 24px);
+  }
+
+  .context h2 {
+    font-size: clamp(16px, 2.8vw, 26px);
+    margin: 0 0 10px;
+    color: #003399;
+  }
+
+  .context p {
+    font-size: clamp(13px, 1.9vw, 18px);
+    line-height: 1.55;
+    color: #2a2a2a;
+    margin: 0 0 10px;
+  }
+  .context p:last-child { margin-bottom: 0; }
+
+  .context strong { color: #003399; }
+
+  /* Medium widgets: stats on 2 columns */
+  @media (max-width: 640px) {
+    .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+
+  /* Very narrow widgets: stack logo above text and shrink subtitle */
+  @media (max-width: 420px) {
+    .header {
+      flex-direction: column;
+      text-align: center;
+    }
+    .brand-block {
+      align-items: center;
+      text-align: center;
+    }
+    .brand-title, .brand-subtitle {
+      white-space: normal;
+    }
+  }
+</style>
+</head>
+<body>
+
+  <div class="page">
+    <div class="header">
+      <img class="logo" src="data:image/png;base64,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" alt="Préfet de la région Bretagne">
+      <div class="brand-block">
+        <p class="brand-title"><span class="blue">Suivi </span><span class="red">MAEC</span></p>
+        <p class="brand-subtitle">Mesures Agro-Environnementales et Climatiques</p>
+      </div>
+    </div>
+
+    <div class="headline">
+      <span class="blue line">DONNÉES</span><span class="red line">DÉPARTEMENTALES</span>
+    </div>
+  </div>
+
+</body>
+</html>
