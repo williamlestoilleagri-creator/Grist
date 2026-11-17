@@ -1436,6 +1436,24 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
       {Tache: 'Tâche exemple', Libelle: 'Troisième étape', Fait: false, Ordre: 3},
     ],
   };
+  P.RESSOURCES.roles = {
+    nom: 'Roles_projet', libelle: 'Rôles (RACI)',
+    description: 'Une ligne par personne et par projet, avec son rôle : R (réalise), A (approuve), C (consulté) ou I (informé), et si besoin le temps consacré et un commentaire. La colonne Projet est une référence vers votre table des projets si elle est indiquée dans les réglages, du texte sinon.',
+    colonnes: [
+      {id: 'Projet', label: 'Projet', type: 'Text', ref: 'projet'},
+      {id: 'Personne', label: 'Personne', type: 'Text'},
+      {id: 'Role', label: 'Rôle', type: 'Choice', widgetOptions: CH(['R – Réalise', 'A – Approuve', 'C – Consulté', 'I – Informé'], ['#000091', '#CE0500', '#C3592D', '#929292'])},
+      {id: 'Temps_consacre', label: 'Temps consacré', type: 'Numeric', widgetOptions: JSON.stringify({numMode: 'percent'})},
+      {id: 'Commentaire', label: 'Commentaire', type: 'Text'},
+    ],
+    exemples: [
+      {Projet: 'Projet A', Personne: 'Agent 1', Role: 'A – Approuve', Temps_consacre: 0.05},
+      {Projet: 'Projet A', Personne: 'Agent 2', Role: 'R – Réalise', Temps_consacre: 0.3, Commentaire: 'Pilote technique'},
+      {Projet: 'Projet A', Personne: 'Agent 3', Role: 'I – Informé'},
+      {Projet: 'Projet B', Personne: 'Agent 3', Role: 'R – Réalise', Temps_consacre: 0.2},
+      {Projet: 'Projet B', Personne: 'Agent 1', Role: 'C – Consulté'},
+    ],
+  };
   const jourDecale = n => { const d = P.addDays(P.today(), n); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 1000; };
   function valeurExemple(col, v) { if (v == null) return null; if (col.type === 'Date') return jourDecale(v); return v; }
 

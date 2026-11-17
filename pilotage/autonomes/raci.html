@@ -1436,6 +1436,24 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
       {Tache: 'Tâche exemple', Libelle: 'Troisième étape', Fait: false, Ordre: 3},
     ],
   };
+  P.RESSOURCES.roles = {
+    nom: 'Roles_projet', libelle: 'Rôles (RACI)',
+    description: 'Une ligne par personne et par projet, avec son rôle : R (réalise), A (approuve), C (consulté) ou I (informé), et si besoin le temps consacré et un commentaire. La colonne Projet est une référence vers votre table des projets si elle est indiquée dans les réglages, du texte sinon.',
+    colonnes: [
+      {id: 'Projet', label: 'Projet', type: 'Text', ref: 'projet'},
+      {id: 'Personne', label: 'Personne', type: 'Text'},
+      {id: 'Role', label: 'Rôle', type: 'Choice', widgetOptions: CH(['R – Réalise', 'A – Approuve', 'C – Consulté', 'I – Informé'], ['#000091', '#CE0500', '#C3592D', '#929292'])},
+      {id: 'Temps_consacre', label: 'Temps consacré', type: 'Numeric', widgetOptions: JSON.stringify({numMode: 'percent'})},
+      {id: 'Commentaire', label: 'Commentaire', type: 'Text'},
+    ],
+    exemples: [
+      {Projet: 'Projet A', Personne: 'Agent 1', Role: 'A – Approuve', Temps_consacre: 0.05},
+      {Projet: 'Projet A', Personne: 'Agent 2', Role: 'R – Réalise', Temps_consacre: 0.3, Commentaire: 'Pilote technique'},
+      {Projet: 'Projet A', Personne: 'Agent 3', Role: 'I – Informé'},
+      {Projet: 'Projet B', Personne: 'Agent 3', Role: 'R – Réalise', Temps_consacre: 0.2},
+      {Projet: 'Projet B', Personne: 'Agent 1', Role: 'C – Consulté'},
+    ],
+  };
   const jourDecale = n => { const d = P.addDays(P.today(), n); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 1000; };
   function valeurExemple(col, v) { if (v == null) return null; if (col.type === 'Date') return jourDecale(v); return v; }
 
@@ -1633,136 +1651,183 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
 })();
 
 </script>
+<script type="text/html" id="pl-aide"><!--AIDE--><p class="chapo">La matrice RACI répond à une question simple : <strong>qui fait quoi sur chaque projet ?</strong> Un tableau croise les projets et les personnes ; chaque case indique le rôle de la personne.</p>
+
+<section>
+  <h2>Les quatre rôles</h2>
+  <div class="blocs">
+    <div><strong>R – Réalise</strong>Fait le travail. Il en faut au moins un par projet.</div>
+    <div><strong>A – Approuve</strong>Responsable final : valide et rend compte. Il en faut <strong>un seul</strong>.</div>
+    <div><strong>C – Consulté</strong>Donne son avis avant les décisions.</div>
+    <div><strong>I – Informé</strong>Est tenu au courant des avancées et des décisions.</div>
+  </div>
+</section>
+
+<section>
+  <h2>Mise en place</h2>
+  <ol class="etapes">
+    <li><span>Ajoutez un <strong>widget personnalisé</strong> avec votre <strong>table des rôles</strong> comme données.</span></li>
+    <li><span>Dans le <strong>panneau de droite</strong>, associez le <strong>Projet</strong>, la <strong>Personne</strong> et le <strong>Rôle</strong> (une liste de choix commençant par R, A, C ou I), puis si besoin le temps consacré et un commentaire.</span></li>
+    <li><span>Facultatif : dans les paramètres (⚙), indiquez votre <strong>table des projets</strong> pour masquer les projets clos.</span></li>
+  </ol>
+</section>
+
+<div class="encart"><strong>📦 Pas encore de table des rôles ?</strong><p>Paramètres (⚙), onglet <strong>Table ressource</strong> : créez en un clic une table « Rôles (RACI) » prête à l’emploi, avec la liste R / A / C / I déjà en couleurs, ou téléchargez son modèle CSV.</p></div>
+
+<section>
+  <h2>Attribuer un rôle</h2>
+  <ol class="etapes">
+    <li><span><strong>Cliquez sur une case</strong> au croisement d’un projet et d’une personne.</span></li>
+    <li><span>Choisissez <strong>R, A, C ou I</strong> ; indiquez si besoin le <strong>temps consacré</strong>.</span></li>
+    <li><span>Pour retirer un rôle, cliquez sur la case puis sur <strong>Retirer</strong>.</span></li>
+  </ol>
+</section>
+
+<div class="encart astuce"><strong>💡 Astuce</strong><p>La colonne <strong>Contrôle</strong> signale les projets mal organisés : aucun responsable final (A), plusieurs A, ou personne pour réaliser (R). La dernière ligne montre, pour chacun, le nombre de projets où il est A ou R, et le temps cumulé : au-delà de 100 %, la personne est surchargée.</p></div>
+
+<div class="encart attention"><strong>⚠️ Bon à savoir</strong><p>Si les colonnes Projet et Personne sont des références, toutes les personnes et tous les projets peuvent être affichés. Si ce sont du texte, ajoutez une nouvelle personne ou un nouveau projet avec les boutons « + » en haut de la matrice.</p></div>
+
+<p class="pied">Le bouton Imprimer produit la matrice sur une page ; le bouton ? affiche ce mode d’emploi.</p><!--FIN_AIDE--></script>
 <style>
-  .rc-wrap{overflow:auto;border:1px solid var(--border);max-height:calc(100vh - 210px)}
-  table.rc{border-collapse:separate;border-spacing:0;font-size:.82rem}
-  .rc th,.rc td{border-bottom:1px solid var(--contrast);border-right:1px solid var(--contrast);padding:0;background:var(--surface)}
-  .rc thead th{position:sticky;top:0;z-index:2;background:var(--alt);border-bottom:2px solid var(--text);vertical-align:bottom;padding:6px 4px;font-weight:500}
-  .rc thead th.ag{height:130px;width:44px;min-width:44px}
-  .rc thead th.ag span{writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;display:inline-block;max-height:120px;overflow:hidden;text-overflow:ellipsis;color:var(--title)}
-  .rc .pj{position:sticky;left:0;z-index:1;min-width:280px;max-width:340px;padding:6px 10px;text-align:left;font-weight:500}
-  .rc thead .pj{z-index:3}
-  .rc .pj small{display:block;color:var(--mention);font-weight:400}
-  .rc td.c button{width:100%;height:36px;border:0;background:none;cursor:pointer;font-weight:700;font-size:.9rem}
+  .rc-page{max-width:1400px;margin:0 auto;padding:8px 8px 40px;display:flex;flex-direction:column;gap:22px;font-size:15px}
+  .rc-leg{display:flex;gap:22px;flex-wrap:wrap;align-items:center}
+  .rc-leg span{display:inline-flex;gap:8px;align-items:center}
+  .rc-wrap{overflow:auto;border:1px solid var(--border);max-height:calc(100vh - 250px)}
+  table.rc{border-collapse:separate;border-spacing:0}
+  .rc th,.rc td{border-bottom:1px solid #eee;border-right:1px solid #eee;padding:0;background:var(--surface)}
+  .rc thead th{position:sticky;top:0;z-index:2;background:var(--alt);border-bottom:2px solid var(--text);vertical-align:bottom;padding:10px 6px;font-weight:500}
+  .rc thead th.ag{height:150px;width:56px;min-width:56px}
+  .rc thead th.ag span{writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;display:inline-block;max-height:140px;overflow:hidden;text-overflow:ellipsis;color:var(--title);font-size:.88rem}
+  .rc .pj{position:sticky;left:0;z-index:1;min-width:300px;max-width:380px;padding:12px 16px;text-align:left;font-weight:500;color:var(--title);font-size:.95rem}
+  .rc thead .pj{z-index:3;color:var(--mention);font-weight:700}
+  .rc td.c button{width:100%;height:52px;border:0;background:none;cursor:pointer}
   .rc td.c button:hover{background:var(--bf-975);box-shadow:inset 0 0 0 2px var(--bf-850)}
-  .rc td.c.chef button{background:repeating-linear-gradient(135deg,transparent 0 6px,var(--bf-975) 6px 12px)}
-  .rc .ctl{padding:4px 8px;white-space:nowrap;font-size:.75rem}
-  .rc tfoot td{position:sticky;bottom:0;background:var(--alt);border-top:2px solid var(--text);text-align:center;font-size:.72rem;padding:4px 2px}
-  .rc tfoot td.pj{z-index:3}
-  .L{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:22px;padding:0 4px;border-radius:3px;color:#fff}
+  .rc .ctl{padding:8px 14px;white-space:nowrap}
+  .rc tfoot td{position:sticky;bottom:0;background:var(--alt);border-top:2px solid var(--text);text-align:center;font-size:.8rem;padding:8px 2px;color:var(--title)}
+  .rc tfoot td.pj{z-index:3;text-align:left}
+  .L{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:26px;padding:0 6px;border-radius:4px;color:#fff;font-weight:700;font-size:.95rem}
   .L.A{background:var(--error)} .L.R{background:var(--bf)} .L.C{background:var(--warning)} .L.I{background:#929292}
-  .rc-menu{position:fixed;z-index:60;background:var(--surface);box-shadow:var(--shadow-lg);border:1px solid var(--border);padding:8px;display:flex;flex-direction:column;gap:6px;min-width:230px}
-  .rc-menu .lettres{display:flex;gap:4px}
-  .rc-menu .lettres button{flex:1;border:1px solid var(--border);background:var(--surface);cursor:pointer;padding:6px 0;font-weight:700}
+  .rc-menu{position:fixed;z-index:60;background:var(--surface);box-shadow:var(--shadow-lg);border:1px solid var(--border);padding:14px;display:flex;flex-direction:column;gap:10px;min-width:280px}
+  .rc-menu .lettres{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  .rc-menu .lettres button{border:1px solid var(--border);background:var(--surface);cursor:pointer;padding:8px 0;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:.72rem;color:var(--mention)}
   .rc-menu .lettres button[aria-pressed=true]{box-shadow:inset 0 0 0 2px var(--title)}
-  .rc-leg{display:flex;gap:14px;flex-wrap:wrap;font-size:.8rem;align-items:center;margin-bottom:10px}
+  .rc-outils{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .rc-outils .in{width:auto}
   @media print{.rc-wrap{max-height:none;overflow:visible}.rc thead th,.rc .pj,.rc tfoot td{position:static}}
 </style>
 </head>
 <body>
 <script>
 (function () {
-  const P = Pilotage, esc = P.esc;
-  const ui = {domaine: '', clos: false, tousAgents: false};
+  const P = Pilotage, L = P.L, esc = P.esc;
   const LETTRES = {R: 'Réalise', A: 'Approuve', C: 'Consulté', I: 'Informé'};
+  const ui = {q: '', tous: false, ajoutsP: [], ajoutsA: []};
 
   P.demarrer({
     id: 'raci',
     titre: 'Matrice RACI',
     sousTitre: 'Qui réalise, approuve, est consulté ou informé, projet par projet',
-    entites: ['role', 'projet', 'agent'],
-    outils: () => `<select class="in sm" id="rc-dom" style="width:auto" aria-label="Domaine"><option value="">Tous domaines</option></select>
-      <label class="case small"><input type="checkbox" id="rc-clos"> Projets clos</label>
-      <label class="case small"><input type="checkbox" id="rc-tous"> Tous les agents</label>
-      <button class="btn ter sm" id="rc-print">${P.ic('imprimer')} Imprimer</button>`,
-    surOutils: el => {
-      el.querySelector('#rc-dom').addEventListener('change', e => { ui.domaine = e.target.value; dessiner(); });
-      el.querySelector('#rc-clos').addEventListener('change', e => { ui.clos = e.target.checked; dessiner(); });
-      el.querySelector('#rc-tous').addEventListener('change', e => { ui.tousAgents = e.target.checked; dessiner(); });
-      el.querySelector('#rc-print').addEventListener('click', () => window.print());
-    },
-    rendu: () => {
-      const doms = P.uniq(P.liste('projet').map(p => p.domaine).filter(Boolean)).sort();
-      const d = P.$('#rc-dom'); d.innerHTML = '<option value="">Tous domaines</option>' + doms.map(x => `<option ${x === ui.domaine ? 'selected' : ''}>${esc(x)}</option>`).join(''); d.classList.toggle('hidden', !doms.length);
-      dessiner();
-    },
+    entites: ['projet'], optionnelles: ['projet'], entitesSeules: true,
+    ressource: 'roles',
+    colonnes: [
+      {name: 'Projet', title: 'Projet', type: 'Any', ressource: ['Projet']},
+      {name: 'Personne', title: 'Personne', type: 'Any', ressource: ['Personne']},
+      {name: 'Role', title: 'Rôle (R, A, C, I)', description: 'Choix commençant par R, A, C ou I', type: 'Choice', ressource: ['Role']},
+      {name: 'Part', title: 'Temps consacré', type: 'Numeric', optional: true, ressource: ['Temps_consacre']},
+      {name: 'Commentaire', title: 'Commentaire', type: 'Any', optional: true, ressource: ['Commentaire']},
+    ],
+    demo: {table: 'DATA_Roles_projet', mapping: {Projet: 'Projet', Personne: 'Personne', Role: 'Role', Part: 'Temps_consacre', Commentaire: 'Commentaire'}},
+    reglagesHtml: () => `<p class="small muted" style="margin:0">Table liée facultative ci-dessus : vos <strong>projets</strong>. Elle permet de masquer les projets clos et de créer la table ressource avec une colonne Projet en référence.</p>
+      <label class="case" style="margin-top:8px"><input type="checkbox" id="rg-clos" ${P.reglage('masquerClos', true) ? 'checked' : ''}> Masquer les projets clos</label>`,
+    lireReglages: (el, r) => { r.masquerClos = el.querySelector('#rg-clos').checked; },
+    outils: () => `<button class="btn ter sm" id="rc-print">${P.ic('imprimer')} Imprimer</button>`,
+    surOutils: el => el.querySelector('#rc-print').addEventListener('click', () => window.print()),
+    rendu: () => dessiner(),
   });
 
-  /* Valeur de choix correspondant à une lettre (ex. « A – Approuve ») */
-  const valeurLettre = l => P.choix('role', 'role').find(x => P.lettreRole(x) === l) || l;
-  const rolesDe = (pid, aid) => P.liste('role').filter(r => r.projet === pid && r.personne === aid);
+  /* ---------- Projets et personnes : références (avec leur liste complète) ou texte ---------- */
+  const estRef = nom => { const c = L.col(nom); return !!c && /^Ref(List)?:/.test(c.type); };
+  const cle = (nom, r) => { const c = L.col(nom); const v = r[c.colId]; if (estRef(nom)) return Array.isArray(v) ? (v[1] || null) : (v || null); const t = L.texte(nom, r); return t || null; };
+  const libelle = (nom, k) => estRef(nom) ? ((L.refs[L.col(nom).colId] || new Map()).get(k) || '#' + k) : k;
+  function tous(nom) {
+    if (estRef(nom)) return [...(L.refs[L.col(nom).colId] || new Map()).keys()];
+    return P.uniq(L.recs.map(r => cle(nom, r)).filter(Boolean));
+  }
+  const encoder = (nom, k) => { const c = L.col(nom); return /^RefList:/.test(c.type) ? ['L', k] : k; };
+  const valeurLettre = l => { const ch = L.choix('Role'); return ch.find(x => P.lettreRole(x) === l) || `${l} – ${LETTRES[l]}`; };
+  function projetClos(k) {
+    if (!P.reglage('masquerClos', true) || !P.table('projet')) return false;
+    const c = L.col('Projet'); const lie = estRef('Projet') && c.type.split(':')[1] === P.table('projet');
+    const p = lie ? P.get('projet', k) : P.liste('projet').find(x => P.norm(x.titre) === P.norm(libelle('Projet', k)) || (x.code && P.norm(x.code) === P.norm(libelle('Projet', k))));
+    return !!p && P.estClos(p.phase);
+  }
 
   function dessiner() {
     const corps = P.$('#pl-corps');
-    const projets = P.liste('projet').filter(p => (!ui.domaine || p.domaine === ui.domaine) && (ui.clos || !P.estClos(p.phase)))
-      .sort((a, b) => String(a.code || a.titre).localeCompare(String(b.code || b.titre), 'fr'));
-    const ids = new Set(projets.map(p => p.id));
-    const roles = P.liste('role').filter(r => ids.has(r.projet));
-    const avecRole = new Set(roles.map(r => r.personne));
-    projets.forEach(p => (p.chefs || []).forEach(id => avecRole.add(id)));
-    const agents = P.liste('agent').filter(a => ui.tousAgents || avecRole.has(a.id)).sort((a, b) => a._libelle.localeCompare(b._libelle, 'fr'));
-    const aPart = P.a('role', 'part');
-
-    const ctrl = p => {
-      const l = roles.filter(r => r.projet === p.id).map(r => P.lettreRole(r.role));
-      const nA = l.filter(x => x === 'A').length, nR = l.filter(x => x === 'R').length;
-      const pb = [];
+    const roles = L.recs.map(r => ({id: r.id, r, p: cle('Projet', r), a: cle('Personne', r), role: L.texte('Role', r), lettre: P.lettreRole(L.texte('Role', r)), part: L.a('Part') ? L.fraction('Part', r) : null, com: L.texte('Commentaire', r)})).filter(x => x.p && x.a);
+    const q = P.norm(ui.q);
+    let projets = P.uniq(tous('Projet').concat(ui.ajoutsP)).filter(k => !projetClos(k) && (!q || P.norm(libelle('Projet', k)).includes(q)));
+    const avecRole = new Set(roles.map(x => x.a));
+    if (!estRef('Projet')) projets = projets.filter(k => roles.some(x => x.p === k) || ui.ajoutsP.includes(k));
+    const agents = P.uniq(tous('Personne').concat(ui.ajoutsA)).filter(k => ui.tous || avecRole.has(k) || ui.ajoutsA.includes(k)).sort((a, b) => libelle('Personne', a).localeCompare(libelle('Personne', b), 'fr'));
+    projets.sort((a, b) => libelle('Projet', a).localeCompare(libelle('Projet', b), 'fr'));
+    const ctrl = k => {
+      const l = roles.filter(x => x.p === k).map(x => x.lettre); const nA = l.filter(x => x === 'A').length, nR = l.filter(x => x === 'R').length; const pb = [];
       if (!nA) pb.push('aucun A'); if (nA > 1) pb.push(`${nA} A`); if (!nR) pb.push('aucun R');
-      return pb.length ? `<span class="badge warn" data-bulle="Une règle RACI : un seul « A » (responsable final) et au moins un « R » par projet.">⚠ ${pb.join(', ')}</span>` : '<span class="badge ok">✓ complet</span>';
+      return pb.length ? `<span class="badge warn" data-bulle="Règle RACI : un seul A (responsable final) et au moins un R par projet.">⚠ ${pb.join(', ')}</span>` : '<span class="badge ok">✓ complet</span>';
     };
-    const totaux = agents.map(a => {
-      const r = roles.filter(x => x.personne === a.id);
-      const n = l => r.filter(x => P.lettreRole(x.role) === l).length;
-      return {A: n('A'), R: n('R'), C: n('C'), I: n('I'), part: P.somme(r.map(x => x.part || 0))};
-    });
-
-    corps.innerHTML = `
-      <div class="rc-leg">${Object.entries(LETTRES).map(([l, t]) => `<span><span class="L ${l}">${l}</span> ${t}</span>`).join('')}
-        <span class="muted">Hachuré : chargé(e) de mission du projet · Cliquer une case pour attribuer un rôle</span></div>
+    const tot = agents.map(a => { const r = roles.filter(x => x.a === a); const n = l => r.filter(x => x.lettre === l).length; return {A: n('A'), R: n('R'), C: n('C'), I: n('I'), part: P.somme(r.map(x => x.part || 0))}; });
+    const peut = L.ecrivable('Role');
+    corps.innerHTML = `<div class="rc-page">
+      <div class="rc-outils"><input class="in sm" id="rc-q" placeholder="Rechercher un projet" value="${esc(ui.q)}" style="width:240px" aria-label="Rechercher un projet">
+        ${estRef('Personne') ? `<label class="case small"><input type="checkbox" id="rc-tous" ${ui.tous ? 'checked' : ''}> Afficher toutes les personnes</label>` : peut ? `<button class="btn ter sm" id="rc-addA">${P.ic('plus')} Personne</button>` : ''}
+        ${!estRef('Projet') && peut ? `<button class="btn ter sm" id="rc-addP">${P.ic('plus')} Projet</button>` : ''}
+        <div class="rc-leg" style="margin-left:auto">${Object.entries(LETTRES).map(([l, t]) => `<span><span class="L ${l}">${l}</span>${t}</span>`).join('')}</div></div>
       ${projets.length && agents.length ? `<div class="rc-wrap"><table class="rc">
-        <thead><tr><th class="pj">Projet</th>${agents.map(a => `<th class="ag" title="${esc(a._libelle)}"><span>${esc(a._libelle)}</span></th>`).join('')}<th>Contrôle</th></tr></thead>
-        <tbody>${projets.map(p => `<tr><th class="pj" scope="row">${esc(p.titre)}<small>${esc([p.code, p.phase].filter(Boolean).join(' · '))}</small></th>
-          ${agents.map(a => { const rs = rolesDe(p.id, a.id); const chef = (p.chefs || []).includes(a.id);
-            const ls = P.uniq(rs.map(r => P.lettreRole(r.role)).filter(Boolean));
-            const info = rs.map(r => `${esc(r.role)}${r.part ? ' · ' + P.fmtPct(r.part) : ''}${r.commentaire ? ' · ' + esc(r.commentaire) : ''}`).join('<br>');
-            return `<td class="c ${chef ? 'chef' : ''}"><button data-p="${p.id}" data-a="${a.id}" aria-label="${esc(a._libelle)} sur ${esc(p.titre)} : ${ls.join(', ') || 'aucun rôle'}" ${info || chef ? `data-bulle="<strong>${esc(a._libelle)}</strong><br>${chef ? 'Chargé(e) de mission<br>' : ''}${info}"` : ''}>${ls.map(l => `<span class="L ${l}">${l}</span>`).join(' ')}</button></td>`; }).join('')}
-          <td class="ctl">${ctrl(p)}</td></tr>`).join('')}</tbody>
-        <tfoot><tr><td class="pj" style="text-align:left">Charge par personne${aPart ? ' (A·R · temps cumulé)' : ' (A·R)'}</td>${totaux.map(t => `<td data-bulle="A : ${t.A} · R : ${t.R} · C : ${t.C} · I : ${t.I}${aPart ? '<br>Temps consacré cumulé : ' + P.fmtPct(t.part) : ''}">${t.A}·${t.R}${aPart && t.part ? `<br><span style="${t.part > 1 ? 'color:var(--error);font-weight:700' : ''}">${P.fmtPct(t.part)}</span>` : ''}</td>`).join('')}<td></td></tr></tfoot>
-      </table></div>` : '<div class="vide">Aucun projet ou aucun agent à afficher. Cochez « Tous les agents » pour commencer à attribuer des rôles.</div>'}`;
-    const wrap = P.$('.rc-wrap');
-    if (wrap) wrap.addEventListener('click', e => { const b = e.target.closest('button[data-p]'); if (b) menu(b, +b.dataset.p, +b.dataset.a); });
+        <thead><tr><th class="pj">Projet</th>${agents.map(a => `<th class="ag" title="${esc(libelle('Personne', a))}"><span>${esc(libelle('Personne', a))}</span></th>`).join('')}<th>Contrôle</th></tr></thead>
+        <tbody>${projets.map(k => `<tr><th class="pj" scope="row">${esc(libelle('Projet', k))}</th>
+          ${agents.map(a => { const rs = roles.filter(x => x.p === k && x.a === a); const ls = P.uniq(rs.map(x => x.lettre).filter(Boolean));
+            const info = rs.map(x => `${esc(x.role)}${x.part ? ' · ' + P.fmtPct(x.part) : ''}${x.com ? ' · ' + esc(x.com) : ''}`).join('<br>');
+            return `<td class="c"><button data-p="${esc(JSON.stringify(k))}" data-a="${esc(JSON.stringify(a))}" aria-label="${esc(libelle('Personne', a))} : ${ls.join(', ') || 'aucun rôle'}" ${info ? `data-bulle="<strong>${esc(libelle('Personne', a))}</strong><br>${info}"` : ''}>${ls.map(l => `<span class="L ${l}">${l}</span>`).join(' ')}</button></td>`; }).join('')}
+          <td class="ctl">${ctrl(k)}</td></tr>`).join('')}</tbody>
+        <tfoot><tr><td class="pj">Rôles par personne (A · R)${L.a('Part') ? ' et temps cumulé' : ''}</td>${tot.map(t => `<td data-bulle="A : ${t.A} · R : ${t.R} · C : ${t.C} · I : ${t.I}">${t.A} · ${t.R}${L.a('Part') && t.part ? `<br><span style="${t.part > 1 ? 'color:var(--error);font-weight:700' : ''}">${P.fmtPct(t.part)}</span>` : ''}</td>`).join('')}<td></td></tr></tfoot>
+      </table></div>` : '<div class="vide">Aucun projet ou aucune personne à afficher. Cochez « Afficher toutes les personnes » ou ajoutez-en une pour commencer.</div>'}
+    </div>`;
+    P.$('#rc-q').addEventListener('input', P.debounce(e => { ui.q = e.target.value; dessiner(); const i = P.$('#rc-q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250));
+    if (P.$('#rc-tous')) P.$('#rc-tous').addEventListener('change', e => { ui.tous = e.target.checked; dessiner(); });
+    const ajout = (id, liste, quoi) => { const b = P.$(id); if (b) b.addEventListener('click', () => { const n = (prompt(`Nom ${quoi}`) || '').trim(); if (n) { ui[liste].push(n); dessiner(); } }); };
+    ajout('#rc-addA', 'ajoutsA', 'de la personne'); ajout('#rc-addP', 'ajoutsP', 'du projet');
+    const w = P.$('.rc-wrap'); if (w && peut) w.addEventListener('click', e => { const b = e.target.closest('button[data-p]'); if (b) menu(b, JSON.parse(b.dataset.p), JSON.parse(b.dataset.a), roles); });
   }
 
-  function menu(btn, pid, aid) {
-    P.$$('.rc-menu').forEach(m => m.remove());
-    const rs = rolesDe(pid, aid); const actuel = rs[0] ? P.lettreRole(rs[0].role) : '';
-    const aPart = P.a('role', 'part') && P.modifiable('role', 'part');
+  function menu(btn, k, a, roles) {
+    P.$$('.rc-menu').forEach(m => m.parentNode.removeChild(m));
+    const rs = roles.filter(x => x.p === k && x.a === a); const actuel = rs[0] ? rs[0].lettre : '';
+    const partOk = L.ecrivable('Part'); const ech = L.echelle('Part');
     const m = document.createElement('div'); m.className = 'rc-menu'; m.setAttribute('role', 'dialog');
-    m.innerHTML = `<strong class="small">${esc(P.libelle('agent', aid))} · ${esc(P.libelle('projet', pid))}</strong>
-      <div class="lettres">${Object.keys(LETTRES).map(l => `<button data-l="${l}" aria-pressed="${l === actuel}" title="${LETTRES[l]}"><span class="L ${l}">${l}</span></button>`).join('')}</div>
-      ${aPart ? `<label class="small">Temps consacré (%) <input class="in sm" type="number" min="0" max="100" step="5" id="rc-part" value="${rs[0] && rs[0].part != null ? Math.round(rs[0].part * 100) : ''}"></label>` : ''}
-      <div style="display:flex;gap:6px;justify-content:space-between">${rs.length ? '<button class="btn danger sm" data-l="">Retirer</button>' : '<span></span>'}<button class="btn ter sm" data-fermer>Fermer</button></div>`;
+    m.innerHTML = `<strong>${esc(libelle('Personne', a))}</strong><span class="small muted" style="margin-top:-6px">${esc(libelle('Projet', k))}</span>
+      <div class="lettres">${Object.entries(LETTRES).map(([l, t]) => `<button data-l="${l}" aria-pressed="${l === actuel}"><span class="L ${l}">${l}</span>${t}</button>`).join('')}</div>
+      ${partOk ? `<label class="small">Temps consacré (%)<input class="in sm" type="number" min="0" max="100" step="5" id="rc-part" value="${rs[0] && rs[0].part != null ? Math.round(rs[0].part * 100) : ''}"></label>` : ''}
+      <div style="display:flex;gap:8px;justify-content:space-between">${rs.length ? '<button class="btn danger sm" data-l="">Retirer</button>' : '<span></span>'}<button class="btn ter sm" data-fermer>Fermer</button></div>`;
     document.body.appendChild(m);
     const r = btn.getBoundingClientRect();
     m.style.left = Math.min(window.innerWidth - m.offsetWidth - 8, r.left) + 'px';
-    m.style.top = (r.bottom + m.offsetHeight > window.innerHeight ? r.top - m.offsetHeight - 4 : r.bottom + 4) + 'px';
-    const fermer = () => { m.remove(); document.removeEventListener('mousedown', dehors); document.removeEventListener('keydown', esc2); };
+    m.style.top = (r.bottom + m.offsetHeight > window.innerHeight ? Math.max(8, r.top - m.offsetHeight - 4) : r.bottom + 4) + 'px';
+    const fermer = () => { if (m.parentNode) m.parentNode.removeChild(m); document.removeEventListener('mousedown', dehors); document.removeEventListener('keydown', touche); };
     const dehors = e => { if (!m.contains(e.target)) fermer(); };
-    const esc2 = e => { if (e.key === 'Escape') fermer(); };
-    setTimeout(() => { document.addEventListener('mousedown', dehors); document.addEventListener('keydown', esc2); }, 0);
-    m.querySelector('.lettres button').focus();
+    const touche = e => { if (e.key === 'Escape') fermer(); };
+    setTimeout(() => { document.addEventListener('mousedown', dehors); document.addEventListener('keydown', touche); }, 0);
     m.addEventListener('click', async e => {
       if (e.target.closest('[data-fermer]')) return fermer();
       const b = e.target.closest('[data-l]'); if (!b) return;
-      const l = b.dataset.l; const partEl = m.querySelector('#rc-part');
-      const vals = l ? {role: valeurLettre(l)} : null;
-      if (vals && partEl && partEl.value !== '') vals.part = Math.max(0, +partEl.value) / 100;
+      const l = b.dataset.l; const pe = m.querySelector('#rc-part');
+      const vals = {Role: valeurLettre(l)}; if (pe && pe.value !== '') vals.Part = Math.max(0, Math.min(100, +pe.value)) / 100 * ech;
       const acts = [];
-      if (!l) rs.forEach(x => acts.push(P.actionSuppr('role', x.id)));
-      else if (rs.length) { acts.push(P.actionMaj('role', rs[0].id, vals)); rs.slice(1).forEach(x => acts.push(P.actionSuppr('role', x.id))); }
-      else acts.push(P.actionAjout('role', Object.assign({projet: pid, personne: aid}, vals)));
+      if (!l) rs.forEach(x => acts.push(['RemoveRecord', L.tableId, x.id]));
+      else if (rs.length) { acts.push(L.actionMaj(rs[0].id, vals)); rs.slice(1).forEach(x => acts.push(['RemoveRecord', L.tableId, x.id])); }
+      else acts.push(L.actionAjout(Object.assign({Projet: encoder('Projet', k), Personne: encoder('Personne', a)}, vals)));
       fermer();
-      await P.appliquer(acts, l ? `${P.libelle('agent', aid)} : ${l} – ${LETTRES[l]}` : 'Rôle retiré.');
+      await P.appliquer(acts, l ? `${libelle('Personne', a)} : ${l} – ${LETTRES[l]}` : 'Rôle retiré.');
     });
   }
 })();
