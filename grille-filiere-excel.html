@@ -185,14 +185,16 @@ async function buildWorkbook(buf, plan){
   const sst = zip.file("xl/sharedStrings.xml") ? await readXml("xl/sharedStrings.xml") : null;
   const sstText = sst ? el(sst, NS, "si").map(si => el(si, NS, "t").map(t => t.textContent).join("")) : [];
   const defNameShifts = {};
+  const yellowXf = zip.file("xl/styles.xml") ? identificationStyles(await readXml("xl/styles.xml")) : new Set();
   for (const sh of sheets){
     if (plan.dropSheets.has(sh.name)) continue;
     const del = plan.delBySheet[sh.name] || new Set();
     const txt = plan.newText[sh.name] || {};
-    if (!del.size && !Object.keys(txt).length) continue;
     const shift = makeShift(del);
-    defNameShifts[sh.index] = shift;
+    if (del.size) defNameShifts[sh.index] = shift;
     const doc = await readXml(sh.path);
+    stripIdentification(doc, yellowXf);
+    if (plan.filiereName) writeFiliereOnCover(doc, plan.filiereName, sstText);
     updateTexts(doc, txt, sstText);
     if (del.size){
       await transformSheet(doc, del, shift);
@@ -285,6 +287,57 @@ async function buildWorkbook(buf, plan){
   writeXml("xl/workbook.xml", wb);
   writeXml("xl/_rels/workbook.xml.rels", wbRels);
   return zip.generateAsync({ type: "blob", compression: "DEFLATE", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+
+
+/* ------------------------------------------------------------------------
+   Repères d'identification des filières (cellules surlignées en jaune :
+   colonnes fl / veau / horti / lait / lapin, « SCA / pas SCA »…) :
+   ils servent à préparer le référentiel et ne doivent pas figurer dans l'export.
+   ------------------------------------------------------------------------ */
+function identificationStyles(styles){
+  const fills = el(styles, NS, "fills")[0];
+  const yellowFills = new Set();
+  if (fills) el(fills, NS, "fill").forEach((f, i) => {
+    const p = el(f, NS, "patternFill")[0]; if (!p || p.getAttribute("patternType") !== "solid") return;
+    const fg = el(p, NS, "fgColor")[0]; const rgb = fg && (fg.getAttribute("rgb") || "");
+    if (/FFFF00$/i.test(rgb)) yellowFills.add(i);
+  });
+  const xfs = new Set(), cellXfs = el(styles, NS, "cellXfs")[0];
+  if (cellXfs) Array.from(cellXfs.children).forEach((x, i) => { if (yellowFills.has(+x.getAttribute("fillId"))) xfs.add(String(i)); });
+  return xfs;
+}
+function stripIdentification(doc, yellowXf){
+  if (!yellowXf.size) return;
+  const removed = new Set();
+  for (const c of el(doc, NS, "c")){
+    if (yellowXf.has(c.getAttribute("s"))){ removed.add(c.getAttribute("r")); c.parentNode.removeChild(c); }
+  }
+  for (const col of el(doc, NS, "col")) if (yellowXf.has(col.getAttribute("style"))) col.removeAttribute("style");
+  for (const r of el(doc, NS, "row")) if (yellowXf.has(r.getAttribute("s"))){ r.removeAttribute("s"); r.removeAttribute("customFormat"); }
+  for (const m of el(doc, NS, "mergeCell")) if (removed.has(m.getAttribute("ref").split(":")[0])) m.parentNode.removeChild(m);
+  for (const mc of el(doc, NS, "mergeCells")){ const n = el(mc, NS, "mergeCell").length; if (n) mc.setAttribute("count", n); else mc.parentNode.removeChild(mc); }
+}
+/* Page de garde : la filière choisie est écrite dans la case « Secteur concerné » */
+function writeFiliereOnCover(doc, name, sstText){
+  const textOf = c => { if (!c) return ""; const t = c.getAttribute("t");
+    if (t === "s"){ const v = el(c, NS, "v")[0]; return v ? sstText[+v.textContent] || "" : ""; }
+    if (t === "inlineStr") return el(c, NS, "t").map(x => x.textContent).join(""); return ""; };
+  const rows = el(doc, NS, "row");
+  const find = re => rows.find(r => el(r, NS, "c").some(c => parseCell(c.getAttribute("r"))?.col === "B" && re.test(cleanText(textOf(c)))));
+  const rowSect = find(/^Secteur concern/i);
+  if (!rowSect) return;
+  // case de saisie à droite du libellé (colonne C), on garde son cadre
+  const rn = rowSect.getAttribute("r");
+  let cell = el(rowSect, NS, "c").find(c => parseCell(c.getAttribute("r"))?.col === "C");
+  if (!cell){
+    cell = doc.createElementNS(NS, "c"); cell.setAttribute("r", "C" + rn);
+    const next = el(rowSect, NS, "c").find(c => colToNum(parseCell(c.getAttribute("r")).col) > 3);
+    rowSect.insertBefore(cell, next || null);
+  }
+  while (cell.firstChild) cell.removeChild(cell.firstChild);
+  cell.setAttribute("t", "inlineStr");
+  const is = doc.createElementNS(NS, "is"), t = doc.createElementNS(NS, "t"); t.textContent = name; is.appendChild(t); cell.appendChild(is);
 }
 
 /* ligne d'origine -> nouvelle ligne (null si supprimée) */
@@ -521,7 +574,8 @@ $("go").addEventListener("click", async () => {
   $("go").disabled = true; showMsg("ok", "Génération en cours…");
   try {
     await loadData();
-    const blob = await buildWorkbook(state.template.slice(0), computePlan(fid));
+    const plan = computePlan(fid); plan.filiereName = fname;
+    const blob = await buildWorkbook(state.template.slice(0), plan);
     const base = state.templateName.replace(/\.xlsx$/i, "");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = `${base} - ${fname}.xlsx`.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\\/:*?"<>|]/g, "-");
