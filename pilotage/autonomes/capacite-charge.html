@@ -1454,6 +1454,28 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
       {Projet: 'Projet B', Personne: 'Agent 1', Role: 'C – Consulté'},
     ],
   };
+  P.RESSOURCES.contrats = {
+    nom: 'Prestataires', libelle: 'Prestataires et contrats',
+    description: 'Une ligne par prestataire : type de relation (marché, contrat, ponctuel, démarché), référence du marché ou du contrat, dates de début et de fin, montant et contact.',
+    colonnes: [
+      {id: 'Raison_sociale', label: 'Raison sociale', type: 'Text'},
+      {id: 'Type_relation', label: 'Type de relation', type: 'Choice', widgetOptions: CH(['Marché public', 'Contrat / convention', 'Ponctuel', 'Démarché'], ['#000091', '#A558A0', '#C3592D', '#929292'])},
+      {id: 'Reference', label: 'Référence marché / contrat', type: 'Text'},
+      {id: 'Objet', label: 'Objet', type: 'Text'},
+      {id: 'Debut_contrat', label: 'Début du contrat', type: 'Date', widgetOptions: JSON.stringify({dateFormat: 'DD/MM/YYYY'})},
+      {id: 'Fin_contrat', label: 'Fin du contrat', type: 'Date', widgetOptions: JSON.stringify({dateFormat: 'DD/MM/YYYY'})},
+      {id: 'Montant', label: 'Montant', type: 'Numeric', widgetOptions: JSON.stringify({numMode: 'currency', currency: 'EUR'})},
+      {id: 'Representant', label: 'Représentant', type: 'Text'},
+      {id: 'Telephone', label: 'Téléphone', type: 'Text'},
+      {id: 'Mail', label: 'Mail', type: 'Text'},
+    ],
+    exemples: [
+      {Raison_sociale: 'Entreprise X', Type_relation: 'Marché public', Reference: 'MAR-2025-001', Objet: 'Maintenance du réseau', Debut_contrat: -400, Fin_contrat: 330, Montant: 120000, Representant: 'Contact X', Telephone: '01 00 00 00 01', Mail: 'contact@x.example'},
+      {Raison_sociale: 'Entreprise Y', Type_relation: 'Contrat / convention', Reference: 'CTR-2024-004', Objet: 'Téléphonie', Debut_contrat: -700, Fin_contrat: 45, Montant: 30000, Representant: 'Contact Y'},
+      {Raison_sociale: 'Entreprise Z', Type_relation: 'Contrat / convention', Reference: 'CTR-2023-010', Objet: 'Copieurs', Debut_contrat: -1100, Fin_contrat: -20, Montant: 18000},
+      {Raison_sociale: 'Artisan W', Type_relation: 'Ponctuel', Objet: 'Petits travaux'},
+    ],
+  };
   const jourDecale = n => { const d = P.addDays(P.today(), n); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 1000; };
   function valeurExemple(col, v) { if (v == null) return null; if (col.type === 'Date') return jourDecale(v); return v; }
 
