@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grille Excel par filière</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root{
+    --bg:#F6F6F6; --surface:#FFFFFF; --ink:#161616; --ink-soft:#5A5A5A; --border:#DDDDDD;
+    --primary:#000091; --primary-hover:#1212FF; --primary-soft:#E3E3FD;
+    --success:#18753C; --success-soft:#E2F3E8; --warning:#B34000; --warning-soft:#FFE9DE;
+    --error:#CE0500; --error-soft:#FFE9E9; --radius:8px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#1E1E1E; --surface:#2A2A2A; --ink:#EEEEEE; --ink-soft:#B0B0B0; --border:#3E3E3E;
+      --primary:#8585F6; --primary-hover:#A5A5F8; --primary-soft:#24244A;
+      --success:#3FBF6F; --success-soft:#1C3324; --warning:#FF8D5C; --warning-soft:#3A2418;
+      --error:#FF6F6A; --error-soft:#3B1E1E; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  main{max-width:720px;margin:0 auto;padding:16px}
+  h1{font-size:18px;margin:0 0 4px}
+  .sub{color:var(--ink-soft);margin:0 0 16px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+  label{display:block;font-weight:600;margin-bottom:6px}
+  select,input[type=file]{width:100%;font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  .stat{flex:1 1 120px;background:var(--bg);border-radius:6px;padding:10px}
+  .stat b{display:block;font-size:20px}
+  .stat span{color:var(--ink-soft);font-size:12px}
+  button{font:inherit;font-weight:600;border:0;border-radius:6px;padding:10px 16px;cursor:pointer;background:var(--primary);color:#fff;width:100%}
+  button:hover:not(:disabled){background:var(--primary-hover)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .msg{border-radius:6px;padding:10px;margin-top:10px;font-size:13px}
+  .msg.ok{background:var(--success-soft);color:var(--success)}
+  .msg.warn{background:var(--warning-soft);color:var(--warning)}
+  .msg.err{background:var(--error-soft);color:var(--error)}
+  details{margin-top:8px} summary{cursor:pointer;color:var(--ink-soft)}
+  table{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
+  td,th{text-align:left;padding:4px 6px;border-bottom:1px solid var(--border)}
+  td.n{text-align:right;font-variant-numeric:tabular-nums}
+  .hint{color:var(--ink-soft);font-size:12px;margin-top:6px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Grille de contrôle par filière</h1>
+  <p class="sub">Produit le classeur Excel d'origine en ne gardant que les critères cochés pour la filière choisie.</p>
+
+  <div class="card">
+    <label for="filiere">Filière</label>
+    <select id="filiere"><option value="">Chargement…</option></select>
+    <div class="row" style="margin-top:12px">
+      <div class="stat"><b id="sKeep">–</b><span>lignes du référentiel conservées</span></div>
+      <div class="stat"><b id="sDrop">–</b><span>lignes retirées</span></div>
+      <div class="stat"><b id="sSheets">–</b><span>feuilles retirées</span></div>
+    </div>
+    <div id="unident"></div>
+    <details id="detail"><summary>Détail par feuille</summary><table><thead><tr><th>Feuille</th><th class="n">Conservées</th><th class="n">Retirées</th></tr></thead><tbody id="detailBody"></tbody></table></details>
+  </div>
+
+  <div class="card">
+    <label>Modèle Excel</label>
+    <div id="modeleStatus" class="hint">Recherche du modèle dans la table <b>Modele</b>…</div>
+    <div id="fileWrap" style="display:none;margin-top:8px">
+      <input type="file" id="fileInput" accept=".xlsx">
+      <div class="hint">Le modèle n'a pas été trouvé dans Grist : choisissez le fichier Excel d'origine.</div>
+    </div>
+  </div>
+
+  <button id="go" disabled>Télécharger la grille Excel</button>
+  <div id="out"></div>
+</main>
+
+<script>
+"use strict";
+/* ======================================================================
+   Paramètres : noms des tables et colonnes Grist utilisées
+   ====================================================================== */
+const T_REF = "Referentiel", T_FIL = "Filieres", T_ONG = "Onglets", T_MOD = "Modele";
+const NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+const NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+const NS_XDR = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+const NS_PKG = "http://schemas.openxmlformats.org/package/2006/relationships";
+const NS_CT = "http://schemas.openxmlformats.org/package/2006/content-types";
+
+const state = { ref: null, fil: [], ong: null, template: null, templateName: "Grille CRC Reco OP.xlsx" };
+const $ = id => document.getElementById(id);
+
+/* ---------------------------------------------------------------- utilitaires */
+function refList(v){ // Grist encode les listes de références ['L', 1, 2]
+  if (!v) return [];
+  if (Array.isArray(v)) return v[0] === "L" ? v.slice(1) : v;
+  return [];
+}
+function cleanText(s){ return String(s == null ? "" : s).replace(/ /g, " ").replace(/\s+/g, " ").trim(); }
+function colToNum(c){ let n = 0; for (const ch of c) n = n * 26 + (ch.charCodeAt(0) - 64); return n; }
+function numToCol(n){ let s = ""; while (n > 0){ const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
+function parseCell(ref){ const m = /^\$?([A-Z]{1,3})\$?(\d+)$/.exec(ref); return m ? { col: m[1], row: +m[2] } : null; }
+function columnar(t){ // {id:[..], A:[..]} -> [{id, A}]
+  const keys = Object.keys(t), n = (t.id || []).length, out = [];
+  for (let i = 0; i < n; i++){ const o = {}; for (const k of keys) o[k] = t[k][i]; out.push(o); }
+  return out;
+}
+function el(parent, ns, name){ return Array.from(parent.getElementsByTagNameNS(ns, name)); }
+
+/* ---------------------------------------------------- calcul des suppressions */
+function computePlan(filiereId){
+  const delBySheet = {}, keepBySheet = {}, newText = {};
+  let unidentified = 0;
+  for (const r of state.ref){
+    const sheet = r.Feuille, line = Math.round(r.Ligne || 0);
+    if (!sheet || !line) continue;
+    const fils = refList(r.Filieres_applicables);
+    const isSection = r.Niveau === "Section";
+    if (!isSection && fils.length === 0) unidentified++;
+    const keep = !r.Retire && fils.includes(filiereId);
+    if (keep){
+      (keepBySheet[sheet] = keepBySheet[sheet] || new Set()).add(line);
+      if (r.Libelle != null) (newText[sheet] = newText[sheet] || {})[line] = String(r.Libelle);
+    } else {
+      (delBySheet[sheet] = delBySheet[sheet] || new Set()).add(line);
+    }
+  }
+  const dropSheets = new Set();
+  if (state.ong){
+    for (const o of state.ong){
+      if (!o.Feuille) continue;
+      if (!refList(o.Filieres_applicables).includes(filiereId)) dropSheets.add(o.Feuille);
+    }
+  }
+  return { delBySheet, keepBySheet, newText, dropSheets, unidentified };
+}
+
+function renderPlan(){
+  const fid = +$("filiere").value;
+  if (!state.ref || !fid){ return; }
+  const p = computePlan(fid);
+  let keep = 0, drop = 0; const rows = [];
+  const sheets = new Set([...Object.keys(p.keepBySheet), ...Object.keys(p.delBySheet)]);
+  for (const s of sheets){
+    const k = p.dropSheets.has(s) ? 0 : (p.keepBySheet[s] ? p.keepBySheet[s].size : 0);
+    const d = p.dropSheets.has(s) ? (p.keepBySheet[s]?.size || 0) + (p.delBySheet[s]?.size || 0) : (p.delBySheet[s] ? p.delBySheet[s].size : 0);
+    keep += k; drop += d;
+    rows.push(`<tr><td>${s}${p.dropSheets.has(s) ? " <i>(feuille retirée)</i>" : ""}</td><td class="n">${k}</td><td class="n">${d}</td></tr>`);
+  }
+  $("sKeep").textContent = keep; $("sDrop").textContent = drop; $("sSheets").textContent = p.dropSheets.size;
+  $("detailBody").innerHTML = rows.join("");
+  $("unident").innerHTML = p.unidentified
+    ? `<div class="msg warn">${p.unidentified} ligne(s) du référentiel n'ont encore aucune filière : elles ne figurent dans aucune grille.</div>` : "";
+  updateButton();
+}
+
+function updateButton(){ $("go").disabled = !(state.ref && state.template && +$("filiere").value); }
+
+/* ================================================== transformation du classeur */
+async function buildWorkbook(buf, plan){
+  const zip = await JSZip.loadAsync(buf);
+  const parser = new DOMParser(), ser = new XMLSerializer();
+  const readXml = async p => parser.parseFromString(await zip.file(p).async("string"), "application/xml");
+  const writeXml = (p, doc) => zip.file(p, ser.serializeToString(doc));
+  const relsPath = p => p.replace(/([^/]+)$/, "_rels/$1.rels");
+  const resolve = (base, target) => { // chemin relatif -> chemin du zip
+    if (target.startsWith("/")) return target.slice(1);
+    const parts = base.split("/"); parts.pop();
+    for (const seg of target.split("/")){ if (seg === "..") parts.pop(); else if (seg !== ".") parts.push(seg); }
+    return parts.join("/");
+  };
+
+  const wb = await readXml("xl/workbook.xml");
+  const wbRels = await readXml("xl/_rels/workbook.xml.rels");
+  const relTarget = {};
+  for (const r of el(wbRels, NS_PKG, "Relationship")) relTarget[r.getAttribute("Id")] = r;
+  const sheetEls = el(wb, NS, "sheet");
+  const sheets = sheetEls.map((s, i) => ({
+    el: s, index: i, name: s.getAttribute("name"),
+    rid: s.getAttributeNS(NS_R, "id"),
+    path: resolve("xl/workbook.xml", relTarget[s.getAttributeNS(NS_R, "id")].getAttribute("Target"))
+  }));
+
+  // 1) suppression des lignes, feuille par feuille
+  const sst = zip.file("xl/sharedStrings.xml") ? await readXml("xl/sharedStrings.xml") : null;
+  const sstText = sst ? el(sst, NS, "si").map(si => el(si, NS, "t").map(t => t.textContent).join("")) : [];
+  const defNameShifts = {};
+  for (const sh of sheets){
+    if (plan.dropSheets.has(sh.name)) continue;
+    const del = plan.delBySheet[sh.name] || new Set();
+    const txt = plan.newText[sh.name] || {};
+    if (!del.size && !Object.keys(txt).length) continue;
+    const shift = makeShift(del);
+    defNameShifts[sh.index] = shift;
+    const doc = await readXml(sh.path);
+    updateTexts(doc, txt, sstText);
+    if (del.size){
+      await transformSheet(doc, del, shift);
+      // dessins (cases à cocher, images) et contrôles de formulaire
+      const rp = relsPath(sh.path);
+      if (zip.file(rp)){
+        const rels = await readXml(rp);
+        for (const r of el(rels, NS_PKG, "Relationship")){
+          const type = r.getAttribute("Type") || "", target = resolve(sh.path, r.getAttribute("Target"));
+          if (!zip.file(target)) continue;
+          if (/\/drawing$/.test(type)){
+            const d = await readXml(target); transformDrawing(d, del, shift); writeXml(target, d);
+          } else if (/\/vmlDrawing$/.test(type)){
+            zip.file(target, transformVml(await zip.file(target).async("string"), del, shift));
+          }
+        }
+      }
+    }
+    writeXml(sh.path, doc);
+  }
+
+  // 2) noms définis (zones d'impression, titres) : décalage des lignes
+  for (const dn of el(wb, NS, "definedName")){
+    const lsid = dn.getAttribute("localSheetId");
+    const sheetIdx = lsid != null ? +lsid : null;
+    const txt = dn.textContent;
+    for (const sh of sheets){
+      const shift = defNameShifts[sh.index]; if (!shift) continue;
+      const q = sh.name.replace(/'/g, "''");
+      const prefixes = ["'" + q + "'!", sh.name + "!"];
+      if (!prefixes.some(p => txt.includes(p))) continue;
+      dn.textContent = txt.replace(/!([^,]+)/g, (all, tail) => "!" + tail
+        .replace(/(\$?)(\d+):(\$?)(\d+)(?![\d])/g, (m, a, r1, b, r2) => {
+          const n1 = shiftRangeRows(+r1, +r2, shift); return n1 ? `${a}${n1[0]}:${b}${n1[1]}` : m; })
+        .replace(/(\$?[A-Z]{1,3})(\$?)(\d+)(?!\d)/g, (m, c, d, r) => { const n = shift(+r); return n ? c + d + n : m; }));
+      void sheetIdx;
+    }
+  }
+
+  // 3) suppression des feuilles entières
+  const dropIdx = sheets.filter(s => plan.dropSheets.has(s.name)).map(s => s.index).sort((a, b) => b - a);
+  if (dropIdx.length){
+    const ct = await readXml("[Content_Types].xml");
+    for (const i of dropIdx){
+      const sh = sheets[i];
+      sh.el.parentNode.removeChild(sh.el);
+      const rel = relTarget[sh.rid]; rel.parentNode.removeChild(rel);
+      for (const o of el(ct, NS_CT, "Override")) if (o.getAttribute("PartName") === "/" + sh.path) o.parentNode.removeChild(o);
+      zip.remove(sh.path); if (zip.file(relsPath(sh.path))) zip.remove(relsPath(sh.path));
+      for (const dn of el(wb, NS, "definedName")){
+        const l = dn.getAttribute("localSheetId");
+        if (l == null) continue;
+        if (+l === i) dn.parentNode.removeChild(dn);
+        else if (+l > i) dn.setAttribute("localSheetId", String(+l - 1));
+      }
+    }
+    writeXml("[Content_Types].xml", ct);
+    // propriétés du document (liste des feuilles)
+    if (zip.file("docProps/app.xml")){
+      let app = await zip.file("docProps/app.xml").async("string");
+      const names = dropIdx.map(i => sheets[i].name);
+      const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      let removed = 0;
+      for (const n of names){ const tag = "<vt:lpstr>" + esc(n) + "</vt:lpstr>"; if (app.includes(tag)){ app = app.replace(tag, ""); removed++; } }
+      app = app.replace(/(<vt:lpstr>Feuilles de calcul<\/vt:lpstr><\/vt:variant><vt:variant><vt:i4>)(\d+)/, (m, a, n) => a + (+n - removed))
+               .replace(/(<vt:lpstr>Worksheets<\/vt:lpstr><\/vt:variant><vt:variant><vt:i4>)(\d+)/, (m, a, n) => a + (+n - removed))
+               .replace(/(<TitlesOfParts><vt:vector size=")(\d+)/, (m, a, n) => a + (+n - removed));
+      zip.file("docProps/app.xml", app);
+    }
+  }
+  // onglet actif = première feuille
+  for (const v of el(wb, NS, "workbookView")){ v.setAttribute("activeTab", "0"); v.removeAttribute("firstSheet"); }
+  const remaining = el(wb, NS, "sheet");
+  for (const s of sheets){ if (!plan.dropSheets.has(s.name) && zip.file(s.path)){
+    const d = await readXml(s.path); let changed = false;
+    for (const v of el(d, NS, "sheetView")){ if (v.getAttribute("tabSelected")){ v.removeAttribute("tabSelected"); changed = true; } }
+    if (s.el === remaining[0]){ const v = el(d, NS, "sheetView")[0]; if (v){ v.setAttribute("tabSelected", "1"); changed = true; } }
+    if (changed) writeXml(s.path, d);
+  }}
+
+  // 4) chaîne de calcul : supprimée, Excel la reconstruit à l'ouverture
+  if (zip.file("xl/calcChain.xml")){
+    zip.remove("xl/calcChain.xml");
+    for (const r of el(wbRels, NS_PKG, "Relationship")) if (/calcChain$/.test(r.getAttribute("Type"))) r.parentNode.removeChild(r);
+    const ct = await readXml("[Content_Types].xml");
+    for (const o of el(ct, NS_CT, "Override")) if (o.getAttribute("PartName") === "/xl/calcChain.xml") o.parentNode.removeChild(o);
+    writeXml("[Content_Types].xml", ct);
+  }
+  for (const c of el(wb, NS, "calcPr")) c.setAttribute("fullCalcOnLoad", "1");
+  writeXml("xl/workbook.xml", wb);
+  writeXml("xl/_rels/workbook.xml.rels", wbRels);
+  return zip.generateAsync({ type: "blob", compression: "DEFLATE", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+
+/* ligne d'origine -> nouvelle ligne (null si supprimée) */
+function makeShift(del){
+  const sorted = [...del].sort((a, b) => a - b);
+  return r => {
+    if (del.has(r)) return null;
+    let lo = 0, hi = sorted.length; while (lo < hi){ const m = (lo + hi) >> 1; if (sorted[m] < r) lo = m + 1; else hi = m; }
+    return r - lo;
+  };
+}
+function shiftRangeRows(r1, r2, shift){
+  let a = null, b = null;
+  for (let r = r1; r <= r2; r++){ const n = shift(r); if (n != null){ if (a == null) a = n; b = n; } }
+  return a == null ? null : [a, b];
+}
+function shiftRange(ref, shift){ // "A1:B5" ou "C3"
+  const [p1, p2] = ref.split(":");
+  const c1 = parseCell(p1), c2 = p2 ? parseCell(p2) : c1;
+  if (!c1 || !c2) return ref;
+  const rr = shiftRangeRows(c1.row, c2.row, shift);
+  if (!rr) return null;
+  return p2 ? `${c1.col}${rr[0]}:${c2.col}${rr[1]}` : `${c1.col}${rr[0]}`;
+}
+function shiftSqref(sqref, shift){
+  const out = sqref.split(/\s+/).filter(Boolean).map(r => shiftRange(r, shift)).filter(Boolean);
+  return out.length ? out.join(" ") : null;
+}
+function shiftFormula(f, shift){
+  return f.replace(/(^|[^A-Za-z0-9_.!'"])(\$?)([A-Z]{1,3})(\$?)(\d+)(?![\d(A-Za-z_])/g, (m, pre, d1, col, d2, row) => {
+    const n = shift(+row); return pre + d1 + col + d2 + (n == null ? row : n);
+  });
+}
+
+/* remplace le libellé d'un critère s'il a été modifié dans Grist */
+function updateTexts(doc, txt, sstText){
+  const lines = Object.keys(txt); if (!lines.length) return;
+  const rowEls = {};
+  for (const r of el(doc, NS, "row")) rowEls[r.getAttribute("r")] = r;
+  for (const line of lines){
+    const row = rowEls[line]; if (!row) continue;
+    const wanted = cleanText(txt[line]);
+    // cellule du critère = première cellule texte à partir de la colonne B
+    for (const c of el(row, NS, "c")){
+      const pc = parseCell(c.getAttribute("r")); if (!pc || pc.col === "A") continue;
+      const t = c.getAttribute("t"); let cur = null;
+      if (t === "s"){ const v = el(c, NS, "v")[0]; cur = v ? sstText[+v.textContent] : null; }
+      else if (t === "inlineStr"){ cur = el(c, NS, "t").map(x => x.textContent).join(""); }
+      if (cur == null || !cleanText(cur)) continue;
+      if (cleanText(cur) !== wanted){
+        while (c.firstChild) c.removeChild(c.firstChild);
+        c.setAttribute("t", "inlineStr");
+        const is = doc.createElementNS(NS, "is"), tt = doc.createElementNS(NS, "t");
+        tt.setAttributeNS("http://www.w3.org/XML/1998/namespace", "xml:space", "preserve");
+        tt.textContent = txt[line]; is.appendChild(tt); c.appendChild(is);
+      }
+      break;
+    }
+  }
+}
+
+/* suppression des lignes dans une feuille */
+async function transformSheet(doc, del, shift){
+  const sheetData = el(doc, NS, "sheetData")[0];
+  const rowEls = {};
+  for (const r of el(sheetData, NS, "row")) rowEls[+r.getAttribute("r")] = r;
+  const findCell = (row, col) => {
+    const r = rowEls[row]; if (!r) return null;
+    return el(r, NS, "c").find(c => parseCell(c.getAttribute("r"))?.col === col) || null;
+  };
+  const putCell = (row, col, src) => { // copie src (cellule d'origine) dans (row, col)
+    let r = rowEls[row];
+    if (!r){ r = doc.createElementNS(NS, "row"); r.setAttribute("r", row);
+      const after = Object.keys(rowEls).map(Number).filter(n => n > row).sort((a, b) => a - b)[0];
+      sheetData.insertBefore(r, after ? rowEls[after] : null); rowEls[row] = r; }
+    const clone = src.cloneNode(true); clone.setAttribute("r", col + row);
+    const old = findCell(row, col);
+    if (old) r.replaceChild(clone, old);
+    else { const next = el(r, NS, "c").find(c => colToNum(parseCell(c.getAttribute("r")).col) > colToNum(col)); r.insertBefore(clone, next || null); }
+  };
+
+  // fusions : réduites ; si la 1re ligne d'une fusion disparaît, son contenu descend
+  const mc = el(doc, NS, "mergeCells")[0];
+  if (mc){
+    for (const m of el(mc, NS, "mergeCell")){
+      const ref = m.getAttribute("ref"), [p1, p2] = ref.split(":");
+      const c1 = parseCell(p1), c2 = parseCell(p2 || p1);
+      if (del.has(c1.row)){
+        const first = [...Array(c2.row - c1.row + 1).keys()].map(k => c1.row + k).find(r => !del.has(r));
+        const src = findCell(c1.row, c1.col);
+        if (first && src) putCell(first, c1.col, src);
+      }
+      const nr = shiftRange(ref, shift);
+      if (!nr || !nr.includes(":") || nr.split(":")[0] === nr.split(":")[1]) m.parentNode.removeChild(m);
+      else m.setAttribute("ref", nr);
+    }
+    const n = el(mc, NS, "mergeCell").length;
+    if (n) mc.setAttribute("count", n); else mc.parentNode.removeChild(mc);
+  }
+
+  // lignes
+  for (const [rn, r] of Object.entries(rowEls)){
+    const n = +rn;
+    if (del.has(n)){ r.parentNode.removeChild(r); continue; }
+    const nn = shift(n);
+    r.setAttribute("r", nn);
+    for (const c of el(r, NS, "c")){
+      const pc = parseCell(c.getAttribute("r")); if (pc) c.setAttribute("r", pc.col + nn);
+      for (const f of el(c, NS, "f")){
+        if (f.textContent) f.textContent = shiftFormula(f.textContent, shift);
+        if (f.getAttribute("ref")){ const s = shiftRange(f.getAttribute("ref"), shift); if (s) f.setAttribute("ref", s); }
+      }
+    }
+  }
+
+  // dimension, validations, mises en forme conditionnelles, filtres
+  for (const d of el(doc, NS, "dimension")){ const s = shiftRange(d.getAttribute("ref"), shift); if (s) d.setAttribute("ref", s); }
+  for (const dv of el(doc, NS, "dataValidation")){
+    const s = shiftSqref(dv.getAttribute("sqref") || "", shift);
+    if (s) dv.setAttribute("sqref", s); else dv.parentNode.removeChild(dv);
+  }
+  for (const dvs of el(doc, NS, "dataValidations")){
+    const n = el(dvs, NS, "dataValidation").length;
+    if (n) dvs.setAttribute("count", n); else dvs.parentNode.removeChild(dvs);
+  }
+  for (const cf of el(doc, NS, "conditionalFormatting")){
+    const s = shiftSqref(cf.getAttribute("sqref") || "", shift);
+    if (s) cf.setAttribute("sqref", s); else cf.parentNode.removeChild(cf);
+  }
+  for (const af of el(doc, NS, "autoFilter")){ const s = shiftRange(af.getAttribute("ref"), shift); if (s) af.setAttribute("ref", s); }
+  for (const sel of el(doc, NS, "selection")){
+    const ac = sel.getAttribute("activeCell"); if (ac){ const p = parseCell(ac); if (p){ const n = shift(p.row); sel.setAttribute("activeCell", p.col + (n || 1)); } }
+    const sq = sel.getAttribute("sqref"); if (sq){ sel.setAttribute("sqref", shiftSqref(sq, shift) || "A1"); }
+  }
+  // sauts de page
+  for (const rb of el(doc, NS, "rowBreaks")){
+    const seen = new Set();
+    for (const b of el(rb, NS, "brk")){
+      let id = +b.getAttribute("id"), n = null;
+      while (id > 0 && (n = shift(id)) == null) id--;
+      if (!n || seen.has(n)) { b.parentNode.removeChild(b); continue; }
+      seen.add(n); b.setAttribute("id", n);
+    }
+    const n = el(rb, NS, "brk").length;
+    if (n){ rb.setAttribute("count", n); rb.setAttribute("manualBreakCount", n); } else rb.parentNode.removeChild(rb);
+  }
+  // contrôles de formulaire (cases à cocher) ancrés sur une ligne supprimée
+  for (const ctrl of el(doc, NS, "control")){
+    const from = el(ctrl, NS, "from")[0], to = el(ctrl, NS, "to")[0];
+    const fr = from && el(from, NS_XDR, "row")[0];
+    if (!fr) continue;
+    if (del.has(+fr.textContent + 1)){
+      let node = ctrl; while (node.parentNode && node.parentNode.localName !== "controls") node = node.parentNode;
+      node.parentNode.removeChild(node);
+    } else {
+      fr.textContent = shift(+fr.textContent + 1) - 1;
+      const tr = to && el(to, NS_XDR, "row")[0];
+      if (tr){ const r = +tr.textContent + 1; let n = shift(r); let k = r; while (n == null && k > 0) n = shift(--k); tr.textContent = (n || 1) - 1; }
+    }
+  }
+  for (const cs of el(doc, NS, "controls")) if (!el(cs, NS, "control").length) cs.parentNode.removeChild(cs);
+}
+
+/* dessins DrawingML (positions en lignes, base 0) */
+function transformDrawing(doc, del, shift){
+  const anchors = [...el(doc, NS_XDR, "twoCellAnchor"), ...el(doc, NS_XDR, "oneCellAnchor")];
+  for (const a of anchors){
+    const from = el(a, NS_XDR, "from")[0], to = el(a, NS_XDR, "to")[0];
+    const fr = el(from, NS_XDR, "row")[0];
+    if (del.has(+fr.textContent + 1)){ a.parentNode.removeChild(a); continue; }
+    const tr = to ? el(to, NS_XDR, "row")[0] : null;
+    const toRow = tr ? +tr.textContent + 1 : null;
+    fr.textContent = shift(+fr.textContent + 1) - 1;
+    if (tr){ let k = toRow, n = shift(k); while (n == null && k > 0) n = shift(--k); tr.textContent = (n || 1) - 1; }
+  }
+}
+/* dessins VML hérités (cases à cocher) : <x:Anchor> col, dx, ligne, dy, col, dx, ligne, dy */
+function transformVml(text, del, shift){
+  return text.replace(/<v:shape\b[\s\S]*?<\/v:shape>/g, shape => {
+    const m = /<x:Anchor>\s*([^<]+)<\/x:Anchor>/.exec(shape); if (!m) return shape;
+    const a = m[1].split(",").map(s => +s.trim());
+    if (a.length < 8) return shape;
+    if (del.has(a[2] + 1)) return "";
+    a[2] = shift(a[2] + 1) - 1;
+    let k = a[6] + 1, n = shift(k); while (n == null && k > 0) n = shift(--k); a[6] = (n || 1) - 1;
+    return shape.replace(m[0], "<x:Anchor>\n    " + a.join(", ") + "</x:Anchor>");
+  });
+}
+
+/* ==================================================================== Grist */
+async function fetchTableSafe(name){ try { return columnar(await grist.docApi.fetchTable(name)); } catch(e){ return null; } }
+
+async function loadData(){
+  const [ref, fil, ong] = await Promise.all([fetchTableSafe(T_REF), fetchTableSafe(T_FIL), fetchTableSafe(T_ONG)]);
+  if (!ref){ showMsg("err", `Table « ${T_REF} » introuvable.`); return; }
+  state.ref = ref; state.fil = fil || []; state.ong = ong && ong.length && "Filieres_applicables" in ong[0] ? ong : null;
+  const sel = $("filiere"), prev = sel.value;
+  sel.innerHTML = '<option value="">— Choisir —</option>' + state.fil.map(f => `<option value="${f.id}">${f.Nom}</option>`).join("");
+  if (prev) sel.value = prev;
+  renderPlan();
+}
+
+async function loadTemplate(){
+  const mod = await fetchTableSafe(T_MOD);
+  const row = mod && mod.find(r => refList(r.Fichier).length || (Array.isArray(r.Fichier) && r.Fichier.length));
+  if (!row){ $("modeleStatus").textContent = "Aucun modèle trouvé dans la table Modele."; $("fileWrap").style.display = "block"; return; }
+  try {
+    const attId = refList(row.Fichier)[0];
+    const tok = await grist.docApi.getAccessToken({ readOnly: true });
+    const resp = await fetch(`${tok.baseUrl}/attachments/${attId}/download?auth=${tok.token}`);
+    if (!resp.ok) throw new Error(resp.status);
+    state.template = await resp.arrayBuffer();
+    const att = await fetchTableSafe("_grist_Attachments");
+    const meta = att && att.find(a => a.id === attId);
+    if (meta && meta.fileName) state.templateName = meta.fileName;
+    $("modeleStatus").innerHTML = `Modèle chargé depuis Grist : <b>${state.templateName}</b>`;
+  } catch(e){
+    $("modeleStatus").textContent = "Impossible de lire la pièce jointe (accès complet au document requis).";
+    $("fileWrap").style.display = "block";
+  }
+  updateButton();
+}
+
+function showMsg(kind, html){ $("out").innerHTML = `<div class="msg ${kind}">${html}</div>`; }
+
+$("filiere").addEventListener("change", () => { $("out").innerHTML = ""; renderPlan(); });
+$("fileInput").addEventListener("change", async e => {
+  const f = e.target.files[0]; if (!f) return;
+  state.template = await f.arrayBuffer(); state.templateName = f.name;
+  $("modeleStatus").innerHTML = `Modèle choisi : <b>${f.name}</b>`; updateButton();
+});
+$("go").addEventListener("click", async () => {
+  const fid = +$("filiere").value, fname = (state.fil.find(f => f.id === fid) || {}).Nom || "filiere";
+  $("go").disabled = true; showMsg("ok", "Génération en cours…");
+  try {
+    await loadData();
+    const blob = await buildWorkbook(state.template.slice(0), computePlan(fid));
+    const base = state.templateName.replace(/\.xlsx$/i, "");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = `${base} - ${fname}.xlsx`.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\\/:*?"<>|]/g, "-");
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    showMsg("ok", `Grille <b>${fname}</b> téléchargée.`);
+  } catch(e){ console.error(e); showMsg("err", "Erreur pendant la génération : " + e.message); }
+  updateButton();
+});
+
+grist.ready({ requiredAccess: "full" });
+grist.onRecord(rec => { // si le widget est lié à la table Filieres
+  if (rec && rec.id && state.fil.some(f => f.id === rec.id) && $("filiere").value !== String(rec.id)){
+    $("filiere").value = String(rec.id); $("out").innerHTML = ""; renderPlan();
+  }
+});
+grist.onRecords(() => loadData());
+loadData(); loadTemplate();
+</script>
+</body>
+</html>
