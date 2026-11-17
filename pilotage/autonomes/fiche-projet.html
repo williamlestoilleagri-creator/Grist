@@ -1027,7 +1027,7 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
   };
 
   P.ouvrirConfig = (onglet) => {
-    const ents = dependances(P.cfg.entites || []);
+    const ents = P.cfg.entitesSeules ? (P.cfg.entites || []) : dependances(P.cfg.entites || []);
     const tablesOpts = Object.keys(etat.schema).sort();
     const corps = document.createElement('div');
     const onglets = [['reglages', 'Réglages']].concat(P.cfg.ressource ? [['ressource', 'Table ressource']] : [], aideIntegree ? [['aide', 'Mode d’emploi']] : []);
@@ -1320,6 +1320,41 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
     const pal = ['#000091', '#6a6af4', '#009081', '#c08c65', '#a558a0', '#417dc4', '#d1335b', '#5e2a2b', '#3a3a3a', '#716043'];
     return {fond: pal[(i >= 0 ? i : [...valeur].reduce((s, ch) => s + ch.charCodeAt(0), 0)) % pal.length]};
   };
+  /* Formulaire générique d'après le type des colonnes associées */
+  L.champForm = (nom, r, opts) => {
+    opts = opts || {};
+    const c = L.col(nom); if (!c) return '';
+    const id = 'lf-' + nom, lab = esc(opts.libelle || L.titreColonne(nom)), t = c.type.split(':')[0];
+    const cls = 'champ' + (opts.large ? ' large' : '');
+    if (!L.ecrivable(nom)) return `<div class="${cls}"><span class="lbl">${lab}</span><div class="in" style="background:var(--alt);box-shadow:none">${esc(r ? L.texte(nom, r) : '') || '–'}</div><span class="aide">Valeur calculée par une formule</span></div>`;
+    const v = r ? r[c.colId] : null;
+    let input;
+    if (t === 'Date' || t === 'DateTime') { const d = r ? L.date(nom, r) : null; input = `<input class="in" type="date" id="${id}" data-l="${nom}" data-t="date" value="${d ? P.iso(d) : ''}">`; }
+    else if (t === 'Numeric' || t === 'Int') input = `<input class="in" type="number" step="any" id="${id}" data-l="${nom}" data-t="num" value="${typeof v === 'number' ? v : ''}">`;
+    else if (t === 'Bool') input = `<label class="case"><input type="checkbox" id="${id}" data-l="${nom}" data-t="bool" ${v ? 'checked' : ''}> Oui</label>`;
+    else if (t === 'Choice') { const l = L.choix(nom).slice(); const cur = r ? L.texte(nom, r) : ''; if (cur && !l.includes(cur)) l.push(cur); input = `<select class="in" id="${id}" data-l="${nom}" data-t="txt"><option value=""></option>${l.map(x => `<option ${x === cur ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>`; }
+    else if (t === 'ChoiceList') { const cur = Array.isArray(v) ? v.slice(1) : []; input = `<div class="multi" data-l="${nom}" data-t="choices" style="display:flex;flex-wrap:wrap;gap:6px">${P.uniq(L.choix(nom).concat(cur)).map(x => `<button type="button" class="tag" aria-pressed="${cur.includes(x)}" data-v="${esc(x)}">${esc(x)}</button>`).join('')}</div>`; }
+    else if (t === 'Ref' || t === 'RefList') {
+      const m = L.refs[c.colId] || new Map(); const l = Array.from(m.entries()).sort((a, b) => a[1].localeCompare(b[1], 'fr'));
+      if (t === 'Ref') input = `<select class="in" id="${id}" data-l="${nom}" data-t="ref"><option value=""></option>${l.map(([k, x]) => `<option value="${k}" ${k === v ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>`;
+      else { const cur = Array.isArray(v) ? v.slice(1) : []; input = `<div class="multi" data-l="${nom}" data-t="refs" style="display:flex;flex-wrap:wrap;gap:6px">${l.map(([k, x]) => `<button type="button" class="tag" aria-pressed="${cur.includes(k)}" data-v="${k}">${esc(x)}</button>`).join('') || '<span class="muted small">Aucun élément</span>'}</div>`; }
+    } else if (opts.long) input = `<textarea class="in" id="${id}" data-l="${nom}" data-t="txt" rows="3">${esc(r ? L.texte(nom, r) : '')}</textarea>`;
+    else input = `<input class="in" id="${id}" data-l="${nom}" data-t="txt" value="${esc(r ? L.texte(nom, r) : '')}">`;
+    return `<div class="${cls}"><label for="${id}">${lab}</label>${input}</div>`;
+  };
+  L.lireForm = el => {
+    const vals = {};
+    el.querySelectorAll('[data-l]').forEach(x => {
+      const nom = x.dataset.l, t = x.dataset.t;
+      if (t === 'date') vals[nom] = P.fromIso(x.value);
+      else if (t === 'num') vals[nom] = x.value === '' ? null : Number(x.value);
+      else if (t === 'bool') vals[nom] = x.checked;
+      else if (t === 'ref') vals[nom] = x.value ? Number(x.value) : 0;
+      else if (t === 'refs' || t === 'choices') { const l = Array.from(x.querySelectorAll('[aria-pressed=true]')).map(b => t === 'refs' ? Number(b.dataset.v) : b.dataset.v); vals[nom] = l.length ? ['L', ...l] : null; }
+      else vals[nom] = x.value;
+    });
+    return vals;
+  };
   L.titreColonne = nom => ((P.cfg.colonnes || []).find(c => c.name === nom) || {}).title || nom;
 
   /* ------------------------------------------------------------------ */
@@ -1355,6 +1390,34 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
         {Intitule: 'Former les utilisateurs', Projet: 'Projet B', Responsable: 'Agent 2', Statut: 'À faire', Priorite: 'P3 – Normale', Date_debut: 20, Echeance: 40, Avancement: 0, Charge: 5, Jalon: false, Suites: ''},
       ],
     },
+  };
+  P.RESSOURCES.projets = {
+    nom: 'Projets', libelle: 'Projets',
+    description: 'Une ligne par projet : code, intitulé, domaine, phase, priorité, chef de projet, calendrier, charge, budget et contenu (objectifs, critères de réussite, contraintes, risques…).',
+    colonnes: [
+      {id: 'Code', label: 'Code', type: 'Text'},
+      {id: 'Intitule', label: 'Intitulé', type: 'Text'},
+      {id: 'Domaine', label: 'Domaine', type: 'Choice', widgetOptions: CH(['Domaine 1', 'Domaine 2', 'Transverse'], ['#000091', '#009081', '#A558A0'])},
+      {id: 'Phase', label: 'Phase', type: 'Choice', widgetOptions: CH(['À cadrer', 'En cours', 'En pause', 'Terminé', 'Abandonné'], ['#6A6AF4', '#000091', '#C3592D', '#18753C', '#929292'])},
+      {id: 'Priorite', label: 'Priorité', type: 'Choice', widgetOptions: CH(['P1 – Critique', 'P2 – Haute', 'P3 – Normale', 'P4 – Basse'], ['#CE0500', '#C3592D', '#0063CB', '#929292'])},
+      {id: 'Chef_de_projet', label: 'Chef de projet', type: 'Text'},
+      {id: 'Date_debut', label: 'Date de début', type: 'Date', widgetOptions: JSON.stringify({dateFormat: 'DD/MM/YYYY'})},
+      {id: 'Deadline', label: 'Deadline', type: 'Date', widgetOptions: JSON.stringify({dateFormat: 'DD/MM/YYYY'})},
+      {id: 'Date_fin_reelle', label: 'Date de fin réelle', type: 'Date', widgetOptions: JSON.stringify({dateFormat: 'DD/MM/YYYY'})},
+      {id: 'Charge_estimee', label: 'Charge estimée (jours)', type: 'Numeric'},
+      {id: 'Budget', label: 'Budget prévu', type: 'Numeric', widgetOptions: JSON.stringify({numMode: 'currency', currency: 'EUR'})},
+      {id: 'Objectifs', label: 'Objectifs', type: 'Text', widgetOptions: JSON.stringify({wrap: true})},
+      {id: 'Criteres', label: 'Critères de réussite', type: 'Text', widgetOptions: JSON.stringify({wrap: true})},
+      {id: 'Description', label: 'Description', type: 'Text', widgetOptions: JSON.stringify({wrap: true})},
+      {id: 'Contraintes', label: 'Contraintes', type: 'Text', widgetOptions: JSON.stringify({wrap: true})},
+      {id: 'Risques', label: 'Risques', type: 'Text', widgetOptions: JSON.stringify({wrap: true})},
+      {id: 'Parties_prenantes', label: 'Parties prenantes', type: 'Text'},
+      {id: 'Prestataires', label: 'Prestataires', type: 'Text'},
+    ],
+    exemples: [
+      {Code: 'PRJ-01', Intitule: 'Projet A', Domaine: 'Domaine 1', Phase: 'En cours', Priorite: 'P2 – Haute', Chef_de_projet: 'Agent 1', Date_debut: -40, Deadline: 30, Charge_estimee: 20, Budget: 15000, Objectifs: 'Remplacer l’équipement en fin de vie', Criteres: 'Mise en service sans interruption', Description: 'Achat, installation et mise en service', Contraintes: 'Intervention hors heures ouvrées', Risques: 'Retard de livraison', Parties_prenantes: 'Direction, Service A', Prestataires: 'Entreprise X'},
+      {Code: 'PRJ-02', Intitule: 'Projet B', Domaine: 'Domaine 2', Phase: 'À cadrer', Priorite: 'P3 – Normale', Chef_de_projet: 'Agent 3', Date_debut: 10, Deadline: 120, Charge_estimee: 12, Objectifs: 'Former les équipes au nouvel outil', Criteres: '90 % des agents formés', Parties_prenantes: 'Tous les services'},
+    ],
   };
   const jourDecale = n => { const d = P.addDays(P.today(), n); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 1000; };
   function valeurExemple(col, v) { if (v == null) return null; if (col.type === 'Date') return jourDecale(v); return v; }
@@ -1539,207 +1602,272 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
 })();
 
 </script>
+<script type="text/html" id="pl-aide"><!--AIDE--><p class="chapo">La fiche projet présente <strong>tout un projet sur une seule page</strong> : objectifs, équipe, calendrier, avancement, jalons et tâches. C’est aussi le moyen le plus simple de <strong>créer un nouveau projet</strong> sans rien oublier.</p>
+
+<section>
+  <h2>À quoi sert-elle ?</h2>
+  <ul>
+    <li><strong>Faire le point</strong> sur un projet en quelques secondes : où en est-il, qui fait quoi, qu’est-ce qui bloque ?</li>
+    <li><strong>Présenter un projet</strong> à une direction ou à un partenaire : la fiche s’imprime sur une page.</li>
+    <li><strong>Lancer un projet</strong> proprement : intitulé, code, calendrier, équipe, objectifs et premiers jalons.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Mise en place</h2>
+  <ol class="etapes">
+    <li><span>Ajoutez un <strong>widget personnalisé</strong> et choisissez votre <strong>table des projets</strong> comme données.</span></li>
+    <li><span>Dans le <strong>panneau de droite</strong> (onglet Widget), associez au minimum l’<strong>Intitulé</strong>, puis les colonnes que vous utilisez : code, domaine, phase, priorité, chef de projet, dates, charge, budget, objectifs, critères de réussite, description, contraintes, risques, parties prenantes, prestataires.</span></li>
+    <li><span>Facultatif : dans les paramètres (⚙), onglet <strong>Réglages</strong>, indiquez vos tables de <strong>tâches</strong>, de <strong>jalons</strong> et de <strong>rôles</strong>. La fiche affiche alors l’avancement, les tâches en retard, les jalons et l’équipe de chaque projet.</span></li>
+  </ol>
+</section>
+
+<div class="encart"><strong>📦 Pas encore de table des projets ?</strong><p>Paramètres (⚙), onglet <strong>Table ressource</strong> : créez en un clic une table « Projets » prête à l’emploi, avec ou sans exemples, ou téléchargez son modèle CSV. Les tâches se rattachent ensuite à un projet par son intitulé ou son code.</p></div>
+
+<section>
+  <h2>Ce que vous y trouvez</h2>
+  <div class="blocs">
+    <div><strong>🏷️ L’identité</strong>Code, intitulé, domaine, phase et priorité (avec les couleurs de vos listes), état du projet, réalisation interne ou avec prestataire.</div>
+    <div><strong>📊 Les indicateurs</strong>Avancement, jours restants avant la deadline, tâches en cours et en retard, charge estimée et planifiée, jalons atteints, budget.</div>
+    <div><strong>🎯 Le contenu</strong>Objectifs, critères de réussite, description, contraintes, risques, besoins de formation.</div>
+    <div><strong>👥 L’équipe</strong>Chefs de projet et rôles de chacun, parties prenantes, prestataires.</div>
+  </div>
+</section>
+
+<section>
+  <h2>Créer un projet</h2>
+  <ol class="etapes">
+    <li><span>Cliquez sur <strong>« Nouveau projet »</strong>.</span></li>
+    <li><span>Saisissez l’<strong>intitulé</strong> ; le <strong>code</strong> est proposé automatiquement à partir des codes existants.</span></li>
+    <li><span>Complétez le calendrier, l’équipe et le contenu, ajoutez si besoin les <strong>premiers jalons</strong>, puis cliquez sur <strong>« Créer le projet »</strong>.</span></li>
+  </ol>
+</section>
+
+<div class="encart astuce"><strong>💡 Astuce</strong><p>Placez la fiche à côté de votre table des projets et réglez « Sélectionner par » sur cette table : la fiche suit la ligne sur laquelle vous cliquez. Cochez alors « Masquer la liste des projets » dans les réglages pour gagner de la place.</p></div>
+
+<div class="encart attention"><strong>⚠️ Bon à savoir</strong><p>L’avancement et l’état du projet sont <strong>calculés à partir des tâches</strong> : des tâches à jour (statut, avancement, charge) donnent une fiche juste.</p></div>
+
+<p class="pied">Les modifications faites dans la fiche sont enregistrées directement dans vos tables. Le bouton ? affiche ce mode d’emploi.</p><!--FIN_AIDE--></script>
 <style>
-  .fp{display:grid;grid-template-columns:270px 1fr;gap:16px;align-items:start}
-  .fp-liste{border:1px solid var(--border);position:sticky;top:76px;max-height:calc(100vh - 96px);display:flex;flex-direction:column}
-  .fp-liste .tete{padding:8px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:6px}
+  .fp{display:grid;grid-template-columns:280px 1fr;gap:32px;align-items:start;max-width:1320px;margin:0 auto;padding:8px 8px 40px}
+  .fp.seul{grid-template-columns:1fr}
+  .fp.seul .fp-liste{display:none}
+  .fp-liste{border:1px solid var(--border);position:sticky;top:84px;max-height:calc(100vh - 110px);display:flex;flex-direction:column}
+  .fp-liste .tete{padding:12px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
   .fp-liste ul{list-style:none;margin:0;padding:0;overflow:auto}
-  .fp-liste li button{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--contrast);padding:8px 10px 8px 12px;cursor:pointer;position:relative}
+  .fp-liste li button{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--contrast);padding:12px 14px 12px 16px;cursor:pointer;position:relative}
   .fp-liste li button:hover{background:var(--alt)}
   .fp-liste li button[aria-current=true]{background:var(--bf-975)}
-  .fp-liste li button[aria-current=true]::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:3px;background:var(--bf)}
-  .fp-liste .nom{font-weight:500;color:var(--title);font-size:.85rem;display:block}
-  .fp-liste .meta{font-size:.72rem;color:var(--mention)}
-  .fp-fiche{display:flex;flex-direction:column;gap:14px;min-width:0}
-  .fp-tete{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;border-bottom:3px solid var(--bf);padding-bottom:10px}
-  .fp-tete h2{font-size:1.5rem;flex:1;min-width:240px}
-  .fp-tete .code{font-family:var(--mono);color:var(--mention);font-size:.85rem;display:block;font-weight:400}
-  .fp-badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
-  .fp-2{display:grid;grid-template-columns:3fr 2fr;gap:14px}
-  .fp-bloc h3{font-size:.8rem;text-transform:uppercase;letter-spacing:.03em;color:var(--mention);margin:10px 0 2px}
+  .fp-liste li button[aria-current=true]::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;background:var(--bf)}
+  .fp-liste .nom{font-weight:500;color:var(--title);font-size:.92rem;display:block}
+  .fp-liste .meta{font-size:.75rem;color:var(--mention);display:block;margin-top:3px}
+  .fp-fiche{display:flex;flex-direction:column;gap:28px;min-width:0;font-size:15px}
+  .fp-tete{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;border-bottom:3px solid var(--bf);padding-bottom:16px}
+  .fp-tete h2{font-size:1.9rem;line-height:1.2}
+  .fp-tete .code{font-family:var(--mono);color:var(--mention);font-size:.9rem;display:block;font-weight:400;margin-bottom:4px}
+  .fp-badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .fp-badges .badge{font-size:.75rem;padding:3px 10px}
+  .fp-2{display:grid;grid-template-columns:3fr 2fr;gap:28px}
+  .fp-bloc h3{font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--mention);margin:18px 0 4px}
   .fp-bloc h3:first-child{margin-top:0}
-  .fp-bloc p{margin:0;white-space:pre-wrap;font-size:.88rem}
-  .fp-pers{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:.85rem}
-  .fp-av{width:28px;height:28px;border-radius:50%;background:var(--bf-925);color:var(--bf);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.72rem;flex:0 0 auto}
-  .fp-jal{display:flex;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid var(--contrast);font-size:.85rem}
-  .fp-jal .d{width:86px;flex:0 0 auto;font-variant-numeric:tabular-nums;color:var(--mention)}
-  .fp-form h3{font-size:.95rem;margin:4px 0 0;padding-top:8px;border-top:1px solid var(--border);grid-column:1/-1}
-  .fp-lignes{display:flex;flex-direction:column;gap:6px}
-  .fp-lignes .l{display:grid;grid-template-columns:1fr 160px 36px;gap:6px}
-  .fp-lignes .l.r{grid-template-columns:1fr 180px 36px}
-  @media (max-width:900px){.fp{grid-template-columns:1fr}.fp-liste{position:static;max-height:280px}.fp-2{grid-template-columns:1fr}}
-  @media print{.fp{grid-template-columns:1fr}.fp-liste{display:none}.fp-2{grid-template-columns:3fr 2fr}}
+  .fp-bloc p{margin:0;white-space:pre-wrap;font-size:.95rem;line-height:1.6;color:var(--title)}
+  .fp-pers{display:flex;align-items:center;gap:12px;padding:8px 0}
+  .fp-av{width:36px;height:36px;border-radius:50%;background:var(--bf-925);color:var(--bf);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.8rem;flex:0 0 auto}
+  .fp-form{display:flex;flex-direction:column;gap:18px}
+  .fp-form h3{font-size:1rem;padding-top:14px;border-top:1px solid var(--border)}
+  .fp-form h3:first-child{border-top:0;padding-top:0}
+  .fp-lignes{display:flex;flex-direction:column;gap:8px}
+  .fp-lignes .l{display:grid;grid-template-columns:1fr 170px 40px;gap:8px}
+  @media (max-width:960px){.fp{grid-template-columns:1fr}.fp-liste{position:static;max-height:300px}.fp-2{grid-template-columns:1fr}}
+  @media print{.fp{grid-template-columns:1fr}.fp-liste{display:none}}
 </style>
 </head>
 <body>
 <script>
 (function () {
-  const P = Pilotage, esc = P.esc;
-  const ui = {sel: null, recherche: '', tous: false};
+  const P = Pilotage, L = P.L, esc = P.esc;
+  const ui = {sel: null, q: '', clos: false};
   try { ui.sel = +localStorage.getItem('fiche-projet-sel') || null; } catch (e) { /* ignoré */ }
+  const TEXTES = ['Objectifs', 'Criteres', 'Description', 'Contraintes', 'Risques', 'Formation'];
 
   P.demarrer({
     id: 'fiche-projet',
     titre: 'Fiche projet',
-    sousTitre: 'Synthèse d’un projet et saisie de nouveaux projets',
-    entites: ['projet', 'tache', 'jalon', 'role', 'temps', 'prestataire'],
-    optionnelles: ['tache', 'jalon', 'role', 'temps', 'prestataire'],
+    sousTitre: 'Un projet sur une page, et la saisie de nouveaux projets',
+    entites: ['tache', 'jalon', 'role'], optionnelles: ['tache', 'jalon', 'role'], entitesSeules: true,
+    ressource: 'projets',
+    colonnes: [
+      {name: 'Titre', title: 'Intitulé', type: 'Any', ressource: ['Intitule']},
+      {name: 'Code', title: 'Code', type: 'Any', optional: true, ressource: ['Code']},
+      {name: 'Domaine', title: 'Domaine', type: 'Choice', optional: true, ressource: ['Domaine']},
+      {name: 'Phase', title: 'Phase / statut', description: 'Ex. À cadrer, En cours, Terminé', type: 'Choice', optional: true, ressource: ['Phase']},
+      {name: 'Priorite', title: 'Priorité', type: 'Choice', optional: true, ressource: ['Priorite']},
+      {name: 'Chefs', title: 'Chef(s) de projet', type: 'Any', optional: true, ressource: ['Chef_de_projet']},
+      {name: 'Debut', title: 'Date de début', type: 'Date', optional: true, ressource: ['Date_debut']},
+      {name: 'Deadline', title: 'Deadline', type: 'Date', optional: true, ressource: ['Deadline']},
+      {name: 'FinReelle', title: 'Date de fin réelle', type: 'Date', optional: true, ressource: ['Date_fin_reelle']},
+      {name: 'Charge', title: 'Charge estimée (jours)', type: 'Numeric', optional: true, ressource: ['Charge_estimee']},
+      {name: 'Budget', title: 'Budget prévu', type: 'Numeric', optional: true, ressource: ['Budget']},
+      {name: 'Objectifs', title: 'Objectifs', type: 'Any', optional: true, ressource: ['Objectifs']},
+      {name: 'Criteres', title: 'Critères de réussite', type: 'Any', optional: true, ressource: ['Criteres']},
+      {name: 'Description', title: 'Description', type: 'Any', optional: true, ressource: ['Description']},
+      {name: 'Contraintes', title: 'Contraintes', type: 'Any', optional: true, ressource: ['Contraintes']},
+      {name: 'Risques', title: 'Risques', type: 'Any', optional: true, ressource: ['Risques']},
+      {name: 'Formation', title: 'Besoins de formation', type: 'Any', optional: true},
+      {name: 'Parties', title: 'Parties prenantes', type: 'Any', optional: true, ressource: ['Parties_prenantes']},
+      {name: 'Prestataires', title: 'Prestataires', type: 'Any', optional: true, ressource: ['Prestataires']},
+    ],
+    demo: {table: 'DATA_Projets', mapping: {Titre: 'Intitule', Code: 'Code', Domaine: 'Domaine', Phase: 'Phase', Priorite: 'Priorite', Chefs: 'Charge_de_mission', Debut: 'Date_de_debut', Deadline: 'Deadline', FinReelle: 'Date_de_fin_reelle', Charge: 'Charge_estimee', Budget: 'Budget_prevu', Objectifs: 'Objectifs', Criteres: 'Criteres_de_reussite', Description: 'Description', Contraintes: 'Contraintes', Risques: 'Risques', Formation: 'Besoin_de_formation', Parties: 'Partie_prenantes', Prestataires: 'Prestataires'}},
+    reglagesHtml: () => `<p class="small muted" style="margin:0">Les tables liées ci-dessus (tâches, jalons, rôles) sont facultatives : elles alimentent l’avancement, les jalons et l’équipe de la fiche. Leur colonne « Projet » peut être une référence vers la table des projets ou le texte de l’intitulé (ou du code).</p>
+      <label class="case" style="margin-top:8px"><input type="checkbox" id="rg-seul" ${P.reglage('seul', false) ? 'checked' : ''}> Masquer la liste des projets (le widget suit la ligne sélectionnée dans une autre vue)</label>`,
+    lireReglages: (el, r) => { r.seul = el.querySelector('#rg-seul').checked; },
     outils: () => `<button class="btn pri sm" id="fp-nouveau">${P.ic('plus')} Nouveau projet</button>`,
     surOutils: el => el.querySelector('#fp-nouveau').addEventListener('click', () => formulaire(null)),
-    init: () => P.surCurseur((tableId, id) => { if (tableId === P.table('projet') && id !== ui.sel) { ui.sel = id; dessiner(); } }),
+    init: () => P.surCurseur((tableId, id) => { if (tableId && tableId === L.tableId && id !== ui.sel) { ui.sel = id; dessiner(); } }),
     rendu: () => dessiner(),
   });
 
   const initiales = n => (n || '?').split(/[\s-]+/).filter(Boolean).slice(0, 2).map(x => x[0]).join('').toUpperCase();
+  const projet = r => ({r, id: r.id, titre: L.texte('Titre', r) || '(sans intitulé)', code: L.texte('Code', r), phase: L.texte('Phase', r), domaine: L.texte('Domaine', r),
+    priorite: L.texte('Priorite', r), debut: L.date('Debut', r), fin: L.date('Deadline', r), finReelle: L.date('FinReelle', r), charge: L.nombre('Charge', r), budget: L.nombre('Budget', r)});
+
+  /* Tâches, jalons et rôles rattachés : par référence vers la table des projets, ou par intitulé / code */
+  function rattache(valeur, ent, p) {
+    if (valeur == null || valeur === '') return false;
+    if (typeof valeur === 'number') {
+      const col = P.colonne(ent, 'projet');
+      if (col && /^Ref(List)?:/.test(col.type) && col.type.split(':')[1] === L.tableId) return valeur === p.id;
+      const lib = P.norm(P.libelle('projet', valeur)); return !!lib && (lib === P.norm(p.titre) || lib === P.norm(p.code));
+    }
+    const txt = P.norm(valeur.texte || valeur); return !!txt && (txt === P.norm(p.titre) || txt === P.norm(p.code));
+  }
+  const tachesDe = p => P.table('tache') ? P.liste('tache').filter(t => rattache(t.projet, 'tache', p)) : [];
+  const avancement = ts => { const t = ts.filter(x => !P.estAbandon(x.statut)); if (!t.length) return null; const w = t.map(x => Math.max(x.charge || 0, 0) || 1); return t.reduce((s, x, i) => s + w[i] * P.avancement(x), 0) / P.somme(w); };
+  function sante(p, ts) {
+    if (P.estClos(p.phase)) return {l: '⚪ Clos', c: ''};
+    if (P.estPause(p.phase)) return {l: '⏸️ En pause', c: ''};
+    const ret = ts.filter(t => P.urgence(t).code === 'retard').length; const j = p.fin ? P.diffDays(p.fin, P.today()) : null;
+    if (ret || (j != null && j < 0)) return {l: '⛈️ Critique', c: 'err'};
+    const av = avancement(ts);
+    if (j != null && j <= 15 && av != null && av < .8) return {l: '🌥️ Tendu', c: 'jaune'};
+    return {l: '☀️ OK', c: 'ok'};
+  }
 
   function dessiner() {
     const corps = P.$('#pl-corps');
-    const projets = P.liste('projet').slice().sort((a, b) => (P.estClos(a.phase) - P.estClos(b.phase)) || String(a.code || a.titre).localeCompare(String(b.code || b.titre), 'fr'));
+    const projets = L.recs.map(projet).sort((a, b) => (P.estClos(a.phase) - P.estClos(b.phase)) || String(a.code || a.titre).localeCompare(String(b.code || b.titre), 'fr'));
     if (!projets.length) {
-      corps.innerHTML = `<div class="vide"><p>Aucun projet pour l’instant.</p><button class="btn pri" id="fp-n2">${P.ic('plus')} Créer le premier projet</button></div>`;
+      corps.innerHTML = `<div class="vide" style="max-width:640px;margin:40px auto;padding:40px"><p>Aucun projet pour l’instant.</p><button class="btn pri" id="fp-n2">${P.ic('plus')} Créer le premier projet</button></div>`;
       P.$('#fp-n2').addEventListener('click', () => formulaire(null)); return;
     }
-    if (!ui.sel || !P.get('projet', ui.sel)) ui.sel = (projets.find(p => !P.estClos(p.phase)) || projets[0]).id;
-    const q = P.norm(ui.recherche);
-    const visibles = projets.filter(p => (ui.tous || !P.estClos(p.phase) || p.id === ui.sel) && (!q || P.norm(p.titre + ' ' + (p.code || '')).includes(q)));
-    corps.innerHTML = `<div class="fp">
+    if (!ui.sel || !projets.some(p => p.id === ui.sel)) ui.sel = (projets.find(p => !P.estClos(p.phase)) || projets[0]).id;
+    const q = P.norm(ui.q);
+    const visibles = projets.filter(p => (ui.clos || !P.estClos(p.phase) || p.id === ui.sel) && (!q || P.norm(p.titre + ' ' + p.code).includes(q)));
+    corps.innerHTML = `<div class="fp ${P.reglage('seul', false) ? 'seul' : ''}">
       <nav class="fp-liste no-print" aria-label="Projets">
-        <div class="tete"><label class="sr" for="fp-q">Rechercher</label><input class="in sm" id="fp-q" placeholder="Rechercher un projet" value="${esc(ui.recherche)}">
-          <label class="case small"><input type="checkbox" id="fp-tous" ${ui.tous ? 'checked' : ''}> Afficher les projets clos</label></div>
-        <ul>${visibles.map(p => { const s = P.santeProjet(p); return `<li><button data-id="${p.id}" aria-current="${p.id === ui.sel}">
-          <span class="nom">${esc(p.titre || '(sans titre)')}</span><span class="meta">${esc(p.code || '')} ${p.code ? '·' : ''} ${esc(s.l)}${p.fin ? ' · ' + P.fmtDate(p.fin) : ''}</span></button></li>`; }).join('') || '<li class="muted small" style="padding:10px">Aucun résultat</li>'}</ul>
+        <div class="tete"><input class="in sm" id="fp-q" placeholder="Rechercher un projet" value="${esc(ui.q)}" aria-label="Rechercher un projet">
+          ${L.a('Phase') ? `<label class="case small"><input type="checkbox" id="fp-clos" ${ui.clos ? 'checked' : ''}> Afficher les projets clos</label>` : ''}</div>
+        <ul>${visibles.map(p => `<li><button data-id="${p.id}" aria-current="${p.id === ui.sel}"><span class="nom">${esc(p.titre)}</span>
+          <span class="meta">${esc([p.code, sante(p, tachesDe(p)).l, p.fin ? P.fmtDate(p.fin) : ''].filter(Boolean).join(' · '))}</span></button></li>`).join('') || '<li class="muted small" style="padding:12px">Aucun résultat</li>'}</ul>
       </nav>
       <article class="fp-fiche" id="fp-fiche"></article></div>`;
-    P.$('#fp-q').addEventListener('input', P.debounce(e => { ui.recherche = e.target.value; dessiner(); P.$('#fp-q').focus(); const v = P.$('#fp-q'); v.setSelectionRange(v.value.length, v.value.length); }, 250));
-    P.$('#fp-tous').addEventListener('change', e => { ui.tous = e.target.checked; dessiner(); });
+    P.$('#fp-q').addEventListener('input', P.debounce(e => { ui.q = e.target.value; dessiner(); const i = P.$('#fp-q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250));
+    if (P.$('#fp-clos')) P.$('#fp-clos').addEventListener('change', e => { ui.clos = e.target.checked; dessiner(); });
     P.$('.fp-liste ul').addEventListener('click', e => { const b = e.target.closest('button[data-id]'); if (!b) return; ui.sel = +b.dataset.id; try { localStorage.setItem('fiche-projet-sel', ui.sel); } catch (x) { /* ignoré */ } dessiner(); });
-    fiche(P.get('projet', ui.sel));
+    fiche(projets.find(p => p.id === ui.sel));
   }
 
   function fiche(p) {
-    const el = P.$('#fp-fiche'); const auj = P.today();
-    const s = P.santeProjet(p);
-    const taches = P.tachesDuProjet(p.id).slice().sort((a, b) => P.urgence(a).rang - P.urgence(b).rang || ((a.echeance || 9e15) - (b.echeance || 9e15)));
-    const ouvertes = taches.filter(t => !P.estClos(t.statut));
-    const retards = taches.filter(t => P.urgence(t).code === 'retard');
-    const jalons = P.liste('jalon').filter(j => j.projet === p.id).sort((a, b) => (a.date || 9e15) - (b.date || 9e15));
-    const roles = P.liste('role').filter(r => r.projet === p.id);
-    const av = P.avancementProjet(p.id);
-    const j = p.fin ? P.diffDays(p.fin, auj) : null;
-    const reel = P.table('temps') ? P.chargeReelleProjet(p.id) : null;
-    const planif = P.table('tache') ? P.chargePlanifieeProjet(p.id) : null;
-    const prest = (p.prestataires || []).map(id => P.get('prestataire', id)).filter(Boolean);
-    const mode = !prest.length ? '🏠 Réalisé en interne' : '🤝 Avec prestataire(s)';
-    const bloc = (titre, txt) => txt ? `<h3>${titre}</h3><p>${esc(txt)}</p>` : '';
-    const ordreRole = {A: 0, R: 1, C: 2, I: 3, '': 4};
-    const equipe = new Map();
-    (p.chefs || []).forEach(id => equipe.set(id, {id, roles: ['Chargé(e) de mission']}));
-    roles.slice().sort((a, b) => ordreRole[P.lettreRole(a.role)] - ordreRole[P.lettreRole(b.role)]).forEach(r => {
-      if (!r.personne) return; if (!equipe.has(r.personne)) equipe.set(r.personne, {id: r.personne, roles: []});
-      equipe.get(r.personne).roles.push(r.role + (r.part ? ` (${P.fmtPct(r.part)})` : ''));
+    const el = P.$('#fp-fiche'); const auj = P.today(); const r = p.r;
+    const ts = tachesDe(p).slice().sort((a, b) => P.urgence(a).rang - P.urgence(b).rang || ((a.echeance || 9e15) - (b.echeance || 9e15)));
+    const ouvertes = ts.filter(t => !P.estClos(t.statut)), retards = ts.filter(t => P.urgence(t).code === 'retard');
+    const jalons = P.table('jalon') ? P.liste('jalon').filter(j => rattache(j.projet, 'jalon', p)).sort((a, b) => (a.date || 9e15) - (b.date || 9e15)) : [];
+    const roles = P.table('role') ? P.liste('role').filter(x => rattache(x.projet, 'role', p)) : [];
+    const s = sante(p, ts), av = avancement(ts), j = p.fin ? P.diffDays(p.fin, auj) : null;
+    const planif = ts.length ? P.somme(ts.map(t => Math.max(t.charge || 0, 0))) : null;
+    const bloc = nom => L.a(nom) && L.texte(nom, r) ? `<h3>${esc(L.titreColonne(nom))}</h3><p>${esc(L.texte(nom, r))}</p>` : '';
+    const equipe = [];
+    if (L.a('Chefs')) L.texte('Chefs', r).split(/\s*,\s*/).filter(Boolean).forEach(n => equipe.push({n, role: L.titreColonne('Chefs').replace(/\(s\)/, '')}));
+    const ordre = {A: 0, R: 1, C: 2, I: 3, '': 4};
+    roles.slice().sort((a, b) => ordre[P.lettreRole(a.role)] - ordre[P.lettreRole(b.role)]).forEach(x => {
+      const n = P.libelle('agent', x.personne); if (!n) return;
+      const e = equipe.find(y => y.n === n); const lib = x.role + (x.part ? ` (${P.fmtPct(x.part)})` : '');
+      if (e) e.role += ' · ' + lib; else equipe.push({n, role: lib});
     });
+    const tags = nom => L.a(nom) && L.texte(nom, r) ? `<h3>${esc(L.titreColonne(nom))}</h3><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">${L.texte(nom, r).split(/\s*,\s*/).filter(Boolean).map(x => `<span class="tag">${esc(x)}</span>`).join('')}</div>` : '';
+    const coulBadge = nom => { const v = L.texte(nom, r); if (!v) return ''; const c = L.couleur(nom, v); return `<span class="badge" style="background:${c.fond};color:${c.texte || '#fff'}">${esc(v)}</span>`; };
 
     el.innerHTML = `
-      <header class="fp-tete">
-        <div style="flex:1;min-width:240px"><h2><span class="code">${esc(p.code || '')}</span>${esc(p.titre || '(sans titre)')}</h2>
-          <div class="fp-badges">${p.domaine ? `<span class="badge info">${esc(p.domaine)}</span>` : ''}${p.phase ? `<span class="badge">${esc(p.phase)}</span>` : ''}
-          ${p.priorite ? `<span class="badge ${P.rangPriorite(p.priorite) <= 1 ? 'err' : P.rangPriorite(p.priorite) === 2 ? 'warn' : ''}">${esc(p.priorite)}</span>` : ''}<span class="badge ${s.c}">${esc(s.l)}</span><span class="badge new">${mode}</span></div></div>
-        <div class="no-print" style="display:flex;gap:6px">
-          <button class="btn sec sm" id="fp-modif">${P.ic('modifier')} Modifier</button>
-          <button class="btn ter sm" id="fp-print">${P.ic('imprimer')} Imprimer</button></div>
-      </header>
+      <header class="fp-tete"><div style="flex:1;min-width:260px"><h2>${p.code ? `<span class="code">${esc(p.code)}</span>` : ''}${esc(p.titre)}</h2>
+          <div class="fp-badges">${coulBadge('Domaine')}${coulBadge('Phase')}${coulBadge('Priorite')}<span class="badge ${s.c}">${esc(s.l)}</span>
+          ${L.a('Prestataires') ? `<span class="badge new">${L.texte('Prestataires', r) ? '🤝 Avec prestataire(s)' : '🏠 Réalisé en interne'}</span>` : ''}</div></div>
+        <div class="no-print" style="display:flex;gap:8px"><button class="btn sec sm" id="fp-modif">${P.ic('modifier')} Modifier</button><button class="btn ter sm" id="fp-print">${P.ic('imprimer')} Imprimer</button></div></header>
+
       <div class="tuiles">
-        <div class="tuile ${av >= .8 ? 'ok' : ''}"><div class="v">${P.fmtPct(av)}</div><div class="l">avancement</div><div class="barre" style="margin-top:4px"><span style="width:${Math.round(av * 100)}%"></span></div></div>
-        <div class="tuile ${j != null && j < 0 && !P.estClos(p.phase) ? 'err' : j != null && j <= 15 ? 'warn' : ''}"><div class="v">${p.fin ? (P.estClos(p.phase) ? '✓' : j < 0 ? `+${-j} j` : `J-${j}`) : '–'}</div><div class="l">deadline ${p.fin ? P.fmtDate(p.fin) : 'non définie'}</div></div>
-        ${P.table('tache') ? `<div class="tuile ${retards.length ? 'err' : ''}"><div class="v">${ouvertes.length}<span class="small muted"> / ${taches.length}</span></div><div class="l">tâches ouvertes${retards.length ? ` · <strong style="color:var(--error)">${retards.length} en retard</strong>` : ''}</div></div>` : ''}
-        <div class="tuile ${reel != null && p.charge && reel > p.charge ? 'warn' : ''}"><div class="v">${P.fmtNb(p.charge)}</div><div class="l">J/H estimés${planif != null ? ` · ${P.fmtNb(planif)} planifiés` : ''}${reel != null ? ` · ${P.fmtNb(reel)} réels` : ''}</div></div>
-        ${P.table('jalon') ? `<div class="tuile"><div class="v">${jalons.filter(x => x.atteint).length}<span class="small muted"> / ${jalons.length}</span></div><div class="l">jalons atteints</div></div>` : ''}
-        ${p.budget ? `<div class="tuile"><div class="v" style="font-size:1.2rem">${P.fmtEuro(p.budget)}</div><div class="l">budget prévu</div></div>` : ''}
+        ${av != null ? `<div class="tuile ${av >= .8 ? 'ok' : ''}"><div class="v">${P.fmtPct(av)}</div><div class="l">avancement</div><div class="barre" style="margin-top:8px"><span style="width:${Math.round(av * 100)}%"></span></div></div>` : ''}
+        ${L.a('Deadline') ? `<div class="tuile ${j != null && j < 0 && !P.estClos(p.phase) ? 'err' : j != null && j <= 15 && !P.estClos(p.phase) ? 'warn' : ''}"><div class="v">${p.fin ? (P.estClos(p.phase) ? '✓' : j < 0 ? `+${-j} j` : `J-${j}`) : '–'}</div><div class="l">${p.fin ? 'deadline le ' + P.fmtDate(p.fin) : 'deadline non définie'}</div></div>` : ''}
+        ${P.table('tache') ? `<div class="tuile ${retards.length ? 'err' : ''}"><div class="v">${ouvertes.length}</div><div class="l">tâche(s) en cours${retards.length ? ` dont <strong style="color:var(--error)">${retards.length} en retard</strong>` : ''}</div></div>` : ''}
+        ${L.a('Charge') ? `<div class="tuile"><div class="v">${P.fmtNb(p.charge)}</div><div class="l">jours estimés${planif != null ? ` · ${P.fmtNb(planif)} planifiés dans les tâches` : ''}</div></div>` : ''}
+        ${jalons.length ? `<div class="tuile"><div class="v">${jalons.filter(x => x.atteint).length} / ${jalons.length}</div><div class="l">jalons atteints</div></div>` : ''}
+        ${p.budget ? `<div class="tuile"><div class="v" style="font-size:1.5rem">${P.fmtEuro(p.budget)}</div><div class="l">budget prévu</div></div>` : ''}
       </div>
+
       <div class="fp-2">
-        <section class="carte fp-bloc">${bloc('Objectifs', p.objectifs)}${bloc('Critères de réussite', p.criteres)}${bloc('Description', p.description)}${bloc('Contraintes', p.contraintes)}${bloc('Risques', p.risques)}${bloc('Besoins de formation', p.formation)}
-          ${!p.objectifs && !p.description && !p.criteres ? '<p class="muted small">Aucune description. Cliquez sur « Modifier » pour compléter la fiche.</p>' : ''}
-          <h3>Calendrier</h3><p>${p.debut ? 'Début le ' + P.fmtDate(p.debut) : 'Début non défini'}${p.fin ? ' · deadline le ' + P.fmtDate(p.fin) : ''}${p.fin_reelle ? ' · terminé le ' + P.fmtDate(p.fin_reelle) : ''}</p>
-        </section>
+        <section class="carte fp-bloc">${TEXTES.map(bloc).join('') || '<p class="muted">Aucune description. Cliquez sur « Modifier » pour compléter la fiche.</p>'}
+          ${p.debut || p.fin ? `<h3>Calendrier</h3><p>${[p.debut ? 'Début le ' + P.fmtDate(p.debut) : '', p.fin ? 'deadline le ' + P.fmtDate(p.fin) : '', p.finReelle ? 'terminé le ' + P.fmtDate(p.finReelle) : ''].filter(Boolean).join(' · ')}</p>` : ''}</section>
         <section class="carte fp-bloc">
-          <h3>Équipe</h3>${equipe.size ? Array.from(equipe.values()).map(x => { const n = P.libelle('agent', x.id); return `<div class="fp-pers"><span class="fp-av" aria-hidden="true">${esc(initiales(n))}</span><span><strong>${esc(n)}</strong><br><span class="muted small">${esc(x.roles.join(' · '))}</span></span></div>`; }).join('') : '<p class="muted small">Aucun membre.</p>'}
-          ${(p.parties || []).length ? `<h3>Parties prenantes</h3><div style="display:flex;flex-wrap:wrap;gap:4px">${P.libelles('partie', p.parties).map(x => `<span class="tag">${esc(x)}</span>`).join('')}</div>` : ''}
-          <h3>Prestataires</h3>${prest.length ? prest.map(x => { const fin = x.fin ? P.diffDays(x.fin, auj) : null; return `<div class="fp-pers"><span><strong>${esc(x.nom)}</strong> ${x.type ? `<span class="badge">${esc(x.type)}</span>` : ''}<br><span class="muted small">${esc([x.marche, x.representant, x.telephone].filter(Boolean).join(' · '))}</span>
-            ${fin != null && fin < 0 ? '<br><span class="badge err">contrat expiré</span>' : fin != null && fin <= 90 ? `<br><span class="badge warn">contrat : fin dans ${fin} j</span>` : ''}</span></div>`; }).join('') : '<p class="muted small">Aucun : projet réalisé en interne.</p>'}
-        </section>
+          <h3>Équipe</h3>${equipe.length ? equipe.map(x => `<div class="fp-pers"><span class="fp-av" aria-hidden="true">${esc(initiales(x.n))}</span><span><strong style="color:var(--title)">${esc(x.n)}</strong><br><span class="muted small">${esc(x.role)}</span></span></div>`).join('') : '<p class="muted">Non renseignée.</p>'}
+          ${tags('Parties')}${tags('Prestataires')}</section>
       </div>
-      ${P.table('jalon') ? `<section class="carte"><h3 class="sec-titre">🏁 Jalons</h3>${jalons.length ? jalons.map(x => {
-        const etat = x.atteint ? '<span class="badge ok">atteint</span>' : !x.date ? '<span class="badge">non daté</span>' : x.date < auj ? '<span class="badge err">dépassé</span>' : P.diffDays(x.date, auj) <= 15 ? '<span class="badge warn">imminent</span>' : '<span class="badge info">à venir</span>';
-        return `<div class="fp-jal"><span class="d">${x.date ? P.fmtDate(x.date) : '–'}</span><span style="flex:1">${esc(x.titre)}</span>${etat}</div>`; }).join('') : '<p class="muted small">Aucun jalon.</p>'}</section>` : ''}
-      ${P.table('tache') ? `<section class="carte"><h3 class="sec-titre">✅ Tâches <span class="muted small" style="font-weight:400">${ouvertes.length} ouverte(s) sur ${taches.length}</span></h3>
-        ${taches.length ? `<table class="tab"><thead><tr><th>Tâche</th><th>Responsable</th><th>Échéance</th><th>Statut</th><th>Urgence</th><th>Avancement</th></tr></thead><tbody>
-        ${taches.map(t => { const u = P.urgence(t); return `<tr><td>${esc(t.titre)}</td><td>${esc(P.libelle('agent', t.responsable))}</td><td>${t.echeance ? P.fmtDate(t.echeance) : ''}</td><td>${esc(t.statut || '')}</td>
-          <td><span class="badge ${u.classe}">${esc(u.libelle)}</span></td><td style="min-width:90px"><div class="barre"><span style="width:${Math.round(P.avancement(t) * 100)}%"></span></div></td></tr>`; }).join('')}</tbody></table>` : '<p class="muted small">Aucune tâche.</p>'}</section>` : ''}
+
+      ${jalons.length ? `<section class="carte"><h2>🏁 Jalons</h2>${jalons.map(x => `<div class="ligne-liste"><div class="t"><strong>${esc(x.titre)}</strong></div><div class="m">${x.date ? P.fmtDate(x.date) : 'non daté'}<br>${x.atteint ? '<span class="badge ok">atteint</span>' : x.date && x.date < auj ? '<span class="badge err">dépassé</span>' : x.date && P.diffDays(x.date, auj) <= 15 ? '<span class="badge warn">imminent</span>' : '<span class="badge info">à venir</span>'}</div></div>`).join('')}</section>` : ''}
+      ${P.table('tache') ? `<section class="carte"><h2>✅ Tâches <span class="muted small" style="font-weight:400">${ouvertes.length} en cours sur ${ts.length}</span></h2>
+        ${ts.length ? ts.map(t => { const u = P.urgence(t); return `<div class="ligne-liste"><div class="t"><strong>${esc(t.titre)}</strong><span>${esc([P.libelle('agent', t.responsable), t.statut].filter(Boolean).join(' · '))}</span></div>
+          <div class="m">${t.echeance ? P.fmtDate(t.echeance) : ''}<br><span class="badge ${u.classe}">${esc(u.libelle)}</span></div></div>`; }).join('') : '<p class="vide-doux">Aucune tâche rattachée à ce projet.</p>'}</section>` : ''}
       <p class="print-only small muted">Fiche éditée le ${P.fmtDate(auj)}</p>`;
     P.$('#fp-modif').addEventListener('click', () => formulaire(p));
     P.$('#fp-print').addEventListener('click', () => window.print());
   }
 
-  /* Proposition de code : même préfixe que les projets du domaine, année en cours, numéro suivant */
-  function codeSuggere(domaine) {
+  function codeSuggere() {
     const an = new Date().getFullYear();
-    const codes = P.liste('projet').map(p => ({p, m: /^([A-Za-z]+)-(\d{4})-(\d+)$/.exec(p.code || '')})).filter(x => x.m);
+    const codes = L.recs.map(r => /^([A-Za-z]+)-(\d{4}|\d{2})-?(\d+)?$/.exec(L.texte('Code', r))).filter(Boolean);
     if (!codes.length) return '';
-    const memes = codes.filter(x => !domaine || x.p.domaine === domaine);
-    const prefixe = (memes[0] || codes[0]).m[1];
-    const num = Math.max(0, ...codes.filter(x => x.m[1] === prefixe && +x.m[2] === an).map(x => +x.m[3])) + 1;
-    return `${prefixe}-${an}-${String(num).padStart(2, '0')}`;
+    const pre = codes[codes.length - 1][1];
+    const m = codes.filter(c => c[1] === pre && c[3] && (+c[2] === an)).map(c => +c[3]);
+    return `${pre}-${an}-${String(Math.max(0, ...m) + 1).padStart(2, '0')}`;
   }
 
   function formulaire(p) {
-    const nouveau = !p; p = p || {};
-    const f = (ch, opts) => P.champFormulaire('projet', ch, p[ch], opts);
-    const roleChoix = P.choix('role', 'role');
-    const div = document.createElement('div');
-    div.className = 'fp-form';
-    div.innerHTML = `<form class="grille" id="fp-f" onsubmit="return false">
-      <h3>Identification</h3>
-      ${f('titre', {large: true})}${f('code')}${f('domaine')}${f('phase')}${f('priorite')}
-      <h3>Calendrier et charge</h3>
-      ${f('debut')}${f('fin')}${f('fin_reelle')}${f('charge')}${f('budget')}
-      <h3>Équipe et partenaires</h3>
-      ${f('chefs', {large: true})}${f('parties', {large: true})}${f('prestataires', {large: true})}
-      <h3>Contenu</h3>
-      ${f('objectifs', {large: true, long: true})}${f('criteres', {large: true, long: true})}${f('description', {large: true, long: true})}
-      ${f('contraintes', {long: true})}${f('risques', {long: true})}${f('formation', {large: true})}
-    </form>
-    ${nouveau && P.table('jalon') && P.a('jalon', 'projet') ? `<div><h3>Jalons initiaux <span class="muted small" style="font-weight:400">(facultatif)</span></h3>
-      <div class="fp-lignes" id="fp-jal"></div><button type="button" class="btn ter sm" id="fp-jal-add" style="margin-top:6px">${P.ic('plus')} Ajouter un jalon</button></div>` : ''}
-    ${nouveau && P.table('role') ? `<div><h3>Rôles (RACI) <span class="muted small" style="font-weight:400">(facultatif)</span></h3>
-      <div class="fp-lignes" id="fp-rol"></div><button type="button" class="btn ter sm" id="fp-rol-add" style="margin-top:6px">${P.ic('plus')} Ajouter une personne</button></div>` : ''}`;
-    const agents = P.liste('agent').slice().sort((a, b) => a._libelle.localeCompare(b._libelle, 'fr'));
-    const ligneJal = () => { const l = document.createElement('div'); l.className = 'l'; l.innerHTML = `<input class="in sm" placeholder="Libellé du jalon" data-j="titre"><input class="in sm" type="date" data-j="date"><button type="button" class="btn ter sm ic" title="Retirer">${P.ic('fermer')}</button>`; l.querySelector('button').onclick = () => l.remove(); P.$('#fp-jal', div).appendChild(l); };
-    const ligneRol = () => { const l = document.createElement('div'); l.className = 'l r'; l.innerHTML = `<select class="in sm" data-r="personne"><option value="">Personne…</option>${agents.map(a => `<option value="${a.id}">${esc(a._libelle)}</option>`).join('')}</select>
-      <select class="in sm" data-r="role">${roleChoix.map(x => `<option>${esc(x)}</option>`).join('')}</select><button type="button" class="btn ter sm ic" title="Retirer">${P.ic('fermer')}</button>`; l.querySelector('button').onclick = () => l.remove(); P.$('#fp-rol', div).appendChild(l); };
+    const nouveau = !p; const r = p ? p.r : null;
+    const f = (nom, o) => L.champForm(nom, r, o);
+    const div = document.createElement('div'); div.className = 'fp-form';
+    div.innerHTML = `<form class="grille" id="fp-f" onsubmit="return false" style="gap:18px 20px">
+      <h3 class="large">Identification</h3>${f('Titre', {large: true})}${f('Code')}${f('Domaine')}${f('Phase')}${f('Priorite')}
+      <h3 class="large">Calendrier et moyens</h3>${f('Debut')}${f('Deadline')}${f('FinReelle')}${f('Charge')}${f('Budget')}
+      <h3 class="large">Équipe et partenaires</h3>${f('Chefs', {large: true})}${f('Parties', {large: true})}${f('Prestataires', {large: true})}
+      <h3 class="large">Contenu</h3>${TEXTES.map(n => f(n, {large: true, long: true})).join('')}</form>
+      ${nouveau && P.table('jalon') && P.modifiable('jalon', 'titre') ? `<div><h3>Premiers jalons <span class="muted small" style="font-weight:400">(facultatif)</span></h3>
+        <div class="fp-lignes" id="fp-jal"></div><button type="button" class="btn ter sm" id="fp-jal-add" style="margin-top:8px">${P.ic('plus')} Ajouter un jalon</button></div>` : ''}`;
+    const ligneJal = () => { const l = document.createElement('div'); l.className = 'l'; l.innerHTML = `<input class="in sm" placeholder="Libellé du jalon" data-j="t"><input class="in sm" type="date" data-j="d"><button type="button" class="btn ter sm ic" title="Retirer">${P.ic('fermer')}</button>`; l.querySelector('button').onclick = () => l.parentNode.removeChild(l); P.$('#fp-jal', div).appendChild(l); };
     if (P.$('#fp-jal-add', div)) { P.$('#fp-jal-add', div).onclick = ligneJal; ligneJal(); }
-    if (P.$('#fp-rol-add', div)) { P.$('#fp-rol-add', div).onclick = ligneRol; ligneRol(); }
-    if (nouveau) {
-      const code = P.$('[data-ch=code]', div), dom = P.$('[data-ch=domaine]', div), phase = P.$('[data-ch=phase]', div), prio = P.$('[data-ch=priorite]', div);
-      if (code && !code.value) code.value = codeSuggere(dom && dom.value);
-      if (dom && code) dom.addEventListener('change', () => { if (!code.dataset.touche) code.value = codeSuggere(dom.value); });
-      if (code) code.addEventListener('input', () => { code.dataset.touche = '1'; });
-      if (phase && !phase.value) { const v = P.choix('projet', 'phase').find(x => /cadr|prevu|prévu|idee|idée|nouveau/i.test(x)); if (v) phase.value = v; }
-      if (prio && !prio.value) { const v = P.choix('projet', 'priorite').find(x => P.rangPriorite(x) === 3); if (v) prio.value = v; }
-    }
+    if (nouveau) { const c = P.$('[data-l=Code]', div); if (c && !c.value) c.value = codeSuggere(); }
     P.modale({titre: nouveau ? 'Nouveau projet' : 'Modifier le projet', contenu: div, large: true, boutons: [
       {libelle: 'Annuler', classe: 'ter'},
       {libelle: nouveau ? 'Créer le projet' : 'Enregistrer', classe: 'pri', action: async c => {
-        const vals = P.lireFormulaire('projet', P.$('#fp-f', c));
-        if (!String(vals.titre || '').trim()) { const t = P.$('[data-ch=titre]', c); t.classList.add('err'); t.focus(); P.toast('L’intitulé est obligatoire.', 'warn'); return false; }
-        if (vals.debut && vals.fin && vals.fin < vals.debut) { P.toast('La deadline est antérieure à la date de début.', 'warn'); return false; }
-        if (!nouveau) { await P.modifier('projet', p.id, vals, 'Projet enregistré.'); return; }
-        const id = await P.ajouter('projet', vals);
-        const acts = [];
-        P.$$('#fp-jal .l', c).forEach(l => { const t = P.$('[data-j=titre]', l).value.trim(); if (t) acts.push(P.actionAjout('jalon', {titre: t, projet: id, date: P.fromIso(P.$('[data-j=date]', l).value)})); });
-        P.$$('#fp-rol .l', c).forEach(l => { const pers = +P.$('[data-r=personne]', l).value; if (pers) acts.push(P.actionAjout('role', {projet: id, personne: pers, role: P.$('[data-r=role]', l).value})); });
-        if (acts.length) await P.appliquer(acts);
+        const v = L.lireForm(P.$('#fp-f', c));
+        if (L.ecrivable('Titre') && !String(v.Titre || '').trim()) { const t = P.$('[data-l=Titre]', c); if (t) { t.classList.add('err'); t.focus(); } P.toast('L’intitulé est obligatoire.', 'warn'); return false; }
+        if (v.Debut && v.Deadline && v.Deadline < v.Debut) { P.toast('La deadline est antérieure à la date de début.', 'warn'); return false; }
+        if (!nouveau) { await L.ecrire(p.id, v, 'Projet enregistré.'); return; }
+        const ids = await P.appliquer([L.actionAjout(v)]);
+        const id = ids[0];
+        const jal = P.$$('#fp-jal .l', c).map(l => ({t: P.$('[data-j=t]', l).value.trim(), d: P.fromIso(P.$('[data-j=d]', l).value)})).filter(x => x.t);
+        if (jal.length && id) {
+          const col = P.colonne('jalon', 'projet'); const parRef = col && /^Ref:/.test(col.type) && col.type.split(':')[1] === L.tableId;
+          await P.appliquer(jal.map(x => P.actionAjout('jalon', {titre: x.t, date: x.d, projet: parRef ? id : (col && /^Ref/.test(col.type) ? undefined : {texte: v.Titre})})));
+        }
         ui.sel = id; try { localStorage.setItem('fiche-projet-sel', id); } catch (e) { /* ignoré */ }
-        P.toast('Projet créé.', 'ok'); dessiner();
+        P.toast('Projet créé.', 'ok');
       }},
     ]});
   }

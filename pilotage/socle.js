@@ -783,7 +783,7 @@
   };
 
   P.ouvrirConfig = (onglet) => {
-    const ents = dependances(P.cfg.entites || []);
+    const ents = P.cfg.entitesSeules ? (P.cfg.entites || []) : dependances(P.cfg.entites || []);
     const tablesOpts = Object.keys(etat.schema).sort();
     const corps = document.createElement('div');
     const onglets = [['reglages', 'Réglages']].concat(P.cfg.ressource ? [['ressource', 'Table ressource']] : [], aideIntegree ? [['aide', 'Mode d’emploi']] : []);
@@ -1076,6 +1076,41 @@
     const pal = ['#000091', '#6a6af4', '#009081', '#c08c65', '#a558a0', '#417dc4', '#d1335b', '#5e2a2b', '#3a3a3a', '#716043'];
     return {fond: pal[(i >= 0 ? i : [...valeur].reduce((s, ch) => s + ch.charCodeAt(0), 0)) % pal.length]};
   };
+  /* Formulaire générique d'après le type des colonnes associées */
+  L.champForm = (nom, r, opts) => {
+    opts = opts || {};
+    const c = L.col(nom); if (!c) return '';
+    const id = 'lf-' + nom, lab = esc(opts.libelle || L.titreColonne(nom)), t = c.type.split(':')[0];
+    const cls = 'champ' + (opts.large ? ' large' : '');
+    if (!L.ecrivable(nom)) return `<div class="${cls}"><span class="lbl">${lab}</span><div class="in" style="background:var(--alt);box-shadow:none">${esc(r ? L.texte(nom, r) : '') || '–'}</div><span class="aide">Valeur calculée par une formule</span></div>`;
+    const v = r ? r[c.colId] : null;
+    let input;
+    if (t === 'Date' || t === 'DateTime') { const d = r ? L.date(nom, r) : null; input = `<input class="in" type="date" id="${id}" data-l="${nom}" data-t="date" value="${d ? P.iso(d) : ''}">`; }
+    else if (t === 'Numeric' || t === 'Int') input = `<input class="in" type="number" step="any" id="${id}" data-l="${nom}" data-t="num" value="${typeof v === 'number' ? v : ''}">`;
+    else if (t === 'Bool') input = `<label class="case"><input type="checkbox" id="${id}" data-l="${nom}" data-t="bool" ${v ? 'checked' : ''}> Oui</label>`;
+    else if (t === 'Choice') { const l = L.choix(nom).slice(); const cur = r ? L.texte(nom, r) : ''; if (cur && !l.includes(cur)) l.push(cur); input = `<select class="in" id="${id}" data-l="${nom}" data-t="txt"><option value=""></option>${l.map(x => `<option ${x === cur ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>`; }
+    else if (t === 'ChoiceList') { const cur = Array.isArray(v) ? v.slice(1) : []; input = `<div class="multi" data-l="${nom}" data-t="choices" style="display:flex;flex-wrap:wrap;gap:6px">${P.uniq(L.choix(nom).concat(cur)).map(x => `<button type="button" class="tag" aria-pressed="${cur.includes(x)}" data-v="${esc(x)}">${esc(x)}</button>`).join('')}</div>`; }
+    else if (t === 'Ref' || t === 'RefList') {
+      const m = L.refs[c.colId] || new Map(); const l = Array.from(m.entries()).sort((a, b) => a[1].localeCompare(b[1], 'fr'));
+      if (t === 'Ref') input = `<select class="in" id="${id}" data-l="${nom}" data-t="ref"><option value=""></option>${l.map(([k, x]) => `<option value="${k}" ${k === v ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>`;
+      else { const cur = Array.isArray(v) ? v.slice(1) : []; input = `<div class="multi" data-l="${nom}" data-t="refs" style="display:flex;flex-wrap:wrap;gap:6px">${l.map(([k, x]) => `<button type="button" class="tag" aria-pressed="${cur.includes(k)}" data-v="${k}">${esc(x)}</button>`).join('') || '<span class="muted small">Aucun élément</span>'}</div>`; }
+    } else if (opts.long) input = `<textarea class="in" id="${id}" data-l="${nom}" data-t="txt" rows="3">${esc(r ? L.texte(nom, r) : '')}</textarea>`;
+    else input = `<input class="in" id="${id}" data-l="${nom}" data-t="txt" value="${esc(r ? L.texte(nom, r) : '')}">`;
+    return `<div class="${cls}"><label for="${id}">${lab}</label>${input}</div>`;
+  };
+  L.lireForm = el => {
+    const vals = {};
+    el.querySelectorAll('[data-l]').forEach(x => {
+      const nom = x.dataset.l, t = x.dataset.t;
+      if (t === 'date') vals[nom] = P.fromIso(x.value);
+      else if (t === 'num') vals[nom] = x.value === '' ? null : Number(x.value);
+      else if (t === 'bool') vals[nom] = x.checked;
+      else if (t === 'ref') vals[nom] = x.value ? Number(x.value) : 0;
+      else if (t === 'refs' || t === 'choices') { const l = Array.from(x.querySelectorAll('[aria-pressed=true]')).map(b => t === 'refs' ? Number(b.dataset.v) : b.dataset.v); vals[nom] = l.length ? ['L', ...l] : null; }
+      else vals[nom] = x.value;
+    });
+    return vals;
+  };
   L.titreColonne = nom => ((P.cfg.colonnes || []).find(c => c.name === nom) || {}).title || nom;
 
   /* ------------------------------------------------------------------ */
@@ -1111,6 +1146,34 @@
         {Intitule: 'Former les utilisateurs', Projet: 'Projet B', Responsable: 'Agent 2', Statut: 'À faire', Priorite: 'P3 – Normale', Date_debut: 20, Echeance: 40, Avancement: 0, Charge: 5, Jalon: false, Suites: ''},
       ],
     },
+  };
+  P.RESSOURCES.projets = {
+    nom: 'Projets', libelle: 'Projets',
+    description: 'Une ligne par projet : code, intitulé, domaine, phase, priorité, chef de projet, calendrier, charge, budget et contenu (objectifs, critères de réussite, contraintes, risques…).',
+    colonnes: [
+      {id: 'Code', label: 'Code', type: 'Text'},
+      {id: 'Intitule', label: 'Intitulé', type: 'Text'},
+      {id: 'Domaine', label: 'Domaine', type: 'Choice', widgetOptions: CH(['Domaine 1', 'Domaine 2', 'Transverse'], ['#000091', '#009081', '#A558A0'])},
+      {id: 'Phase', label: 'Phase', type: 'Choice', widgetOptions: CH(['À cadrer', 'En cours', 'En pause', 'Terminé', 'Abandonné'], ['#6A6AF4', '#000091', '#C3592D', '#18753C', '#929292'])},
+      {id: 'Priorite', label: 'Priorité', type: 'Choice', widgetOptions: CH(['P1 – Critique', 'P2 – Haute', 'P3 – Normale', 'P4 – Basse'], ['#CE0500', '#C3592D', '#0063CB', '#929292'])},
+      {id: 'Chef_de_projet', label: 'Chef de projet', type: 'Text'},
+      {id: 'Date_debut', label: 'Date de début', type: 'Date', widgetOptions: JSON.stringify({dateFormat: 'DD/MM/YYYY'})},
+      {id: 'Deadline', label: 'Deadline', type: 'Date', widgetOptions: JSON.stringify({dateFormat: 'DD/MM/YYYY'})},
+      {id: 'Date_fin_reelle', label: 'Date de fin réelle', type: 'Date', widgetOptions: JSON.stringify({dateFormat: 'DD/MM/YYYY'})},
+      {id: 'Charge_estimee', label: 'Charge estimée (jours)', type: 'Numeric'},
+      {id: 'Budget', label: 'Budget prévu', type: 'Numeric', widgetOptions: JSON.stringify({numMode: 'currency', currency: 'EUR'})},
+      {id: 'Objectifs', label: 'Objectifs', type: 'Text', widgetOptions: JSON.stringify({wrap: true})},
+      {id: 'Criteres', label: 'Critères de réussite', type: 'Text', widgetOptions: JSON.stringify({wrap: true})},
+      {id: 'Description', label: 'Description', type: 'Text', widgetOptions: JSON.stringify({wrap: true})},
+      {id: 'Contraintes', label: 'Contraintes', type: 'Text', widgetOptions: JSON.stringify({wrap: true})},
+      {id: 'Risques', label: 'Risques', type: 'Text', widgetOptions: JSON.stringify({wrap: true})},
+      {id: 'Parties_prenantes', label: 'Parties prenantes', type: 'Text'},
+      {id: 'Prestataires', label: 'Prestataires', type: 'Text'},
+    ],
+    exemples: [
+      {Code: 'PRJ-01', Intitule: 'Projet A', Domaine: 'Domaine 1', Phase: 'En cours', Priorite: 'P2 – Haute', Chef_de_projet: 'Agent 1', Date_debut: -40, Deadline: 30, Charge_estimee: 20, Budget: 15000, Objectifs: 'Remplacer l’équipement en fin de vie', Criteres: 'Mise en service sans interruption', Description: 'Achat, installation et mise en service', Contraintes: 'Intervention hors heures ouvrées', Risques: 'Retard de livraison', Parties_prenantes: 'Direction, Service A', Prestataires: 'Entreprise X'},
+      {Code: 'PRJ-02', Intitule: 'Projet B', Domaine: 'Domaine 2', Phase: 'À cadrer', Priorite: 'P3 – Normale', Chef_de_projet: 'Agent 3', Date_debut: 10, Deadline: 120, Charge_estimee: 12, Objectifs: 'Former les équipes au nouvel outil', Criteres: '90 % des agents formés', Parties_prenantes: 'Tous les services'},
+    ],
   };
   const jourDecale = n => { const d = P.addDays(P.today(), n); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 1000; };
   function valeurExemple(col, v) { if (v == null) return null; if (col.type === 'Date') return jourDecale(v); return v; }
