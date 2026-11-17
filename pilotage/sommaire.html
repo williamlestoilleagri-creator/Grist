@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-scheme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sommaire – Pilotage SSI-Logistique</title>
+<link rel="stylesheet" href="socle.css">
+<style>
+  body{background:var(--surface)}
+  .som{max-width:1120px;margin:0 auto;padding:32px 20px 56px;display:flex;flex-direction:column;gap:40px}
+  .som-intro h2{font-size:2rem;line-height:1.2}
+  .som-intro p{margin:10px 0 0;font-size:1.05rem;color:var(--text);max-width:760px;line-height:1.6}
+  .som-groupe{display:flex;flex-direction:column;gap:16px}
+  .som-groupe>h3{font-size:.85rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mention);border-bottom:1px solid var(--border);padding-bottom:8px}
+  .som-cartes{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:20px}
+  .som-carte{position:relative;display:flex;flex-direction:column;gap:10px;border:1px solid var(--border);border-bottom:4px solid var(--bf);padding:24px 24px 20px;background:var(--surface);transition:background .15s,box-shadow .15s}
+  .som-carte:hover{background:var(--bf-975);box-shadow:var(--shadow-lg)}
+  .som-carte .ico{font-size:2rem;line-height:1}
+  .som-carte h4{margin:0;font-size:1.2rem;color:var(--title)}
+  .som-carte h4 a{color:inherit;text-decoration:none}
+  .som-carte h4 a::after{content:"";position:absolute;inset:0}
+  .som-carte h4 a:focus-visible{outline:none}
+  .som-carte:focus-within{outline:2px solid var(--focus);outline-offset:2px}
+  .som-carte p{margin:0;font-size:.95rem;line-height:1.55;color:var(--text);flex:1}
+  .som-carte .pied{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:6px}
+  .som-carte .aller{color:var(--bf);font-weight:500;font-size:.92rem}
+  .som-carte .aller::after{content:" →"}
+  .som-carte .liens{position:relative;z-index:1;display:flex;gap:14px;font-size:.82rem}
+  .som-carte .liens a{color:var(--mention)}
+  .som-carte .liens a:hover{color:var(--bf)}
+  .som-note{font-size:.85rem;color:var(--mention);border-top:1px solid var(--border);padding-top:14px}
+  @media (max-width:600px){.som-intro h2{font-size:1.5rem}}
+</style>
+</head>
+<body>
+<header class="pl-entete">
+  <div class="pl-marque"><p class="fr-logo fr-logo--sm" style="margin:0">République<br>française</p></div>
+  <div class="pl-titre"><h1>Pilotage SSI-Logistique</h1><p>DRAAF Bretagne · Secrétariat général</p></div>
+</header>
+<main class="som" id="som"></main>
+<script>
+(function () {
+  const DOC = 'https://grist.dataregion.fr/o/draaf-bretagne-sg/7fADPEVSHkiR/Pilotage-SSI-Logistique/p/';
+  const TUTO = 'https://williamlestoilleagri-creator.github.io/Grist/pilotage/tutos/';
+  const GROUPES = [
+    {titre: 'Suivre et décider', widgets: [
+      {ico: '📊', nom: 'Revue hebdomadaire', page: 10, tuto: 'revue-hebdo', txt: 'Ce qui a été terminé, ce qui est en retard et ce qui arrive : la page du point d’équipe.'},
+      {ico: '📁', nom: 'Fiche projet', page: 12, tuto: 'fiche-projet', txt: 'Un projet sur une page : objectifs, équipe, avancement, jalons et tâches. Création de nouveaux projets.'},
+      {ico: '📑', nom: 'Échéancier des contrats', page: 20, tuto: 'echeancier-contrats', txt: 'Les marchés et contrats sur une frise, avec les renouvellements à anticiper.'},
+    ]},
+    {titre: 'Planifier', widgets: [
+      {ico: '📅', nom: 'Gantt', page: 15, tuto: 'gantt', txt: 'Les tâches sur une frise, regroupées par projet. Glisser une barre pour replanifier.'},
+      {ico: '👥', nom: 'Capacité de travail', page: 14, tuto: 'capacite-charge', txt: 'Qui est chargé, quelle semaine, et à cause de quelles tâches. Réaffectation en un clic.'},
+    ]},
+    {titre: 'Agir au quotidien', widgets: [
+      {ico: '⚡', nom: 'Saisie rapide', page: 16, tuto: 'saisie-express', txt: 'Une ligne de texte devient une tâche : @responsable #projet vendredi !2 ~1.'},
+      {ico: '☑️', nom: 'Sous-tâches', page: 18, tuto: 'sous-taches', txt: 'Découper une tâche en étapes à cocher ; l’avancement se met à jour tout seul.'},
+      {ico: '🧩', nom: 'Matrice RACI', page: 19, tuto: 'raci', txt: 'Qui réalise, approuve, est consulté ou informé, projet par projet.'},
+    ]},
+  ];
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+  document.getElementById('som').innerHTML = `
+    <section class="som-intro"><h2>Que voulez-vous faire ?</h2>
+      <p>Choisissez un outil : il s’ouvre directement dans le document Grist du pôle. Chaque outil a son mode d’emploi, accessible ici ou avec le bouton <strong>?</strong> de l’outil.</p></section>
+    ${GROUPES.map(g => `<section class="som-groupe"><h3>${esc(g.titre)}</h3><div class="som-cartes">
+      ${g.widgets.map(w => `<article class="som-carte"><span class="ico" aria-hidden="true">${w.ico}</span>
+        <h4><a href="${DOC}${w.page}" target="_top">${esc(w.nom)}</a></h4><p>${esc(w.txt)}</p>
+        <div class="pied"><span class="aller" aria-hidden="true">Ouvrir</span>
+          <span class="liens"><a href="${TUTO}${w.tuto}.html" target="_blank" rel="noopener">Mode d’emploi</a><a href="${DOC}${w.page}" target="_blank" rel="noopener" title="Ouvrir dans un nouvel onglet">Nouvel onglet</a></span></div></article>`).join('')}
+    </div></section>`).join('')}
+    <p class="som-note">Les données sont celles du document Grist « Pilotage SSI-Logistique ». Les modes d’emploi peuvent être adaptés par l’équipe avec l’outil « Mode d’emploi ».</p>`;
+})();
+</script>
+</body>
+</html>
