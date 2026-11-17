@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-scheme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mode d’emploi</title>
+<link rel="stylesheet" href="socle.css">
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<script src="socle.js"></script>
+<style>
+  .me{display:grid;grid-template-columns:250px 1fr;gap:18px;align-items:start}
+  .me.seul{grid-template-columns:1fr}
+  .me.seul .me-som{display:none}
+  .me-som{border:1px solid var(--border);position:sticky;top:76px}
+  .me-som ul{list-style:none;margin:0;padding:0}
+  .me-som li button{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--contrast);padding:8px 12px;cursor:pointer;position:relative;font-size:.85rem;color:var(--title)}
+  .me-som li button:hover{background:var(--alt)}
+  .me-som li button[aria-current=true]{background:var(--bf-975);font-weight:700}
+  .me-som li button[aria-current=true]::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:3px;background:var(--bf)}
+  .me-som li button.modele{color:var(--mention);font-style:italic}
+  .me-som .pied-som{padding:8px;display:flex;flex-direction:column;gap:6px}
+  .me-barre{display:flex;gap:6px;align-items:center;flex-wrap:wrap;border-bottom:3px solid var(--bf);padding-bottom:8px;margin-bottom:14px}
+  .me-barre h2{flex:1;font-size:1.4rem;min-width:200px}
+  .me-barre h2[contenteditable=true]{outline:1px dashed var(--bf);padding:0 4px}
+  .me-meta{font-size:.75rem;color:var(--mention);margin:-8px 0 12px}
+  .me-outils{position:sticky;top:66px;z-index:10;display:flex;flex-wrap:wrap;gap:2px;background:var(--alt);border:1px solid var(--border);padding:4px;margin-bottom:10px}
+  .me-outils button{background:var(--surface);border:1px solid var(--border);min-width:32px;height:30px;padding:0 8px;cursor:pointer;font-size:.8rem}
+  .me-outils button:hover{background:var(--bf-975);border-color:var(--bf)}
+  .me-outils .sep{width:1px;background:var(--border);margin:0 4px}
+  /* Mise en forme des modes d'emploi (identique aux pages autonomes) */
+  .tuto{display:flex;flex-direction:column;gap:18px;max-width:880px}
+  .tuto[contenteditable=true]{outline:2px dashed var(--bf-850);outline-offset:8px;min-height:200px}
+  .tuto h2{font-size:1.3rem;margin:0 0 6px}
+  .tuto h3{font-size:1.05rem;margin:0 0 4px}
+  .tuto p,.tuto li{font-size:.95rem;line-height:1.6}
+  .tuto p{margin:0 0 6px}
+  .tuto .chapo{font-size:1.1rem;color:var(--title)}
+  .tuto figure{margin:0;border:1px solid var(--border)}
+  .tuto figure img{display:block;width:100%;height:auto}
+  .tuto figcaption{font-size:.8rem;color:var(--mention);padding:6px 10px;border-top:1px solid var(--border);background:var(--alt)}
+  .tuto .etapes{counter-reset:e;list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+  .tuto .etapes>li{counter-increment:e;display:flex;gap:12px;align-items:flex-start}
+  .tuto .etapes>li::before{content:counter(e);flex:0 0 30px;height:30px;border-radius:50%;background:var(--bf);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .tuto .blocs{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+  .tuto .blocs>div{border:1px solid var(--border);border-left:4px solid var(--bf);padding:10px 12px;font-size:.88rem}
+  .tuto .blocs strong{display:block;color:var(--title);margin-bottom:2px}
+  .tuto .encart{border-left:4px solid var(--bf);background:var(--bf-975);padding:12px 16px}
+  .tuto .encart.astuce{border-color:var(--success);background:var(--success-soft)}
+  .tuto .encart.attention{border-color:var(--warning);background:var(--warning-bg)}
+  .tuto .encart p{margin:0}
+  .tuto .encart>strong:first-child{display:block;margin-bottom:4px}
+  .tuto .pied{font-size:.8rem;color:var(--mention);border-top:1px solid var(--border);padding-top:10px}
+  @media (max-width:760px){.me{grid-template-columns:1fr}.me-som{position:static}}
+  @media print{.me{grid-template-columns:1fr}.me-som,.me-outils{display:none}}
+</style>
+</head>
+<body>
+<script>
+(function () {
+  const P = Pilotage, esc = P.esc;
+  /* Modèles d'origine (générés depuis pilotage/tutos/src par construire.py) */
+  const MODELES = /*MODELES*/{"revue-hebdo": {"titre": "Revue hebdomadaire", "contenu": "<p class=\"chapo\">La revue hebdomadaire prépare votre point d’équipe en un clic : elle rassemble sur une seule page <strong>ce qui a été fait, ce qui est en retard et ce qui arrive<\/strong>, à partir des projets, tâches, jalons et temps saisis dans Grist.<\/p>\n\n<section>\n  <h2>À quoi sert-elle ?<\/h2>\n  <p>Plus besoin de parcourir les tables avant la réunion du pôle : la revue fait le tri pour vous. Chaque semaine, elle répond à trois questions :<\/p>\n  <ul>\n    <li><strong>Qu’avons-nous terminé ?<\/strong> pour valoriser le travail fait ;<\/li>\n    <li><strong>Qu’est-ce qui bloque ?<\/strong> pour décider ensemble des actions ;<\/li>\n    <li><strong>Qu’est-ce qui arrive ?<\/strong> pour anticiper les échéances et les jalons.<\/li>\n  <\/ul>\n<\/section>\n\n<section>\n  <h2>Ce que vous y trouvez<\/h2>\n  <div class=\"blocs\">\n    <div><strong>📊 Les chiffres de la semaine<\/strong>Tâches terminées, nouvelles, en retard, échéances proches, jalons, temps déclaré.<\/div>\n    <div><strong>🌦️ La météo des projets<\/strong>Chaque projet en cours avec son état (☀️ OK, 🌥️ tendu, ⛈️ critique), son avancement et sa deadline.<\/div>\n    <div><strong>✅ Le réalisé<\/strong>Les tâches terminées pendant la période, regroupées par projet, avec les suites données.<\/div>\n    <div><strong>🔴 Les retards<\/strong>Les tâches dont l’échéance est dépassée, avec le responsable et le nombre de jours de retard.<\/div>\n    <div><strong>📅 À venir<\/strong>Les échéances des 7 prochains jours et les jalons des 15 prochains jours.<\/div>\n    <div><strong>💤 Les points d’attention<\/strong>Les tâches qui n’ont pas bougé depuis 14 jours, et celles sans responsable ou sans échéance.<\/div>\n    <div><strong>⏱️ Le temps déclaré<\/strong>Le temps de chaque agent, en distinguant les projets et le reste (support, maintenance…).<\/div>\n    <div><strong>📝 Les décisions<\/strong>Une zone pour noter les décisions prises pendant la réunion.<\/div>\n  <\/div>\n<\/section>\n\n<section>\n  <h2>Comment l’utiliser en réunion<\/h2>\n  <ol class=\"etapes\">\n    <li><span>Choisissez la <strong>période<\/strong> en haut : « 7 derniers jours », « Cette semaine » ou « Semaine précédente ».<\/span><\/li>\n    <li><span>Si besoin, <strong>filtrez<\/strong> sur un domaine (SSI, Logistique…) ou sur un agent pour un point individuel.<\/span><\/li>\n    <li><span>Passez en revue la <strong>météo<\/strong>, puis les <strong>retards<\/strong> : pour chacun, décidez d’une action, d’une nouvelle échéance ou d’un changement de responsable.<\/span><\/li>\n    <li><span>Notez les <strong>décisions<\/strong> en bas de page, puis cliquez sur <strong>Copier<\/strong> pour coller la revue dans un mail, ou sur <strong>Imprimer<\/strong>.<\/span><\/li>\n  <\/ol>\n<\/section>\n\n<div class=\"encart astuce\"><strong>💡 Astuce<\/strong><p>Une tâche en retard ou « dormante » n’est souvent qu’une tâche pas mise à jour. Corriger son statut, son avancement ou ses suites données dans Grist suffit à la faire disparaître des alertes : la revue reflète toujours l’état réel des tables.<\/p><\/div>\n\n<div class=\"encart attention\"><strong>⚠️ Bon à savoir<\/strong><p>Les notes de la zone « Décisions » sont enregistrées dans votre navigateur uniquement : vos collègues ne les voient pas. Pensez à les copier dans le compte rendu.<\/p><\/div>\n\n<p class=\"pied\">La revue ne modifie aucune donnée : elle lit les tables du document. Le bouton ⟳ actualise l’affichage, le bouton ⚙ permet de régler le seuil des tâches « dormantes » et l’horizon « à venir ».<\/p>"}}/*FIN_MODELES*/;
+  const ui = {sel: null, edition: false, base: null};
+
+  P.demarrer({
+    id: 'mode-emploi',
+    titre: 'Mode d’emploi',
+    sousTitre: 'Guides d’utilisation des widgets, modifiables par l’équipe',
+    entites: ['tuto'],
+    optionnelles: ['tuto'],
+    reglagesHtml: () => {
+      const cles = P.uniq(Object.keys(MODELES).concat(P.liste('tuto').map(t => t.cle).filter(Boolean)));
+      return `<div class="grille"><div class="champ"><label for="rg-cle">Mode d’emploi affiché à l’ouverture</label><select class="in" id="rg-cle"><option value="">Le premier de la liste</option>
+        ${cles.map(k => `<option value="${esc(k)}" ${k === P.reglage('cle', '') ? 'selected' : ''}>${esc((MODELES[k] || {}).titre || k)}</option>`).join('')}</select></div>
+        <div class="champ"><span class="lbl">Sommaire</span><label class="case"><input type="checkbox" id="rg-seul" ${P.reglage('seul', false) ? 'checked' : ''}> N’afficher que ce mode d’emploi (sans sommaire)</label>
+        <span class="aide">Pratique pour placer l’aide d’un widget à côté de lui, sur la même page.</span></div></div>`;
+    },
+    lireReglages: (el, r) => { r.cle = el.querySelector('#rg-cle').value; r.seul = el.querySelector('#rg-seul').checked; ui.sel = null; },
+    init: () => P.surCurseur((tableId, id) => { if (!ui.edition && tableId === P.table('tuto') && id !== ui.sel) { ui.sel = id; dessiner(); } }),
+    rendu: () => { if (!ui.edition) dessiner(); },
+  });
+
+  const tutos = () => P.liste('tuto').slice().sort((a, b) => (a.ordre ?? 1e9) - (b.ordre ?? 1e9) || a.titre.localeCompare(b.titre, 'fr'));
+
+  function dessiner() {
+    const corps = P.$('#pl-corps');
+    if (!P.table('tuto')) {
+      corps.innerHTML = `<div class="carte" style="max-width:680px"><h2>Table des modes d’emploi</h2>
+        <p>Les modes d’emploi sont enregistrés dans une table Grist, pour que toute l’équipe puisse les lire et les modifier. Elle n’existe pas encore dans ce document.</p>
+        <ul class="small"><li><code>Widget</code> : identifiant du widget concerné (ex. <code>revue-hebdo</code>)</li><li><code>Titre</code>, <code>Contenu</code> (texte mis en forme), <code>Ordre</code></li>
+        <li><code>Mis_a_jour_le</code>, <code>Mis_a_jour_par</code> : remplis automatiquement à chaque modification</li></ul>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn pri" id="me-creer">Créer la table et y ajouter les modes d’emploi</button><button class="btn sec" id="me-assoc">Associer une table existante</button></div></div>`;
+      P.$('#me-creer').addEventListener('click', async () => { await P.creerStructure('tuto'); await importerModeles(); });
+      P.$('#me-assoc').addEventListener('click', P.ouvrirConfig);
+      return;
+    }
+    const liste = tutos();
+    const manquants = Object.keys(MODELES).filter(k => !liste.some(t => t.cle === k));
+    if (!ui.sel || !P.get('tuto', ui.sel)) {
+      const pref = P.reglage('cle', '');
+      ui.sel = ((pref && liste.find(t => t.cle === pref)) || liste[0] || {}).id || null;
+    }
+    corps.innerHTML = `<div class="me ${P.reglage('seul', false) ? 'seul' : ''}">
+      <nav class="me-som no-print" aria-label="Modes d’emploi"><ul>
+        ${liste.map(t => `<li><button data-id="${t.id}" aria-current="${t.id === ui.sel}">${esc(t.titre || t.cle || 'Sans titre')}</button></li>`).join('')}
+        ${manquants.map(k => `<li><button class="modele" data-modele="${esc(k)}" data-bulle="Ce mode d’emploi n’est pas encore dans le document : cliquer pour l’ajouter">＋ ${esc(MODELES[k].titre)}</button></li>`).join('')}
+      </ul><div class="pied-som"><button class="btn sec sm" id="me-nouveau">${P.ic('plus')} Nouveau mode d’emploi</button></div></nav>
+      <article id="me-page"></article></div>`;
+    P.$('.me-som').addEventListener('click', async e => {
+      const b = e.target.closest('button[data-id]');
+      if (b) { ui.sel = +b.dataset.id; dessiner(); return; }
+      const m = e.target.closest('button[data-modele]');
+      if (m) { const id = await ajouterModele(m.dataset.modele); if (id) { ui.sel = id; dessiner(); } }
+    });
+    P.$('#me-nouveau').addEventListener('click', nouveau);
+    page();
+  }
+
+  function page() {
+    const zone = P.$('#me-page'); const t = P.get('tuto', ui.sel);
+    if (!t) { zone.innerHTML = '<div class="vide">Aucun mode d’emploi. Cliquez sur « Nouveau mode d’emploi » ou ajoutez un modèle depuis le sommaire.</div>'; return; }
+    const peutEcrire = P.modifiable('tuto', 'contenu');
+    zone.innerHTML = `<div class="me-barre"><h2 id="me-titre">${esc(t.titre || 'Sans titre')}</h2>
+        ${peutEcrire ? `<button class="btn pri sm" id="me-modifier">${P.ic('modifier')} Modifier</button>` : ''}
+        <button class="btn ter sm" id="me-print">${P.ic('imprimer')} Imprimer</button></div>
+      ${t.maj || t.maj_par ? `<p class="me-meta">Dernière modification${t.maj ? ' le ' + P.fmtDateHeure(t.maj) : ''}${t.maj_par ? ' par ' + esc(t.maj_par) : ''}</p>` : ''}
+      <div class="tuto" id="me-contenu">${nettoyer(t.contenu || '<p class="muted">Ce mode d’emploi est vide. Cliquez sur « Modifier » pour le rédiger.</p>')}</div>`;
+    P.$('#me-print').addEventListener('click', () => window.print());
+    if (peutEcrire) P.$('#me-modifier').addEventListener('click', () => editer(t));
+  }
+
+  /* ---------- Édition ---------- */
+  const OUTILS = [
+    ['h2', 'Titre', 'Titre de section'], ['h3', 'Sous-titre', 'Sous-titre'], ['p', '¶', 'Paragraphe normal'], ['chapo', 'Chapeau', 'Paragraphe d’introduction en gros'], null,
+    ['bold', '<strong>G</strong>', 'Gras (Ctrl+B)'], ['italic', '<em>I</em>', 'Italique (Ctrl+I)'], ['lien', '🔗', 'Lien'], null,
+    ['ul', '• Liste', 'Liste à puces'], ['etapes', '① Étapes', 'Liste d’étapes numérotées'], null,
+    ['info', 'ℹ️ Encart', 'Encart d’information'], ['astuce', '💡 Astuce', 'Encart astuce (vert)'], ['attention', '⚠️ Attention', 'Encart d’avertissement (orange)'], ['blocs', '▦ Blocs', 'Grille de blocs'], null,
+    ['undo', '↶', 'Annuler (Ctrl+Z)'], ['redo', '↷', 'Rétablir'], ['efface', 'Tx', 'Retirer la mise en forme'],
+  ];
+
+  function editer(t) {
+    ui.edition = true; ui.base = t.contenu || '';
+    const zone = P.$('#me-page'); const contenu = P.$('#me-contenu'); const titre = P.$('#me-titre');
+    P.$('.me-barre', zone).insertAdjacentHTML('afterend', `<div class="me-outils no-print" role="toolbar" aria-label="Mise en forme">${OUTILS.map(o => o ? `<button type="button" data-o="${o[0]}" data-bulle="${esc(o[2])}">${o[1]}</button>` : '<span class="sep"></span>').join('')}</div>`);
+    P.$('#me-modifier').remove();
+    P.$('.me-barre', zone).insertAdjacentHTML('beforeend', `<button class="btn ter sm" id="me-annuler">Annuler</button><button class="btn pri sm" id="me-enreg">Enregistrer</button>`);
+    if (!t.contenu) contenu.innerHTML = '<p><br></p>';
+    contenu.contentEditable = 'true'; titre.contentEditable = 'true'; contenu.focus();
+    try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch (e) { /* ignoré */ }
+    P.$('.me-outils').addEventListener('mousedown', e => e.preventDefault());
+    P.$('.me-outils').addEventListener('click', e => { const b = e.target.closest('[data-o]'); if (b) commande(b.dataset.o, contenu); });
+    contenu.addEventListener('paste', e => { e.preventDefault(); const txt = (e.clipboardData || window.clipboardData).getData('text/plain'); document.execCommand('insertText', false, txt); });
+    titre.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); contenu.focus(); } });
+    P.$('#me-annuler').addEventListener('click', async () => {
+      if (contenu.innerHTML !== nettoyer(ui.base) && !(await P.confirmer('Abandonner les modifications en cours ?', 'Abandonner'))) return;
+      ui.edition = false; dessiner();
+    });
+    P.$('#me-enreg').addEventListener('click', () => enregistrer(t, titre, contenu));
+    window.onbeforeunload = () => ui.edition ? true : undefined;
+  }
+
+  function commande(o, contenu) {
+    const ex = (c, v) => document.execCommand(c, false, v);
+    contenu.focus();
+    switch (o) {
+      case 'h2': case 'h3': case 'p': ex('formatBlock', o.toUpperCase()); break;
+      case 'chapo': { ex('formatBlock', 'P'); const b = blocCourant(contenu); if (b && b.tagName === 'P') b.classList.toggle('chapo'); break; }
+      case 'bold': case 'italic': case 'undo': case 'redo': ex(o); break;
+      case 'efface': ex('removeFormat'); break;
+      case 'lien': { const u = prompt('Adresse du lien (https://…)'); if (u && /^(https?:|mailto:)/i.test(u.trim())) ex('createLink', u.trim()); break; }
+      case 'ul': ex('insertUnorderedList'); break;
+      case 'etapes': { ex('insertOrderedList'); const b = blocCourant(contenu); const ol = b && b.closest('ol'); if (ol) ol.className = 'etapes'; break; }
+      case 'info': case 'astuce': case 'attention': {
+        const titres = {info: 'ℹ️ À noter', astuce: '💡 Astuce', attention: '⚠️ Bon à savoir'};
+        insererApres(contenu, `<div class="encart${o === 'info' ? '' : ' ' + o}"><strong>${titres[o]}</strong><p>Votre texte…</p></div>`); break;
+      }
+      case 'blocs': insererApres(contenu, '<div class="blocs"><div><strong>Titre du bloc</strong>Description courte.</div><div><strong>Titre du bloc</strong>Description courte.</div></div>'); break;
+    }
+  }
+  /* Insère un bloc (encart, grille) après le paragraphe courant, jamais à l'intérieur */
+  function insererApres(racine, html) {
+    let n = blocCourant(racine);
+    while (n && n.parentNode !== racine) n = n.parentNode;
+    const tmp = document.createElement('div'); tmp.innerHTML = html; const el = tmp.firstChild;
+    if (n) n.after(el); else racine.appendChild(el);
+    if (!el.nextSibling) { const p = document.createElement('p'); p.innerHTML = '<br>'; el.after(p); }
+    const cible = el.querySelector('p') || el.querySelector('div') || el;
+    const r = document.createRange(); r.selectNodeContents(cible); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+  }
+  function blocCourant(racine) {
+    const s = window.getSelection(); if (!s.rangeCount) return null;
+    let n = s.getRangeAt(0).startContainer; if (n.nodeType === 3) n = n.parentNode;
+    while (n && n !== racine && !/^(P|H2|H3|LI|DIV)$/.test(n.tagName)) n = n.parentNode;
+    return n === racine ? null : n;
+  }
+
+  async function enregistrer(t, titreEl, contenuEl) {
+    const html = nettoyer(contenuEl.innerHTML);
+    const titre = titreEl.textContent.trim() || t.titre;
+    const actuel = P.get('tuto', t.id);
+    if (actuel && (actuel.contenu || '') !== ui.base && !(await P.confirmer('Ce mode d’emploi a été modifié par quelqu’un d’autre depuis que vous avez commencé. Enregistrer quand même et remplacer sa version ?', 'Remplacer'))) return;
+    const vals = {contenu: html, titre};
+    if (P.a('tuto', 'maj') && !P.aDeclencheur('tuto', 'maj')) vals.maj = new Date();
+    ui.edition = false; window.onbeforeunload = null;
+    await P.modifier('tuto', t.id, vals, 'Mode d’emploi enregistré.');
+    dessiner();
+  }
+
+  async function nouveau() {
+    const f = document.createElement('form'); f.className = 'grille'; f.onsubmit = () => false;
+    f.innerHTML = `<div class="champ large"><label for="nv-t">Titre</label><input class="in" id="nv-t" placeholder="Ex. : Saisir ses temps chaque vendredi"></div>
+      <div class="champ"><label for="nv-k">Identifiant</label><input class="in" id="nv-k" placeholder="ex. saisie-des-temps"><span class="aide">Facultatif : nom du widget concerné</span></div>`;
+    P.modale({titre: 'Nouveau mode d’emploi', contenu: f, boutons: [{libelle: 'Annuler', classe: 'ter'}, {libelle: 'Créer', classe: 'pri', action: async () => {
+      const titre = P.$('#nv-t', f).value.trim(); if (!titre) { P.toast('Indiquez un titre.', 'warn'); return false; }
+      const cle = P.$('#nv-k', f).value.trim() || P.norm(titre).slice(0, 30);
+      const id = await P.ajouter('tuto', {titre, cle, contenu: '', ordre: (Math.max(0, ...P.liste('tuto').map(x => x.ordre || 0)) + 1)});
+      ui.sel = id; dessiner(); const t = P.get('tuto', id); if (t) editer(t);
+    }}]});
+  }
+
+  async function ajouterModele(cle) {
+    const m = MODELES[cle]; if (!m) return null;
+    const ordre = Object.keys(MODELES).indexOf(cle) + 1;
+    return P.ajouter('tuto', {cle, titre: m.titre, contenu: m.contenu, ordre}, `« ${m.titre} » ajouté.`);
+  }
+  async function importerModeles() {
+    if (!P.table('tuto')) return;
+    const existants = new Set(P.liste('tuto').map(t => t.cle));
+    const acts = Object.entries(MODELES).filter(([k]) => !existants.has(k)).map(([k, m], i) => P.actionAjout('tuto', {cle: k, titre: m.titre, contenu: m.contenu, ordre: i + 1}));
+    if (acts.length) await P.appliquer(acts, `${acts.length} mode(s) d’emploi ajouté(s).`);
+  }
+
+  /* ---------- Nettoyage du HTML (seules les balises de mise en forme sont conservées) ---------- */
+  const BALISES = new Set(['H2', 'H3', 'H4', 'P', 'UL', 'OL', 'LI', 'STRONG', 'B', 'EM', 'I', 'U', 'A', 'BR', 'DIV', 'SPAN', 'SECTION', 'FIGURE', 'FIGCAPTION', 'IMG', 'BLOCKQUOTE', 'CODE', 'KBD', 'TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD']);
+  const INTERDITES = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'LINK', 'META', 'FORM', 'INPUT', 'BUTTON', 'TEXTAREA', 'SELECT', 'SVG', 'MATH']);
+  const CLASSES = new Set(['chapo', 'encart', 'astuce', 'attention', 'blocs', 'etapes', 'pied', 'muted']);
+  function nettoyer(html) {
+    const doc = new DOMParser().parseFromString(`<div>${html || ''}</div>`, 'text/html');
+    const parcourir = n => {
+      Array.from(n.childNodes).forEach(c => {
+        if (c.nodeType === 8) { c.remove(); return; }
+        if (c.nodeType !== 1) return;
+        if (INTERDITES.has(c.tagName)) { c.remove(); return; }
+        parcourir(c);
+        if (!BALISES.has(c.tagName)) { c.replaceWith(...c.childNodes); return; }
+        Array.from(c.attributes).forEach(a => {
+          const nom = a.name.toLowerCase(), v = a.value.trim();
+          if (nom === 'class') { const k = v.split(/\s+/).filter(x => CLASSES.has(x)); if (k.length) c.setAttribute('class', k.join(' ')); else c.removeAttribute('class'); }
+          else if (nom === 'href' && c.tagName === 'A' && /^(https?:|mailto:|#)/i.test(v)) { c.setAttribute('target', '_blank'); c.setAttribute('rel', 'noopener'); }
+          else if (nom === 'src' && c.tagName === 'IMG' && /^(https:|data:image\/(png|jpe?g|gif|webp);)/i.test(v)) { /* conservé */ }
+          else if (nom === 'alt' && c.tagName === 'IMG') { /* conservé */ }
+          else if ((nom === 'target' || nom === 'rel') && c.tagName === 'A') { /* conservé */ }
+          else c.removeAttribute(a.name);
+        });
+      });
+    };
+    const racine = doc.body.firstChild; parcourir(racine);
+    return racine.innerHTML.trim();
+  }
+})();
+</script>
+</body>
+</html>

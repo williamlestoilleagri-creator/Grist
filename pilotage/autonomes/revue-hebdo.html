@@ -444,10 +444,26 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
     theme: {libelle: 'Thèmes', tables: ['themes', 'theme', 'categories'], champs: {
       nom: {l: 'Libellé', k: 'texte', req: true, syn: ['liste', 'theme', 'libelle', 'nom', 'intitule']},
     }},
+    tuto: {libelle: 'Modes d’emploi', tables: ['tutos', 'tuto', 'modesdemploi', 'modedemploi', 'tutoriels', 'aide', 'documentation'], creable: true, champs: {
+      cle: {l: 'Widget concerné (clé)', k: 'texte', req: true, syn: ['widget', 'cle', 'identifiant', 'code']},
+      titre: {l: 'Titre', k: 'texte', req: true, syn: ['titre', 'intitule', 'nom']},
+      contenu: {l: 'Contenu (HTML)', k: 'texte', req: true, syn: ['contenu', 'texte', 'corps', 'html']},
+      ordre: {l: 'Ordre', k: 'nombre', syn: ['ordre', 'position', 'rang']},
+      maj: {l: 'Mis à jour le', k: 'datetime', syn: ['misajourle', 'dernieremiseajour', 'majle', 'modifiele']},
+      maj_par: {l: 'Mis à jour par', k: 'texte', syn: ['misajourpar', 'dernieremiseajourpar', 'majpar', 'modifiepar']},
+    }},
   };
   /* Structure créée automatiquement pour les entités « créables » */
   P.STRUCTURES = {
-    sous_tache: {table: 'DATA_Sous_taches', cols: (cible) => [
+    tuto: {table: 'DATA_Tutos', besoin: [], cols: () => [
+      {id: 'Widget', type: 'Text', champ: 'cle'},
+      {id: 'Titre', type: 'Text', champ: 'titre'},
+      {id: 'Contenu', type: 'Text', champ: 'contenu'},
+      {id: 'Ordre', type: 'Numeric', champ: 'ordre'},
+      {id: 'Mis_a_jour_le', type: 'DateTime:Europe/Paris', champ: 'maj', declencheur: 'NOW()'},
+      {id: 'Mis_a_jour_par', type: 'Text', champ: 'maj_par', declencheur: 'user.Name'},
+    ]},
+    sous_tache: {table: 'DATA_Sous_taches', besoin: ['tache'], cols: (cible) => [
       {id: 'Tache', type: 'Ref:' + cible.tache, champ: 'tache'},
       {id: 'Libelle', type: 'Text', champ: 'libelle'},
       {id: 'Fait', type: 'Bool', champ: 'fait'},
@@ -754,6 +770,7 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
   };
   P.a = (ent, ch) => !!P.colonne(ent, ch);
   P.modifiable = (ent, ch) => { const c = P.colonne(ent, ch); return !!c && !(c.isFormula && c.formula); };
+  P.aDeclencheur = (ent, ch) => { const c = P.colonne(ent, ch); return !!c && !c.isFormula && !!c.formula; };
   P.choix = (ent, ch) => {
     const c = P.colonne(ent, ch);
     let l = [];
@@ -901,11 +918,14 @@ table.tab{width:100%;border-collapse:collapse;font-size:.83rem}
   P.creerStructure = async ent => {
     const st = P.STRUCTURES[ent]; if (!st) return;
     const cibles = {tache: P.table('tache'), agent: P.table('agent')};
-    if (!cibles.tache) { P.toast('Associez d’abord la table des tâches.', 'warn'); return; }
+    if ((st.besoin || []).includes('tache') && !cibles.tache) { P.toast('Associez d’abord la table des tâches.', 'warn'); return; }
     let nom = st.table; let i = 2;
     while (etat.schema[nom]) nom = st.table + '_' + i++;
     const cols = st.cols(cibles);
-    await etat.backend.apply([['AddTable', nom, cols.map(c => ({id: c.id, type: c.type, isFormula: false}))]]);
+    // Colonnes « déclencheur » (formule recalculée à chaque modification de la ligne) : meilleur effort
+    const avecDecl = cols.map(c => c.declencheur ? {id: c.id, type: c.type, isFormula: false, formula: c.declencheur, recalcWhen: 2} : {id: c.id, type: c.type, isFormula: false});
+    try { await etat.backend.apply([['AddTable', nom, avecDecl]]); }
+    catch (e) { console.warn('Formules déclencheurs refusées, création simple', e); await etat.backend.apply([['AddTable', nom, cols.map(c => ({id: c.id, type: c.type, isFormula: false}))]]); }
     etat.schema = await etat.backend.schema();
     // Colonne affichée des références (« Montrer la colonne ») : meilleur effort
     if (etat.backend.nom === 'grist') {

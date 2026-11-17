@@ -1,10 +1,15 @@
-"""Assemble les tutoriels autonomes (un fichier HTML par widget, style DSFR inclus).
+"""Construit les modes d'emploi et les versions autonomes des widgets.
 
 Usage : python3 pilotage/tutos/construire.py
 Sources : pilotage/tutos/src/<widget>.html (contenu) et pilotage/tutos/img/<widget>.jpg (capture).
+1. pilotage/tutos/<widget>.html : mode d'emploi autonome (style DSFR inclus) ;
+2. pilotage/mode-emploi.html : les modes d'emploi y sont intégrés comme modèles d'origine ;
+3. pilotage/autonomes/*.html : chaque widget en un seul fichier (CSS, socle et données de démo inclus).
 """
 import base64
+import json
 import pathlib
+import re
 
 ICI = pathlib.Path(__file__).resolve().parent
 CSS = (ICI.parent / "socle.css").read_text(encoding="utf-8")
@@ -53,6 +58,43 @@ GABARIT = """<!DOCTYPE html>
 """
 
 
+def lire_sources():
+    for src in sorted((ICI / "src").glob("*.html")):
+        texte = src.read_text(encoding="utf-8")
+        premiere, contenu = texte.split("\n", 1)
+        yield src.stem, premiere.replace("<!-- titre:", "").replace("-->", "").strip(), contenu
+
+
+def integrer_modeles():
+    """Intègre les modes d'emploi (sans les captures) dans le widget « Mode d'emploi »."""
+    modeles = {}
+    for cle, titre, contenu in lire_sources():
+        sans_capture = re.sub(r"<figure>.*?</figure>\s*", "", contenu, flags=re.S).strip()
+        modeles[cle] = {"titre": titre, "contenu": sans_capture}
+    cible = ICI.parent / "mode-emploi.html"
+    html = cible.read_text(encoding="utf-8")
+    js = json.dumps(modeles, ensure_ascii=False).replace("</", "<\\/")
+    html = re.sub(r"/\*MODELES\*/.*?/\*FIN_MODELES\*/", lambda m: "/*MODELES*/" + js + "/*FIN_MODELES*/", html, flags=re.S)
+    cible.write_text(html, encoding="utf-8")
+    print("mode-emploi.html :", len(modeles), "modèle(s) intégré(s)")
+
+
+def construire_autonomes():
+    """Un fichier HTML par widget, sans dépendance locale."""
+    racine = ICI.parent
+    css = (racine / "socle.css").read_text(encoding="utf-8")
+    socle = (racine / "socle.js").read_text(encoding="utf-8")
+    demo = (racine / "demo-data.js").read_text(encoding="utf-8")
+    sortie = racine / "autonomes"
+    sortie.mkdir(exist_ok=True)
+    for f in sorted(racine.glob("*.html")):
+        s = f.read_text(encoding="utf-8")
+        s = s.replace('<link rel="stylesheet" href="socle.css">', "<style>\n" + css + "\n</style>")
+        s = s.replace('<script src="socle.js"></script>', "<script>\n" + demo + "\n</script>\n<script>\n" + socle + "\n</script>")
+        (sortie / f.name).write_text(s, encoding="utf-8")
+    print("autonomes/ :", len(list(sortie.glob("*.html"))), "fichier(s)")
+
+
 def construire():
     for src in sorted((ICI / "src").glob("*.html")):
         texte = src.read_text(encoding="utf-8")
@@ -69,3 +111,5 @@ def construire():
 
 if __name__ == "__main__":
     construire()
+    integrer_modeles()
+    construire_autonomes()

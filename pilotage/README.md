@@ -12,6 +12,7 @@ Huit widgets personnalisés pour suivre les projets du pôle dans Grist, à la c
 | `sous-taches.html` | Sous-tâches à cocher ; crée sa table si elle n'existe pas ; met à jour l'avancement |
 | `raci.html` | Matrice RACI éditable avec contrôles |
 | `echeancier-contrats.html` | Échéancier des marchés et contrats, alertes de renouvellement, export CSV |
+| `mode-emploi.html` | Modes d'emploi des widgets, enregistrés dans la table `DATA_Tutos` et modifiables par l'équipe (éditeur visuel) |
 
 Fichiers communs : `socle.js` (détection de la structure, lecture/écriture, configuration), `socle.css` (charte DSFR), `demo-data.js` (données fictives du mode démonstration).
 
@@ -31,3 +32,7 @@ Les widgets ne dépendent pas de noms de tables figés. Chacun s'appuie sur des 
 ## Mode démonstration
 
 Ouvert hors de Grist (directement dans un navigateur), chaque widget fonctionne avec des données fictives enregistrées dans le navigateur ; le lien « Réinitialiser les données » les remet à zéro.
+
+## Modes d'emploi
+
+Les textes d'origine sont dans `tutos/src/<widget>.html`. La commande `python3 pilotage/tutos/construire.py` produit les pages autonomes `tutos/<widget>.html`, intègre les textes comme modèles dans `mode-emploi.html` et régénère `autonomes/`. Dans Grist, le widget **Mode d'emploi** crée la table `DATA_Tutos`, y copie les modèles et permet à chacun de les modifier ; la date et l'auteur de la dernière modification sont enregistrés par des formules déclencheurs.
