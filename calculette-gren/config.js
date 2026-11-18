@@ -13,5 +13,9 @@ window.GREN_CONFIG = {
   // Lien des pages obligatoires du pied de page (à compléter par le service)
   CONTACT: "",
   // Déconnexion automatique du backoffice après inactivité (minutes)
-  INACTIVITE_MINUTES: 30
+  INACTIVITE_MINUTES: 30,
+  // Accès TEMPORAIRE à l'espace administrateur de l'application (référentiel…).
+  // ⚠ Visible par toute personne qui lit le code de la page : il masque les réglages
+  // mais ne protège rien. Le backoffice sécurisé (admin/) a sa propre connexion.
+  ADMIN_TEMPORAIRE: { identifiant: "admin", motDePasse: "nimda" }
 };
