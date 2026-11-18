@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rapport de contrôle</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx@9.7.1/dist/index.iife.js"></script>
+<style>
+  @font-face{font-family:Marianne;src:url(https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/fonts/Marianne-Regular.woff2) format("woff2");font-weight:400}
+  @font-face{font-family:Marianne;src:url(https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/fonts/Marianne-Medium.woff2) format("woff2");font-weight:500}
+  @font-face{font-family:Marianne;src:url(https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/fonts/Marianne-Bold.woff2) format("woff2");font-weight:700}
+  :root{
+    --bf:#000091; --bf-hover:#1212FF; --bf-soft:#E3E3FD; --rouge:#E1000F;
+    --bg:#F6F6F6; --surface:#FFFFFF; --ink:#161616; --ink-soft:#666666; --border:#DDDDDD;
+    --ok:#18753C; --ok-soft:#B8FEC9; --err:#CE0500; --err-soft:#FFE9E9; --warn:#B34000; --warn-soft:#FFE9E6;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bf:#8585F6; --bf-hover:#A5A5F8; --bf-soft:#21213F; --bg:#161616; --surface:#1E1E1E; --ink:#EEEEEE;
+      --ink-soft:#AAAAAA; --border:#353535; --ok:#27A658; --ok-soft:#19402A; --err:#FF5655; --err-soft:#3B1E1E; --warn:#FC5D00; --warn-soft:#3E2515; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Marianne,Arial,sans-serif}
+  main{max-width:980px;margin:0 auto;padding:16px}
+  header.top{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+  .marque{font-weight:700;font-size:12px;line-height:1.05;text-transform:uppercase;letter-spacing:.02em;border-left:4px solid;border-image:linear-gradient(#000091 33%,#fff 33% 66%,#E1000F 66%) 1;padding-left:8px}
+  .marque i{display:block;font-weight:400;font-style:italic;text-transform:none;font-size:10px;letter-spacing:0;margin-top:3px}
+  h1{font-size:22px;margin:0}
+  .sub{color:var(--ink-soft);margin:2px 0 0;font-size:13px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:16px;margin-bottom:12px}
+  .card h2{font-size:15px;margin:0 0 10px;display:flex;align-items:center;gap:8px}
+  .step{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--bf);color:#fff;font-size:12px}
+  .drop{display:block;border:2px dashed var(--border);border-radius:4px;padding:18px;text-align:center;color:var(--ink-soft);cursor:pointer}
+  .drop.over{border-color:var(--bf);background:var(--bf-soft)}
+  .drop b{color:var(--bf)}
+  input[type=file]{display:none}
+  .info{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+  .kpi{flex:1 1 130px;background:var(--bg);border-left:4px solid var(--bf);padding:8px 10px}
+  .kpi b{display:block;font-size:20px}
+  .kpi span{font-size:12px;color:var(--ink-soft)}
+  .kpi.err{border-color:var(--err)}
+  .schemas{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+  @media (max-width:720px){.schemas{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .opt{border:2px solid var(--border);border-radius:4px;padding:6px;cursor:pointer;background:var(--surface);text-align:center;font-size:13px}
+  .opt:hover{border-color:var(--bf-hover)}
+  .opt.sel{border-color:var(--bf);box-shadow:0 0 0 2px var(--bf-soft)}
+  .opt .th{height:96px;display:grid;place-items:center;background:#fff;border-radius:2px;overflow:hidden;margin-bottom:6px}
+  .opt .th svg{width:100%;height:100%}
+  .opt .none{color:#999;font-size:12px}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+  .field{flex:1 1 200px}
+  .field label{display:block;font-size:13px;font-weight:500;margin-bottom:4px}
+  .field input[type=text]{width:100%;font:inherit;padding:8px;border:0;border-bottom:2px solid var(--ink);background:#EEEEEE;color:#161616;border-radius:4px 4px 0 0}
+  .chk{display:flex;gap:6px;align-items:center;font-size:14px}
+  .btns{display:flex;gap:10px;flex-wrap:wrap}
+  button{font:inherit;font-weight:500;border:0;padding:10px 18px;cursor:pointer;background:var(--bf);color:#fff;border-radius:0}
+  button.sec{background:transparent;color:var(--bf);box-shadow:inset 0 0 0 1px var(--bf)}
+  button:hover:not(:disabled){background:var(--bf-hover);color:#fff}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .msg{padding:8px 10px;margin-top:10px;font-size:13px;border-left:4px solid}
+  .msg.ok{background:var(--ok-soft);border-color:var(--ok)} .msg.err{background:var(--err-soft);border-color:var(--err)}
+  iframe.preview{width:100%;height:720px;border:1px solid var(--border);background:#fff}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <div class="marque">République<br>Française<i>Liberté<br>Égalité<br>Fraternité</i></div>
+    <div><h1>Rapport de contrôle de reconnaissance</h1><p class="sub">À partir d'un fichier de contrôle rempli (grille par filière)</p></div>
+  </header>
+
+  <section class="card">
+    <h2><span class="step">1</span>Fichier de contrôle</h2>
+    <label class="drop" id="drop"><input type="file" id="file" accept=".xlsx">Glissez le fichier Excel rempli ici ou <b>choisissez un fichier</b></label>
+    <div id="summary"></div>
+  </section>
+
+  <section class="card" id="cardOpts">
+    <h2><span class="step">2</span>Schéma fonctionnel de l'OP</h2>
+    <div class="schemas" id="schemas"></div>
+    <div class="row" style="margin-top:14px">
+      <div class="field"><label for="lieu">Fait à</label><input type="text" id="lieu" placeholder="Rennes"></div>
+      <div class="field"><label for="date">Le</label><input type="text" id="date"></div>
+      <label class="chk"><input type="checkbox" id="annexe" checked> Annexe : détail de tous les points</label>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2><span class="step">3</span>Rapport</h2>
+    <div class="btns">
+      <button id="bPdf" disabled>Télécharger en PDF</button>
+      <button id="bDocx" disabled>Télécharger en Word</button>
+      <button id="bPrev" class="sec" disabled>Aperçu</button>
+    </div>
+    <div id="out"></div>
+    <iframe class="preview hidden" id="preview" title="Aperçu du rapport"></iframe>
+  </section>
+</main>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const clean = v => String(v == null ? "" : v).replace(/ /g," ").replace(/[ \t]+/g," ").replace(/\s*\n\s*/g,"\n").trim();
+const one = v => clean(v).replace(/\n/g," ");
+const state = { data:null, schema:"flux", fileName:"" };
+const FONT_URL = w => `https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/fonts/Marianne-${w}.woff2`;
+
+/* =====================================================================
+   1. LECTURE DU FICHIER DE CONTRÔLE
+   ===================================================================== */
+function sheetGrid(ws){
+  const rng = XLSX.utils.decode_range(ws["!ref"] || "A1:A1");
+  const merges = (ws["!merges"] || []).map(m => ({ r1:m.s.r+1, c1:m.s.c+1, r2:m.e.r+1, c2:m.e.c+1 }));
+  const get = (r, c) => { const cell = ws[XLSX.utils.encode_cell({ r:r-1, c:c-1 })]; return cell ? (cell.w != null && typeof cell.v === "number" ? cell.v : cell.v) : null; };
+  const txt = (r, c) => clean(get(r, c));
+  const mergeAt = (r, c) => merges.find(m => m.r1 === r && m.c1 === c);
+  return { maxR: rng.e.r+1, maxC: Math.min(rng.e.c+1, 30), get, txt, mergeAt };
+}
+const findSheet = (wb, re) => wb.SheetNames.find(n => re.test(n));
+
+function parseControl(wb){
+  const D = { cover:{}, fiche:[], filiales:[], personnes:[], controleurs:[], onglets:[], sondages:[], rendements:[], stades:[], capital:[], producteurs:[], conventions:[] };
+  // ---- page de garde
+  const gName = findSheet(wb, /garde/i);
+  if (gName){
+    const g = sheetGrid(wb.Sheets[gName]);
+    const right = (r, from=3) => { for (let c = from; c <= g.maxC; c++){ const t = g.txt(r, c); if (t && !/^(du|au)$/i.test(t)) return t; } return ""; };
+    let mode = null;
+    for (let r = 1; r <= g.maxR; r++){
+      const b = g.txt(r, 2), B = b.toUpperCase();
+      if (/^SERVICE TERRITORIAL/.test(B) && !mode) D.cover.service = right(r, 3);
+      else if (/^RAISON SOCIALE/.test(B)) D.cover.rs = right(r, 3);
+      else if (/^N° DE RECONNAISSANCE/.test(B)) D.cover.reco = right(r, 3);
+      else if (/^SECTEUR CONCERN/.test(B)) D.cover.secteur = right(r, 3);
+      else if (/^N° DE DEMANDE/.test(B)) D.cover.demande = right(r, 3);
+      else if (/^OBJET/.test(B)){ const v = []; for (let c = 3; c <= g.maxC; c++){ const t = g.txt(r, c); if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(t) || typeof g.get(r,c) === "number") v.push(typeof g.get(r,c) === "number" ? xlDate(g.get(r,c)) : t); } D.cover.du = v[0] || ""; D.cover.au = v[1] || ""; }
+      else if (/^PERSONNE/.test(B)){ mode = "p"; r++; }
+      else if (/^CONTROLEUR|^CONTRÔLEUR/.test(B)){ mode = "c"; r++; }
+      else if (mode){ const f = b, n = right(r, 6) || g.txt(r, 6); if (f || n) (mode === "p" ? D.personnes : D.controleurs).push({ fonction:f, nom:n }); }
+    }
+  }
+  // ---- fiche signalétique
+  const fName = findSheet(wb, /^fiche/i);
+  if (fName){
+    const g = sheetGrid(wb.Sheets[fName]); let inFil = false;
+    for (let r = 1; r <= g.maxR; r++){
+      const b = g.txt(r, 2), c = g.txt(r, 3);
+      if (/^Filiales et participations/i.test(b)){ inFil = true; continue; }
+      if (inFil){
+        if (g.txt(r,2) && !/^Filiales/.test(g.txt(r,2))) inFil = false;
+        else { if (c && !/^Raison sociale$/i.test(c)) D.filiales.push({ nom:c, pct:g.get(r,4), objet:g.txt(r,5) }); continue; }
+      }
+      if (b && c && !/^SANS OBJET/i.test(b)) D.fiche.push({ label:one(b), value:c });
+    }
+  }
+  // ---- onglets de critères
+  for (const name of wb.SheetNames){
+    const g = sheetGrid(wb.Sheets[name]);
+    if (/^CTRL/i.test(name)){ // contrôles par sondage
+      const rows = [];
+      for (let r = 4; r <= g.maxR; r++){ const v = [1,2,3,4,5,6].map(c => g.txt(r, c)); if (v.some(Boolean)) rows.push(v); }
+      const head = [1,2,3,4,5,6].map(c => one(g.txt(3, c)));
+      D.sondages.push({ titre: one(g.txt(1, 1)) || name, head, rows });
+      continue;
+    }
+    if (/^4\.1/.test(name)){
+      for (let r = 8; r <= g.maxR; r++){ const a = g.txt(r,1); if (a && !/^Le cas|^Ex\./i.test(a)) D.capital.push({ adherent:a, activite:g.txt(r,2), membres:g.txt(r,3), parts:g.get(r,4), voix:g.get(r,5) }); }
+      continue;
+    }
+    if (!/^\d/.test(name)) continue;
+    const og = parseOnglet(name, g, D);
+    if (og) D.onglets.push(og);
+  }
+  return D;
+}
+function xlDate(n){ const d = new Date(Math.round((n - 25569) * 864e5)); return d.toLocaleDateString("fr-FR", { timeZone:"UTC" }); }
+
+function parseOnglet(name, g, D){
+  const og = { sheet:name, code:(name.match(/^[\d.]+/) || [""])[0].replace(/\.$/,""), titre:"", items:[], observations:[] };
+  for (let r = 1; r <= 3 && !og.titre; r++) for (let c = 1; c <= 4; c++){ const t = clean(g.txt(r, c)).split("\n")[0].trim(); if (/^ONGLET/i.test(t)){ og.titre = t.replace(/\s+(voir fiche|Le point \d).*$/i,"").replace(/\s+\(.*$/,"").trim(); break; } }
+  if (/^13\./.test(name)){ og.titre = "Contrôle en exploitation – " + (g.txt(1,3) || name.replace(/^13\.\s*/, "")); D.producteurs.push({ nom:g.txt(1,3), produits:g.txt(2,3), sheet:name }); }
+  if (!og.titre) og.titre = name;
+  let hdr = null, section = "", obsNext = false;
+  for (let r = 1; r <= g.maxR; r++){
+    const vals = {}; for (let c = 1; c <= g.maxC; c++){ const t = g.txt(r, c); if (t) vals[c] = t; }
+    const U = Object.fromEntries(Object.entries(vals).map(([c, v]) => [c, one(v).toUpperCase()]));
+    const uv = Object.values(U);
+    if (uv.some(v => ["OUI","C","01/01/N-1"].includes(v)) && uv.some(v => ["NON","NC","01/01/N"].includes(v))){
+      hdr = { crit:2 };
+      for (const [c, v] of Object.entries(U)){
+        if (/^CRIT|^LES MEMBRES/.test(v)) hdr.crit = +c; else if (/^AVEC QUOI/.test(v)) hdr.avec = +c; else if (/^DESCRIPTION/.test(v)) hdr.desc = +c;
+        else if (["OUI","C","01/01/N-1"].includes(v)){ hdr.yes = +c; hdr.mode = { "OUI":"yn", "C":"cnc", "01/01/N-1":"num" }[v]; }
+        else if (["NON","NC","01/01/N"].includes(v)) hdr.no = +c; else if (/^OBSERVATION|^SI N/.test(v)) hdr.obs = +c;
+      }
+      continue;
+    }
+    // tableau des rendements (onglet 7)
+    if (one(g.txt(r, 2)) === "Produits" && /Rendement AGRESTE/i.test(g.txt(r, 5))){
+      for (let k = r + 1; k <= g.maxR && g.txt(k, 2); k++){
+        const a = +g.get(k, 5), o = +g.get(k, 6);
+        D.rendements.push({ produit:g.txt(k,2), annee:g.txt(k,3), dept:g.txt(k,4), agreste:a, op:o, variation: a ? (o - a) / a : null, justif:g.txt(k,8) });
+      }
+      continue;
+    }
+    // stades de mise en marché (onglet 12)
+    if (/^(Vrac|Brut de cueille|Conditionné|Destiné à la transformation|Transformé|Autres)$/.test(g.txt(r, 3)) && (g.txt(r,4) || g.get(r,5))){
+      D.stades.push({ stade:g.txt(r,3), produits:g.txt(r,4), pct:+g.get(r,5) || 0 }); continue;
+    }
+    if (!hdr) continue;
+    const crit = g.txt(r, hdr.crit), low = one(crit).toLowerCase();
+    const num = one(g.txt(r, 1) || (hdr.crit > 2 ? g.txt(r, hdr.crit - 1) : ""));
+    if (obsNext && !crit){ const m = g.mergeAt(r, hdr.crit); const t = m ? g.txt(r, hdr.crit) : ""; if (t) og.observations.push(t); obsNext = false; continue; }
+    if (!crit) continue;
+    if (/observations complémentaires|^observations du contr/.test(low)){ obsNext = true; continue; }
+    if (/^(i|ii|iii|iv|v|vi)\s*[-–.]/.test(low) || /^(secteur |op sans|op avec|a- |b- |a\) |b\) |c\) |achats extérieurs|respect de l.apport|cas des op)/.test(low)){ section = one(crit); continue; }
+    if (/^(point de vigilance|précision|observation :|→|etablir la vpc|contrôle du respect des dispositions|remarque|>)/.test(low)) continue;
+    if (/^nom du prestataire/.test(low)){ const v = one(crit).split(":").slice(1).join(":").replace(/[.…]+/g,"").trim(); if (v) D.conventions.push({ sheet:name, nom:v }); }
+    const item = { num, critere:crit, section, type:"text", avec:"", desc:"", res:null, obs:"", v1:null, v2:null, texte:"" };
+    const right = g.mergeAt(r, hdr.crit + 1) || g.mergeAt(r, hdr.crit + 2);
+    if (right && right.c2 >= (hdr.obs || 7) - 1){ item.texte = g.txt(r, right.c1); og.items.push(item); continue; }
+    item.type = hdr.mode;
+    if (hdr.avec) item.avec = g.txt(r, hdr.avec);
+    if (hdr.desc) item.desc = g.txt(r, hdr.desc);
+    if (hdr.obs) item.obs = g.txt(r, hdr.obs);
+    if (hdr.mode === "num"){ item.v1 = g.get(r, hdr.yes); item.v2 = g.get(r, hdr.no); }
+    else {
+      const y = g.txt(r, hdr.yes), n = g.txt(r, hdr.no);
+      if (n) item.res = hdr.mode === "cnc" ? "NC" : "NON"; else if (y) item.res = hdr.mode === "cnc" ? "C" : "OUI";
+    }
+    og.items.push(item);
+  }
+  return og;
+}
+
+/* ---- indicateurs */
+function isAnomalie(it){ return it.res === "NC" || (it.res === "NON" && !!it.obs); }
+function isAnswered(it){ return !!(it.res || it.texte || it.desc || it.v1 != null || it.v2 != null); }
+function stats(D){
+  const s = { points:0, repondus:0, anomalies:0, parOnglet:[] };
+  for (const og of D.onglets){
+    const pts = og.items.filter(i => i.type !== "text" || i.texte);
+    const rep = og.items.filter(isAnswered), an = og.items.filter(isAnomalie);
+    if (!og.items.length && !og.observations.length) continue;
+    s.points += og.items.length; s.repondus += rep.length; s.anomalies += an.length;
+    s.parOnglet.push({ og, points:og.items.length, repondus:rep.length, anomalies:an.length });
+    void pts;
+  }
+  s.conformes = s.repondus - s.anomalies; s.nonRenseignes = s.points - s.repondus;
+  return s;
+}
+
+/* ---- données du schéma fonctionnel */
+function schemaData(D){
+  const f = l => (D.fiche.find(x => new RegExp(l, "i").test(x.label)) || {}).value || "";
+  const nbAdh = (f("Nombre d'adhérents").match(/\d[\d\s]*/) || [""])[0].trim();
+  const etp = {};
+  const o2 = D.onglets.find(o => o.code === "2");
+  if (o2) for (const it of o2.items){
+    const l = one(it.critere).toLowerCase();
+    if (/secteur administratif/.test(l)) etp.adm = it.texte; else if (/secteur technique/.test(l)) etp.tech = it.texte; else if (/secteur commercial/.test(l)) etp.com = it.texte;
+    else if (/nombre de saisonniers/.test(l)) etp.saison = it.texte; else if (/préciser par qui/.test(l)) etp.mad = it.texte;
+  }
+  const fonctions = [["9","Appui technique"],["10","Tri, stockage, conditionnement"],["11","Agréage"],["12","Mise en marché"]].map(([code, label]) => {
+    const og = D.onglets.find(o => o.code === code); const who = new Set();
+    if (og) for (const it of og.items){ if (it.res !== "OUI") continue; const l = one(it.critere).toLowerCase();
+      if (/personnel qualifié|propre service commercial|assuré par l'op \?/.test(l)) who.add("OP"); if (/\baop\b/.test(l)) who.add("AOP");
+      if (/filiale/.test(l)) who.add("Filiale"); if (/adhérents de l'op|via ses membres/.test(l)) who.add("Adhérents"); if (/prestataire/.test(l)) who.add("Prestataire"); }
+    const presta = D.conventions.filter(c => c.sheet.startsWith(code + ".")).map(c => c.nom);
+    presta.forEach(() => who.add("Prestataire"));
+    return { label, who:[...who], presta };
+  }).filter(x => x.who.length);
+  const aop = f("Raison\\(s\\) sociale\\(s\\) AOP");
+  return {
+    op: D.cover.rs || f("Raison sociale"), filiere: D.cover.secteur || f("Secteur concerné"), statut: f("Statut juridique"),
+    adherents: nbAdh, etp, filiales: D.filiales, aop: /sans objet/i.test(aop) ? "" : aop,
+    stades: D.stades.filter(s => s.pct || s.produits), fonctions,
+    producteurs: D.producteurs.filter(p => p.nom).map(p => p.nom)
+  };
+}
+
+/* =====================================================================
+   2. SCHÉMAS (3 VISUELS, SVG)
+   ===================================================================== */
+const C = { bf:"#000091", bfSoft:"#E3E3FD", bfMid:"#6A6AF4", rouge:"#E1000F", gris:"#3A3A3A", grisClair:"#F6F6F6", vert:"#18753C", vertSoft:"#B8FEC9", ocre:"#B34000", ocreSoft:"#FEECC2", trait:"#929292" };
+const wrap = (s, n) => { const out = []; let line = ""; for (const w of String(s).split(/\s+/)){ if ((line + " " + w).trim().length > n){ if (line) out.push(line); line = w; } else line = (line + " " + w).trim(); } if (line) out.push(line); return out; };
+function tspan(x, y, lines, lh, attrs = ""){ return `<text x="${x}" y="${y}" ${attrs}>${lines.map((l, i) => `<tspan x="${x}" dy="${i ? lh : 0}">${esc(l)}</tspan>`).join("")}</text>`; }
+function box(x, y, w, h, fill, stroke, title, lines, opts = {}){
+  const tc = opts.tc || C.gris, tt = opts.ttc || stroke;
+  let s = `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="4" fill="${fill}" stroke="${stroke}" stroke-width="${opts.sw || 1.5}"/>`;
+  if (opts.band) s += `<rect x="${x}" y="${y}" width="5" height="${h}" fill="${stroke}"/>`;
+  s += tspan(x + 14, y + 22, wrap(title, opts.wt || 26), 16, `font-size="${opts.fs || 14}" font-weight="700" fill="${tt}"`);
+  const tl = wrap(title, opts.wt || 26).length;
+  if (lines && lines.length) s += tspan(x + 14, y + 24 + tl * 16, lines.flatMap(l => wrap(l, opts.wl || 34)), 14, `font-size="11.5" fill="${tc}"`);
+  return s;
+}
+const arrow = (x1, y1, x2, y2, dash) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${C.trait}" stroke-width="1.6" ${dash ? 'stroke-dasharray="5 4"' : ""} marker-end="url(#ar)"/>`;
+const defs = `<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${C.trait}"/></marker></defs>`;
+function opLines(S){ const l = []; if (S.statut) l.push(S.statut); if (S.filiere) l.push("Filière : " + S.filiere);
+  const e = [S.etp.adm && "adm. " + S.etp.adm, S.etp.tech && "tech. " + S.etp.tech, S.etp.com && "com. " + S.etp.com].filter(Boolean);
+  if (e.length) l.push("Salariés : " + e.join(" · ")); return l; }
+function pct(v){ return v == null || v === "" || isNaN(v) ? "" : (v <= 1 ? Math.round(v * 100) : Math.round(v)) + " %"; }
+function svgWrap(w, h, inner, fontCss){ return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" font-family="Marianne, Arial, sans-serif">${fontCss ? `<style>${fontCss}</style>` : ""}${defs}<rect width="${w}" height="${h}" fill="#fff"/>${inner}</svg>`; }
+
+/* Option A — flux de l'amont vers l'aval */
+function schemaFlux(S, fontCss){
+  const W = 1000, side = [];
+  S.filiales.forEach(f => side.push({ t:f.nom, l:[(pct(f.pct) ? pct(f.pct) + " détenus" : "Filiale"), f.objet].filter(Boolean), k:"fil" }));
+  if (S.aop) side.push({ t:S.aop, l:["Association d'OP (adhésion)"], k:"aop" });
+  if (S.etp.mad && !/sans objet/i.test(S.etp.mad)) side.push({ t:"Personnel mis à disposition", l:[S.etp.mad], k:"mad" });
+  const fonc = S.fonctions;
+  const outs = S.stades.length ? S.stades : [{ stade:"Clients de l'OP", produits:"", pct:null }];
+  const H = Math.max(470, 140 + Math.max(outs.length * 86, side.length * 92 + 200));
+  let s = `<text x="30" y="34" font-size="13" font-weight="700" fill="${C.bf}">AMONT</text><text x="${W/2}" y="34" text-anchor="middle" font-size="13" font-weight="700" fill="${C.bf}">ORGANISATION DE PRODUCTEURS</text><text x="${W-30}" y="34" text-anchor="end" font-size="13" font-weight="700" fill="${C.bf}">AVAL – MISE EN MARCHÉ</text>`;
+  s += `<line x1="30" y1="44" x2="${W-30}" y2="44" stroke="${C.bfSoft}" stroke-width="2"/>`;
+  const ay = 80;
+  s += box(30, ay, 230, 120, C.grisClair, C.gris, `${S.adherents || "?"} producteurs adhérents`, ["Apport total de la production", ...(S.producteurs.length ? ["Contrôlés : " + S.producteurs.length + " exploitation(s)"] : [])], { band:true, wt:22 });
+  const ox = 360, oy = 70, ow = 280, oh = 150;
+  s += box(ox, oy, ow, oh, C.bfSoft, C.bf, S.op || "OP", opLines(S), { band:true, wt:28, wl:40, fs:15 });
+  s += arrow(260, ay + 60, ox - 4, oy + 75);
+  // fonctions
+  let fy = oy + oh + 18;
+  if (fonc.length){
+    s += `<text x="${ox}" y="${fy + 12}" font-size="11" font-weight="700" fill="${C.gris}">FONCTIONS</text>`;
+    fonc.forEach((f, i) => { const y = fy + 20 + i * 30; const ext = !f.who.includes("OP");
+      s += `<rect x="${ox}" y="${y}" width="${ow}" height="24" rx="3" fill="${ext ? C.ocreSoft : C.vertSoft}"/><text x="${ox + 10}" y="${y + 16}" font-size="11.5" fill="${C.gris}"><tspan font-weight="700">${esc(f.label)}</tspan> – ${esc(f.who.join(", "))}${f.presta.length ? " (" + esc(f.presta.join(", ")) + ")" : ""}</text>`; });
+    fy += 30 + fonc.length * 30;
+  }
+  // structures liées
+  side.forEach((b, i) => { const y = fy + 10 + i * 92, x = ox + 20; const col = b.k === "aop" ? C.vert : b.k === "mad" ? C.ocre : C.bfMid;
+    s += box(x, y, ow - 40, 78, "#fff", col, b.t, b.l, { wt:30, wl:38, fs:12.5 }); s += arrow(ox + ow / 2, i ? y - 14 : oy + oh, ox + ow / 2, y - 2, true); });
+  // débouchés
+  const tot = outs.length, gap = 86, sy = Math.max(70, oy + oh / 2 - (tot * gap) / 2);
+  let yy = sy;
+  outs.forEach(o => { const x = W - 30 - 250, title = o.stade + (pct(o.pct) ? " – " + pct(o.pct) : "");
+    const tl = wrap(title, 30).length, sl = o.produits ? wrap(o.produits, 36).length : 0, h = 30 + tl * 16 + sl * 14 + (o.pct ? 8 : 0);
+    s += box(x, yy, 250, h, "#fff", C.bf, title, o.produits ? [o.produits] : [], { wt:30, wl:36, fs:13 });
+    if (o.pct) s += `<rect x="${x + 14}" y="${yy + h - 10}" width="${Math.max(4, 220 * (o.pct <= 1 ? o.pct : o.pct / 100))}" height="4" fill="${C.bf}"/>`;
+    s += arrow(ox + ow, oy + 75, x - 4, yy + h / 2); yy += h + 14; });
+  return svgWrap(W, H, s, fontCss);
+}
+
+/* Option B — organigramme */
+function schemaOrga(S, fontCss){
+  const W = 1000;
+  const lvl2 = [{ t:`${S.adherents || "?"} producteurs adhérents`, l:["Apport total de la production"], c:C.gris, f:C.grisClair }];
+  S.filiales.forEach(f => lvl2.push({ t:f.nom, l:[pct(f.pct) ? "Filiale – " + pct(f.pct) + " du capital" : "Filiale", f.objet].filter(Boolean), c:C.bfMid, f:"#fff" }));
+  if (S.aop) lvl2.push({ t:S.aop, l:["Association d'OP"], c:C.vert, f:"#fff" });
+  if (S.etp.mad && !/sans objet/i.test(S.etp.mad)) lvl2.push({ t:"Personnel mis à disposition", l:[S.etp.mad], c:C.ocre, f:"#fff" });
+  S.fonctions.forEach(f => lvl2.push({ t:f.label, l:[f.who.join(", "), ...f.presta], c:f.who.includes("OP") ? C.vert : C.ocre, f:"#fff" }));
+  const outs = S.stades;
+  const n2 = lvl2.length, bw2 = Math.min(220, (W - 60 - (n2 - 1) * 16) / n2);
+  const H = outs.length ? 560 : 400;
+  let s = box(W/2 - 170, 30, 340, 120, C.bf, C.bf, S.op || "OP", opLines(S), { tc:"#fff", ttc:"#fff", wt:34, wl:44, fs:16 });
+  const y2 = 210, x0 = (W - (n2 * bw2 + (n2 - 1) * 16)) / 2;
+  s += `<line x1="${W/2}" y1="150" x2="${W/2}" y2="${y2 - 26}" stroke="${C.trait}" stroke-width="1.6"/>`;
+  if (n2 > 1) s += `<line x1="${x0 + bw2/2}" y1="${y2 - 26}" x2="${x0 + (n2-1)*(bw2+16) + bw2/2}" y2="${y2 - 26}" stroke="${C.trait}" stroke-width="1.6"/>`;
+  lvl2.forEach((b, i) => { const x = x0 + i * (bw2 + 16); s += arrow(x + bw2/2, y2 - 26, x + bw2/2, y2 - 2); s += box(x, y2, bw2, 120, b.f, b.c, b.t, b.l, { wt:Math.floor(bw2/8.6), wl:Math.floor(bw2/6.6), fs:12.5, band:true }); });
+  if (outs.length){
+    const y3 = 420, bw3 = Math.min(220, (W - 60 - (outs.length - 1) * 16) / outs.length), x3 = (W - (outs.length * bw3 + (outs.length - 1) * 16)) / 2;
+    s += `<text x="${W/2}" y="${y3 - 30}" text-anchor="middle" font-size="12" font-weight="700" fill="${C.bf}">DÉBOUCHÉS (part du chiffre d'affaires)</text>`;
+    outs.forEach((o, i) => { const x = x3 + i * (bw3 + 16);
+      s += `<rect x="${x}" y="${y3}" width="${bw3}" height="96" rx="4" fill="${C.grisClair}"/>`;
+      s += `<text x="${x + bw3/2}" y="${y3 + 36}" text-anchor="middle" font-size="24" font-weight="700" fill="${C.bf}">${esc(pct(o.pct) || "–")}</text>`;
+      s += tspan(x + bw3/2, y3 + 58, wrap(o.stade, Math.floor(bw3/7.5)), 14, `text-anchor="middle" font-size="12" font-weight="700" fill="${C.gris}"`);
+      s += tspan(x + bw3/2, y3 + 88, wrap(o.produits, Math.floor(bw3/6.5)).slice(0, 1), 13, `text-anchor="middle" font-size="10.5" fill="#666"`); });
+  }
+  return svgWrap(W, H, s, fontCss);
+}
+
+/* Option C — vue radiale */
+function schemaRadial(S, fontCss){
+  const W = 1000, H = 600, cx = W / 2, cy = H / 2 + 6;
+  const sat = [{ t:`${S.adherents || "?"} adhérents`, l:["Producteurs"], c:C.gris }];
+  S.filiales.forEach(f => sat.push({ t:f.nom.replace(/\s*\(fictive?\)/i, ""), l:[pct(f.pct) ? pct(f.pct) + " du capital" : "Filiale"], c:C.bfMid }));
+  if (S.aop) sat.push({ t:S.aop.replace(/\s*\(fictive?\)/i, ""), l:["AOP"], c:C.vert });
+  if (S.etp.mad && !/sans objet/i.test(S.etp.mad)) sat.push({ t:"Mise à disposition", l:[S.etp.mad.split(":")[0]], c:C.ocre });
+  S.fonctions.forEach(f => sat.push({ t:f.label, l:[f.who.join(", ")], c:f.who.includes("OP") ? C.vert : C.ocre }));
+  S.stades.forEach(o => sat.push({ t:o.stade, l:[pct(o.pct) + " du CA"], c:C.bf, out:true }));
+  const n = sat.length, rx = 360, ry = 220;
+  let s = "";
+  sat.forEach((b, i) => { const a = -Math.PI / 2 + (2 * Math.PI * i) / n; const x = cx + rx * Math.cos(a), y = cy + ry * Math.sin(a);
+    s += `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="${b.c}" stroke-opacity=".45" stroke-width="${b.out ? 3 : 1.6}" ${b.out ? "" : 'stroke-dasharray="4 4"'}/>`; });
+  sat.forEach((b, i) => { const a = -Math.PI / 2 + (2 * Math.PI * i) / n; const x = cx + rx * Math.cos(a), y = cy + ry * Math.sin(a);
+    const lines = wrap(b.t, 18).slice(0, 2), sub = b.l.filter(Boolean).flatMap(l => wrap(l, 22)).slice(0, 2);
+    const h = 26 + lines.length * 15 + sub.length * 13, w = 170;
+    s += `<rect x="${x - w/2}" y="${y - h/2}" width="${w}" height="${h}" rx="${b.out ? 18 : 4}" fill="#fff" stroke="${b.c}" stroke-width="2"/>`;
+    s += tspan(x, y - h/2 + 20, lines, 15, `text-anchor="middle" font-size="12.5" font-weight="700" fill="${b.c}"`);
+    s += tspan(x, y - h/2 + 22 + lines.length * 15, sub, 13, `text-anchor="middle" font-size="11" fill="${C.gris}"`); });
+  s += `<circle cx="${cx}" cy="${cy}" r="92" fill="${C.bf}"/>`;
+  s += tspan(cx, cy - 18, wrap((S.op || "OP").replace(/\s*\(fictive?\)/i, ""), 18).slice(0, 3), 17, `text-anchor="middle" font-size="14" font-weight="700" fill="#fff"`);
+  s += `<text x="${cx}" y="${cy + 46}" text-anchor="middle" font-size="11.5" fill="#fff">${esc(S.filiere || "")}</text>`;
+  s += `<g font-size="11" fill="${C.gris}"><rect x="24" y="${H-30}" width="12" height="12" fill="${C.bf}"/><text x="42" y="${H-20}">Débouchés</text><rect x="130" y="${H-30}" width="12" height="12" fill="${C.bfMid}"/><text x="148" y="${H-20}">Filiales</text><rect x="220" y="${H-30}" width="12" height="12" fill="${C.vert}"/><text x="238" y="${H-20}">Interne / AOP</text><rect x="345" y="${H-30}" width="12" height="12" fill="${C.ocre}"/><text x="363" y="${H-20}">Externalisé</text></g>`;
+  return svgWrap(W, H, s, fontCss);
+}
+const SCHEMAS = { flux:{ label:"Flux amont → aval", fn:schemaFlux }, orga:{ label:"Organigramme", fn:schemaOrga }, radial:{ label:"Vue radiale", fn:schemaRadial } };
+
+/* police Marianne intégrée aux SVG (pour les images du Word) */
+let fontCssCache = null;
+async function marianneCss(){
+  if (fontCssCache !== null) return fontCssCache;
+  try {
+    const b64 = async w => { const buf = await (await fetch(FONT_URL(w))).arrayBuffer(); let s = ""; const u = new Uint8Array(buf); for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
+    const [r, b] = await Promise.all([b64("Regular"), b64("Bold")]);
+    fontCssCache = `@font-face{font-family:Marianne;font-weight:400;src:url(data:font/woff2;base64,${r}) format("woff2")}@font-face{font-family:Marianne;font-weight:700;src:url(data:font/woff2;base64,${b}) format("woff2")}`;
+  } catch(e){ fontCssCache = ""; }
+  return fontCssCache;
+}
+async function svgToPng(svg, scale = 2){
+  const m = svg.match(/viewBox="0 0 (\d+) (\d+)"/); const w = +m[1], h = +m[2];
+  const img = new Image(); const url = URL.createObjectURL(new Blob([svg], { type:"image/svg+xml" }));
+  await new Promise((ok, ko) => { img.onload = ok; img.onerror = ko; img.src = url; });
+  await new Promise(r => setTimeout(r, 60));
+  const cv = document.createElement("canvas"); cv.width = w * scale; cv.height = h * scale;
+  const ctx = cv.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height); ctx.drawImage(img, 0, 0, cv.width, cv.height);
+  URL.revokeObjectURL(url);
+  const blob = await new Promise(r => cv.toBlob(r, "image/png"));
+  return { data:new Uint8Array(await blob.arrayBuffer()), w, h };
+}
+
+/* =====================================================================
+   3. RAPPORT HTML (aperçu et PDF)
+   ===================================================================== */
+function resLabel(it){
+  if (it.type === "num") return `${it.v1 ?? "–"} → ${it.v2 ?? "–"}`;
+  if (it.texte) return "Renseigné";
+  return it.res ? ({ OUI:"Oui", NON:"Non", C:"Conforme", NC:"Non conforme" })[it.res] : "–";
+}
+function resClass(it){ return isAnomalie(it) ? "ko" : it.res ? "okk" : ""; }
+function ficheVal(D, re){ return (D.fiche.find(x => re.test(x.label)) || {}).value || ""; }
+
+function reportHtml(D, opts){
+  const S = stats(D), sch = opts.schemaSvg;
+  const anomalies = D.onglets.flatMap(og => og.items.filter(isAnomalie).map(it => ({ og, it })));
+  const today = opts.date || new Date().toLocaleDateString("fr-FR");
+  const ident = [["Raison sociale", D.cover.rs], ["N° de reconnaissance", D.cover.reco], ["Filière", D.cover.secteur],
+    ["Statut juridique", ficheVal(D, /^Statut juridique/i)], ["N° SIRET", ficheVal(D, /^Numéro Siret/i)], ["Siège social", ficheVal(D, /^Adresse du Siège Social/i)],
+    ["Responsable légal", ficheVal(D, /^Responsable légal/i)], ["Nombre d'adhérents", ficheVal(D, /^Nombre d'adhérents/i)], ["Date de l'arrêté de reconnaissance", ficheVal(D, /^Date de l.arrêté/i)],
+    ["Zone de reconnaissance", ficheVal(D, /^Zone de reconnaissance/i)], ["Dernier contrôle FAM", ficheVal(D, /^Date du dernier contrôle/i)]].filter(x => x[1]);
+  const avis = S.anomalies ? `<p>Le contrôle a porté sur <b>${S.points}</b> points répartis sur <b>${S.parOnglet.length}</b> thèmes. <b>${S.anomalies} anomalie${S.anomalies > 1 ? "s ont été relevées" : " a été relevée"}</b> ; ${S.anomalies > 1 ? "elles sont détaillées" : "elle est détaillée"} en partie 5. Elles appellent des actions correctives de la part de l'OP, dont la mise en œuvre sera vérifiée.</p>`
+                         : `<p>Le contrôle a porté sur <b>${S.points}</b> points répartis sur <b>${S.parOnglet.length}</b> thèmes. <b>Aucune anomalie n'a été relevée.</b></p>`;
+  let n = 0; const H2 = t => `<h2><span>${++n}</span>${t}</h2>`;
+  const rows = (arr, cols) => arr.map(r => `<tr>${cols.map(c => `<td>${c(r)}</td>`).join("")}</tr>`).join("");
+  let h = `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Rapport de contrôle – ${esc(D.cover.rs || "")}</title><style>${REPORT_CSS}</style></head><body>
+<header class="entete">
+  <div class="marque">République<br>Française<i>Liberté<br>Égalité<br>Fraternité</i></div>
+  <div class="emetteur">${esc(D.cover.service || "Service territorial")}<br><span>Contrôle de reconnaissance des organisations de producteurs</span></div>
+</header>
+<div class="titre">
+  <p class="sur">Rapport de contrôle de reconnaissance</p>
+  <h1>${esc(D.cover.rs || "Organisation de producteurs")}</h1>
+  <p class="tags"><span class="tag">Filière ${esc(D.cover.secteur || "–")}</span>${D.cover.reco ? `<span class="tag">N° ${esc(D.cover.reco)}</span>` : ""}${D.cover.du ? `<span class="tag">Contrôle du ${esc(D.cover.du)}${D.cover.au ? " au " + esc(D.cover.au) : ""}</span>` : ""}${D.cover.demande ? `<span class="tag">Demande ${esc(D.cover.demande)}</span>` : ""}</p>
+</div>
+
+${H2("Synthèse")}
+<div class="kpis"><div class="kpi"><b>${S.points}</b><span>points contrôlés</span></div><div class="kpi ok"><b>${S.conformes}</b><span>sans anomalie</span></div><div class="kpi ko"><b>${S.anomalies}</b><span>anomalie${S.anomalies > 1 ? "s" : ""} relevée${S.anomalies > 1 ? "s" : ""}</span></div><div class="kpi nr"><b>${S.nonRenseignes}</b><span>non renseigné${S.nonRenseignes > 1 ? "s" : ""}</span></div></div>
+<div class="avis ${S.anomalies ? "avis-ko" : "avis-ok"}">${avis}</div>
+<p class="note">Une anomalie correspond à une réponse « Non » ou « Non conforme » assortie d'une observation du contrôleur.</p>
+
+${H2("Identification de l'organisation de producteurs")}
+<table class="kv">${rows(ident, [r => esc(r[0]), r => esc(r[1])])}</table>
+${D.filiales.length ? `<h3>Filiales et participations</h3><table><thead><tr><th>Raison sociale</th><th>Participation</th><th>Objet</th></tr></thead><tbody>${rows(D.filiales, [r => esc(r.nom), r => esc(pct(r.pct)), r => esc(r.objet)])}</tbody></table>` : ""}
+
+${H2("Déroulement du contrôle")}
+<table class="kv"><tr><td>Période</td><td>${esc(D.cover.du ? "Du " + D.cover.du + (D.cover.au ? " au " + D.cover.au : "") : "–")}</td></tr><tr><td>Service</td><td>${esc(D.cover.service || "–")}</td></tr></table>
+<div class="deux"><div><h3>Personnes rencontrées</h3><table><thead><tr><th>Fonction</th><th>Nom</th></tr></thead><tbody>${rows(D.personnes, [r => esc(r.fonction), r => esc(r.nom)]) || '<tr><td colspan="2">–</td></tr>'}</tbody></table></div>
+<div><h3>Contrôleur(s)</h3><table><thead><tr><th>Service</th><th>Nom</th></tr></thead><tbody>${rows(D.controleurs, [r => esc(r.fonction), r => esc(r.nom)]) || '<tr><td colspan="2">–</td></tr>'}</tbody></table></div></div>
+
+${sch ? H2("Schéma fonctionnel de l'OP") + `<figure class="schema">${sch}<figcaption>Schéma établi à partir des éléments relevés lors du contrôle.</figcaption></figure>` : ""}
+
+${H2("Résultats par thème")}
+<table class="res"><thead><tr><th>Thème contrôlé</th><th class="n">Points</th><th class="n">Anomalies</th><th>Taux sans anomalie</th></tr></thead><tbody>
+${S.parOnglet.map(p => { const t = p.repondus ? (p.repondus - p.anomalies) / p.repondus : null;
+  return `<tr><td>${esc(p.og.titre.replace(/^ONGLET\s*/i, ""))}</td><td class="n">${p.points}</td><td class="n ${p.anomalies ? "rouge" : ""}">${p.anomalies}</td><td>${t == null ? "–" : `<span class="bar"><i style="width:${Math.round(t * 100)}%"></i></span> ${Math.round(t * 100)} %`}</td></tr>`; }).join("")}
+</tbody></table>
+
+${H2("Anomalies relevées")}
+${anomalies.length ? anomalies.map(({ og, it }, i) => `<div class="anom"><p class="ref">Anomalie ${i + 1} · ${esc(og.titre.replace(/^ONGLET\s*/i, "").split(" - ")[0])}${it.num ? " · point " + esc(it.num) : ""}</p><p class="crit">${esc(one(it.critere))}</p><p class="obs"><b>Constat :</b> ${esc(it.obs)}</p>${it.avec ? `<p class="src">Contrôle réalisé à partir de : ${esc(it.avec)}</p>` : ""}</div>`).join("") : `<p>Aucune anomalie relevée.</p>`}
+
+${D.rendements.length || D.sondages.some(s => s.rows.length) || D.stades.length ? H2("Contrôles complémentaires") : ""}
+${D.rendements.length ? `<h3>Rendements déclarés et références AGRESTE</h3><table><thead><tr><th>Produit</th><th>Année</th><th>Département</th><th class="n">AGRESTE</th><th class="n">OP</th><th class="n">Écart</th><th>Justification de l'OP</th></tr></thead><tbody>${rows(D.rendements, [r => esc(r.produit), r => esc(r.annee), r => esc(r.dept), r => fmtN(r.agreste), r => fmtN(r.op), r => `<span class="${Math.abs(r.variation || 0) > .2 ? "rouge" : ""}">${r.variation == null ? "–" : (r.variation > 0 ? "+" : "") + Math.round(r.variation * 100) + " %"}</span>`, r => esc(r.justif)])}</tbody></table>` : ""}
+${D.sondages.filter(s => s.rows.length).map(s => `<h3>${esc(s.titre)}</h3><table><thead><tr>${s.head.map(x => `<th>${esc(x)}</th>`).join("")}</tr></thead><tbody>${s.rows.map(r => `<tr>${r.map((v, i) => `<td class="${i === 5 && /^NC$/i.test(v) ? "rouge" : ""}">${esc(v)}</td>`).join("")}</tr>`).join("")}</tbody></table>`).join("")}
+${D.stades.length ? `<h3>Mise en marché par stade</h3><table><thead><tr><th>Stade du produit</th><th>Produits</th><th class="n">Part du CA</th></tr></thead><tbody>${rows(D.stades, [r => esc(r.stade), r => esc(r.produits), r => esc(pct(r.pct))])}</tbody></table>` : ""}
+
+${D.onglets.some(o => o.observations.length) ? H2("Observations complémentaires du contrôleur") + D.onglets.filter(o => o.observations.length).map(o => `<p><b>${esc(o.titre.replace(/^ONGLET\s*/i, ""))} :</b> ${o.observations.map(esc).join(" ")}</p>`).join("") : ""}
+
+<div class="signature"><p>Fait à ${esc(opts.lieu || "……………")}, le ${esc(today)}</p>${D.controleurs.map(c => `<p class="sig">${esc(c.nom)}<br><span>${esc(c.fonction)}</span></p>`).join("")}</div>
+
+${opts.annexe ? `<section class="annexe"><h2 class="ann">Annexe – Détail des points contrôlés</h2>${D.onglets.filter(o => o.items.length).map(og => `<h3>${esc(og.titre.replace(/^ONGLET\s*/i, ""))}</h3><table class="det"><thead><tr><th>N°</th><th>Critère</th><th>Résultat</th><th>Observation</th></tr></thead><tbody>${og.items.map(it => `<tr><td>${esc(it.num)}</td><td>${esc(one(it.critere)).slice(0, 260)}${it.texte ? `<br><span class="rep">${esc(it.texte)}</span>` : ""}</td><td class="${resClass(it)}">${esc(resLabel(it))}</td><td>${esc(it.obs)}</td></tr>`).join("")}</tbody></table>`).join("")}</section>` : ""}
+<script>${opts.print ? "document.fonts.ready.then(()=>setTimeout(()=>window.print(),300));" : ""}<\/script>
+</body></html>`;
+  return h;
+}
+function fmtN(v){ return v == null || isNaN(v) ? "–" : Number(v).toLocaleString("fr-FR", { maximumFractionDigits:1 }); }
+
+const REPORT_CSS = `
+@font-face{font-family:Marianne;src:url(${FONT_URL("Regular")}) format("woff2");font-weight:400}
+@font-face{font-family:Marianne;src:url(${FONT_URL("Medium")}) format("woff2");font-weight:500}
+@font-face{font-family:Marianne;src:url(${FONT_URL("Bold")}) format("woff2");font-weight:700}
+@page{size:A4;margin:16mm 16mm 18mm;@bottom-right{content:"Page " counter(page) " / " counter(pages);font:9pt Marianne,Arial;color:#666}@bottom-left{content:"Rapport de contrôle de reconnaissance";font:9pt Marianne,Arial;color:#666}}
+*{box-sizing:border-box}
+body{font:10pt/1.5 Marianne,Arial,sans-serif;color:#161616;margin:0 auto;max-width:180mm;background:#fff;padding:8mm 0}
+@media print{body{padding:0}}
+.entete{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12mm}
+.marque{font-weight:700;font-size:10.5pt;line-height:1.05;text-transform:uppercase;padding-top:14px;position:relative}
+.marque:before{content:"";position:absolute;top:0;left:0;width:34px;height:7px;background:linear-gradient(90deg,#000091 33%,#fff 33% 66%,#E1000F 66%);outline:1px solid #ddd}
+.marque i{display:block;font-weight:400;font-style:italic;text-transform:none;font-size:8pt;margin-top:4px;line-height:1.15}
+.emetteur{text-align:right;font-weight:700;font-size:10pt}.emetteur span{font-weight:400;color:#666;font-size:8.5pt}
+.titre{border-left:6px solid #000091;padding:2mm 0 2mm 5mm;margin-bottom:8mm}
+.sur{margin:0;color:#000091;font-weight:700;text-transform:uppercase;font-size:9pt;letter-spacing:.04em}
+h1{font-size:22pt;line-height:1.15;margin:2mm 0 3mm}
+.tags{margin:0;display:flex;flex-wrap:wrap;gap:2mm}.tag{background:#E3E3FD;color:#000091;font-weight:500;font-size:8.5pt;padding:1mm 3mm;border-radius:10mm}
+h2{font-size:13pt;color:#000091;margin:8mm 0 3mm;display:flex;align-items:center;gap:3mm;break-after:avoid;border-bottom:1px solid #DDD;padding-bottom:1.5mm}
+h2 span{display:inline-grid;place-items:center;width:7mm;height:7mm;background:#000091;color:#fff;font-size:10pt;flex:none}
+h3{font-size:10.5pt;margin:5mm 0 2mm;break-after:avoid}
+table{width:100%;border-collapse:collapse;margin:0 0 3mm;font-size:9pt;break-inside:auto}
+th{background:#F6F6F6;text-align:left;font-weight:700;border-bottom:2px solid #000091;padding:1.6mm 2mm}
+td{border-bottom:1px solid #E5E5E5;padding:1.6mm 2mm;vertical-align:top}
+tr{break-inside:avoid}
+table.kv td:first-child{width:36%;color:#3A3A3A;font-weight:500;background:#F6F6F6}
+.n{text-align:right;font-variant-numeric:tabular-nums}
+.rouge{color:#CE0500;font-weight:700}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:3mm;margin-bottom:4mm}
+.kpi{border-left:4px solid #000091;background:#F6F6F6;padding:2.5mm 3mm}.kpi b{display:block;font-size:18pt;line-height:1.1}.kpi span{font-size:8.5pt;color:#3A3A3A}
+.kpi.ok{border-color:#18753C}.kpi.ko{border-color:#CE0500}.kpi.ko b{color:#CE0500}.kpi.nr{border-color:#929292}
+.avis{padding:3mm 4mm;border-left:4px solid}.avis p{margin:0}.avis-ok{background:#B8FEC9;border-color:#18753C}.avis-ko{background:#FFE9E9;border-color:#CE0500}
+.note{font-size:8pt;color:#666;margin:2mm 0 0}
+.deux{display:grid;grid-template-columns:1fr 1fr;gap:5mm}
+.schema{margin:0;break-inside:avoid}.schema svg{width:100%;height:auto;border:1px solid #E5E5E5}.schema figcaption{font-size:8pt;color:#666;margin-top:1.5mm}
+.bar{display:inline-block;width:28mm;height:2.2mm;background:#E5E5E5;vertical-align:middle;margin-right:2mm}.bar i{display:block;height:100%;background:#000091}
+.anom{border:1px solid #E5E5E5;border-left:4px solid #CE0500;padding:2.5mm 4mm;margin-bottom:3mm;break-inside:avoid}
+.anom p{margin:0 0 1mm}.anom .ref{font-size:8pt;color:#CE0500;font-weight:700;text-transform:uppercase;letter-spacing:.03em}.anom .crit{font-weight:500}.anom .src{font-size:8pt;color:#666}
+.signature{margin-top:10mm;break-inside:avoid;display:flex;flex-wrap:wrap;gap:6mm 14mm}.signature p:first-child{width:100%;margin:0}
+.sig{margin:0;font-weight:700;padding-top:16mm;min-width:55mm;border-bottom:1px solid #DDD}.sig span{font-weight:400;font-size:8.5pt;color:#666}
+.annexe{break-before:page}.ann{display:block}
+table.det td:nth-child(1){width:8mm}table.det td:nth-child(3){width:22mm;font-weight:700}table.det td:nth-child(4){width:48mm}
+td.okk{color:#18753C}td.ko{color:#CE0500}.rep{color:#000091;font-size:8.5pt}
+`;
+
+/* =====================================================================
+   4. RAPPORT WORD (.docx)
+   ===================================================================== */
+async function buildDocx(D, opts){
+  const d = window.docx;
+  const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, ShadingType, BorderStyle, AlignmentType, ImageRun, Footer, Header, PageNumber, HeadingLevel, PageBreak } = d;
+  const S = stats(D), F = "Marianne", BF = "000091";
+  const anomalies = D.onglets.flatMap(og => og.items.filter(isAnomalie).map(it => ({ og, it })));
+  const T = (t, o = {}) => new TextRun({ text:String(t ?? ""), font:F, size:o.size || 19, bold:o.bold, italics:o.italics, color:o.color, allCaps:o.caps,
+    shading:o.bg ? { type:ShadingType.CLEAR, fill:o.bg, color:"auto" } : undefined });
+  const P = (runs, o = {}) => new Paragraph({ children:Array.isArray(runs) ? runs : [T(runs, o)], spacing:{ after:o.after ?? 100, before:o.before ?? 0 }, alignment:o.align, keepNext:o.keepNext, border:o.border, shading:o.shading, indent:o.indent });
+  let n = 0;
+  const H2b = t => new Paragraph({ children:[T(` ${++n} `, { bold:true, color:"FFFFFF", size:22, bg:BF }), T("  " + t, { bold:true, color:BF, size:26 })], spacing:{ before:300, after:120 }, keepNext:true,
+    border:{ bottom:{ style:BorderStyle.SINGLE, size:6, color:"DDDDDD", space:4 } } });
+  const H3 = t => P([T(t, { bold:true, size:21 })], { before:180, after:80, keepNext:true });
+  const cell = (content, o = {}) => new TableCell({ children:(Array.isArray(content) ? content : String(content ?? "").split("\n").map((line, i) => P([T(line, { bold:o.bold || (o.big && i === 0), color:o.color, size:o.big && i === 0 ? 32 : (o.size || 17) })], { after:0 }))),
+    shading:o.fill ? { type:ShadingType.CLEAR, fill:o.fill, color:"auto" } : undefined, width:o.w ? { size:o.w, type:WidthType.PERCENTAGE } : undefined,
+    margins:{ top:60, bottom:60, left:90, right:90 }, borders:{ top:{ style:BorderStyle.NONE, size:0, color:"FFFFFF" }, left:{ style:BorderStyle.NONE, size:0, color:"FFFFFF" }, right:{ style:BorderStyle.NONE, size:0, color:"FFFFFF" },
+      bottom:{ style:BorderStyle.SINGLE, size:o.head ? 12 : 4, color:o.head ? BF : "E5E5E5" } } });
+  const table = (head, data, widths) => new Table({ width:{ size:100, type:WidthType.PERCENTAGE },
+    columnWidths: widths ? widths.map(w => Math.round(w * 101)) : undefined, layout: widths ? d.TableLayoutType.FIXED : undefined, rows:[
+    ...(head ? [new TableRow({ tableHeader:true, children:head.map((h, i) => cell(h, { bold:true, fill:"F6F6F6", head:true, w:widths && widths[i] })) })] : []),
+    ...data.map(r => new TableRow({ cantSplit:true, children:r.map((v, i) => typeof v === "object" && v && v.t !== undefined ? cell(v.t, { ...v, w:widths && widths[i] }) : cell(v, { w:widths && widths[i] })) })) ] });
+  const kv = arr => table(null, arr.map(([k, v]) => [{ t:k, fill:"F6F6F6", bold:true }, v]), [36, 64]);
+
+  const ident = [["Raison sociale", D.cover.rs], ["N° de reconnaissance", D.cover.reco], ["Filière", D.cover.secteur], ["Statut juridique", ficheVal(D, /^Statut juridique/i)],
+    ["N° SIRET", ficheVal(D, /^Numéro Siret/i)], ["Siège social", ficheVal(D, /^Adresse du Siège Social/i)], ["Responsable légal", ficheVal(D, /^Responsable légal/i)],
+    ["Nombre d'adhérents", ficheVal(D, /^Nombre d'adhérents/i)], ["Date de l'arrêté de reconnaissance", ficheVal(D, /^Date de l.arrêté/i)],
+    ["Zone de reconnaissance", ficheVal(D, /^Zone de reconnaissance/i)], ["Dernier contrôle FAM", ficheVal(D, /^Date du dernier contrôle/i)]].filter(x => x[1]);
+
+  const children = [];
+  // bloc-marque + émetteur
+  children.push(new Table({ width:{ size:100, type:WidthType.PERCENTAGE }, borders:d.TableBorders ? d.TableBorders.NONE : undefined, rows:[new TableRow({ children:[
+    new TableCell({ borders:noB(d), children:[P([T("▬", { color:BF, size:20 }), T("▬", { color:"FFFFFF", size:20 }), T("▬", { color:"E1000F", size:20 })], { after:20 }), P([T("RÉPUBLIQUE", { bold:true, size:21 })], { after:0 }), P([T("FRANÇAISE", { bold:true, size:21 })], { after:40 }), P([T("Liberté", { italics:true, size:15 })], { after:0 }), P([T("Égalité", { italics:true, size:15 })], { after:0 }), P([T("Fraternité", { italics:true, size:15 })], { after:0 })] }),
+    new TableCell({ borders:noB(d), children:[P([T(D.cover.service || "Service territorial", { bold:true })], { align:AlignmentType.RIGHT, after:0 }), P([T("Contrôle de reconnaissance des organisations de producteurs", { color:"666666", size:16 })], { align:AlignmentType.RIGHT })] }) ] })] }));
+  children.push(P("", { after:300 }));
+  children.push(P([T("RAPPORT DE CONTRÔLE DE RECONNAISSANCE", { bold:true, color:BF, size:18 })], { after:60, border:{ left:{ style:BorderStyle.SINGLE, size:36, color:BF, space:10 } } }));
+  children.push(P([T(D.cover.rs || "Organisation de producteurs", { bold:true, size:44 })], { after:100, border:{ left:{ style:BorderStyle.SINGLE, size:36, color:BF, space:10 } } }));
+  children.push(P([T(["Filière " + (D.cover.secteur || "–"), D.cover.reco && "N° " + D.cover.reco, D.cover.du && "Contrôle du " + D.cover.du + (D.cover.au ? " au " + D.cover.au : ""), D.cover.demande && "Demande " + D.cover.demande].filter(Boolean).join("   ·   "), { color:BF, size:17, bold:true })], { after:200, border:{ left:{ style:BorderStyle.SINGLE, size:36, color:BF, space:10 } } }));
+
+  children.push(H2b("Synthèse"));
+  children.push(table(null, [[
+    { t:`${S.points}\npoints contrôlés`, fill:"F6F6F6", big:true }, { t:`${S.conformes}\nsans anomalie`, fill:"F6F6F6", big:true, color:"18753C" },
+    { t:`${S.anomalies}\nanomalie(s) relevée(s)`, fill:"F6F6F6", big:true, color:"CE0500" }, { t:`${S.nonRenseignes}\nnon renseigné(s)`, fill:"F6F6F6", big:true, color:"666666" } ]], [25, 25, 25, 25]));
+  children.push(P([T(S.anomalies ? `Le contrôle a porté sur ${S.points} points répartis sur ${S.parOnglet.length} thèmes. ${S.anomalies} anomalie(s) ont été relevée(s) ; elles sont détaillées en partie 5 et appellent des actions correctives de la part de l'OP, dont la mise en œuvre sera vérifiée.` : `Le contrôle a porté sur ${S.points} points répartis sur ${S.parOnglet.length} thèmes. Aucune anomalie n'a été relevée.`)],
+    { before:120, shading:{ type:ShadingType.CLEAR, fill:S.anomalies ? "FFE9E9" : "B8FEC9", color:"auto" }, border:{ left:{ style:BorderStyle.SINGLE, size:30, color:S.anomalies ? "CE0500" : "18753C", space:8 } } }));
+  children.push(P([T("Une anomalie correspond à une réponse « Non » ou « Non conforme » assortie d'une observation du contrôleur.", { size:15, color:"666666", italics:true })]));
+
+  children.push(H2b("Identification de l'organisation de producteurs"));
+  children.push(kv(ident));
+  if (D.filiales.length){ children.push(H3("Filiales et participations")); children.push(table(["Raison sociale", "Participation", "Objet"], D.filiales.map(f => [f.nom, pct(f.pct), f.objet]), [45, 15, 40])); }
+
+  children.push(H2b("Déroulement du contrôle"));
+  children.push(kv([["Période", D.cover.du ? "Du " + D.cover.du + (D.cover.au ? " au " + D.cover.au : "") : "–"], ["Service", D.cover.service || "–"]]));
+  children.push(H3("Personnes rencontrées")); children.push(table(["Fonction", "Nom"], D.personnes.map(p => [p.fonction, p.nom]), [50, 50]));
+  children.push(H3("Contrôleur(s)")); children.push(table(["Service", "Nom"], D.controleurs.map(p => [p.fonction, p.nom]), [60, 40]));
+
+  if (opts.schemaPng){
+    children.push(H2b("Schéma fonctionnel de l'OP"));
+    const wpx = 620, hpx = Math.round(wpx * opts.schemaPng.h / opts.schemaPng.w);
+    children.push(new Paragraph({ children:[new ImageRun({ type:"png", data:opts.schemaPng.data, transformation:{ width:wpx, height:hpx } })], alignment:AlignmentType.CENTER, spacing:{ after:60 } }));
+    children.push(P([T("Schéma établi à partir des éléments relevés lors du contrôle.", { size:15, color:"666666", italics:true })]));
+  }
+
+  children.push(H2b("Résultats par thème"));
+  children.push(table(["Thème contrôlé", "Points", "Anomalies", "Taux sans anomalie"], S.parOnglet.map(p => { const t = p.repondus ? Math.round((p.repondus - p.anomalies) / p.repondus * 100) + " %" : "–";
+    return [p.og.titre.replace(/^ONGLET\s*/i, ""), String(p.points), { t:String(p.anomalies), color:p.anomalies ? "CE0500" : undefined, bold:!!p.anomalies }, t]; }), [58, 12, 14, 16]));
+
+  children.push(H2b("Anomalies relevées"));
+  if (!anomalies.length) children.push(P("Aucune anomalie relevée."));
+  anomalies.forEach(({ og, it }, i) => {
+    const bl = { left:{ style:BorderStyle.SINGLE, size:30, color:"CE0500", space:8 } };
+    children.push(P([T(`ANOMALIE ${i + 1} · ${og.titre.replace(/^ONGLET\s*/i, "").split(" - ")[0]}${it.num ? " · POINT " + it.num : ""}`, { bold:true, color:"CE0500", size:15 })], { after:20, border:bl, keepNext:true, before:120 }));
+    children.push(P([T(one(it.critere), { bold:true, size:18 })], { after:20, border:bl, keepNext:true }));
+    children.push(P([T("Constat : ", { bold:true, size:18 }), T(it.obs, { size:18 })], { after:it.avec ? 20 : 80, border:bl, keepNext:!!it.avec }));
+    if (it.avec) children.push(P([T("Contrôle réalisé à partir de : " + it.avec, { size:15, color:"666666" })], { after:80, border:bl }));
+  });
+
+  const comp = D.rendements.length || D.sondages.some(s => s.rows.length) || D.stades.length;
+  if (comp) children.push(H2b("Contrôles complémentaires"));
+  if (D.rendements.length){ children.push(H3("Rendements déclarés et références AGRESTE"));
+    children.push(table(["Produit", "Année", "Département", "AGRESTE", "OP", "Écart", "Justification"], D.rendements.map(r => [r.produit, r.annee, r.dept, fmtN(r.agreste), fmtN(r.op),
+      { t:r.variation == null ? "–" : (r.variation > 0 ? "+" : "") + Math.round(r.variation * 100) + " %", color:Math.abs(r.variation || 0) > .2 ? "CE0500" : undefined, bold:Math.abs(r.variation || 0) > .2 }, r.justif]), [14, 8, 16, 10, 8, 9, 35])); }
+  for (const s of D.sondages.filter(s => s.rows.length)){ children.push(H3(s.titre)); children.push(table(s.head, s.rows.map(r => r.map((v, i) => i === 5 && /^NC$/i.test(v) ? { t:v, color:"CE0500", bold:true } : v)))); }
+  if (D.stades.length){ children.push(H3("Mise en marché par stade")); children.push(table(["Stade du produit", "Produits", "Part du CA"], D.stades.map(s => [s.stade, s.produits, pct(s.pct)]), [30, 55, 15])); }
+
+  if (D.onglets.some(o => o.observations.length)){
+    children.push(H2b("Observations complémentaires du contrôleur"));
+    D.onglets.filter(o => o.observations.length).forEach(o => children.push(P([T(o.titre.replace(/^ONGLET\s*/i, "") + " : ", { bold:true }), T(o.observations.join(" "))])));
+  }
+  children.push(P([T(`Fait à ${opts.lieu || "……………"}, le ${opts.date || new Date().toLocaleDateString("fr-FR")}`)], { before:400, after:600 }));
+  D.controleurs.forEach(c => { children.push(P([T(c.nom, { bold:true })], { after:0 })); children.push(P([T(c.fonction, { size:16, color:"666666" })], { after:300 })); });
+
+  if (opts.annexe){
+    children.push(new Paragraph({ children:[new PageBreak()] }));
+    children.push(P([T("Annexe – Détail des points contrôlés", { bold:true, color:BF, size:26 })], { after:160 }));
+    for (const og of D.onglets.filter(o => o.items.length)){
+      children.push(H3(og.titre.replace(/^ONGLET\s*/i, "")));
+      children.push(table(["N°", "Critère", "Résultat", "Observation"], og.items.map(it => [it.num || "", one(it.critere).slice(0, 260) + (it.texte ? "\n→ " + it.texte : ""),
+        { t:resLabel(it), bold:true, color:isAnomalie(it) ? "CE0500" : it.res ? "18753C" : undefined }, it.obs || ""]), [6, 56, 14, 24]));
+    }
+  }
+
+  const doc = new Document({
+    creator:"Grist – rapport de contrôle", title:"Rapport de contrôle – " + (D.cover.rs || ""),
+    styles:{ default:{ document:{ run:{ font:F, size:19 } } } },
+    sections:[{ properties:{ page:{ margin:{ top:900, bottom:900, left:900, right:900 } } },
+      footers:{ default:new Footer({ children:[new Paragraph({ alignment:AlignmentType.RIGHT, children:[T("Rapport de contrôle de reconnaissance – " + (D.cover.rs || "") + "   ·   Page ", { size:15, color:"666666" }), new TextRun({ children:[PageNumber.CURRENT], font:F, size:15, color:"666666" }), T(" / ", { size:15, color:"666666" }), new TextRun({ children:[PageNumber.TOTAL_PAGES], font:F, size:15, color:"666666" })] })] }) },
+      children }]
+  });
+  void Header; void HeadingLevel;
+  return Packer.toBlob(doc);
+}
+function noB(d){ const n = { style:d.BorderStyle.NONE, size:0, color:"FFFFFF" }; return { top:n, bottom:n, left:n, right:n }; }
+
+/* =====================================================================
+   5. INTERFACE
+   ===================================================================== */
+function renderSchemaChoices(){
+  const S = state.data ? schemaData(state.data) : null;
+  const opts = [["none", "Sans schéma"], ...Object.entries(SCHEMAS).map(([k, v]) => [k, v.label])];
+  $("schemas").innerHTML = opts.map(([k, label]) => `<div class="opt ${state.schema === k ? "sel" : ""}" data-k="${k}" role="radio" aria-checked="${state.schema === k}" tabindex="0"><div class="th">${k === "none" ? '<span class="none">Le rapport ne contiendra pas de schéma</span>' : S ? SCHEMAS[k].fn(S, "").replace(/width="\d+" height="\d+"/, "") : '<span class="none">Chargez un fichier</span>'}</div>${label}</div>`).join("");
+  for (const el of $("schemas").querySelectorAll(".opt")){
+    const pick = () => { state.schema = el.dataset.k; renderSchemaChoices(); if (!$("preview").classList.contains("hidden")) preview(); };
+    el.onclick = pick; el.onkeydown = e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); pick(); } };
+  }
+}
+function currentOpts(print){
+  const S = state.data ? schemaData(state.data) : null;
+  return { lieu:$("lieu").value.trim(), date:$("date").value.trim(), annexe:$("annexe").checked, print,
+    schemaSvg: state.schema !== "none" && S ? SCHEMAS[state.schema].fn(S, "") : "" };
+}
+function msg(kind, t){ $("out").innerHTML = `<div class="msg ${kind}">${t}</div>`; }
+function preview(){ const f = $("preview"); f.classList.remove("hidden"); f.srcdoc = reportHtml(state.data, currentOpts(false)); }
+function baseName(){ return ("Rapport de controle - " + (state.data.cover.rs || "OP") + " - " + (state.data.cover.secteur || "")).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[\\/:*?"<>|]/g, "-").replace(/\s+/g, " ").trim(); }
+function download(blob, name){ const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000); }
+
+async function loadFile(f){
+  try {
+    const wb = XLSX.read(await f.arrayBuffer(), { type:"array", cellDates:false });
+    state.data = parseControl(wb); state.fileName = f.name;
+    const S = stats(state.data);
+    $("summary").innerHTML = `<div class="info"><div class="kpi"><b>${esc(state.data.cover.rs || "OP ?")}</b><span>${esc(state.data.cover.secteur || "")} · ${esc(f.name)}</span></div>
+      <div class="kpi"><b>${S.points}</b><span>points contrôlés</span></div><div class="kpi err"><b>${S.anomalies}</b><span>anomalies relevées</span></div><div class="kpi"><b>${S.parOnglet.length}</b><span>thèmes</span></div></div>`;
+    if (!$("lieu").value && state.data.cover.service) $("lieu").placeholder = "Ville";
+    ["bPdf", "bDocx", "bPrev"].forEach(id => $(id).disabled = false);
+    renderSchemaChoices(); $("out").innerHTML = "";
+    if (!$("preview").classList.contains("hidden")) preview();
+  } catch(e){ console.error(e); msg("err", "Fichier illisible : " + esc(e.message)); }
+}
+
+$("date").value = new Date().toLocaleDateString("fr-FR");
+$("file").addEventListener("change", e => e.target.files[0] && loadFile(e.target.files[0]));
+const drop = $("drop");
+["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", e => e.dataTransfer.files[0] && loadFile(e.dataTransfer.files[0]));
+$("bPrev").onclick = preview;
+$("annexe").onchange = () => { if (!$("preview").classList.contains("hidden")) preview(); };
+$("bPdf").onclick = () => {
+  const html = reportHtml(state.data, currentOpts(true));
+  const w = window.open("", "_blank");
+  if (w){ w.document.open(); w.document.write(html); w.document.close(); msg("ok", "Le rapport s'ouvre dans un nouvel onglet : choisissez « Enregistrer au format PDF » dans la fenêtre d'impression."); }
+  else { download(new Blob([html], { type:"text/html" }), baseName() + ".html"); msg("ok", "Fenêtre bloquée : le rapport a été téléchargé en HTML. Ouvrez-le puis imprimez-le en PDF (Ctrl+P)."); }
+};
+$("bDocx").onclick = async () => {
+  $("bDocx").disabled = true; msg("ok", "Génération du document Word…");
+  try {
+    const S = schemaData(state.data); let png = null;
+    if (state.schema !== "none") png = await svgToPng(SCHEMAS[state.schema].fn(S, await marianneCss()));
+    const blob = await buildDocx(state.data, { ...currentOpts(false), schemaPng:png });
+    download(blob, baseName() + ".docx"); msg("ok", "Rapport Word téléchargé.");
+  } catch(e){ console.error(e); msg("err", "Erreur : " + esc(e.message)); }
+  $("bDocx").disabled = false;
+};
+renderSchemaChoices();
+try { grist.ready({ requiredAccess:"none" }); } catch(e){}
+</script>
+</body>
+</html>

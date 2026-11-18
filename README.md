@@ -8,6 +8,7 @@
 | `prise-rdv-calendrier.html` | Prise de rendez-vous (calendrier) |
 | `rdv/index.html` | Formulaire public de prise de rendez-vous |
 | `grille-filiere-excel.html` | **Grille Excel par filière** : exporte le modèle Excel CRC Reco OP en ne gardant que les critères de la filière choisie |
+| `rapport-controle.html` | **Rapport de contrôle** (DSFR, Marianne) en PDF ou Word à partir d'un fichier de contrôle rempli, avec schéma fonctionnel optionnel (3 visuels) |
 | `crc-reco-op/` | **Trame Grist** du compte-rendu de contrôle de reconnaissance des OP (référentiel CSV + script de création) |
 | `duo.html` | **Duo** — interprète à deux écouteurs (ex. japonais ⇄ allemand) |
 
