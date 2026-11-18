@@ -117,8 +117,8 @@ Application web (HTML/JS, sans serveur obligatoire) au **Système de Design de l
 - **Exploitation / parcelles** saisies une fois (PACAGE, sol, zonage…), import CSV.
 - **Calcul** : rendement (référence GREN, historique 5 ans hors extrêmes, saisie libre), RSH, CIPAN, pailles, irrigation, effluents (Keq selon la période), arrière-effet N-1, pâturage (convertisseur UGB). Formule en blocs visuels et détail du calcul.
 - **Groupes** de parcelles selon les 5 conditions ; **verrous** calendrier d'épandage et plafond 170 kg N/ha.
-- **PDF** : PPF, PPF + fiche détaillée par parcelle, fiche d'une parcelle, comparatif — générés directement (police Marianne embarquée). Exports CSV.
-- **Comparer** : import d'un fichier de résultats (export de la Calculette, sauvegarde, ou CSV de tableur / autre outil avec une colonne « dose ») ou instantané des résultats actuels, puis écarts parcelle par parcelle.
+- **Exporter et comparer** (un seul onglet) : plan de fumure en PDF (simple ou détaillé par parcelle), tableau pour Excel ; comparaison avec un fichier de résultats (tableau Excel en CSV avec une colonne « dose », ou copie Calculette GREN) ou avec ses résultats gardés de côté ; copie des données (fichier `.gren`) pour changer d'appareil.
+- **Espace administrateur** dans l'application (bouton en haut à droite) : référentiel GREN et lien vers le backoffice. Accès **temporaire** `admin` / `nimda`, réglable dans `config.js` — il masque les réglages mais ne protège rien (visible dans le code de la page).
 - Mémoire pluriannuelle, sauvegarde JSON, hors connexion, installable sur mobile.
 - Données de l'exploitation **uniquement dans le navigateur**. Si un serveur est configuré : bandeau d'annonce, mode maintenance, référentiel officiel publié et mesure d'audience anonyme.
 
