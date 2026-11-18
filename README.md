@@ -107,18 +107,35 @@ Langues proposées : japonais, allemand, français, anglais, espagnol, italien, 
 
 ## Calculette GREN — fertilisation azotée (`calculette-gren/`)
 
-Application web autonome (un seul fichier HTML, sans serveur) pour calculer la **dose prévisionnelle d'azote** par la méthode du bilan selon le référentiel GREN Bretagne, et éditer le **Plan Prévisionnel de Fumure (PPF)**.
+Application web (HTML/JS, sans serveur obligatoire) au **Système de Design de l'État (DSFR)**, police **Marianne**, bloc-marque **Préfète de la région Bretagne** : calcul de la **dose prévisionnelle d'azote** par la méthode du bilan (référentiel GREN Bretagne) et édition du **Plan Prévisionnel de Fumure (PPF)**.
 
-En ligne (GitHub Pages) : `https://williamlestoilleagri-creator.github.io/Grist/calculette-gren/`
+- Application : `https://williamlestoilleagri-creator.github.io/Grist/calculette-gren/`
+- Backoffice : `https://williamlestoilleagri-creator.github.io/Grist/calculette-gren/admin/` — mise en service : [`calculette-gren/supabase/INSTALLATION.md`](calculette-gren/supabase/INSTALLATION.md)
 
-- **Exploitation** : PACAGE, raison sociale, adresse, département, commune (recherche geo.api.gouv.fr), sol dominant, SAU — saisis une fois.
-- **Parcelles** : identifiant PACAGE_îlot_parcelle, surface, type de sol, zonage (Standard / ZAR / bassin versant) ; import CSV.
-- **Calcul des doses** : culture, rendement (référence GREN par département, historique sur 5 ans hors extrêmes, ou saisie libre), RSH (forfait ou analyse), CIPAN, pailles, irrigation, apports organiques, pâturage (convertisseur UGB). Formule affichée en blocs : besoins − fournitures ± corrections = dose, puis plafond.
-- **Mémoire pluriannuelle** : le précédent, l'arrière-effet des effluents N-1 et l'historique de rendements sont repris automatiquement à la campagne suivante.
-- **Groupes de parcelles** : proposés seulement si les 5 conditions sont réunies (sol, culture/précédent, historique organique, zonage, rendement) ; contrôle de conformité des groupes validés.
-- **Verrous** : blocage de toute saisie d'épandage dans une période d'interdiction (type I / II / III × culture × zone) et au-delà de 170 kg N organique / ha SAU.
-- **PPF** : impression / PDF et export CSV.
-- **Référentiel** entièrement modifiable (cultures, sols, précédents, CIPAN, effluents, calendrier, paramètres), exportable / importable en JSON.
-- Données enregistrées dans le navigateur (localStorage) + export / import de sauvegarde JSON. Installable sur téléphone et utilisable hors connexion.
+### Application
 
-> ⚠ Les valeurs du référentiel livrées par défaut sont **indicatives** : elles doivent être vérifiées et corrigées au regard de l'arrêté référentiel GREN Bretagne et des arrêtés ZAR en vigueur. Outil d'aide à la décision, non réglementaire.
+- **Exploitation / parcelles** saisies une fois (PACAGE, sol, zonage…), import CSV.
+- **Calcul** : rendement (référence GREN, historique 5 ans hors extrêmes, saisie libre), RSH, CIPAN, pailles, irrigation, effluents (Keq selon la période), arrière-effet N-1, pâturage (convertisseur UGB). Formule en blocs visuels et détail du calcul.
+- **Groupes** de parcelles selon les 5 conditions ; **verrous** calendrier d'épandage et plafond 170 kg N/ha.
+- **PDF** : PPF, PPF + fiche détaillée par parcelle, fiche d'une parcelle, comparatif — générés directement (police Marianne embarquée). Exports CSV.
+- **Comparer** : import d'un fichier de résultats (export de la Calculette, sauvegarde, ou CSV de tableur / autre outil avec une colonne « dose ») ou instantané des résultats actuels, puis écarts parcelle par parcelle.
+- Mémoire pluriannuelle, sauvegarde JSON, hors connexion, installable sur mobile.
+- Données de l'exploitation **uniquement dans le navigateur**. Si un serveur est configuré : bandeau d'annonce, mode maintenance, référentiel officiel publié et mesure d'audience anonyme.
+
+### Backoffice
+
+Accès réservé (liste d'autorisation), **double authentification TOTP obligatoire**, rôles super-administrateur / administrateur / lecteur, création d'accès par invitation. Tableau de bord, statistiques d'utilisation, journal des connexions (et journal Supabase), **suivi des attaques** (force brute, robots, attaques distribuées, flood, accès refusés), blocage manuel et automatique d'IP, publication versionnée du référentiel GREN, paramètres (annonce, maintenance, seuils de sécurité, rétention), journal d'administration infalsifiable depuis l'interface. Droits appliqués par la base (RLS) : voir [`calculette-gren/supabase/schema.sql`](calculette-gren/supabase/schema.sql).
+
+### Fichiers
+
+| Fichier | Rôle |
+|---|---|
+| `calculette-gren/index.html` | application |
+| `calculette-gren/admin/` | backoffice (`index.html`, `admin.js`, `admin.css`) |
+| `calculette-gren/config.js` | adresse du projet Supabase et clé publique (vide = sans serveur) |
+| `calculette-gren/referentiel-defaut.js` | référentiel par défaut (indicatif) partagé |
+| `calculette-gren/supabase/` | schéma SQL et guide d'installation |
+| `calculette-gren/dsfr/` | DSFR 1.15.3 auto-hébergé (CSS, JS, Marianne, icônes) |
+| `calculette-gren/lib/` | supabase-js, jsPDF, jsPDF-AutoTable, Marianne pour les PDF |
+
+> ⚠ Les valeurs du référentiel par défaut sont **indicatives** : à vérifier et corriger (de préférence en publiant un référentiel depuis le backoffice) au regard de l'arrêté référentiel GREN Bretagne et des arrêtés ZAR en vigueur. Outil d'aide à la décision, non réglementaire. Le DSFR, la police Marianne et le bloc-marque sont réservés aux sites de l'État.

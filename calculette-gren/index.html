@@ -1,271 +1,166 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" data-fr-scheme="system">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#1E6B45">
-<meta name="description" content="Calculette de fertilisation azotée selon la méthode du bilan (référentiel GREN Bretagne) et édition du Plan Prévisionnel de Fumure.">
-<title>Calculette GREN</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="format-detection" content="telephone=no">
+<meta name="theme-color" content="#000091">
+<meta name="description" content="Calculette GREN : dose prévisionnelle d'azote par la méthode du bilan (référentiel GREN Bretagne) et édition du Plan Prévisionnel de Fumure.">
+<title>Calculette GREN — fertilisation azotée</title>
+<link rel="stylesheet" href="dsfr/dsfr.min.css">
+<link rel="stylesheet" href="dsfr/icons.css">
+<link rel="apple-touch-icon" href="dsfr/favicon/apple-touch-icon.png">
+<link rel="icon" href="dsfr/favicon/favicon.svg" type="image/svg+xml">
+<link rel="shortcut icon" href="dsfr/favicon/favicon.ico" type="image/x-icon">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
 <style>
-:root{
-  --bg:#F5F7F3; --card:#FFFFFF; --ink:#1B2A21; --ink-soft:#4F5F55; --ink-faint:#8A978F;
-  --line:#DDE5DE; --green:#1E6B45; --green-2:#2E8B57; --green-soft:#E3F1E8;
-  --wheat:#C98A12; --wheat-soft:#FBF0D9; --blue:#2D5F8B; --blue-soft:#E4EEF7;
-  --red:#B42318; --red-soft:#FDE8E6; --radius:12px;
-  --shadow:0 1px 2px rgba(20,40,30,.06),0 6px 18px -10px rgba(20,40,30,.18);
-  --font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-}
-*{box-sizing:border-box}
-html,body{margin:0}
-body{background:var(--bg);color:var(--ink);font:15px/1.45 var(--font);-webkit-text-size-adjust:100%}
 [hidden]{display:none!important}
-a{color:var(--green)}
-h1,h2,h3{line-height:1.2;margin:0 0 .6em}
-h2{font-size:1.25rem} h3{font-size:1.02rem}
-.muted{color:var(--ink-soft)} .faint{color:var(--ink-faint);font-size:.86em}
-.num{font-variant-numeric:tabular-nums;text-align:right}
-
-/* header */
-header.top{background:var(--green);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-header.top .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.1rem}
-header.top .brand svg{width:30px;height:30px}
-header.top .sub{font-weight:400;opacity:.85;font-size:.85rem}
-header.top .spacer{flex:1}
-.yearbox{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.14);border-radius:999px;padding:3px 6px}
-.yearbox button{background:transparent;border:0;color:#fff;font-size:1rem;cursor:pointer;padding:4px 8px;border-radius:999px}
-.yearbox button:hover{background:rgba(255,255,255,.18)}
-.yearbox b{min-width:118px;text-align:center;font-size:.92rem}
-
-nav.tabs{display:flex;gap:2px;overflow-x:auto;background:#fff;border-bottom:1px solid var(--line);padding:0 8px;position:sticky;top:0;z-index:5}
-nav.tabs button{background:none;border:0;border-bottom:3px solid transparent;padding:12px 12px 9px;font:inherit;color:var(--ink-soft);cursor:pointer;white-space:nowrap}
-nav.tabs button.on{color:var(--green);border-bottom-color:var(--green);font-weight:600}
-
-main{max-width:1200px;margin:0 auto;padding:16px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;margin-bottom:16px}
-.grid{display:grid;gap:12px}
-.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
-.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
-.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
-@media(max-width:820px){.g3,.g4{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:560px){.g2,.g3,.g4{grid-template-columns:minmax(0,1fr)}}
-label.f{display:flex;flex-direction:column;gap:4px;font-size:.86rem;color:var(--ink-soft)}
-label.f>span{font-weight:600;color:var(--ink)}
-input,select,textarea{font:inherit;color:var(--ink);background:#fff;border:1px solid #C9D3CB;border-radius:8px;padding:8px 10px;min-width:0;width:100%}
-input:focus,select:focus,textarea:focus{outline:2px solid var(--green-2);outline-offset:0;border-color:var(--green-2)}
-input[type=checkbox],input[type=radio]{width:auto;accent-color:var(--green)}
-.radios{display:flex;gap:14px;flex-wrap:wrap;align-items:center;color:var(--ink)}
-.radios label{display:flex;gap:6px;align-items:center;cursor:pointer}
-.btn{display:inline-flex;align-items:center;gap:6px;font:inherit;font-weight:600;border-radius:8px;padding:8px 14px;border:1px solid var(--green);background:var(--green);color:#fff;cursor:pointer;text-decoration:none}
-.btn:hover{background:#185a3a}
-.btn.ghost{background:#fff;color:var(--green)} .btn.ghost:hover{background:var(--green-soft)}
-.btn.danger{background:#fff;color:var(--red);border-color:#E7B4AF} .btn.danger:hover{background:var(--red-soft)}
-.btn.sm{padding:4px 10px;font-size:.85rem}
-.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
-.toolbar .spacer{flex:1}
-
-.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
-table{border-collapse:collapse;width:100%;font-size:.9rem}
-th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
-th{background:#F0F4F1;font-weight:600;color:var(--ink-soft);font-size:.8rem;text-transform:uppercase;letter-spacing:.02em;white-space:nowrap}
-tr:last-child td{border-bottom:0}
-tbody tr.click{cursor:pointer} tbody tr.click:hover{background:#F7FAF8}
-tr.sel td{background:var(--green-soft)!important}
-td input,td select{padding:5px 7px;font-size:.88rem}
-tfoot td{font-weight:700;background:#F7FAF8}
-
-.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:.78rem;font-weight:600;background:#EEF2EF;color:var(--ink-soft)}
-.pill.zar{background:var(--red-soft);color:var(--red)} .pill.bv{background:var(--wheat-soft);color:#8A5B00}
-.pill.ok{background:var(--green-soft);color:var(--green)} .pill.prev{background:var(--blue-soft);color:var(--blue)}
-.alert{border-radius:10px;padding:12px 14px;margin-bottom:12px;border:1px solid}
-.alert.err{background:var(--red-soft);border-color:#F1B8B2;color:#7A1A12}
-.alert.warn{background:var(--wheat-soft);border-color:#EED9A6;color:#6B4700}
-.alert.info{background:var(--blue-soft);border-color:#C3D7EA;color:#1F4466}
-.alert.ok{background:var(--green-soft);border-color:#BFDCC9;color:#174F33}
-.alert b{display:block;margin-bottom:2px}
-
-/* formula blocks */
-.formula{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch}
-.blk{border-radius:10px;padding:10px 12px;min-width:112px;flex:1 1 112px;border:1px solid}
-.blk .v{font-size:1.35rem;font-weight:700;font-variant-numeric:tabular-nums}
-.blk .l{font-size:.8rem;font-weight:600}
-.blk .s{font-size:.72rem;opacity:.75}
-.blk.need{background:var(--wheat-soft);border-color:#EED9A6;color:#6B4700}
-.blk.sup{background:var(--blue-soft);border-color:#C3D7EA;color:#1F4466}
-.blk.cor{background:#F1ECF8;border-color:#D9CCEC;color:#4A2F72}
-.blk.res{background:var(--green);border-color:var(--green);color:#fff}
-.blk.cap{background:#fff;border-color:var(--line);color:var(--ink)}
-.op{display:flex;align-items:center;font-size:1.4rem;font-weight:700;color:var(--ink-faint);padding:0 2px}
-.bigdose{display:flex;gap:16px;flex-wrap:wrap;align-items:baseline}
-.bigdose .d{font-size:2.4rem;font-weight:800;color:var(--green);font-variant-numeric:tabular-nums}
-details.trace{margin-top:10px} details.trace summary{cursor:pointer;color:var(--green);font-weight:600}
-.trace pre{white-space:pre-wrap;background:#F7FAF8;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:.8rem}
-
-.layout2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:16px;align-items:start}
-@media(max-width:980px){.layout2{grid-template-columns:minmax(0,1fr)}}
-.section-t{font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--green);font-weight:700;margin:16px 0 8px;padding-top:12px;border-top:1px dashed var(--line)}
-.section-t:first-child{border-top:0;padding-top:0;margin-top:0}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}
-.kpi{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
-.kpi .v{font-size:1.3rem;font-weight:700;font-variant-numeric:tabular-nums}
-.kpi .l{font-size:.78rem;color:var(--ink-soft)}
-.group{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px;background:#fff}
-.group.validated{border-color:#9FCDB1;background:#F6FBF8}
-.group.broken{border-color:#F1B8B2;background:#FFF8F7}
-.crit{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
-.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;z-index:50;box-shadow:var(--shadow);max-width:calc(100vw - 32px)}
-.toast.err{background:var(--red)}
-dialog{border:0;border-radius:14px;padding:0;max-width:min(560px,calc(100vw - 32px));box-shadow:0 20px 60px rgba(0,0,0,.3)}
-dialog::backdrop{background:rgba(20,30,25,.45)}
-dialog .dh{padding:14px 16px;border-bottom:1px solid var(--line);font-weight:700}
-dialog .db{padding:16px}
-dialog .df{padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
-dialog.block .dh{background:var(--red);color:#fff}
-
-/* PPF print */
-.ppf-doc h1{font-size:1.4rem}
-.ppf-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:4px 16px;font-size:.9rem;margin-bottom:12px}
-.sign{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:24px}
-.sign div{border-top:1px solid var(--ink);padding-top:6px;font-size:.85rem;min-height:60px}
+.gren-panel{background:var(--background-default-grey);border:1px solid var(--border-default-grey);padding:1.5rem;margin-bottom:1.5rem}
+.gren-panel>h2:first-child,.gren-panel>h3:first-child{margin-bottom:1rem}
+.gren-bar{display:flex;flex-wrap:wrap;gap:.75rem 1rem;align-items:center;justify-content:space-between;margin-bottom:1.5rem}
+.gren-bar h1{margin:0}
+.gren-campagne{display:flex;align-items:center;gap:.25rem;border:1px solid var(--border-default-grey);background:var(--background-default-grey);padding:.25rem}
+.gren-campagne strong{padding:0 .5rem;white-space:nowrap}
+.gren-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1rem;margin-bottom:1.5rem}
+.gren-kpi{border:1px solid var(--border-default-grey);background:var(--background-default-grey);padding:1rem}
+.gren-kpi .v{font-size:1.75rem;line-height:2.25rem;font-weight:700;font-variant-numeric:tabular-nums}
+.gren-kpi .l{font-size:.875rem;color:var(--text-mention-grey)}
+.gren-kpi.err .v{color:var(--text-default-error)}
+.gren-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:1.5rem;align-items:start}
+@media(max-width:62em){.gren-layout{grid-template-columns:minmax(0,1fr)}}
+.gren-section{font-size:.875rem;font-weight:700;text-transform:uppercase;letter-spacing:.02em;color:var(--text-action-high-blue-france);margin:1.5rem 0 .75rem;padding-top:1rem;border-top:1px solid var(--border-default-grey)}
+.gren-section:first-of-type{border-top:0;padding-top:0;margin-top:0}
+.num{text-align:right!important;font-variant-numeric:tabular-nums;white-space:nowrap}
+.gren-mention{color:var(--text-mention-grey);font-size:.875rem}
+tr.gren-click{cursor:pointer}
+tr.gren-click:hover td{background:var(--background-alt-grey)}
+tr.gren-sel td{background:var(--background-action-low-blue-france)!important}
+.fr-table td .fr-input,.fr-table td .fr-select{margin-top:0;min-width:5rem}
+.fr-table{margin-bottom:1rem}
+.gren-formula{display:flex;flex-wrap:wrap;gap:.5rem;align-items:stretch}
+.gren-blk{padding:.75rem;min-width:7.5rem;flex:1 1 7.5rem}
+.gren-blk .l{font-size:.8125rem;font-weight:700;line-height:1.2}
+.gren-blk .v{font-size:1.5rem;font-weight:700;font-variant-numeric:tabular-nums;line-height:2rem}
+.gren-blk .s{font-size:.75rem}
+.gren-blk.need{background:var(--background-contrast-yellow-tournesol);color:var(--text-label-yellow-tournesol)}
+.gren-blk.sup{background:var(--background-contrast-blue-ecume);color:var(--text-label-blue-ecume)}
+.gren-blk.cor{background:var(--background-contrast-purple-glycine);color:var(--text-label-purple-glycine)}
+.gren-blk.res{background:var(--background-action-high-blue-france);color:var(--text-inverted-blue-france)}
+.gren-op{display:flex;align-items:center;font-size:1.5rem;font-weight:700;color:var(--text-mention-grey)}
+.gren-dose{display:flex;flex-wrap:wrap;gap:.5rem 1rem;align-items:baseline;margin-top:1rem}
+.gren-dose .d{font-size:2.5rem;line-height:3rem;font-weight:800;color:var(--text-action-high-blue-france);font-variant-numeric:tabular-nums}
+.gren-trace{white-space:pre-wrap;font-size:.8125rem;background:var(--background-alt-grey);padding:1rem;margin:0}
+.gren-group{border:1px solid var(--border-default-grey);padding:1rem;margin-bottom:1rem}
+.gren-group.ok{border-left:4px solid var(--border-plain-success, #18753c)}
+.gren-group.ko{border-left:4px solid var(--border-plain-error)}
+.gren-badges{display:flex;flex-wrap:wrap;gap:.5rem;margin:.5rem 0}
+.gren-toast{position:fixed;left:50%;bottom:1.5rem;transform:translateX(-50%);z-index:1000;max-width:calc(100vw - 2rem);background:var(--background-default-grey);box-shadow:0 6px 18px rgba(0,0,18,.25)}
+dialog.gren-modal{border:0;padding:0;width:min(40rem,calc(100vw - 2rem));background:var(--background-default-grey);color:var(--text-default-grey);box-shadow:0 8px 32px rgba(0,0,18,.35)}
+dialog.gren-modal::backdrop{background:rgba(22,22,22,.64)}
+.gren-modal__head{padding:1.5rem 1.5rem .5rem}
+.gren-modal__head h1{font-size:1.375rem;line-height:1.75rem;margin:0}
+.gren-modal.block .gren-modal__head h1{color:var(--text-default-error)}
+.gren-modal__body{padding:.5rem 1.5rem 1rem;max-height:65vh;overflow:auto}
+.gren-modal__foot{padding:1rem 1.5rem 1.5rem;display:flex;flex-wrap:wrap;gap:1rem;justify-content:flex-end}
+.gren-ppf-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(14rem,1fr));gap:.25rem 1.5rem;margin-bottom:1rem}
+.gren-sign{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-top:2rem}
+.gren-sign div{border-top:1px solid var(--text-default-grey);padding-top:.5rem;min-height:4rem;font-size:.875rem}
+.gren-ppf-head{display:none}
 @media print{
   @page{size:A4 landscape;margin:12mm}
-  body{background:#fff;font-size:10.5pt}
-  header.top,nav.tabs,.noprint,.toast{display:none!important}
-  main{max-width:none;padding:0}
-  .card{border:0;box-shadow:none;padding:0}
-  .tablewrap{border:0;overflow:visible}
-  table{font-size:9pt} th{background:#eee!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  th,td{padding:4px 6px}
+  .fr-header,.fr-footer,.fr-skiplinks,.gren-noprint,.gren-toast,.fr-notice{display:none!important}
+  .gren-ppf-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem}
+  .fr-container{max-width:none;padding:0}
+  .gren-panel{border:0;padding:0}
+  .fr-table table{font-size:9pt}
+  .fr-table td,.fr-table th{padding:.25rem .4rem!important}
 }
 </style>
 </head>
 <body>
-<header class="top">
-  <div class="brand">
-    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#fff"/><path d="M16 26V11" stroke="#1E6B45" stroke-width="2.2" stroke-linecap="round"/><path d="M16 15c-4 0-6-2.5-6-6 4 0 6 2.5 6 6zm0 0c4 0 6-2.5 6-6-4 0-6 2.5-6 6zm0 6c-4 0-6-2.5-6-6 4 0 6 2.5 6 6zm0 0c4 0 6-2.5 6-6-4 0-6 2.5-6 6z" fill="#C98A12"/></svg>
-    <div>Calculette GREN<div class="sub">Fertilisation azotée · méthode du bilan · Bretagne</div></div>
+<div class="fr-skiplinks">
+  <nav class="fr-container" role="navigation" aria-label="Accès rapide">
+    <ul class="fr-skiplinks__list">
+      <li><a class="fr-link" href="#contenu">Contenu</a></li>
+      <li><a class="fr-link" href="#navigation">Menu</a></li>
+      <li><a class="fr-link" href="#pied">Pied de page</a></li>
+    </ul>
+  </nav>
+</div>
+<header role="banner" class="fr-header">
+  <div class="fr-header__body">
+    <div class="fr-container">
+      <div class="fr-header__body-row">
+        <div class="fr-header__brand fr-enlarge-link">
+          <div class="fr-header__brand-top">
+            <div class="fr-header__logo"><p class="fr-logo" data-marque>Préfète<br>de la région<br>Bretagne</p></div>
+            <div class="fr-header__navbar">
+              <button class="fr-btn--menu fr-btn" data-fr-opened="false" aria-controls="menu-principal" aria-haspopup="menu" id="bouton-menu" title="Menu">Menu</button>
+            </div>
+          </div>
+          <div class="fr-header__service">
+            <a href="./" title="Accueil — Calculette GREN"><p class="fr-header__service-title">Calculette GREN</p></a>
+            <p class="fr-header__service-tagline">Fertilisation azotée — méthode du bilan</p>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
-  <div class="spacer"></div>
-  <div class="yearbox" title="Campagne = année de récolte">
-    <button id="yPrev" aria-label="Campagne précédente">◀</button>
-    <b id="yLabel">Campagne</b>
-    <button id="yNext" aria-label="Campagne suivante">▶</button>
+  <div class="fr-header__menu fr-modal" id="menu-principal" aria-labelledby="bouton-menu">
+    <div class="fr-container">
+      <button class="fr-btn--close fr-btn" aria-controls="menu-principal" title="Fermer">Fermer</button>
+      <div class="fr-header__menu-links"></div>
+      <nav class="fr-nav" id="navigation" role="navigation" aria-label="Menu principal">
+        <ul class="fr-nav__list" id="tabs"></ul>
+      </nav>
+    </div>
   </div>
 </header>
-<nav class="tabs" id="tabs"></nav>
-<main id="view"></main>
-<dialog id="dlg"><div class="dh" id="dlgH"></div><div class="db" id="dlgB"></div><div class="df" id="dlgF"></div></dialog>
+<div id="annonce"></div>
+<main id="contenu" role="main" tabindex="-1">
+  <div class="fr-container fr-py-4w" id="view"></div>
+</main>
+<footer class="fr-footer" role="contentinfo" id="pied">
+  <div class="fr-container">
+    <div class="fr-footer__body">
+      <div class="fr-footer__brand fr-enlarge-link">
+        <a href="./" title="Retour à l'accueil — Calculette GREN"><p class="fr-logo" data-marque>Préfète<br>de la région<br>Bretagne</p></a>
+      </div>
+      <div class="fr-footer__content">
+        <p class="fr-footer__content-desc">La Calculette GREN aide les agriculteurs et agricultrices de Bretagne à calculer la dose prévisionnelle d'azote selon la méthode du bilan et à éditer leur Plan Prévisionnel de Fumure. Outil d'aide à la décision, non réglementaire.</p>
+        <ul class="fr-footer__content-list">
+          <li class="fr-footer__content-item"><a class="fr-footer__content-link" target="_blank" rel="noopener" title="info.gouv.fr — nouvelle fenêtre" href="https://www.info.gouv.fr">info.gouv.fr</a></li>
+          <li class="fr-footer__content-item"><a class="fr-footer__content-link" target="_blank" rel="noopener" title="service-public.fr — nouvelle fenêtre" href="https://www.service-public.fr">service-public.fr</a></li>
+          <li class="fr-footer__content-item"><a class="fr-footer__content-link" target="_blank" rel="noopener" title="legifrance.gouv.fr — nouvelle fenêtre" href="https://www.legifrance.gouv.fr">legifrance.gouv.fr</a></li>
+          <li class="fr-footer__content-item"><a class="fr-footer__content-link" target="_blank" rel="noopener" title="data.gouv.fr — nouvelle fenêtre" href="https://www.data.gouv.fr">data.gouv.fr</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="fr-footer__bottom">
+      <ul class="fr-footer__bottom-list">
+        <li class="fr-footer__bottom-item"><a class="fr-footer__bottom-link" href="#accessibilite" data-tab="aide" data-ancre="accessibilite">Accessibilité : non conforme</a></li>
+        <li class="fr-footer__bottom-item"><a class="fr-footer__bottom-link" href="#mentions" data-tab="aide" data-ancre="mentions">Mentions légales</a></li>
+        <li class="fr-footer__bottom-item"><a class="fr-footer__bottom-link" href="#donnees" data-tab="aide" data-ancre="donnees">Données personnelles</a></li>
+        <li class="fr-footer__bottom-item"><a class="fr-footer__bottom-link" href="#cookies" data-tab="aide" data-ancre="cookies">Gestion des cookies</a></li>
+      </ul>
+      <div class="fr-footer__bottom-copy">
+        <p>Sauf mention explicite de propriété intellectuelle détenue par des tiers, les contenus de ce site sont proposés sous <a href="https://github.com/etalab/licence-ouverte/blob/master/LO.md" target="_blank" rel="noopener" title="licence etalab-2.0 — nouvelle fenêtre">licence etalab-2.0</a></p>
+      </div>
+    </div>
+  </div>
+</footer>
+<dialog class="gren-modal" id="dlg" aria-labelledby="dlgH">
+  <div class="gren-modal__head"><h1 id="dlgH"></h1></div>
+  <div class="gren-modal__body" id="dlgB"></div>
+  <div class="gren-modal__foot" id="dlgF"></div>
+</dialog>
 
+<script type="module" src="dsfr/dsfr.module.min.js"></script>
+<script nomodule src="dsfr/dsfr.nomodule.min.js"></script>
+<script src="config.js"></script>
+<script src="referentiel-defaut.js"></script>
 <script>
 "use strict";
-/* =========================================================================
-   RÉFÉRENTIEL PAR DÉFAUT
-   ⚠ Valeurs INDICATIVES inspirées de la méthode du bilan GREN Bretagne.
-   Elles doivent être vérifiées / remplacées par les valeurs de l'arrêté
-   référentiel régional en vigueur (onglet « Référentiel », modifiable).
-   ========================================================================= */
-const DEPTS = {"22":"Côtes-d'Armor","29":"Finistère","35":"Ille-et-Vilaine","56":"Morbihan"};
-const REF_DEFAULT = {
-  version: 1,
-  params: {
-    plafondOrga: 170,      // kg N organique total / ha SAU / an (Directive Nitrates)
-    plafondZAR: 210,       // kg N total / ha (organique + minéral) — alerte ZAR / BV
-    nUGB: 85,              // kg N excrété / UGB / an (pâturage)
-    keqPature: 0.4,        // coefficient d'efficacité des restitutions au pâturage
-    pailleExportee: 10,    // correction (+) si paille exportée
-    pailleEnfouie: -10,    // correction (−) si paille enfouie
-    cipanLimite: "12-01",  // destruction avant cette date = précoce
-    arrondi: 5             // arrondi de la dose finale (kg N/ha)
-  },
-  cultures: [
-    {id:"ble",  nom:"Blé tendre d'hiver", cat:"automne",  unite:"q/ha",  methode:"bilan",   b:3.0, rf:20, irrig:0,  forfait:0,   plafond:240, prec:"cereale", rdt22:80, rdt29:76, rdt35:82, rdt56:75},
-    {id:"orgh", nom:"Orge d'hiver",       cat:"automne",  unite:"q/ha",  methode:"bilan",   b:2.5, rf:20, irrig:0,  forfait:0,   plafond:200, prec:"cereale", rdt22:75, rdt29:72, rdt35:76, rdt56:70},
-    {id:"orgp", nom:"Orge de printemps",  cat:"printemps",unite:"q/ha",  methode:"bilan",   b:2.2, rf:20, irrig:0,  forfait:0,   plafond:160, prec:"cereale", rdt22:62, rdt29:60, rdt35:62, rdt56:58},
-    {id:"trit", nom:"Triticale",          cat:"automne",  unite:"q/ha",  methode:"bilan",   b:2.6, rf:20, irrig:0,  forfait:0,   plafond:200, prec:"cereale", rdt22:70, rdt29:68, rdt35:70, rdt56:66},
-    {id:"avoi", nom:"Avoine d'hiver",     cat:"automne",  unite:"q/ha",  methode:"bilan",   b:2.2, rf:20, irrig:0,  forfait:0,   plafond:150, prec:"cereale", rdt22:60, rdt29:58, rdt35:60, rdt56:56},
-    {id:"colz", nom:"Colza d'hiver",      cat:"automne",  unite:"q/ha",  methode:"bilan",   b:6.5, rf:20, irrig:0,  forfait:0,   plafond:220, prec:"colza",   rdt22:36, rdt29:35, rdt35:37, rdt56:34},
-    {id:"maig", nom:"Maïs grain",         cat:"printemps",unite:"q/ha",  methode:"bilan",   b:2.2, rf:30, irrig:20, forfait:0,   plafond:220, prec:"maisg",   rdt22:95, rdt29:92, rdt35:98, rdt56:92},
-    {id:"maie", nom:"Maïs ensilage",      cat:"printemps",unite:"t MS/ha",methode:"bilan",  b:13,  rf:30, irrig:20, forfait:0,   plafond:220, prec:"maise",   rdt22:14, rdt29:13.5,rdt35:14.5,rdt56:13.5},
-    {id:"prfa", nom:"Prairie temporaire (fauche/ensilage)",cat:"prairie",unite:"t MS/ha",methode:"bilan",b:25,rf:0,irrig:0,forfait:0,plafond:250,prec:"prairie",rdt22:9,rdt29:9.5,rdt35:8.5,rdt56:8.5},
-    {id:"prpa", nom:"Prairie pâturée",    cat:"prairie",  unite:"t MS/ha",methode:"bilan",  b:25,  rf:0,  irrig:0,  forfait:0,   plafond:200, prec:"prairie", rdt22:8, rdt29:8.5, rdt35:7.5, rdt56:7.5},
-    {id:"pdt",  nom:"Pomme de terre",     cat:"printemps",unite:"t/ha",  methode:"bilan",   b:4.5, rf:30, irrig:20, forfait:0,   plafond:240, prec:"legume",  rdt22:45, rdt29:45, rdt35:42, rdt56:42},
-    {id:"chfl", nom:"Chou-fleur",         cat:"automne",  unite:"—",     methode:"forfait", b:0,   rf:0,  irrig:0,  forfait:180, plafond:220, prec:"legume",  rdt22:0, rdt29:0, rdt35:0, rdt56:0},
-    {id:"artc", nom:"Artichaut",          cat:"printemps",unite:"—",     methode:"forfait", b:0,   rf:0,  irrig:0,  forfait:140, plafond:180, prec:"legume",  rdt22:0, rdt29:0, rdt35:0, rdt56:0},
-    {id:"hari", nom:"Haricot / légume d'industrie",cat:"printemps",unite:"—",methode:"forfait",b:0,rf:0,irrig:0,forfait:60,plafond:100,prec:"legume",rdt22:0,rdt29:0,rdt35:0,rdt56:0},
-    {id:"sarr", nom:"Sarrasin (blé noir)",cat:"printemps",unite:"—",     methode:"forfait", b:0,   rf:0,  irrig:0,  forfait:30,  plafond:40,  prec:"cereale", rdt22:0, rdt29:0, rdt35:0, rdt56:0},
-    {id:"pois", nom:"Pois / féverole (légumineuse)",cat:"printemps",unite:"q/ha",methode:"forfait",b:0,rf:0,irrig:0,forfait:0,plafond:0,prec:"legumineuse",rdt22:45,rdt29:45,rdt35:45,rdt56:42}
-  ],
-  precedents: [
-    {id:"cereale",     nom:"Céréale à paille",                     effet:0},
-    {id:"maisg",       nom:"Maïs grain",                           effet:0},
-    {id:"maise",       nom:"Maïs ensilage",                        effet:0},
-    {id:"colza",       nom:"Colza",                                effet:20},
-    {id:"legumineuse", nom:"Légumineuse (pois, féverole…)",        effet:30},
-    {id:"legume",      nom:"Légumes / pomme de terre",             effet:20},
-    {id:"prairie",     nom:"Prairie en place (non retournée)",     effet:0},
-    {id:"pr1",         nom:"Prairie retournée — 1re année",        effet:100},
-    {id:"pr2",         nom:"Prairie retournée — 2e année",         effet:50},
-    {id:"pr3",         nom:"Prairie retournée — 3e année",         effet:20},
-    {id:"jach",        nom:"Jachère / gel",                        effet:20}
-  ],
-  sols: [
-    {id:"limsain", nom:"Limon sain profond",              mhAut:40, mhPri:90,  mhPra:60, rshAut:40, rshPri:50},
-    {id:"limhyd",  nom:"Limon hydromorphe",               mhAut:30, mhPri:70,  mhPra:50, rshAut:35, rshPri:45},
-    {id:"schist",  nom:"Sol sur schiste",                 mhAut:35, mhPri:80,  mhPra:55, rshAut:35, rshPri:45},
-    {id:"granit",  nom:"Sol sur granite / sableux",       mhAut:35, mhPri:80,  mhPra:50, rshAut:30, rshPri:40},
-    {id:"argil",   nom:"Sol argileux",                    mhAut:30, mhPri:70,  mhPra:50, rshAut:40, rshPri:50},
-    {id:"humif",   nom:"Sol humifère (MO > 5 %)",         mhAut:60, mhPri:120, mhPra:80, rshAut:50, rshPri:60}
-  ],
-  cipan: [
-    {id:"aucune",  nom:"Aucun couvert",                       precoce:0,  tardif:0},
-    {id:"nonleg",  nom:"CIPAN non légumineuse (moutarde, phacélie…)", precoce:5, tardif:15},
-    {id:"melange", nom:"Mélange avec légumineuse",            precoce:15, tardif:25},
-    {id:"repous",  nom:"Repousses de céréales / colza",       precoce:0,  tardif:10},
-    {id:"derob",   nom:"Dérobée récoltée (RGI, méteil…)",     precoce:0,  tardif:5}
-  ],
-  effluents: [
-    {id:"lisporc", nom:"Lisier de porc",            unite:"m³", type:"II", n:5.0, keqAut:0.10, keqHiv:0.55, keqPri:0.65, arriere:0.03},
-    {id:"lisbov",  nom:"Lisier de bovins",          unite:"m³", type:"II", n:3.0, keqAut:0.10, keqHiv:0.45, keqPri:0.55, arriere:0.05},
-    {id:"fumbov",  nom:"Fumier de bovins",          unite:"t",  type:"I",  n:5.5, keqAut:0.05, keqHiv:0.15, keqPri:0.25, arriere:0.15},
-    {id:"fumporc", nom:"Fumier de porc",            unite:"t",  type:"I",  n:7.5, keqAut:0.10, keqHiv:0.20, keqPri:0.30, arriere:0.10},
-    {id:"fientes", nom:"Fientes de volailles",      unite:"t",  type:"II", n:30,  keqAut:0.10, keqHiv:0.55, keqPri:0.60, arriere:0.05},
-    {id:"fumvol",  nom:"Fumier de volailles",       unite:"t",  type:"II", n:22,  keqAut:0.10, keqHiv:0.45, keqPri:0.50, arriere:0.05},
-    {id:"compost", nom:"Compost de fumier",         unite:"t",  type:"I",  n:8,   keqAut:0.05, keqHiv:0.10, keqPri:0.15, arriere:0.10},
-    {id:"digest",  nom:"Digestat liquide",          unite:"m³", type:"II", n:4.5, keqAut:0.10, keqHiv:0.60, keqPri:0.65, arriere:0.03}
-  ],
-  mineraux: [
-    {id:"amo",  nom:"Ammonitrate 33,5", teneur:33.5},
-    {id:"sol39",nom:"Solution azotée 39", teneur:39},
-    {id:"uree", nom:"Urée 46", teneur:46},
-    {id:"dap",  nom:"18-46-0 (DAP)", teneur:18},
-    {id:"nkg",  nom:"Autre (kg N saisis directement)", teneur:100}
-  ],
-  animaux: [
-    {id:"vl",  nom:"Vache laitière",       ugb:1.0},
-    {id:"va",  nom:"Vache allaitante",     ugb:0.85},
-    {id:"g2",  nom:"Génisse > 2 ans",      ugb:0.8},
-    {id:"g1",  nom:"Génisse 1–2 ans",      ugb:0.6},
-    {id:"g0",  nom:"Veau / génisse < 1 an",ugb:0.4},
-    {id:"tau", nom:"Taureau",              ugb:1.0},
-    {id:"bre", nom:"Brebis",               ugb:0.15},
-    {id:"che", nom:"Chèvre",               ugb:0.17},
-    {id:"equ", nom:"Cheval",               ugb:0.85}
-  ],
-  // Calendrier d'interdiction d'épandage (MM-JJ). cat : automne | printemps | prairie ; zone : toutes | ZAR | BV
-  calendrier: [
-    {cat:"automne",   type:"I",   debut:"11-15", fin:"01-15", zone:"toutes"},
-    {cat:"automne",   type:"II",  debut:"10-01", fin:"01-31", zone:"toutes"},
-    {cat:"automne",   type:"III", debut:"09-01", fin:"01-31", zone:"toutes"},
-    {cat:"printemps", type:"I",   debut:"07-01", fin:"01-15", zone:"toutes"},
-    {cat:"printemps", type:"II",  debut:"07-01", fin:"01-31", zone:"toutes"},
-    {cat:"printemps", type:"III", debut:"07-01", fin:"02-15", zone:"toutes"},
-    {cat:"prairie",   type:"I",   debut:"12-15", fin:"01-15", zone:"toutes"},
-    {cat:"prairie",   type:"II",  debut:"10-01", fin:"01-31", zone:"toutes"},
-    {cat:"prairie",   type:"III", debut:"10-01", fin:"01-31", zone:"toutes"}
-  ]
-};
-
 /* =========================================================================
    ÉTAT & PERSISTANCE
    ========================================================================= */
@@ -286,7 +181,7 @@ function migrate(s){
   s.ref = s.ref || clone(REF_DEFAULT);
   for (const k of Object.keys(REF_DEFAULT)) if (!(k in s.ref)) s.ref[k] = clone(REF_DEFAULT[k]);
   s.ref.params = Object.assign(clone(REF_DEFAULT.params), s.ref.params || {});
-  s.campagnes = s.campagnes || {}; s.parcelles = s.parcelles || [];
+  s.campagnes = s.campagnes || {}; s.parcelles = s.parcelles || []; s.references = s.references || [];
   return s;
 }
 let S = load() || newState();
@@ -310,18 +205,9 @@ const minById = id => byId(R().mineraux, id);
 const opts = (arr, sel, empty) => (empty !== undefined ? `<option value="">${esc(empty)}</option>` : "") +
   arr.map(o => `<option value="${esc(o.id)}" ${o.id === sel ? "selected" : ""}>${esc(o.nom)}</option>`).join("");
 const ZONES = [{id:"standard",nom:"Standard"},{id:"ZAR",nom:"ZAR (zone d'actions renforcées)"},{id:"BV",nom:"Bassin versant en contentieux"}];
-const zonePill = z => z === "ZAR" ? `<span class="pill zar">ZAR</span>` : z === "BV" ? `<span class="pill bv">BV contentieux</span>` : `<span class="pill">Standard</span>`;
+const zonePill = z => z === "ZAR" ? badge("ZAR", "error") : z === "BV" ? badge("BV contentieux", "warning") : badge("Standard");
+const statutPill = s => s === "realise" ? badge("Réalisé", "success") : badge("Prévisionnel", "info");
 const CAT_LABEL = {automne:"Culture d'automne", printemps:"Culture de printemps", prairie:"Prairie"};
-function toast(msg, err){ const t = document.createElement("div"); t.className = "toast" + (err ? " err" : ""); t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 3200); }
-function dialog({title, body, buttons=[{label:"OK"}], block=false}){
-  const d = $("#dlg"); d.className = block ? "block" : "";
-  $("#dlgH").textContent = title; $("#dlgB").innerHTML = body; const f = $("#dlgF"); f.innerHTML = "";
-  return new Promise(res => {
-    buttons.forEach((b, i) => { const el = document.createElement("button"); el.className = "btn " + (b.cls || (i ? "" : "")); el.textContent = b.label;
-      el.onclick = () => { d.close(); res(b.value ?? i); }; f.appendChild(el); });
-    d.onclose = () => res(null); d.showModal();
-  });
-}
 const parcelLabel = p => p.nom ? `${p.nom}` : `Îlot ${p.ilot} · parc. ${p.num}`;
 const parcelCode = p => `${S.exploitation.pacage || "PACAGE"}_${p.ilot || "?"}_${p.num || "?"}`;
 const sau = () => num(S.exploitation.sau) || S.parcelles.reduce((a, p) => a + num(p.surface), 0);
@@ -527,63 +413,148 @@ function groupStatus(g, y){
 }
 
 /* =========================================================================
+   SERVEUR (facultatif) : annonce, maintenance, référentiel officiel, audience
+   ========================================================================= */
+const CFG = window.GREN_CONFIG || {};
+const SRV = !!(CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY);
+let PUB = {};
+let SESSION = "";
+try { SESSION = sessionStorage.getItem("gren-session") || ""; if (!SESSION) { SESSION = uid() + uid(); sessionStorage.setItem("gren-session", SESSION); } } catch(e) { SESSION = uid() + uid(); }
+async function rpc(fn, args = {}){
+  if (!SRV) return null;
+  const r = await fetch(`${CFG.SUPABASE_URL.replace(/\/$/, "")}/rest/v1/rpc/${fn}`, {method:"POST",
+    headers:{"apikey":CFG.SUPABASE_ANON_KEY, "Authorization":"Bearer " + CFG.SUPABASE_ANON_KEY, "Content-Type":"application/json"}, body:JSON.stringify(args)});
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  const t = await r.text(); return t ? JSON.parse(t) : null;
+}
+function suivre(type, culture){
+  if (!SRV) return;
+  const w = innerWidth;
+  rpc("suivre", {p_type:type, p_session:SESSION, p_departement:S.exploitation.departement || null, p_culture:culture || null,
+    p_appareil: w < 768 ? "mobile" : w < 1100 ? "tablette" : "ordinateur"}).catch(() => {});
+}
+const migrateRef = ref => migrate({version:1, ref:clone(ref)}).ref;
+async function syncServeur(){
+  if (!SRV) return;
+  try {
+    PUB = await rpc("config_publique") || {};
+    renderAnnonce();
+    if (PUB.maintenance) { render(); return; }
+    if (PUB.referentiel_version && S.refSource !== "perso" && S.refVersion !== PUB.referentiel_version) {
+      const r = await rpc("referentiel_officiel");
+      if (r && r.contenu && Array.isArray(r.contenu.cultures)) {
+        S.ref = migrateRef(r.contenu); S.refVersion = r.version; S.refPublieLe = r.publie_le; save(); render();
+        toast(`Référentiel GREN officiel (version ${r.version}) chargé.`);
+      }
+    }
+  } catch(e) { /* hors ligne : on garde le référentiel local */ }
+}
+function renderAnnonce(){
+  const el = $("#annonce"); if (!el) return;
+  if (!PUB.annonce) { el.innerHTML = ""; return; }
+  const t = {info:"fr-notice--info", warning:"fr-notice--warning", error:"fr-notice--alert", success:"fr-notice--info"}[PUB.annonce_niveau] || "fr-notice--info";
+  el.innerHTML = `<div class="fr-notice ${t}"><div class="fr-container"><div class="fr-notice__body"><p><span class="fr-notice__title">${esc(PUB.annonce)}</span></p></div></div></div>`;
+}
+
+/* =========================================================================
+   COMPOSANTS DSFR
+   ========================================================================= */
+let _nid = 0; const nid = () => "c" + (++_nid);
+// Identifiant du champ : celui fourni dans les attributs (id="…"), sinon un identifiant généré
+function idDe(attrs){ const m = /\bid="([^"]+)"/.exec(attrs || ""); return m ? [m[1], attrs.replace(m[0], "")] : [nid(), attrs]; }
+const lbl = (label, hint) => `${label}${hint ? `<span class="fr-hint-text">${hint}</span>` : ""}`;
+function fInput(label, attrs, value = "", {hint = "", type = "text", cls = ""} = {}){
+  let id; [id, attrs] = idDe(attrs);
+  return `<div class="fr-input-group ${cls}"><label class="fr-label" for="${id}">${lbl(label, hint)}</label><input class="fr-input" id="${id}" type="${type}" ${attrs} value="${esc(value)}"></div>`;
+}
+function fSelect(label, attrs, optionsHtml, {hint = "", cls = ""} = {}){
+  let id; [id, attrs] = idDe(attrs);
+  return `<div class="fr-select-group ${cls}"><label class="fr-label" for="${id}">${lbl(label, hint)}</label><select class="fr-select" id="${id}" ${attrs}>${optionsHtml}</select></div>`;
+}
+function fTextarea(label, attrs, value = "", hint = ""){
+  const id = nid();
+  return `<div class="fr-input-group"><label class="fr-label" for="${id}">${lbl(label, hint)}</label><textarea class="fr-input" id="${id}" ${attrs} rows="3">${esc(value)}</textarea></div>`;
+}
+function fRadios(legend, name, attr, items, cur, {hint = "", inline = true} = {}){
+  const lid = nid();
+  return `<fieldset class="fr-fieldset" aria-labelledby="${lid}"><legend class="fr-fieldset__legend--regular fr-fieldset__legend" id="${lid}">${lbl(legend, hint)}</legend>
+    ${items.map(([v, l]) => { const id = nid(); return `<div class="fr-fieldset__element ${inline ? "fr-fieldset__element--inline" : ""}"><div class="fr-radio-group"><input type="radio" id="${id}" name="${name}" ${attr} value="${esc(v)}" ${String(v) === String(cur) ? "checked" : ""}><label class="fr-label" for="${id}">${l}</label></div></div>`; }).join("")}
+  </fieldset>`;
+}
+function fCheckbox(label, attrs, checked, hint = ""){
+  const id = nid();
+  return `<div class="fr-checkbox-group"><input type="checkbox" id="${id}" ${attrs} ${checked ? "checked" : ""}><label class="fr-label" for="${id}">${lbl(label, hint)}</label></div>`;
+}
+const table = (inner, caption = "") => `<div class="fr-table fr-table--bordered fr-table--no-caption"><div class="fr-table__wrapper"><div class="fr-table__container"><div class="fr-table__content"><table>${caption ? `<caption>${esc(caption)}</caption>` : ""}${inner}</table></div></div></div></div>`;
+const alerte = (type, titre, texte) => `<div class="fr-alert fr-alert--${type} fr-alert--sm fr-mb-3w">${titre ? `<h3 class="fr-alert__title">${titre}</h3>` : ""}${texte ? `<p>${texte}</p>` : ""}</div>`;
+const badge = (txt, type = "") => `<p class="fr-badge fr-badge--sm ${type ? "fr-badge--" + type : ""} fr-badge--no-icon">${esc(txt)}</p>`;
+const btn = (label, attrs, {kind = "", icon = "", sm = false} = {}) =>
+  `<button type="button" class="fr-btn ${kind ? "fr-btn--" + kind : ""} ${sm ? "fr-btn--sm" : ""} ${icon ? `fr-btn--icon-left fr-icon-${icon}` : ""}" ${attrs}>${label}</button>`;
+const kpi = (v, l, err) => `<div class="gren-kpi ${err ? "err" : ""}"><div class="v">${v}</div><div class="l">${l}</div></div>`;
+
+/* =========================================================================
    VUES
    ========================================================================= */
 const TABS = [
-  ["exploitation","Exploitation"],["parcelles","Parcelles"],["campagne","Calcul des doses"],
-  ["groupes","Groupes"],["interventions","Apports & épandages"],["ppf","Plan prévisionnel (PPF)"],
-  ["referentiel","Référentiel GREN"],["aide","Aide"]
+  ["exploitation","Exploitation"],["parcelles","Parcelles"],["campagne","Calcul des doses"],["groupes","Groupes"],
+  ["interventions","Apports"],["ppf","Plan de fumure (PPF)"],["comparer","Comparer"],["referentiel","Référentiel"],["aide","Aide"]
 ];
+function campagneSwitch(){
+  return `<div class="gren-campagne" role="group" aria-label="Campagne">
+    ${btn("Campagne précédente", `data-act="yPrev" title="Campagne précédente"`, {kind:"tertiary-no-outline", icon:"arrow-left-s-line", sm:true}).replace(">Campagne précédente<", "><span class=\"fr-sr-only\">Campagne précédente</span><")}
+    <strong>Campagne ${S.annee - 1}-${S.annee}</strong>
+    ${btn("Campagne suivante", `data-act="yNext" title="Campagne suivante"`, {kind:"tertiary-no-outline", icon:"arrow-right-s-line", sm:true}).replace(">Campagne suivante<", "><span class=\"fr-sr-only\">Campagne suivante</span><")}
+  </div>`;
+}
+const bar = (titre, withYear = true) => `<div class="gren-bar"><h1>${titre}</h1>${withYear ? campagneSwitch() : ""}</div>`;
+
 function render(){
-  $("#tabs").innerHTML = TABS.map(([k, l]) => `<button data-tab="${k}" class="${S.tab === k ? "on" : ""}">${l}</button>`).join("");
-  $("#yLabel").textContent = `Campagne ${S.annee - 1}-${S.annee}`;
+  _nid = 0;
+  document.querySelectorAll("[data-marque]").forEach(el => el.innerHTML = (CFG.MARQUE || ["Préfète","de la région","Bretagne"]).map(esc).join("<br>"));
+  $("#tabs").innerHTML = TABS.map(([k, l]) => `<li class="fr-nav__item"><a class="fr-nav__link" href="#${k}" data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ""}>${l}</a></li>`).join("");
   const v = $("#view");
-  v.innerHTML = (VIEWS[S.tab] || VIEWS.exploitation)();
-  if (!storageOK) v.insertAdjacentHTML("afterbegin", `<div class="alert warn"><b>Sauvegarde locale indisponible</b>Le navigateur bloque le stockage : pensez à exporter vos données (onglet Exploitation).</div>`);
+  if (PUB.maintenance) { v.innerHTML = `<h1>Maintenance en cours</h1>${alerte("info", "", esc(PUB.maintenance_message || "Le service est momentanément indisponible."))}`; return; }
+  v.innerHTML = (storageOK ? "" : alerte("warning", "Sauvegarde locale indisponible", "Le navigateur bloque le stockage : exportez régulièrement vos données (onglet Exploitation).")) + (VIEWS[S.tab] || VIEWS.exploitation)();
   if (VIEWS[S.tab + "_after"]) VIEWS[S.tab + "_after"]();
+  document.title = `${(TABS.find(t => t[0] === S.tab) || TABS[0])[1]} — Calculette GREN`;
 }
 function globalBanners(){
   let h = "";
   const b = bilanOrga();
-  if (b.parHa > b.plafond) h += `<div class="alert err"><b>⛔ Infraction : plafond de ${b.plafond} kg N organique / ha dépassé</b>${fmt(b.parHa)} kg N/ha SAU (${fmt(b.tot)} kg N sur ${fmt(b.sau,2)} ha). Réduisez les apports organiques prévus.</div>`;
+  if (b.parHa > b.plafond) h += alerte("error", `Infraction : plafond de ${b.plafond} kg N organique / ha dépassé`, `${fmt(b.parHa)} kg N/ha SAU (${fmt(b.tot)} kg N sur ${fmt(b.sau, 2)} ha). Réduisez les apports organiques prévus.`);
   const z = zarAlerts();
-  if (z.length) h += `<div class="alert warn"><b>Zones ZAR / bassin versant : azote total élevé</b>${z.map(x => `${esc(parcelLabel(x.p))} : ${fmt(x.r.nTotalHa)} kg N/ha`).join(" · ")} (seuil paramétré ${R().params.plafondZAR} kg N/ha — à vérifier selon l'arrêté local).</div>`;
+  if (z.length) h += alerte("warning", "Zones ZAR / bassin versant : azote total élevé", `${z.map(x => `${esc(parcelLabel(x.p))} : ${fmt(x.r.nTotalHa)} kg N/ha`).join(" · ")} (seuil paramétré ${R().params.plafondZAR} kg N/ha — à vérifier selon l'arrêté local).`);
   return h;
 }
-
 const VIEWS = {};
 
 /* ---------- Exploitation ---------- */
 VIEWS.exploitation = () => {
-  const e = S.exploitation;
-  const first = !e.pacage && !S.parcelles.length;
-  return `
-  ${first ? `<div class="alert info"><b>Bienvenue 👋</b>Renseignez une fois les données fixes de votre exploitation : elles resteront enregistrées d'une année sur l'autre. Vous pouvez aussi <a href="#" data-act="demo">charger un exemple</a> pour découvrir l'outil.</div>` : ""}
-  <div class="card">
-    <h2>Données fixes de l'exploitation</h2>
-    <div class="grid g3">
-      <label class="f"><span>N° PACAGE</span><input data-e="pacage" value="${esc(e.pacage)}" inputmode="numeric" maxlength="9" placeholder="9 chiffres"></label>
-      <label class="f"><span>Raison sociale</span><input data-e="raison" value="${esc(e.raison)}" placeholder="GAEC, EARL…"></label>
-      <label class="f"><span>Exploitant·e</span><input data-e="exploitant" value="${esc(e.exploitant)}"></label>
-      <label class="f" style="grid-column:span 2"><span>Adresse</span><input data-e="adresse" value="${esc(e.adresse)}"></label>
-      <label class="f"><span>Département</span><select data-e="departement">${Object.entries(DEPTS).map(([k,v]) => `<option value="${k}" ${e.departement===k?"selected":""}>${k} — ${v}</option>`).join("")}</select></label>
-      <label class="f"><span>Commune du siège</span><input data-e="commune" list="communes" value="${esc(e.commune)}" placeholder="Tapez pour rechercher"><datalist id="communes"></datalist></label>
-      <label class="f"><span>Type de sol dominant</span><select data-e="sol">${opts(R().sols, e.sol)}</select></label>
-      <label class="f"><span>SAU totale (ha)</span><input data-e="sau" value="${esc(e.sau)}" inputmode="decimal" placeholder="Auto : ${fmt(S.parcelles.reduce((a,p)=>a+num(p.surface),0),2)} ha"></label>
+  const e = S.exploitation; const first = !e.pacage && !S.parcelles.length;
+  return `${bar("Mon exploitation", false)}
+  ${first ? `<div class="fr-callout fr-mb-4w"><h2 class="fr-callout__title">Bienvenue</h2><p class="fr-callout__text">Renseignez une fois les données fixes de votre exploitation : elles resteront enregistrées d'une année sur l'autre. Vous pouvez aussi charger un exemple pour découvrir l'outil.</p>${btn("Charger un exemple", 'data-act="demo"', {kind:"secondary"})}</div>` : ""}
+  <section class="gren-panel"><h2 class="fr-h4">Données fixes de l'exploitation</h2>
+    <div class="fr-grid-row fr-grid-row--gutters">
+      <div class="fr-col-12 fr-col-md-4">${fInput("N° PACAGE", 'data-e="pacage" inputmode="numeric" maxlength="9" autocomplete="off"', e.pacage, {hint:"9 chiffres"})}</div>
+      <div class="fr-col-12 fr-col-md-4">${fInput("Raison sociale", 'data-e="raison"', e.raison, {hint:"GAEC, EARL, nom…"})}</div>
+      <div class="fr-col-12 fr-col-md-4">${fInput("Exploitant ou exploitante", 'data-e="exploitant" autocomplete="name"', e.exploitant)}</div>
+      <div class="fr-col-12 fr-col-md-8">${fInput("Adresse", 'data-e="adresse" autocomplete="street-address"', e.adresse)}</div>
+      <div class="fr-col-12 fr-col-md-4">${fSelect("Département", 'data-e="departement"', Object.entries(DEPTS).map(([k, v]) => `<option value="${k}" ${e.departement === k ? "selected" : ""}>${k} — ${v}</option>`).join(""))}</div>
+      <div class="fr-col-12 fr-col-md-4">${fInput("Commune du siège", 'data-e="commune" list="communes" autocomplete="off"', e.commune, {hint:"Tapez pour rechercher"})}<datalist id="communes"></datalist></div>
+      <div class="fr-col-12 fr-col-md-4">${fSelect("Type de sol dominant", 'data-e="sol"', opts(R().sols, e.sol))}</div>
+      <div class="fr-col-12 fr-col-md-4">${fInput("SAU totale (ha)", `data-e="sau" inputmode="decimal" placeholder="${fmt(S.parcelles.reduce((a, p) => a + num(p.surface), 0), 2)}"`, e.sau, {hint:"Vide = somme des parcelles"})}</div>
     </div>
-    <p class="faint">La SAU sert au contrôle du plafond de ${R().params.plafondOrga} kg N organique/ha. Laissée vide, elle est calculée à partir des parcelles. La commune est cherchée dans la base officielle des communes (geo.api.gouv.fr).</p>
-  </div>
-  <div class="card">
-    <h2>Sauvegarde des données</h2>
-    <p class="muted">Les données sont enregistrées automatiquement <b>dans ce navigateur, sur cet appareil</b>. Exportez régulièrement un fichier de sauvegarde pour changer d'appareil ou les conserver en sécurité.</p>
-    <div class="toolbar">
-      <button class="btn" data-act="export">⬇ Exporter la sauvegarde (.json)</button>
-      <label class="btn ghost">⬆ Importer une sauvegarde<input type="file" accept=".json,application/json" data-act="import" hidden></label>
-      <span class="spacer"></span>
-      <button class="btn ghost" data-act="demo">Charger l'exemple</button>
-      <button class="btn danger" data-act="reset">Tout effacer</button>
-    </div>
-  </div>`;
+    <p class="gren-mention fr-mt-2w fr-mb-0">La SAU sert au contrôle du plafond de ${R().params.plafondOrga} kg N organique/ha. La commune est recherchée dans la base officielle des communes (geo.api.gouv.fr).</p>
+  </section>
+  <section class="gren-panel"><h2 class="fr-h4">Sauvegarde des données</h2>
+    <p>Vos données sont enregistrées automatiquement <strong>dans ce navigateur, sur cet appareil</strong>. Elles ne sont envoyées à aucun serveur. Exportez régulièrement une sauvegarde pour changer d'appareil ou la conserver en sécurité.</p>
+    <ul class="fr-btns-group fr-btns-group--inline-md fr-btns-group--icon-left">
+      <li>${btn("Exporter la sauvegarde", 'data-act="export"', {icon:"download-line"})}</li>
+      <li><label class="fr-btn fr-btn--secondary fr-btn--icon-left fr-icon-upload-line">Importer une sauvegarde<input type="file" accept=".json,application/json" data-act="import" hidden></label></li>
+      <li>${btn("Charger l'exemple", 'data-act="demo"', {kind:"tertiary"})}</li>
+      <li>${btn("Tout effacer", 'data-act="reset"', {kind:"tertiary", icon:"delete-line"})}</li>
+    </ul>
+  </section>`;
 };
 let communeTimer;
 VIEWS.exploitation_after = () => {
@@ -594,7 +565,7 @@ VIEWS.exploitation_after = () => {
       try {
         const r = await fetch(`https://geo.api.gouv.fr/communes?nom=${encodeURIComponent(q)}&codeRegion=53&fields=nom,code,codeDepartement&limit=12`);
         const list = await r.json();
-        $("#communes").innerHTML = list.map(c => `<option value="${esc(c.nom)} (${esc(c.codeDepartement)})" data-code="${esc(c.code)}">`).join("");
+        $("#communes").innerHTML = list.map(c => `<option value="${esc(c.nom)} (${esc(c.codeDepartement)})">`).join("");
       } catch(e){}
     }, 250);
   });
@@ -602,144 +573,124 @@ VIEWS.exploitation_after = () => {
 
 /* ---------- Parcelles ---------- */
 VIEWS.parcelles = () => {
-  const ps = S.parcelles; const tot = ps.reduce((a,p) => a + num(p.surface), 0);
-  return `
-  <div class="card">
-    <div class="toolbar"><h2 style="margin:0">Parcelles (${ps.length}) · ${fmt(tot,2)} ha</h2><span class="spacer"></span>
-      <button class="btn" data-act="addParcelle">+ Ajouter une parcelle</button>
-      <button class="btn ghost" data-act="csvParcelles">Importer (CSV / Telepac)</button>
-    </div>
-    <p class="faint">Identifiant = PACAGE_n° îlot PAC_n° parcelle PAC. Le type de sol, le zonage et la surface sont des données stables, conservées d'une campagne à l'autre.</p>
-    ${ps.length ? `<div class="tablewrap"><table>
-      <thead><tr><th>Identifiant</th><th>Îlot</th><th>Parcelle</th><th>Nom d'usage</th><th>Surface (ha)</th><th>Type de sol</th><th>Zonage</th><th>Dépt</th><th></th></tr></thead>
+  const ps = S.parcelles; const tot = ps.reduce((a, p) => a + num(p.surface), 0);
+  return `${bar("Mes parcelles", false)}
+  <section class="gren-panel">
+    <div class="gren-bar fr-mb-2w"><h2 class="fr-h4 fr-mb-0">${ps.length} parcelle${ps.length > 1 ? "s" : ""} · ${fmt(tot, 2)} ha</h2>
+      <ul class="fr-btns-group fr-btns-group--inline-sm fr-btns-group--icon-left fr-mb-0">
+        <li>${btn("Ajouter une parcelle", 'data-act="addParcelle"', {icon:"add-line"})}</li>
+        <li>${btn("Importer un CSV", 'data-act="csvParcelles"', {kind:"secondary", icon:"upload-line"})}</li></ul></div>
+    <p class="gren-mention">Identifiant = PACAGE_n° îlot PAC_n° parcelle PAC. Surface, type de sol et zonage sont conservés d'une campagne à l'autre.</p>
+    ${ps.length ? table(`<thead><tr><th scope="col">Identifiant</th><th scope="col">Îlot</th><th scope="col">Parcelle</th><th scope="col">Nom d'usage</th><th scope="col">Surface (ha)</th><th scope="col">Type de sol</th><th scope="col">Zonage</th><th scope="col">Dépt</th><th scope="col"><span class="fr-sr-only">Actions</span></th></tr></thead>
       <tbody>${ps.map(p => `<tr data-pid="${p.id}">
-        <td class="faint">${esc(parcelCode(p))}</td>
-        <td><input data-p="ilot" value="${esc(p.ilot)}" style="width:64px"></td>
-        <td><input data-p="num" value="${esc(p.num)}" style="width:64px"></td>
-        <td><input data-p="nom" value="${esc(p.nom)}" placeholder="optionnel"></td>
-        <td><input data-p="surface" value="${esc(p.surface)}" inputmode="decimal" style="width:80px"></td>
-        <td><select data-p="sol">${opts(R().sols, p.sol)}</select></td>
-        <td><select data-p="zone">${opts(ZONES, p.zone || "standard")}</select></td>
-        <td><select data-p="dept">${Object.keys(DEPTS).map(k => `<option ${dept(p)===k?"selected":""}>${k}</option>`).join("")}</select></td>
-        <td><button class="btn danger sm" data-act="delParcelle" title="Supprimer">✕</button></td>
-      </tr>`).join("")}</tbody></table></div>` : `<p class="muted">Aucune parcelle. Ajoutez-les une à une ou importez un fichier CSV.</p>`}
-  </div>
-  <div class="alert info"><b>Zonage et type de sol automatiques</b>Le zonage ZAR / bassin versant et le type de sol se renseignent ici à la main. Une détermination automatique par intersection géographique nécessiterait les couches cartographiques officielles (DREAL, carte pédologique) : c'est une évolution possible de l'outil.</div>`;
+        <td class="gren-mention">${esc(parcelCode(p))}</td>
+        <td><input class="fr-input" aria-label="Îlot" data-p="ilot" value="${esc(p.ilot)}" style="width:4.5rem"></td>
+        <td><input class="fr-input" aria-label="Parcelle" data-p="num" value="${esc(p.num)}" style="width:4.5rem"></td>
+        <td><input class="fr-input" aria-label="Nom d'usage" data-p="nom" value="${esc(p.nom)}" placeholder="optionnel"></td>
+        <td><input class="fr-input" aria-label="Surface en hectares" data-p="surface" value="${esc(p.surface)}" inputmode="decimal" style="width:6rem"></td>
+        <td><select class="fr-select" aria-label="Type de sol" data-p="sol">${opts(R().sols, p.sol)}</select></td>
+        <td><select class="fr-select" aria-label="Zonage" data-p="zone">${opts(ZONES, p.zone || "standard")}</select></td>
+        <td><select class="fr-select" aria-label="Département" data-p="dept">${Object.keys(DEPTS).map(k => `<option ${dept(p) === k ? "selected" : ""}>${k}</option>`).join("")}</select></td>
+        <td>${btn("Supprimer", 'data-act="delParcelle" title="Supprimer la parcelle"', {kind:"tertiary-no-outline", icon:"delete-line", sm:true})}</td>
+      </tr>`).join("")}</tbody>`) : `<p>Aucune parcelle. Ajoutez-les une à une ou importez un fichier CSV.</p>`}
+  </section>
+  ${alerte("info", "Zonage et type de sol", "Le zonage ZAR / bassin versant et le type de sol se renseignent ici. Leur détermination automatique par intersection géographique nécessiterait les couches cartographiques officielles (DREAL, carte pédologique).")}`;
 };
 
-/* ---------- Campagne / calcul ---------- */
+/* ---------- Calcul ---------- */
 VIEWS.campagne = () => {
-  if (!S.parcelles.length) return `<div class="card"><p>Ajoutez d'abord vos parcelles (onglet <a href="#" data-tab="parcelles">Parcelles</a>).</p></div>`;
-  const y = S.annee;
-  const isNew = !hasCamp(y);
+  if (!S.parcelles.length) return `${bar("Calcul des doses")}<p>Ajoutez d'abord vos parcelles (onglet <a href="#parcelles" data-tab="parcelles">Parcelles</a>).</p>`;
+  const y = S.annee; const isNew = !hasCamp(y);
   const rows = S.parcelles.map(p => ({p, c:entry(p.id, y), r:calc(p, y)}));
-  if (isNew) save();
+  if (isNew) { save(); suivre("nouvelle_campagne"); }
   if (!S.sel || !byId(S.parcelles, S.sel)) S.sel = S.parcelles[0].id;
   const sel = rows.find(x => x.p.id === S.sel);
   const done = rows.filter(x => x.r);
   const totN = done.reduce((a, x) => a + x.r.doseFinale * num(x.p.surface), 0);
-  return `${globalBanners()}
-  <div class="kpis">
-    <div class="kpi"><div class="v">${done.length}/${rows.length}</div><div class="l">parcelles calculées</div></div>
-    <div class="kpi"><div class="v">${fmt(totN)}</div><div class="l">kg N minéral à prévoir (total)</div></div>
-    <div class="kpi"><div class="v">${fmt(bilanOrga().parHa)}</div><div class="l">kg N org./ha SAU (plafond ${R().params.plafondOrga})</div></div>
-  </div>
-  <div class="layout2">
-    <div class="card">
-      <h2>Parcelles — campagne ${y}</h2>
-      <div class="tablewrap"><table>
-        <thead><tr><th>Parcelle</th><th class="num">ha</th><th>Culture ${y}</th><th class="num">Dose</th></tr></thead>
-        <tbody>${rows.map(({p, c, r}) => `<tr class="click ${p.id === S.sel ? "sel" : ""}" data-selp="${p.id}">
-          <td><b>${esc(parcelLabel(p))}</b><br><span class="faint">${esc(solById(p.sol).nom)}</span> ${p.zone && p.zone !== "standard" ? zonePill(p.zone) : ""}</td>
-          <td class="num">${fmt(num(p.surface),2)}</td>
-          <td>${c.culture ? esc(cultureById(c.culture)?.nom) : `<span class="faint">à choisir</span>`}</td>
-          <td class="num">${r ? `<b>${fmt(r.doseFinale)}</b>` : "—"}</td></tr>`).join("")}</tbody>
-      </table></div>
-      <p class="faint">Doses en kg N/ha. Cliquez sur une parcelle pour la renseigner.</p>
-    </div>
+  const b = bilanOrga();
+  return `${bar("Calcul des doses")}${globalBanners()}
+  <div class="gren-kpis">${kpi(`${done.length}/${rows.length}`, "parcelles calculées")}${kpi(fmt(totN), "kg N minéral à prévoir (total)")}${kpi(fmt(b.parHa), `kg N organique / ha SAU (plafond ${b.plafond})`, b.parHa > b.plafond)}</div>
+  <div class="gren-layout">
+    <section class="gren-panel"><h2 class="fr-h4">Parcelles — récolte ${y}</h2>
+      ${table(`<thead><tr><th scope="col">Parcelle</th><th scope="col" class="num">ha</th><th scope="col">Culture</th><th scope="col" class="num">Dose</th></tr></thead>
+        <tbody>${rows.map(({p, c, r}) => `<tr class="gren-click ${p.id === S.sel ? "gren-sel" : ""}" data-selp="${p.id}" tabindex="0" aria-selected="${p.id === S.sel}">
+          <td><strong>${esc(parcelLabel(p))}</strong><br><span class="gren-mention">${esc(solById(p.sol).nom)}</span> ${p.zone && p.zone !== "standard" ? zonePill(p.zone) : ""}</td>
+          <td class="num">${fmt(num(p.surface), 2)}</td>
+          <td>${c.culture ? esc(cultureById(c.culture)?.nom) : `<span class="gren-mention">à choisir</span>`}</td>
+          <td class="num">${r ? `<strong>${fmt(r.doseFinale)}</strong>` : "—"}</td></tr>`).join("")}</tbody>`)}
+      <p class="gren-mention fr-mb-0">Doses en kg N/ha. Sélectionnez une parcelle pour la renseigner.</p>
+    </section>
     <div>${sel ? detail(sel.p, y) : ""}</div>
   </div>`;
 };
 function detail(p, y){
   const c = entry(p.id, y); const cult = cultureById(c.culture); const r = calc(p, y);
-  const prevE = S.campagnes[y-1] && S.campagnes[y-1].cultures[p.id];
+  const prevE = S.campagnes[y - 1] && S.campagnes[y - 1].cultures[p.id];
   const prevC = prevE && cultureById(prevE.culture);
   const hist = cult ? histValues(p, c, y) : [];
   const unite = cult ? cult.unite : "";
   const isPrairie = cult && cult.cat === "prairie";
+  const bilanM = cult && cult.methode !== "forfait";
   const pa = c.pature || {animaux:[]};
-  return `<div class="card" data-pid="${p.id}">
-    <div class="toolbar" style="margin-bottom:4px"><h2 style="margin:0">${esc(parcelLabel(p))}</h2>${zonePill(p.zone || "standard")}<span class="spacer"></span><span class="faint">${esc(parcelCode(p))} · ${fmt(num(p.surface),2)} ha · ${esc(solById(p.sol).nom)}</span></div>
+  return `<section class="gren-panel" data-pid="${p.id}" id="detail">
+    <div class="gren-bar fr-mb-1w"><h2 class="fr-h4 fr-mb-0">${esc(parcelLabel(p))} ${zonePill(p.zone || "standard")}</h2>
+      ${r ? btn("Fiche PDF", 'data-act="pdfFiche"', {kind:"secondary", icon:"download-line", sm:true}) : ""}</div>
+    <p class="gren-mention">${esc(parcelCode(p))} · ${fmt(num(p.surface), 2)} ha · ${esc(solById(p.sol).nom)}</p>
 
-    <div class="section-t">1 · Culture et rendement</div>
-    <div class="grid g2">
-      <label class="f"><span>Culture implantée (${y})</span><select data-c="culture">${opts(R().cultures, c.culture, "— choisir —")}</select></label>
-      <label class="f"><span>Précédent cultural</span><select data-c="precedent">${opts(R().precedents, c.precedent, "— choisir —")}</select>
-        <span class="faint">${prevC ? `Mémoire ${y-1} : ${esc(prevC.nom)}` : "Pas d'historique : saisie manuelle"}</span></label>
+    <h3 class="gren-section">1. Culture et rendement</h3>
+    <div class="fr-grid-row fr-grid-row--gutters">
+      <div class="fr-col-12 fr-col-md-6">${fSelect(`Culture implantée (récolte ${y})`, 'data-c="culture"', opts(R().cultures, c.culture, "— Choisir —"))}</div>
+      <div class="fr-col-12 fr-col-md-6">${fSelect("Précédent cultural", 'data-c="precedent"', opts(R().precedents, c.precedent, "— Choisir —"), {hint: prevC ? `Mémoire ${y - 1} : ${esc(prevC.nom)}` : "Pas d'historique : saisie manuelle"})}</div>
     </div>
-    ${cult && !cult.methode.startsWith("forfait") ? `
-    <div style="margin-top:10px" class="radios">
-      <b>Rendement prévisionnel :</b>
-      <label><input type="radio" name="rdt" data-c="rdtMode" value="ref" ${c.rdtMode==="ref"?"checked":""}> Référence GREN (${fmt(num(cult["rdt"+dept(p)]),1)} ${unite})</label>
-      <label><input type="radio" name="rdt" data-c="rdtMode" value="hist" ${c.rdtMode==="hist"?"checked":""}> Historique de l'exploitation</label>
-      <label><input type="radio" name="rdt" data-c="rdtMode" value="libre" ${c.rdtMode==="libre"?"checked":""}> Saisie libre</label>
-    </div>
-    <div class="grid g2" style="margin-top:8px">
-      ${c.rdtMode === "hist" ? `<label class="f"><span>Rendements des 5 dernières années (${unite})</span><input data-c="rdtHist" value="${esc(c.rdtHist)}" placeholder="${hist.length ? hist.map(v=>fmt(v,1)).join(" ; ") + " (auto)" : "ex. 78 ; 82 ; 65 ; 80 ; 76"}">
-        <span class="faint">${String(c.rdtHist||"").trim() ? "Saisie manuelle." : hist.length ? `Calculé depuis vos campagnes précédentes (même culture, même sol).` : "Aucun historique enregistré : saisissez les valeurs."} Moyenne en excluant la plus haute et la plus basse.</span></label>` : ""}
-      ${c.rdtMode === "libre" ? `<label class="f"><span>Rendement objectif (${unite})</span><input data-c="rdtLibre" value="${esc(c.rdtLibre)}" inputmode="decimal"></label>` : ""}
-      <label class="f"><span>Rendement réalisé ${y} (${unite})</span><input data-c="rdtRealise" value="${esc(c.rdtRealise)}" inputmode="decimal" placeholder="après récolte"><span class="faint">Alimente l'historique des années suivantes.</span></label>
-    </div>` : cult ? `<p class="faint">Culture raisonnée en dose forfaitaire GREN.</p>` : ""}
+    ${bilanM ? `
+    ${fRadios("Rendement prévisionnel", "rdt" + p.id, 'data-c="rdtMode"', [["ref", `Référence GREN (${fmt(num(cult["rdt" + dept(p)]), 1)} ${unite})`], ["hist", "Historique de l'exploitation"], ["libre", "Saisie libre"]], c.rdtMode)}
+    <div class="fr-grid-row fr-grid-row--gutters">
+      ${c.rdtMode === "hist" ? `<div class="fr-col-12 fr-col-md-6">${fInput(`Rendements des 5 dernières années (${unite})`, `data-c="rdtHist" placeholder="${hist.length ? esc(hist.map(v => fmt(v, 1)).join(" ; ")) + " (auto)" : "ex. 78 ; 82 ; 65 ; 80 ; 76"}"`, c.rdtHist, {hint: String(c.rdtHist || "").trim() ? "Saisie manuelle. Moyenne sans la valeur la plus haute ni la plus basse." : hist.length ? "Calculé depuis vos campagnes (même culture, même sol)." : "Aucun historique : saisissez les valeurs."})}</div>` : ""}
+      ${c.rdtMode === "libre" ? `<div class="fr-col-12 fr-col-md-6">${fInput(`Rendement objectif (${unite})`, 'data-c="rdtLibre" inputmode="decimal"', c.rdtLibre)}</div>` : ""}
+      <div class="fr-col-12 fr-col-md-6">${fInput(`Rendement réalisé ${y} (${unite})`, 'data-c="rdtRealise" inputmode="decimal" placeholder="après récolte"', c.rdtRealise, {hint:"Alimente l'historique des années suivantes."})}</div>
+    </div>` : cult ? `<p class="gren-mention">Culture raisonnée en dose forfaitaire GREN.</p>` : ""}
 
     ${cult ? `
-    ${!cult.methode.startsWith("forfait") ? `
-    <div class="section-t">2 · Fournitures du sol</div>
-    <div class="radios"><b>Reliquat sortie hiver (RSH) :</b>
-      <label><input type="radio" name="rsh" data-c="rshMode" value="forfait" ${c.rshMode!=="mesure"?"checked":""}> Valeur forfaitaire (${fmt(num(solById(p.sol)[cult.cat === "automne" ? "rshAut" : "rshPri"]))} kg N/ha)</label>
-      <label><input type="radio" name="rsh" data-c="rshMode" value="mesure" ${c.rshMode==="mesure"?"checked":""}> Analyse de sol</label>
-      ${c.rshMode==="mesure" ? `<input data-c="rshMesure" value="${esc(c.rshMesure)}" inputmode="decimal" placeholder="kg N/ha" style="width:110px">` : ""}
+    ${bilanM ? `
+    <h3 class="gren-section">2. Fournitures du sol</h3>
+    ${fRadios("Reliquat sortie hiver (RSH)", "rsh" + p.id, 'data-c="rshMode"', [["forfait", `Valeur forfaitaire (${fmt(num(solById(p.sol)[cult.cat === "automne" ? "rshAut" : "rshPri"]))} kg N/ha)`], ["mesure", "Analyse de sol"]], c.rshMode === "mesure" ? "mesure" : "forfait")}
+    ${c.rshMode === "mesure" ? `<div class="fr-grid-row"><div class="fr-col-12 fr-col-md-6">${fInput("RSH mesuré (kg N/ha)", 'data-c="rshMesure" inputmode="decimal"', c.rshMesure)}</div></div>` : ""}
+    <div class="fr-grid-row fr-grid-row--gutters">
+      <div class="fr-col-12 fr-col-md-6">${fSelect("Culture intermédiaire / dérobée", 'data-c="cipan"', opts(R().cipan, c.cipan))}</div>
+      <div class="fr-col-12 fr-col-md-6">${fInput("Date de destruction du couvert", 'data-c="cipanDate"', c.cipanDate, {type:"date"})}</div>
     </div>
-    <div class="grid g2" style="margin-top:10px">
-      <label class="f"><span>Culture intermédiaire / dérobée</span><select data-c="cipan">${opts(R().cipan, c.cipan)}</select></label>
-      <label class="f"><span>Date de destruction du couvert</span><input type="date" data-c="cipanDate" value="${esc(c.cipanDate)}"></label>
-    </div>
-    <div class="section-t">3 · Pratiques</div>
-    <div class="grid g2">
-      <div class="radios"><b>Pailles du précédent :</b>
-        <label><input type="radio" name="pa" data-c="paille" value="" ${!c.paille?"checked":""}> Sans objet</label>
-        <label><input type="radio" name="pa" data-c="paille" value="exportee" ${c.paille==="exportee"?"checked":""}> Exportées</label>
-        <label><input type="radio" name="pa" data-c="paille" value="enfouie" ${c.paille==="enfouie"?"checked":""}> Enfouies</label></div>
-      <div class="radios"><b>Irrigation :</b>
-        <label><input type="checkbox" data-c="irrigation" ${c.irrigation?"checked":""}> Parcelle irriguée ${num(cult.irrig) ? `(+${cult.irrig} kg N/ha)` : ""}</label></div>
-    </div>` : ""}
+    <h3 class="gren-section">3. Pratiques</h3>
+    ${fRadios("Pailles du précédent", "pa" + p.id, 'data-c="paille"', [["", "Sans objet"], ["exportee", "Exportées"], ["enfouie", "Enfouies"]], c.paille || "")}
+    ${fCheckbox(`Parcelle irriguée${num(cult.irrig) ? ` (+${cult.irrig} kg N/ha)` : ""}`, 'data-c="irrigation"', c.irrigation)}` : ""}
 
-    <div class="section-t">4 · Apports organiques</div>
-    ${r.org.length ? `<div class="tablewrap"><table><thead><tr><th>Date</th><th>Effluent</th><th class="num">Qté/ha</th><th class="num">N total</th><th class="num">Keq</th><th class="num">N efficace</th><th>Statut</th></tr></thead><tbody>
-      ${r.org.map(o => `<tr><td>${esc(o.i.date)}</td><td>${esc(o.e.nom)}</td><td class="num">${fmt(num(o.i.qte),1)} ${esc(o.e.unite||"")}</td><td class="num">${fmt(o.nTot)}</td><td class="num">${o.keq}</td><td class="num"><b>${fmt(o.nEff)}</b></td><td>${statutPill(o.i.statut)}</td></tr>`).join("")}
-    </tbody></table></div>` : `<p class="faint">Aucun apport organique enregistré sur cette campagne.</p>`}
-    ${r.arriere ? `<p class="faint">Arrière-effet des effluents épandus en ${y-1} : <b>${fmt(r.arriere)} kg N/ha</b> (calculé automatiquement).</p>` : ""}
-    <button class="btn ghost sm" data-act="addInterv" data-pid="${p.id}">+ Ajouter un apport</button>
+    <h3 class="gren-section">4. Apports organiques</h3>
+    ${r.org.length ? table(`<thead><tr><th scope="col">Date</th><th scope="col">Effluent</th><th scope="col" class="num">Qté/ha</th><th scope="col" class="num">N total</th><th scope="col" class="num">Keq</th><th scope="col" class="num">N efficace</th><th scope="col">Statut</th></tr></thead><tbody>
+      ${r.org.map(o => `<tr><td>${esc(frDate(o.i.date))}</td><td>${esc(o.e.nom)}</td><td class="num">${fmt(num(o.i.qte), 1)} ${esc(o.e.unite || "")}</td><td class="num">${fmt(o.nTot)}</td><td class="num">${fmt(o.keq, 2)}</td><td class="num"><strong>${fmt(o.nEff)}</strong></td><td>${statutPill(o.i.statut)}</td></tr>`).join("")}
+    </tbody>`) : `<p class="gren-mention">Aucun apport organique enregistré sur cette campagne.</p>`}
+    ${r.arriere ? `<p class="gren-mention">Arrière-effet des effluents épandus en ${y - 1} : <strong>${fmt(r.arriere)} kg N/ha</strong> (calculé automatiquement).</p>` : ""}
+    ${btn("Ajouter un apport", `data-act="addInterv" data-pid="${p.id}"`, {kind:"secondary", icon:"add-line", sm:true})}
 
     ${isPrairie ? `
-    <div class="section-t">5 · Pâturage (convertisseur UGB)</div>
-    <div class="tablewrap"><table><thead><tr><th>Catégorie d'animaux</th><th class="num">Nombre</th><th class="num">UGB</th><th></th></tr></thead><tbody>
-      ${(pa.animaux||[]).map((a, i) => `<tr><td><select data-pat="cat" data-i="${i}">${opts(R().animaux, a.cat)}</select></td><td><input data-pat="n" data-i="${i}" value="${esc(a.n)}" inputmode="decimal" style="width:80px"></td><td class="num">${fmt(num(a.n) * num((byId(R().animaux,a.cat)||{ugb:0}).ugb),2)}</td><td><button class="btn danger sm" data-act="delAnimal" data-i="${i}">✕</button></td></tr>`).join("")}
-    </tbody></table></div>
-    <div class="toolbar" style="margin-top:8px"><button class="btn ghost sm" data-act="addAnimal">+ Animaux</button>
-      <label class="f" style="flex-direction:row;align-items:center;gap:8px"><span>Jours de pâture</span><input data-c="pature.jours" value="${esc(pa.jours)}" inputmode="numeric" style="width:90px"></label>
-      <span class="faint">${fmt(r.pat.ugb,2)} UGB → ${fmt(r.pat.nTot)} kg N/ha restitués</span></div>` : ""}
+    <h3 class="gren-section">5. Pâturage (convertisseur UGB)</h3>
+    ${(pa.animaux || []).length ? table(`<thead><tr><th scope="col">Catégorie</th><th scope="col">Nombre</th><th scope="col" class="num">UGB</th><th scope="col"><span class="fr-sr-only">Actions</span></th></tr></thead><tbody>
+      ${pa.animaux.map((a, i) => `<tr><td><select class="fr-select" aria-label="Catégorie d'animaux" data-pat="cat" data-i="${i}">${opts(R().animaux, a.cat)}</select></td><td><input class="fr-input" aria-label="Nombre d'animaux" data-pat="n" data-i="${i}" value="${esc(a.n)}" inputmode="decimal" style="width:6rem"></td><td class="num">${fmt(num(a.n) * num((byId(R().animaux, a.cat) || {ugb:0}).ugb), 2)}</td><td>${btn("Retirer", `data-act="delAnimal" data-i="${i}"`, {kind:"tertiary-no-outline", icon:"delete-line", sm:true})}</td></tr>`).join("")}
+    </tbody>`) : ""}
+    <div class="fr-grid-row fr-grid-row--gutters fr-grid-row--bottom">
+      <div class="fr-col-12 fr-col-md-4">${fInput("Jours de pâture", 'data-c="pature.jours" inputmode="numeric"', pa.jours)}</div>
+      <div class="fr-col-12 fr-col-md-8">${btn("Ajouter des animaux", 'data-act="addAnimal"', {kind:"secondary", icon:"add-line", sm:true})} <span class="gren-mention">${fmt(r.pat.ugb, 2)} UGB → ${fmt(r.pat.nTot)} kg N/ha restitués</span></div>
+    </div>` : ""}
 
-    <div class="section-t">Résultat</div>
+    <h3 class="gren-section">Résultat</h3>
     ${formulaBlocks(r)}
-    ` : `<p class="muted" style="margin-top:12px">Choisissez la culture pour lancer le calcul.</p>`}
-    <label class="f" style="margin-top:12px"><span>Notes</span><textarea data-c="notes" rows="2">${esc(c.notes)}</textarea></label>
-  </div>`;
+    ` : `<p class="fr-mt-2w">Choisissez la culture pour lancer le calcul.</p>`}
+    <div class="fr-mt-3w">${fTextarea("Notes", 'data-c="notes"', c.notes)}</div>
+  </section>`;
 }
-const statutPill = s => s === "realise" ? `<span class="pill ok">Réalisé</span>` : `<span class="pill prev">Prévisionnel</span>`;
+const frDate = d => d ? d.split("-").reverse().join("/") : "";
 function formulaBlocks(r){
-  const b = (cls, v, l, s) => `<div class="blk ${cls}"><div class="l">${l}</div><div class="v">${fmt(v)}</div>${s ? `<div class="s">${s}</div>` : ""}</div>`;
-  const op = o => `<div class="op">${o}</div>`;
-  const parts = [b("need", r.besoin, "Besoins de la culture", r.forfait ? "forfait GREN" : `${fmt(r.rdt.val,1)} ${r.cult.unite} × ${r.cult.b}${r.rf ? " + Rf " + r.rf : ""}${r.irrig ? " + irrig. " + r.irrig : ""}`)];
+  const b = (cls, v, l, s) => `<div class="gren-blk ${cls}"><div class="l">${l}</div><div class="v">${fmt(v)}</div>${s ? `<div class="s">${s}</div>` : ""}</div>`;
+  const op = o => `<div class="gren-op" aria-hidden="true">${o}</div>`;
+  const parts = [b("need", r.besoin, "Besoins de la culture", r.forfait ? "forfait GREN" : `${fmt(r.rdt.val, 1)} ${esc(r.cult.unite)} × ${r.cult.b}${r.rf ? " + Rf " + r.rf : ""}${r.irrig ? " + irrig. " + r.irrig : ""}`)];
   if (!r.forfait) {
     parts.push(op("−"), b("sup", r.rsh, "Reliquat sortie hiver", r.c.rshMode === "mesure" ? "mesuré" : "forfait"));
     parts.push(op("−"), b("sup", r.mh, "Minéralisation (Mh)", "type de sol"));
@@ -748,116 +699,98 @@ function formulaBlocks(r){
   }
   if (r.nOrgEff) parts.push(op("−"), b("sup", r.nOrgEff, "N organique efficace", `${r.org.length} apport(s)`));
   if (r.arriere) parts.push(op("−"), b("sup", r.arriere, "Arrière-effet", "apports N-1"));
-  if (r.pat.nEff) parts.push(op("−"), b("sup", r.pat.nEff, "Pâturage", `${fmt(r.pat.ugb,1)} UGB`));
+  if (r.pat.nEff) parts.push(op("−"), b("sup", r.pat.nEff, "Pâturage", `${fmt(r.pat.ugb, 1)} UGB`));
   if (r.corr) parts.push(op(r.corr > 0 ? "+" : "−"), b("cor", Math.abs(r.corr), "Correction résidus", r.c.paille === "exportee" ? "paille exportée" : "paille enfouie"));
   parts.push(op("="), b("res", r.doseCalc, "Dose calculée", "kg N/ha"));
   const capped = r.dosePlaf < r.doseCalc;
-  return `<div class="formula">${parts.join("")}</div>
-    <div class="grid g3" style="margin-top:12px">
-      <div class="kpi"><div class="l">Fournitures totales</div><div class="v">${fmt(r.fournitures)}</div><div class="faint">sol ${fmt(r.fournSol)} · organique ${fmt(r.fournOrg)}</div></div>
-      <div class="kpi"><div class="l">Plafond GREN ${esc(r.cult.nom)}</div><div class="v">${r.cult.plafond === "" ? "—" : fmt(r.plafond)}</div><div class="faint">${capped ? "⚠ dose plafonnée" : "non atteint"}</div></div>
-      <div class="kpi"><div class="l">Engrais minéral prévu</div><div class="v">${fmt(r.minPrevu)}</div><div class="faint">${r.reste > 0 ? `reste à apporter : ${fmt(r.reste)}` : r.reste < 0 ? `⚠ dépasse la dose de ${fmt(-r.reste)}` : "dose couverte"}</div></div>
+  return `<div class="gren-formula" role="group" aria-label="Formule du bilan">${parts.join("")}</div>
+    <div class="gren-kpis fr-mt-2w fr-mb-0">
+      ${kpi(fmt(r.fournitures), `Fournitures totales (sol ${fmt(r.fournSol)} · organique ${fmt(r.fournOrg)})`)}
+      ${kpi(r.cult.plafond === "" ? "—" : fmt(r.plafond), `Plafond GREN — ${capped ? "dose plafonnée" : "non atteint"}`)}
+      ${kpi(fmt(r.minPrevu), r.reste > 0 ? `Engrais minéral prévu — reste ${fmt(r.reste)}` : r.reste < 0 ? `Engrais minéral prévu — dépasse de ${fmt(-r.reste)}` : "Engrais minéral prévu — dose couverte", r.reste < 0)}
     </div>
-    <div class="bigdose" style="margin-top:12px"><span class="muted">Dose finale prévisionnelle</span><span class="d">${fmt(r.doseFinale)}</span><span class="muted">kg N/ha · soit ${fmt(r.doseFinale * num(r.p.surface))} kg N sur la parcelle</span></div>
-    <details class="trace"><summary>Détail du calcul</summary><pre>${esc(r.trace.join("\n"))}</pre></details>`;
+    <div class="gren-dose"><span>Dose finale prévisionnelle</span><span class="d">${fmt(r.doseFinale)}</span><span>kg N/ha · soit ${fmt(r.doseFinale * num(r.p.surface))} kg N sur la parcelle</span></div>
+    <section class="fr-accordion fr-mt-2w"><h3 class="fr-accordion__title"><button type="button" class="fr-accordion__btn" aria-expanded="false" aria-controls="acc-trace">Détail du calcul</button></h3>
+      <div class="fr-collapse" id="acc-trace"><pre class="gren-trace">${esc(r.trace.join("\n"))}</pre></div></section>`;
 }
 
 /* ---------- Groupes ---------- */
 VIEWS.groupes = () => {
   const y = S.annee; const cc = camp(y);
-  const props = proposerGroupes(y);
-  const validated = cc.groupes || [];
+  const props = proposerGroupes(y); const validated = cc.groupes || [];
   const inValid = new Set(validated.flatMap(g => g.ids));
   const multi = props.filter(g => g.ids.length > 1);
   const noCult = S.parcelles.filter(p => !entry(p.id, y).culture);
-  const crit = k => `<div class="crit">
-    <span class="pill">Sol : ${esc(solById(k.sol).nom)}</span>
-    <span class="pill">${esc(cultureById(k.culture)?.nom)} / ${esc(precById(k.precedent)?.nom || "précédent ?")}</span>
-    <span class="pill">Organique : ${esc(k.org.replace(/([a-z]+):/g, (m, id) => effById(id) ? effById(id).nom + " " : m))}</span>
-    ${zonePill(k.zone)} <span class="pill">Rdt ${fmt(k.rdt,1)}</span></div>`;
+  const crit = k => `<div class="gren-badges">${badge("Sol : " + solById(k.sol).nom)}${badge((cultureById(k.culture)?.nom || "") + " / " + (precById(k.precedent)?.nom || "précédent ?"))}${badge("Organique : " + k.org.replace(/([a-z]+):/g, (m, id) => effById(id) ? effById(id).nom + " " : m))}${zonePill(k.zone)}${badge("Rdt " + fmt(k.rdt, 1))}</div>`;
   const plist = ids => ids.map(id => byId(S.parcelles, id)).filter(Boolean);
-  const gDose = ids => { const r = calc(plist(ids)[0], y); return r ? fmt(r.doseFinale) : "—"; };
-  return `
-  <div class="alert info"><b>Comment sont proposés les groupes ?</b>Deux parcelles ne sont regroupées que si elles partagent <b>les 5 conditions</b> : même type de sol, même couple culture / précédent, même historique d'apports organiques (année en cours et précédente), même zonage (jamais de mélange ZAR / standard) et même rendement objectif.</div>
-  <div class="card"><h2>Groupes validés (${validated.length})</h2>
-    ${validated.length ? validated.map((g, gi) => { const ok = groupStatus(g, y); const ps = plist(g.ids);
-      return `<div class="group ${ok ? "validated" : "broken"}">
-        <div class="toolbar" style="margin:0"><b>${esc(g.nom)}</b> ${ok ? `<span class="pill ok">conforme</span>` : `<span class="pill zar">n'est plus homogène</span>`}
-          <span class="spacer"></span><span>Dose : <b>${ok ? gDose(g.ids) : "—"}</b> kg N/ha · ${fmt(ps.reduce((a,p)=>a+num(p.surface),0),2)} ha</span>
-          <button class="btn ghost sm" data-act="harmo" data-g="${gi}">Harmoniser les saisies</button>
-          <button class="btn danger sm" data-act="delGroupe" data-g="${gi}">Dissoudre</button></div>
-        ${ok ? "" : `<p class="faint" style="color:var(--red)">Une parcelle a changé (sol, culture, précédent, apports, zonage ou rendement) : dissolvez ce groupe et validez une nouvelle proposition.</p>`}
-        <div class="faint">${ps.map(p => esc(parcelLabel(p))).join(" · ")}</div></div>`; }).join("") : `<p class="faint">Aucun groupe validé pour la campagne ${y}.</p>`}
-  </div>
-  <div class="card"><h2>Propositions</h2>
-    ${multi.length ? multi.map((g, i) => { const already = g.ids.every(id => inValid.has(id)); const ps = plist(g.ids);
-      return `<div class="group">
-        <div class="toolbar" style="margin:0"><b>Groupe proposé ${i+1}</b> · ${ps.length} parcelles · ${fmt(ps.reduce((a,p)=>a+num(p.surface),0),2)} ha
-          <span class="spacer"></span><span>Dose : <b>${gDose(g.ids)}</b> kg N/ha</span>
-          ${already ? `<span class="pill ok">déjà validé</span>` : `<button class="btn sm" data-act="valGroupe" data-ids="${g.ids.join(",")}">Valider ce groupe</button>`}</div>
-        ${crit(g.key)}<div class="faint">${ps.map(p => esc(parcelLabel(p))).join(" · ")}</div></div>`; }).join("")
-      : `<p class="faint">Aucune parcelle ne remplit actuellement les 5 conditions de regroupement.</p>`}
-    ${noCult.length ? `<p class="faint">${noCult.length} parcelle(s) sans culture renseignée ne sont pas analysées.</p>` : ""}
-  </div>`;
+  const gDose = ids => { const ps = plist(ids); const r = ps.length && calc(ps[0], y); return r ? fmt(r.doseFinale) : "—"; };
+  const surf = ids => fmt(plist(ids).reduce((a, p) => a + num(p.surface), 0), 2);
+  return `${bar("Groupes de parcelles")}
+  ${alerte("info", "Règle de regroupement", "Deux parcelles ne sont regroupées que si elles partagent les 5 conditions : même type de sol, même couple culture / précédent, même historique d'apports organiques (année en cours et précédente), même zonage (jamais de mélange ZAR / standard) et même rendement objectif.")}
+  <section class="gren-panel"><h2 class="fr-h4">Groupes validés (${validated.length})</h2>
+    ${validated.length ? validated.map((g, gi) => { const ok = groupStatus(g, y);
+      return `<div class="gren-group ${ok ? "ok" : "ko"}">
+        <div class="gren-bar fr-mb-1w"><h3 class="fr-h6 fr-mb-0">${esc(g.nom)} ${ok ? badge("Conforme", "success") : badge("N'est plus homogène", "error")}</h3>
+          <span>Dose : <strong>${ok ? gDose(g.ids) : "—"}</strong> kg N/ha · ${surf(g.ids)} ha</span></div>
+        ${ok ? "" : `<p class="fr-error-text">Une parcelle a changé (sol, culture, précédent, apports, zonage ou rendement) : dissolvez ce groupe et validez une nouvelle proposition.</p>`}
+        <p class="gren-mention">${plist(g.ids).map(p => esc(parcelLabel(p))).join(" · ")}</p>
+        <ul class="fr-btns-group fr-btns-group--icon-left fr-btns-group--inline-sm fr-btns-group--sm fr-mb-0"><li>${btn("Harmoniser les saisies", `data-act="harmo" data-g="${gi}"`, {kind:"secondary", sm:true})}</li><li>${btn("Dissoudre", `data-act="delGroupe" data-g="${gi}"`, {kind:"tertiary", sm:true})}</li></ul></div>`; }).join("") : `<p class="gren-mention">Aucun groupe validé pour la campagne ${y}.</p>`}
+  </section>
+  <section class="gren-panel"><h2 class="fr-h4">Propositions</h2>
+    ${multi.length ? multi.map((g, i) => { const already = g.ids.every(id => inValid.has(id));
+      return `<div class="gren-group">
+        <div class="gren-bar fr-mb-1w"><h3 class="fr-h6 fr-mb-0">Groupe proposé ${i + 1} · ${g.ids.length} parcelles · ${surf(g.ids)} ha</h3><span>Dose : <strong>${gDose(g.ids)}</strong> kg N/ha</span></div>
+        ${crit(g.key)}<p class="gren-mention">${plist(g.ids).map(p => esc(parcelLabel(p))).join(" · ")}</p>
+        ${already ? badge("Déjà validé", "success") : btn("Valider ce groupe", `data-act="valGroupe" data-ids="${g.ids.join(",")}"`, {sm:true, icon:"check-line"})}</div>`; }).join("")
+      : `<p class="gren-mention">Aucune parcelle ne remplit actuellement les 5 conditions de regroupement.</p>`}
+    ${noCult.length ? `<p class="gren-mention">${noCult.length} parcelle(s) sans culture renseignée ne sont pas analysées.</p>` : ""}
+  </section>`;
 };
 
-/* ---------- Interventions ---------- */
+/* ---------- Apports ---------- */
 VIEWS.interventions = () => {
   const y = S.annee; const cc = camp(y);
   const list = [...cc.interventions].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
   const b = bilanOrga();
-  return `${globalBanners()}
-  <div class="kpis">
-    <div class="kpi"><div class="v" style="color:${b.parHa > b.plafond ? "var(--red)" : "inherit"}">${fmt(b.parHa)}</div><div class="l">kg N organique / ha SAU (plafond ${b.plafond})</div></div>
-    <div class="kpi"><div class="v">${fmt(b.tot)}</div><div class="l">kg N organique total épandu + pâturé</div></div>
-    <div class="kpi"><div class="v">${list.length}</div><div class="l">interventions ${y}</div></div>
-  </div>
-  <div class="card">
-    <div class="toolbar"><h2 style="margin:0">Apports et épandages — campagne ${y}</h2><span class="spacer"></span>
-      <button class="btn" data-act="addInterv">+ Nouvel apport</button></div>
-    <p class="faint">Chaque saisie est contrôlée : <b>calendrier d'interdiction d'épandage</b> (type de fertilisant × culture × zonage) et <b>plafond de ${b.plafond} kg N organique/ha</b>. Une saisie non conforme est bloquée. Passez le statut à « Réalisé » au fur et à mesure : cette liste sert de cahier d'enregistrement.</p>
-    ${list.length ? `<div class="tablewrap"><table>
-      <thead><tr><th>Date</th><th>Parcelle</th><th>Type</th><th>Produit</th><th class="num">Qté/ha</th><th class="num">N total/ha</th><th>Statut</th><th></th></tr></thead>
+  return `${bar("Apports et épandages")}${globalBanners()}
+  <div class="gren-kpis">${kpi(fmt(b.parHa), `kg N organique / ha SAU (plafond ${b.plafond})`, b.parHa > b.plafond)}${kpi(fmt(b.tot), "kg N organique épandu + pâturé")}${kpi(list.length, `interventions ${y}`)}</div>
+  <section class="gren-panel">
+    <div class="gren-bar fr-mb-2w"><h2 class="fr-h4 fr-mb-0">Cahier des apports — récolte ${y}</h2>${btn("Nouvel apport", 'data-act="addInterv"', {icon:"add-line"})}</div>
+    <p class="gren-mention">Chaque saisie est contrôlée : <strong>calendrier d'interdiction d'épandage</strong> (type de fertilisant × culture × zonage) et <strong>plafond de ${b.plafond} kg N organique/ha</strong>. Une saisie non conforme est bloquée. Passez le statut à « Réalisé » au fur et à mesure : cette liste sert de cahier d'enregistrement.</p>
+    ${list.length ? table(`<thead><tr><th scope="col">Date</th><th scope="col">Parcelle</th><th scope="col">Type</th><th scope="col">Produit</th><th scope="col" class="num">Qté/ha</th><th scope="col" class="num">N total/ha</th><th scope="col">Statut</th><th scope="col"><span class="fr-sr-only">Actions</span></th></tr></thead>
       <tbody>${list.map(i => { const p = byId(S.parcelles, i.pid); const isOrg = i.type === "organique";
         const prod = isOrg ? effById(i.produit) : minById(i.produit);
         const nha = isOrg ? num(i.qte) * (i.teneur !== "" && i.teneur != null ? num(i.teneur) : num(prod?.n)) : num(i.qte) * num(prod?.teneur) / 100;
-        return `<tr data-iid="${i.id}"><td>${esc(i.date)}</td><td>${p ? esc(parcelLabel(p)) : "?"}</td><td>${isOrg ? "Organique" : "Minéral"}</td>
-        <td>${esc(prod?.nom || i.produit)}</td><td class="num">${fmt(num(i.qte),1)} ${isOrg ? esc(prod?.unite||"") : "kg"}</td><td class="num">${fmt(nha)}</td>
-        <td><select data-i="statut"><option value="prev" ${i.statut!=="realise"?"selected":""}>Prévisionnel</option><option value="realise" ${i.statut==="realise"?"selected":""}>Réalisé</option></select></td>
-        <td><button class="btn danger sm" data-act="delInterv">✕</button></td></tr>`; }).join("")}</tbody></table></div>` : `<p class="muted">Aucun apport saisi pour cette campagne.</p>`}
-  </div>`;
+        return `<tr data-iid="${i.id}"><td>${esc(frDate(i.date))}</td><td>${p ? esc(parcelLabel(p)) : "?"}</td><td>${isOrg ? "Organique" : "Minéral"}</td>
+        <td>${esc(prod?.nom || i.produit)}</td><td class="num">${fmt(num(i.qte), 1)} ${isOrg ? esc(prod?.unite || "") : "kg"}</td><td class="num">${fmt(nha)}</td>
+        <td><select class="fr-select" aria-label="Statut" data-i="statut"><option value="prev" ${i.statut !== "realise" ? "selected" : ""}>Prévisionnel</option><option value="realise" ${i.statut === "realise" ? "selected" : ""}>Réalisé</option></select></td>
+        <td>${btn("Supprimer", 'data-act="delInterv"', {kind:"tertiary-no-outline", icon:"delete-line", sm:true})}</td></tr>`; }).join("")}</tbody>`) : `<p>Aucun apport saisi pour cette campagne.</p>`}
+  </section>`;
 };
 async function interventionForm(pidPreset){
   const y = S.annee; const today = new Date().toISOString().slice(0, 10);
   const groups = camp(y).groupes || [];
-  const body = `<div class="grid">
-    <label class="f"><span>Appliquer à</span><select id="fCible">
-      ${S.parcelles.map(p => `<option value="p:${p.id}" ${p.id === pidPreset ? "selected" : ""}>Parcelle — ${esc(parcelLabel(p))}</option>`).join("")}
-      ${groups.map((g, i) => `<option value="g:${i}">Groupe — ${esc(g.nom)} (${g.ids.length} parcelles)</option>`).join("")}
-    </select></label>
-    <div class="radios"><b>Type :</b><label><input type="radio" name="fType" value="organique" checked> Organique</label><label><input type="radio" name="fType" value="mineral"> Minéral</label></div>
-    <label class="f"><span>Produit</span><select id="fProd"></select></label>
-    <div class="grid g2">
-      <label class="f"><span>Date</span><input type="date" id="fDate" value="${today}"></label>
-      <label class="f"><span id="fQteL">Quantité / ha</span><input id="fQte" inputmode="decimal"></label>
-    </div>
-    <label class="f" id="fTenW"><span>Teneur en N (kg N / unité) — optionnel</span><input id="fTen" inputmode="decimal" placeholder="valeur GREN par défaut"></label>
-    <label class="f"><span>Statut</span><select id="fStat"><option value="prev">Prévisionnel</option><option value="realise">Réalisé</option></select></label>
-    <div id="fMsg"></div></div>`;
-  const d = $("#dlg"); d.className = "";
-  $("#dlgH").textContent = "Nouvel apport d'azote"; $("#dlgB").innerHTML = body;
-  $("#dlgF").innerHTML = `<button class="btn ghost" value="cancel" id="fCancel">Annuler</button><button class="btn" id="fOk">Enregistrer</button>`;
+  const d = $("#dlg"); d.className = "gren-modal";
+  $("#dlgH").textContent = "Nouvel apport d'azote";
+  $("#dlgB").innerHTML = `
+    ${fSelect("Appliquer à", 'id="fCible"', S.parcelles.map(p => `<option value="p:${p.id}" ${p.id === pidPreset ? "selected" : ""}>Parcelle — ${esc(parcelLabel(p))}</option>`).join("") + groups.map((g, i) => `<option value="g:${i}">Groupe — ${esc(g.nom)} (${g.ids.length} parcelles)</option>`).join(""))}
+    ${fRadios("Type de fertilisant", "fType", "", [["organique", "Organique"], ["mineral", "Minéral"]], "organique")}
+    ${fSelect("Produit", 'id="fProd"', "")}
+    <div class="fr-grid-row fr-grid-row--gutters"><div class="fr-col-12 fr-col-sm-6">${fInput("Date", 'id="fDate"', today, {type:"date"})}</div>
+      <div class="fr-col-12 fr-col-sm-6"><div class="fr-input-group"><label class="fr-label" for="fQte" id="fQteL">Quantité / ha</label><input class="fr-input" id="fQte" inputmode="decimal"></div></div></div>
+    <div id="fTenW">${fInput("Teneur en N (kg N / unité)", 'id="fTen" inputmode="decimal" placeholder="valeur GREN par défaut"', "", {hint:"Optionnel : valeur de votre analyse d'effluent"})}</div>
+    ${fSelect("Statut", 'id="fStat"', `<option value="prev">Prévisionnel</option><option value="realise">Réalisé</option>`)}
+    <div id="fMsg"></div>`;
+  $("#dlgF").innerHTML = `${btn("Annuler", 'id="fCancel"', {kind:"secondary"})}${btn("Enregistrer", 'id="fOk"')}`;
   const fill = () => {
     const t = $('input[name="fType"]:checked').value;
     $("#fProd").innerHTML = t === "organique"
       ? R().effluents.map(e => `<option value="${e.id}">${esc(e.nom)} (type ${e.type}, ${e.n} kg N/${e.unite})</option>`).join("")
       : R().mineraux.map(m => `<option value="${m.id}">${esc(m.nom)}</option>`).join("");
-    $("#fTenW").hidden = t !== "organique";
-    upd();
+    $("#fTenW").hidden = t !== "organique"; upd();
   };
   const upd = () => {
-    const t = $('input[name="fType"]:checked').value;
-    const e = t === "organique" ? effById($("#fProd").value) : null;
+    const t = $('input[name="fType"]:checked').value; const e = t === "organique" ? effById($("#fProd").value) : null;
     $("#fQteL").textContent = t === "organique" ? `Quantité (${e ? e.unite : "t ou m³"} / ha)` : ($("#fProd").value === "nkg" ? "kg N / ha" : "kg de produit / ha");
   };
   d.querySelectorAll('input[name="fType"]').forEach(r => r.onchange = fill);
@@ -866,166 +799,447 @@ async function interventionForm(pidPreset){
   $("#fOk").onclick = async () => {
     const cible = $("#fCible").value; const type = $('input[name="fType"]:checked').value;
     const produit = $("#fProd").value; const date = $("#fDate").value; const qte = num($("#fQte").value);
-    const teneur = type === "organique" ? $("#fTen").value.trim() : "";
-    const statut = $("#fStat").value;
-    if (!date || qte <= 0) { $("#fMsg").innerHTML = `<div class="alert warn">Renseignez une date et une quantité.</div>`; return; }
+    const teneur = type === "organique" ? $("#fTen").value.trim() : ""; const statut = $("#fStat").value;
+    if (!date || qte <= 0) { $("#fMsg").innerHTML = alerte("warning", "", "Renseignez une date et une quantité."); return; }
     const pids = cible.startsWith("g:") ? groups[+cible.slice(2)].ids : [cible.slice(2)];
-    // 1. Calendrier d'épandage
     const typeProd = type === "organique" ? effById(produit).type : "III";
     for (const pid of pids) {
       const p = byId(S.parcelles, pid); const c = entry(pid, y);
-      if (!c.culture) { $("#fMsg").innerHTML = `<div class="alert warn">Renseignez d'abord la culture de « ${esc(parcelLabel(p))} » (le calendrier en dépend).</div>`; return; }
+      if (!c.culture) { $("#fMsg").innerHTML = alerte("warning", "", `Renseignez d'abord la culture de « ${esc(parcelLabel(p))} » : le calendrier en dépend.`); return; }
       const hit = checkCalendrier(p, date, typeProd, c.culture);
       if (hit) {
         d.close();
-        await dialog({title:"⛔ Épandage interdit à cette date", block:true,
-          body:`<p>La date du <b>${date.split("-").reverse().join("/")}</b> se trouve dans la période d'interdiction d'épandage des fertilisants de <b>type ${typeProd}</b> sur <b>${esc(CAT_LABEL[hit.cult.cat].toLowerCase())}</b> (${esc(hit.cult.nom)}) : du <b>${fmtMMJJ(hit.rule.debut)}</b> au <b>${fmtMMJJ(hit.rule.fin)}</b>${hit.rule.zone !== "toutes" ? ` (règle ${hit.rule.zone})` : ""}.</p><p>Parcelle : ${esc(parcelLabel(p))}. L'intervention n'a pas été enregistrée.</p>`,
+        await dialog({title:"Épandage interdit à cette date", block:true,
+          body:`${alerte("error", "", `La date du <strong>${frDate(date)}</strong> se trouve dans la période d'interdiction d'épandage des fertilisants de <strong>type ${typeProd}</strong> sur ${esc(CAT_LABEL[hit.cult.cat].toLowerCase())} (${esc(hit.cult.nom)}) : du <strong>${fmtMMJJ(hit.rule.debut)}</strong> au <strong>${fmtMMJJ(hit.rule.fin)}</strong>${hit.rule.zone !== "toutes" ? ` (règle ${hit.rule.zone})` : ""}.`)}<p>Parcelle : ${esc(parcelLabel(p))}. L'intervention n'a pas été enregistrée.</p>`,
           buttons:[{label:"Compris"}]});
         return;
       }
     }
-    // 2. Plafond 170 kg N organique
     if (type === "organique") {
       const e = effById(produit); const ten = teneur !== "" ? num(teneur) : num(e.n);
       const extra = pids.reduce((a, pid) => a + qte * ten * num(byId(S.parcelles, pid).surface), 0);
       const b = bilanOrga(y, extra);
       if (b.parHa > b.plafond) {
         d.close();
-        await dialog({title:"⛔ Infraction réglementaire : plafond organique", block:true,
-          body:`<p>Avec cet apport, l'azote organique de l'exploitation atteindrait <b>${fmt(b.parHa)} kg N/ha SAU</b>, au-delà du plafond de <b>${b.plafond} kg N/ha</b> fixé par la Directive Nitrates.</p><p>${fmt(b.tot)} kg N organique pour ${fmt(b.sau,2)} ha. L'intervention n'a pas été enregistrée.</p>`,
+        await dialog({title:"Infraction réglementaire : plafond organique", block:true,
+          body:`${alerte("error", "", `Avec cet apport, l'azote organique de l'exploitation atteindrait <strong>${fmt(b.parHa)} kg N/ha SAU</strong>, au-delà du plafond de <strong>${b.plafond} kg N/ha</strong> fixé par la Directive Nitrates.`)}<p>${fmt(b.tot)} kg N organique pour ${fmt(b.sau, 2)} ha. L'intervention n'a pas été enregistrée.</p>`,
           buttons:[{label:"Compris"}]});
         return;
       }
     }
     for (const pid of pids) camp(y).interventions.push({id:uid(), pid, date, type, produit, qte, teneur, statut});
-    save(); d.close(); toast(`Apport enregistré${pids.length > 1 ? ` sur ${pids.length} parcelles` : ""}`); render();
+    save(); d.close(); toast(`Apport enregistré${pids.length > 1 ? ` sur ${pids.length} parcelles` : ""}.`); render();
   };
   d.showModal();
 }
 
 /* ---------- PPF ---------- */
-VIEWS.ppf = () => {
-  const y = S.annee; const e = S.exploitation;
+function ppfLines(y){
   const rows = S.parcelles.map(p => ({p, r:calc(p, y)}));
-  const byGroup = S.ppfGroup;
   const groups = camp(y).groupes || [];
-  let lines = rows;
-  if (byGroup && groups.length) {
-    const used = new Set(); lines = [];
-    groups.forEach(g => { if (!groupStatus(g, y)) return; const ps = g.ids.map(id => rows.find(x => x.p.id === id)).filter(Boolean); ps.forEach(x => used.add(x.p.id));
-      lines.push({group:g, p:{...ps[0].p, nom:g.nom, surface: ps.reduce((a,x)=>a+num(x.p.surface),0), _members:ps.map(x=>parcelLabel(x.p)).join(", ")}, r:ps[0].r, members:ps}); });
-    rows.forEach(x => { if (!used.has(x.p.id)) lines.push(x); });
-  }
-  const b = bilanOrga();
-  const tot = (f) => lines.reduce((a, x) => a + (x.r ? f(x) : 0), 0);
-  return `
-  <div class="toolbar noprint">
-    <button class="btn" onclick="window.print()">🖨 Imprimer / enregistrer en PDF</button>
-    <button class="btn ghost" data-act="csvPPF">⬇ Export CSV (tableur)</button>
-    <label class="radios"><input type="checkbox" data-act="ppfGroup" ${byGroup ? "checked" : ""}> Présenter par groupes validés</label>
-  </div>
+  if (!S.ppfGroup || !groups.length) return rows;
+  const used = new Set(); const lines = [];
+  groups.forEach(g => { if (!groupStatus(g, y)) return; const ps = g.ids.map(id => rows.find(x => x.p.id === id)).filter(Boolean); if (!ps.length) return; ps.forEach(x => used.add(x.p.id));
+    lines.push({p:{...ps[0].p, nom:g.nom, surface:ps.reduce((a, x) => a + num(x.p.surface), 0), _members:ps.map(x => parcelLabel(x.p)).join(", ")}, r:ps[0].r, members:ps}); });
+  rows.forEach(x => { if (!used.has(x.p.id)) lines.push(x); });
+  return lines;
+}
+VIEWS.ppf = () => {
+  const y = S.annee; const e = S.exploitation; const lines = ppfLines(y); const b = bilanOrga();
+  const totN = lines.reduce((a, x) => a + (x.r ? x.r.doseFinale * num(x.p.surface) : 0), 0);
+  return `${bar("Plan Prévisionnel de Fumure")}
+  <ul class="fr-btns-group fr-btns-group--inline-md fr-btns-group--icon-left gren-noprint">
+    <li>${btn("Télécharger le PDF", 'data-act="pdfPPF"', {icon:"download-line"})}</li>
+    <li>${btn("PDF avec fiches détaillées", 'data-act="pdfPPFfiches"', {kind:"secondary", icon:"file-text-line"})}</li>
+    <li>${btn("Export CSV", 'data-act="csvPPF"', {kind:"secondary", icon:"download-line"})}</li>
+    <li>${btn("Imprimer", 'data-act="print"', {kind:"tertiary", icon:"printer-line"})}</li>
+  </ul>
+  <div class="gren-noprint">${fCheckbox("Présenter par groupes validés", 'data-act="ppfGroup"', S.ppfGroup)}</div>
   ${globalBanners()}
-  <div class="card ppf-doc">
-    <h1>Plan Prévisionnel de Fumure azotée — campagne ${y - 1}-${y}</h1>
-    <div class="ppf-meta">
-      <div><b>Exploitation :</b> ${esc(e.raison || "—")}</div><div><b>N° PACAGE :</b> ${esc(e.pacage || "—")}</div>
-      <div><b>Exploitant·e :</b> ${esc(e.exploitant || "—")}</div><div><b>Commune :</b> ${esc(e.commune || "—")}${/\(\d+\)/.test(e.commune || "") ? "" : ` (${esc(e.departement)})`}</div>
-      <div><b>SAU :</b> ${fmt(sau(),2)} ha</div><div><b>Édité le :</b> ${new Date().toLocaleDateString("fr-FR")}</div>
+  <section class="gren-panel fr-mt-2w">
+    <div class="gren-ppf-head"><p class="fr-logo" data-marque>Préfète<br>de la région<br>Bretagne</p><span class="gren-mention">Calculette GREN</span></div>
+    <h2 class="fr-h4">PPF azote — campagne ${y - 1}-${y}</h2>
+    <div class="gren-ppf-meta">
+      <div><strong>Exploitation :</strong> ${esc(e.raison || "—")}</div><div><strong>N° PACAGE :</strong> ${esc(e.pacage || "—")}</div>
+      <div><strong>Exploitant·e :</strong> ${esc(e.exploitant || "—")}</div><div><strong>Commune :</strong> ${esc(e.commune || "—")}${/\(\d+\)/.test(e.commune || "") ? "" : ` (${esc(e.departement)})`}</div>
+      <div><strong>SAU :</strong> ${fmt(sau(), 2)} ha</div><div><strong>Édité le :</strong> ${new Date().toLocaleDateString("fr-FR")}</div>
     </div>
-    <div class="tablewrap"><table>
-      <thead><tr><th>Parcelle / îlot</th><th class="num">ha</th><th>Zone</th><th>Culture</th><th>Précédent</th><th class="num">Rdt obj.</th><th class="num">Besoin</th><th class="num">RSH</th><th class="num">Mh</th><th class="num">Autres fourn.</th><th class="num">N org. eff.</th><th class="num">Corr.</th><th class="num">Dose calc.</th><th class="num">Plafond</th><th class="num">Dose finale</th><th class="num">Total kg N</th></tr></thead>
-      <tbody>${lines.map(({p, r, members}) => !r ? `<tr><td>${esc(parcelLabel(p))}</td><td class="num">${fmt(num(p.surface),2)}</td><td colspan="14" class="faint">culture non renseignée</td></tr>` : `<tr>
-        <td><b>${esc(parcelLabel(p))}</b>${members ? `<br><span class="faint">${esc(p._members)}</span>` : `<br><span class="faint">${esc(parcelCode(p))}</span>`}</td>
-        <td class="num">${fmt(num(p.surface),2)}</td><td>${esc(p.zone || "standard")}</td><td>${esc(r.cult.nom)}</td><td>${esc(r.prec?.nom || "—")}</td>
-        <td class="num">${r.forfait ? "forfait" : fmt(r.rdt.val,1) + " " + esc(r.cult.unite)}</td>
+    ${table(`<thead><tr><th scope="col">Parcelle / îlot</th><th scope="col" class="num">ha</th><th scope="col">Zone</th><th scope="col">Culture</th><th scope="col">Précédent</th><th scope="col" class="num">Rdt obj.</th><th scope="col" class="num">Besoin</th><th scope="col" class="num">RSH</th><th scope="col" class="num">Mh</th><th scope="col" class="num">Autres fourn.</th><th scope="col" class="num">N org. eff.</th><th scope="col" class="num">Corr.</th><th scope="col" class="num">Dose calc.</th><th scope="col" class="num">Plafond</th><th scope="col" class="num">Dose finale</th><th scope="col" class="num">Total kg N</th></tr></thead>
+      <tbody>${lines.map(({p, r, members}) => !r ? `<tr><td>${esc(parcelLabel(p))}</td><td class="num">${fmt(num(p.surface), 2)}</td><td colspan="14" class="gren-mention">culture non renseignée</td></tr>` : `<tr>
+        <td><strong>${esc(parcelLabel(p))}</strong><br><span class="gren-mention">${members ? esc(p._members) : esc(parcelCode(p))}</span></td>
+        <td class="num">${fmt(num(p.surface), 2)}</td><td>${esc(p.zone || "standard")}</td><td>${esc(r.cult.nom)}</td><td>${esc(r.prec?.nom || "—")}</td>
+        <td class="num">${r.forfait ? "forfait" : fmt(r.rdt.val, 1) + " " + esc(r.cult.unite)}</td>
         <td class="num">${fmt(r.besoin)}</td><td class="num">${fmt(r.rsh)}</td><td class="num">${fmt(r.mh)}</td><td class="num">${fmt(r.precEff + r.cipanEff + r.arriere + r.pat.nEff)}</td>
         <td class="num">${fmt(r.nOrgEff)}</td><td class="num">${r.corr ? (r.corr > 0 ? "+" : "") + fmt(r.corr) : "0"}</td><td class="num">${fmt(r.doseCalc)}</td>
-        <td class="num">${r.cult.plafond === "" ? "—" : fmt(r.plafond)}</td><td class="num"><b>${fmt(r.doseFinale)}</b></td><td class="num">${fmt(r.doseFinale * num(p.surface))}</td></tr>`).join("")}</tbody>
-      <tfoot><tr><td>Total</td><td class="num">${fmt(lines.reduce((a,x)=>a+num(x.p.surface),0),2)}</td><td colspan="13"></td><td class="num">${fmt(tot(x => x.r.doseFinale * num(x.p.surface)))}</td></tr></tfoot>
-    </table></div>
-    <p style="margin-top:12px"><b>Azote organique (épandu + pâturage) :</b> ${fmt(b.tot)} kg N, soit <b>${fmt(b.parHa)} kg N/ha SAU</b> (plafond ${b.plafond}) — ${b.parHa > b.plafond ? "<b style='color:var(--red)'>NON CONFORME</b>" : "conforme"}.</p>
-    <p class="faint">Doses en kg N/ha calculées par la méthode du bilan prévisionnel (Besoin − fournitures du sol − azote organique efficace ± corrections), plafonnées par culture. Valeurs de référence : référentiel paramétré dans l'outil (à vérifier au regard de l'arrêté GREN Bretagne en vigueur). Document d'aide à la décision, non réglementaire.</p>
-    <div class="sign"><div>Date et signature de l'exploitant·e</div><div>Observations</div></div>
-  </div>`;
+        <td class="num">${r.cult.plafond === "" ? "—" : fmt(r.plafond)}</td><td class="num"><strong>${fmt(r.doseFinale)}</strong></td><td class="num">${fmt(r.doseFinale * num(p.surface))}</td></tr>`).join("")}
+        <tr><th scope="row">Total</th><td class="num"><strong>${fmt(lines.reduce((a, x) => a + num(x.p.surface), 0), 2)}</strong></td><td colspan="13"></td><td class="num"><strong>${fmt(totN)}</strong></td></tr></tbody>`)}
+    <p><strong>Azote organique (épandu + pâturage) :</strong> ${fmt(b.tot)} kg N, soit <strong>${fmt(b.parHa)} kg N/ha SAU</strong> (plafond ${b.plafond}) — ${b.parHa > b.plafond ? badge("Non conforme", "error") : badge("Conforme", "success")}</p>
+    <p class="gren-mention">Doses en kg N/ha calculées par la méthode du bilan prévisionnel (besoins − fournitures du sol − azote organique efficace ± corrections), plafonnées par culture. Référentiel : ${refLabel()}. Document d'aide à la décision, non réglementaire.</p>
+    <div class="gren-sign"><div>Date et signature de l'exploitant·e</div><div>Observations</div></div>
+  </section>`;
 };
+const refLabel = () => S.refSource === "perso" ? "référentiel personnalisé" : S.refVersion ? `référentiel GREN officiel, version ${S.refVersion}` : "référentiel par défaut (indicatif)";
+
+/* ---------- Comparer ---------- */
+const normTxt = s => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+const memeCulture = (a, b) => { a = normTxt(a); b = normTxt(b); return !a || !b || a === b || a.includes(b) || b.includes(a); };
+function resultatsActuels(y){
+  return S.parcelles.map(p => { const r = calc(p, y);
+    return {code:parcelCode(p), ilot:String(p.ilot || ""), num:String(p.num || ""), nom:p.nom || "", surface:num(p.surface),
+      culture:r ? r.cult.nom : "", rendement:r && !r.forfait ? Math.round(r.rdt.val * 10) / 10 : null, besoin:r ? Math.round(r.besoin) : null,
+      fournitures:r ? Math.round(r.fournitures) : null, norg:r ? Math.round(r.nOrgEff) : null, dose:r ? r.doseFinale : null}; });
+}
+function matchLigne(p, lignes){
+  const code = parcelCode(p);
+  return lignes.find(l => l.code && l.code === code)
+    || lignes.find(l => l.ilot !== "" && String(l.ilot) === String(p.ilot) && String(l.num || "1") === String(p.num || "1"))
+    || (p.nom ? lignes.find(l => l.nom && normTxt(l.nom) === normTxt(p.nom)) : null);
+}
+function comparaison(ref, y){
+  const act = resultatsActuels(y); const used = new Set();
+  const rows = S.parcelles.map((p, i) => { const a = act[i]; const o = matchLigne(p, ref.lignes); if (o) used.add(o);
+    const ecart = o && a.dose != null && o.dose != null ? a.dose - o.dose : null;
+    return {p, a, o, ecart, ecartPct: ecart != null && o.dose ? ecart / o.dose * 100 : null}; });
+  return {rows, orphelines: ref.lignes.filter(l => !used.has(l))};
+}
+VIEWS.comparer = () => {
+  const y = S.annee; S.references = S.references || [];
+  const refs = S.references; const ref = byId(refs, S.refSel) || refs[0];
+  const intro = `<p>Importez un fichier de résultats (un export de la Calculette, ou un tableau CSV issu d'un tableur ou d'un autre outil de fertilisation) ou enregistrez vos résultats actuels comme référence, puis modifiez vos saisies : l'écart s'affiche parcelle par parcelle.</p>`;
+  const actions = `<ul class="fr-btns-group fr-btns-group--inline-md fr-btns-group--icon-left">
+    <li><label class="fr-btn fr-btn--icon-left fr-icon-upload-line">Importer un fichier de résultats<input type="file" accept=".json,.csv,.txt,application/json,text/csv" data-act="importResultats" hidden></label></li>
+    <li>${btn("Enregistrer mes résultats actuels comme référence", 'data-act="snapshot"', {kind:"secondary", icon:"add-line"})}</li>
+    <li>${btn("Exporter mes résultats", 'data-act="exportResultats"', {kind:"tertiary", icon:"download-line"})}</li></ul>`;
+  if (!ref) return `${bar("Comparer mes résultats")}<section class="gren-panel">${intro}${actions}
+    <p class="gren-mention fr-mb-0">CSV attendu : une ligne par parcelle avec au moins une colonne <strong>dose</strong> (kg N/ha) et une colonne d'identification : <strong>identifiant</strong> (PACAGE_îlot_parcelle), <strong>îlot</strong> + <strong>parcelle</strong>, ou <strong>nom</strong>. Colonnes facultatives : culture, rendement, besoin, surface. Depuis Excel : « Enregistrer sous » → CSV (séparateur point-virgule).</p></section>`;
+  const {rows, orphelines} = comparaison(ref, y);
+  const cmp = rows.filter(x => x.o && x.a.dose != null && x.o.dose != null);
+  const sum = f => cmp.reduce((a, x) => a + f(x), 0);
+  const surf = sum(x => x.a.surface);
+  const totA = sum(x => x.a.dose * x.a.surface), totO = sum(x => x.o.dose * x.a.surface);
+  const nbDiff = cmp.filter(x => Math.abs(x.ecart) >= 10).length;
+  const sign = v => v > 0 ? "+" + fmt(v) : v < 0 ? "−" + fmt(-v) : "0";
+  const tendance = e => e == null ? "" : e >= 10 ? badge("Hausse", "warning") : e <= -10 ? badge("Baisse", "info") : badge("Stable", "success");
+  return `${bar("Comparer mes résultats")}
+  <section class="gren-panel">${intro}${actions}
+    <div class="fr-grid-row fr-grid-row--gutters fr-grid-row--bottom">
+      <div class="fr-col-12 fr-col-md-8">${fSelect("Résultats de référence", 'data-act="refSel"', refs.map(r => `<option value="${r.id}" ${r.id === ref.id ? "selected" : ""}>${esc(r.nom)} — ${r.lignes.length} lignes — ${new Date(r.date).toLocaleDateString("fr-FR")}</option>`).join(""))}</div>
+      <div class="fr-col-12 fr-col-md-4"><ul class="fr-btns-group fr-btns-group--icon-left fr-btns-group--inline fr-btns-group--sm fr-mb-0"><li>${btn("Renommer", 'data-act="refRename"', {kind:"tertiary", sm:true, icon:"edit-line"})}</li><li>${btn("Supprimer", 'data-act="refDelete"', {kind:"tertiary", sm:true, icon:"delete-line"})}</li></ul></div>
+    </div>
+  </section>
+  <div class="gren-kpis">
+    ${kpi(`${cmp.length}/${rows.length}`, "parcelles comparées")}
+    ${kpi(fmt(totO), "kg N — résultats de référence")}
+    ${kpi(fmt(totA), `kg N — résultats actuels (${sign(totA - totO)})`)}
+    ${kpi(surf ? fmt(totO / surf) + " → " + fmt(totA / surf) : "—", "dose moyenne pondérée (kg N/ha)")}
+    ${kpi(nbDiff, "parcelles avec un écart ≥ 10 kg N/ha")}
+  </div>
+  <section class="gren-panel">
+    <div class="gren-bar fr-mb-2w"><h2 class="fr-h4 fr-mb-0">Écarts par parcelle — récolte ${y}</h2>
+      <ul class="fr-btns-group fr-btns-group--inline-sm fr-btns-group--icon-left fr-mb-0"><li>${btn("Comparatif PDF", 'data-act="pdfComparatif"', {icon:"download-line", sm:true})}</li><li>${btn("Comparatif CSV", 'data-act="csvComparatif"', {kind:"secondary", icon:"download-line", sm:true})}</li></ul></div>
+    ${table(`<thead><tr><th scope="col">Parcelle</th><th scope="col" class="num">ha</th><th scope="col">Culture (réf. → actuelle)</th><th scope="col" class="num">Rdt réf.</th><th scope="col" class="num">Rdt actuel</th><th scope="col" class="num">Dose réf.</th><th scope="col" class="num">Dose actuelle</th><th scope="col" class="num">Écart kg N/ha</th><th scope="col" class="num">Écart %</th><th scope="col" class="num">Écart total kg N</th><th scope="col">Tendance</th></tr></thead>
+      <tbody>${rows.map(({p, a, o, ecart, ecartPct}) => `<tr>
+        <td><strong>${esc(parcelLabel(p))}</strong><br><span class="gren-mention">${esc(a.code)}</span></td>
+        <td class="num">${fmt(a.surface, 2)}</td>
+        <td>${o ? (o.culture && !memeCulture(o.culture, a.culture) ? `${esc(o.culture)} → <strong>${esc(a.culture || "?")}</strong>` : esc(a.culture || o.culture || "—")) : esc(a.culture || "—")}</td>
+        <td class="num">${o && o.rendement != null ? fmt(o.rendement, 1) : "—"}</td><td class="num">${a.rendement != null ? fmt(a.rendement, 1) : "—"}</td>
+        <td class="num">${o && o.dose != null ? fmt(o.dose) : o ? "—" : `<span class="gren-mention">absente</span>`}</td>
+        <td class="num">${a.dose != null ? `<strong>${fmt(a.dose)}</strong>` : "—"}</td>
+        <td class="num"><strong>${ecart != null ? sign(ecart) : "—"}</strong></td>
+        <td class="num">${ecartPct != null ? (ecartPct > 0 ? "+" : ecartPct < 0 ? "−" : "") + fmt(Math.abs(ecartPct), 1) + " %" : "—"}</td>
+        <td class="num">${ecart != null ? sign(ecart * a.surface) : "—"}</td>
+        <td>${tendance(ecart)}</td></tr>`).join("")}</tbody>`)}
+    ${orphelines.length ? alerte("warning", `${orphelines.length} ligne(s) du fichier sans parcelle correspondante`, orphelines.slice(0, 12).map(l => esc(l.nom || l.code || `îlot ${l.ilot} parc. ${l.num}`) + (l.dose != null ? ` (${fmt(l.dose)} kg N/ha)` : "")).join(" · ") + (orphelines.length > 12 ? " …" : "") + ". Vérifiez l'identifiant, le n° d'îlot / parcelle ou le nom d'usage.") : ""}
+    <p class="gren-mention fr-mb-0">Écart = dose actuelle − dose de référence. « Hausse » / « Baisse » au-delà de 10 kg N/ha.</p>
+  </section>`;
+};
+function parseResultats(txt, nomFichier){
+  txt = txt.replace(/^﻿/, "");
+  const t = txt.trim();
+  if (t.startsWith("{")) {
+    const j = JSON.parse(t);
+    if (j.type === "calculette-gren-resultats" && Array.isArray(j.lignes)) return {nom:j.nom || `Résultats ${j.annee || ""} (${nomFichier})`, lignes:j.lignes};
+    if (j.version && j.parcelles && j.campagnes) { // sauvegarde complète de la Calculette
+      const save = S; S = migrate(j); const y = save.annee in (j.campagnes || {}) ? save.annee : Math.max(...Object.keys(j.campagnes).map(Number));
+      let lignes; try { lignes = resultatsActuels(y); } finally { S = save; }
+      return {nom:`Sauvegarde ${j.exploitation?.raison || ""} — récolte ${y}`, lignes};
+    }
+    throw new Error("Fichier JSON non reconnu");
+  }
+  const rows = t.split(/\r?\n/).filter(l => l.trim());
+  if (rows.length < 2) throw new Error("Fichier vide");
+  const sep = [";", "\t", ","].map(s => [s, rows[0].split(s).length]).sort((a, b) => b[1] - a[1])[0][0];
+  const split = l => { const out = []; let cur = "", q = false; for (let i = 0; i < l.length; i++) { const ch = l[i];
+    if (ch === '"') { if (q && l[i + 1] === '"') { cur += '"'; i++; } else q = !q; } else if (ch === sep && !q) { out.push(cur); cur = ""; } else cur += ch; } out.push(cur); return out.map(x => x.trim()); };
+  const head = split(rows[0]).map(normTxt);
+  const find = (...keys) => { for (const k of keys) { const i = head.findIndex(h => h === k); if (i >= 0) return i; } for (const k of keys) { const i = head.findIndex(h => h.includes(k)); if (i >= 0) return i; } return -1; };
+  const ci = {code:find("identifiant", "id parcelle", "code"), ilot:find("ilot", "n ilot", "numero ilot"), num:find("parcelle", "n parcelle", "numero parcelle", "num"), nom:find("nom", "nom d usage", "libelle"),
+    surface:find("surface ha", "surface"), culture:find("culture"), rendement:find("rendement objectif", "rendement", "rdt"), besoin:find("besoin"),
+    dose:find("dose finale kg n ha", "dose finale", "dose retenue", "dose conseillee", "dose")};
+  if (ci.dose < 0) throw new Error("Aucune colonne « dose » trouvée");
+  if (ci.code < 0 && ci.ilot < 0 && ci.nom < 0) throw new Error("Aucune colonne d'identification (identifiant, îlot, nom)");
+  if (ci.num === ci.nom) ci.num = -1;
+  const lignes = rows.slice(1).map(split).map(v => { const g = k => ci[k] >= 0 ? (v[ci[k]] || "") : ""; const n = k => g(k).trim() === "" ? null : num(g(k));
+    return {code:g("code"), ilot:g("ilot"), num:g("num") || (g("ilot") ? "1" : ""), nom:g("nom"), surface:n("surface"), culture:g("culture"), rendement:n("rendement"), besoin:n("besoin"), dose:n("dose")}; })
+    .filter(l => l.code || l.ilot || l.nom);
+  return {nom:`${nomFichier}`, lignes};
+}
 
 /* ---------- Référentiel ---------- */
-const REF_TABLES = [
-  {k:"cultures", t:"Cultures (besoins, plafonds, rendements de référence)", cols:[
-    ["id","Code"],["nom","Nom","w"],["cat","Catégorie",["automne","printemps","prairie"]],["unite","Unité rdt"],["methode","Méthode",["bilan","forfait"]],
-    ["b","b (kg N/unité)","n"],["rf","Rf","n"],["irrig","+ irrig.","n"],["forfait","Forfait","n"],["plafond","Plafond","n"],["prec","Devient précédent","prec"],
-    ["rdt22","Rdt 22","n"],["rdt29","Rdt 29","n"],["rdt35","Rdt 35","n"],["rdt56","Rdt 56","n"]]},
-  {k:"sols", t:"Types de sol (minéralisation Mh et RSH forfaitaire, kg N/ha)", cols:[
-    ["id","Code"],["nom","Nom","w"],["mhAut","Mh automne","n"],["mhPri","Mh printemps","n"],["mhPra","Mh prairie","n"],["rshAut","RSH cult. hiver","n"],["rshPri","RSH cult. print.","n"]]},
-  {k:"precedents", t:"Précédents culturaux (fourniture, kg N/ha)", cols:[["id","Code"],["nom","Nom","w"],["effet","Effet","n"]]},
-  {k:"cipan", t:"Couverts / CIPAN (fourniture, kg N/ha)", cols:[["id","Code"],["nom","Nom","w"],["precoce","Destruction précoce","n"],["tardif","Destruction tardive","n"]]},
-  {k:"effluents", t:"Effluents (teneur N et coefficients d'équivalence engrais Keq)", cols:[
-    ["id","Code"],["nom","Nom","w"],["unite","Unité",["t","m³"]],["type","Type",["I","II"]],["n","kg N/unité","n"],["keqAut","Keq automne","n"],["keqHiv","Keq fin hiver","n"],["keqPri","Keq printemps","n"],["arriere","Arrière-effet N+1","n"]]},
-  {k:"mineraux", t:"Engrais minéraux", cols:[["id","Code"],["nom","Nom","w"],["teneur","% N","n"]]},
-  {k:"animaux", t:"Convertisseur bétail → UGB", cols:[["id","Code"],["nom","Catégorie","w"],["ugb","UGB/tête","n"]]},
-  {k:"calendrier", t:"Calendrier d'interdiction d'épandage (MM-JJ)", cols:[
-    ["cat","Culture",["automne","printemps","prairie"]],["type","Type fertilisant",["I","II","III"]],["debut","Début (MM-JJ)"],["fin","Fin (MM-JJ)"],["zone","Zone",["toutes","ZAR","BV"]]]}
-];
-const PARAMS = [["plafondOrga","Plafond azote organique (kg N/ha SAU)"],["plafondZAR","Seuil d'alerte N total ZAR / BV (kg N/ha)"],["nUGB","Azote excrété (kg N/UGB/an)"],["keqPature","Keq restitutions au pâturage"],["pailleExportee","Correction paille exportée (kg N/ha)"],["pailleEnfouie","Correction paille enfouie (kg N/ha)"],["cipanLimite","Destruction CIPAN précoce avant (MM-JJ)"],["arrondi","Arrondi de la dose (kg N/ha)"]];
-VIEWS.referentiel = () => `
-  <div class="alert warn"><b>Valeurs à valider</b>Les valeurs livrées par défaut sont <b>indicatives</b>. Avant tout usage, comparez-les à l'arrêté référentiel GREN Bretagne et aux arrêtés ZAR en vigueur, puis corrigez-les ici. Les modifications sont enregistrées avec vos données et peuvent être partagées par export.</div>
-  <div class="toolbar"><button class="btn ghost" data-act="exportRef">⬇ Exporter le référentiel</button>
-    <label class="btn ghost">⬆ Importer un référentiel<input type="file" accept=".json" data-act="importRef" hidden></label>
-    <span class="spacer"></span><button class="btn danger" data-act="resetRef">Rétablir les valeurs par défaut</button></div>
-  <div class="card"><h3>Paramètres généraux</h3><div class="grid g4">
-    ${PARAMS.map(([k, l]) => `<label class="f"><span>${l}</span><input data-param="${k}" value="${esc(R().params[k])}"></label>`).join("")}</div></div>
-  ${REF_TABLES.map(T => `<div class="card"><div class="toolbar"><h3 style="margin:0">${T.t}</h3><span class="spacer"></span><button class="btn ghost sm" data-act="refAdd" data-k="${T.k}">+ Ligne</button></div>
-    <div class="tablewrap"><table><thead><tr>${T.cols.map(c => `<th>${c[1]}</th>`).join("")}<th></th></tr></thead><tbody>
-    ${R()[T.k].map((row, i) => `<tr>${T.cols.map(([f,, ty]) => {
-      const v = row[f] ?? "";
-      if (Array.isArray(ty)) return `<td><select data-ref="${T.k}" data-i="${i}" data-f="${f}">${ty.map(o => `<option ${o===v?"selected":""}>${o}</option>`).join("")}</select></td>`;
-      if (ty === "prec") return `<td><select data-ref="${T.k}" data-i="${i}" data-f="${f}">${opts(R().precedents, v, "—")}</select></td>`;
-      return `<td><input data-ref="${T.k}" data-i="${i}" data-f="${f}" data-t="${ty||""}" value="${esc(v)}" style="${ty==="w"?"min-width:200px":ty==="n"?"width:76px":"width:96px"}"></td>`;
-    }).join("")}<td><button class="btn danger sm" data-act="refDel" data-k="${T.k}" data-i="${i}">✕</button></td></tr>`).join("")}
-    </tbody></table></div></div>`).join("")}`;
+VIEWS.referentiel = () => `${bar("Référentiel GREN", false)}
+  ${S.refSource === "perso"
+    ? alerte("warning", "Référentiel personnalisé", `Vous avez modifié le référentiel sur cet appareil.${SRV ? " " + btn("Revenir au référentiel officiel", 'data-act="refOfficiel"', {kind:"secondary", sm:true}) : ""}`)
+    : S.refVersion ? alerte("success", `Référentiel officiel — version ${S.refVersion}`, `Publié le ${S.refPublieLe ? new Date(S.refPublieLe).toLocaleDateString("fr-FR") : "—"} par l'administration. Il est mis à jour automatiquement.`)
+    : alerte("warning", "Valeurs indicatives", "Les valeurs par défaut sont indicatives. Comparez-les à l'arrêté référentiel GREN Bretagne et aux arrêtés ZAR en vigueur avant tout usage. Toute modification ici ne vaut que pour cet appareil.")}
+  <ul class="fr-btns-group fr-btns-group--inline-md fr-btns-group--icon-left">
+    <li>${btn("Exporter le référentiel", 'data-act="exportRef"', {kind:"secondary", icon:"download-line"})}</li>
+    <li><label class="fr-btn fr-btn--secondary fr-btn--icon-left fr-icon-upload-line">Importer un référentiel<input type="file" accept=".json" data-act="importRef" hidden></label></li>
+    <li>${btn("Rétablir les valeurs par défaut", 'data-act="resetRef"', {kind:"tertiary", icon:"refresh-line"})}</li></ul>
+  <section class="gren-panel"><h2 class="fr-h5">Paramètres généraux</h2><div class="fr-grid-row fr-grid-row--gutters">
+    ${PARAMS.map(([k, l]) => `<div class="fr-col-12 fr-col-md-6 fr-col-lg-3">${fInput(l, `data-param="${k}"`, R().params[k])}</div>`).join("")}</div></section>
+  ${REF_TABLES.map(T => `<section class="gren-panel"><div class="gren-bar fr-mb-2w"><h2 class="fr-h5 fr-mb-0">${T.t}</h2>${btn("Ajouter une ligne", `data-act="refAdd" data-k="${T.k}"`, {kind:"secondary", sm:true, icon:"add-line"})}</div>
+    ${table(`<thead><tr>${T.cols.map(c => `<th scope="col">${c[1]}</th>`).join("")}<th scope="col"><span class="fr-sr-only">Actions</span></th></tr></thead><tbody>
+    ${R()[T.k].map((row, i) => `<tr>${T.cols.map(([f, l, ty]) => { const v = row[f] ?? ""; const al = `aria-label="${esc(l)}"`;
+      if (Array.isArray(ty)) return `<td><select class="fr-select" ${al} data-ref="${T.k}" data-i="${i}" data-f="${f}">${ty.map(o => `<option ${o === v ? "selected" : ""}>${o}</option>`).join("")}</select></td>`;
+      if (ty === "prec") return `<td><select class="fr-select" ${al} data-ref="${T.k}" data-i="${i}" data-f="${f}">${opts(R().precedents, v, "—")}</select></td>`;
+      return `<td><input class="fr-input" ${al} data-ref="${T.k}" data-i="${i}" data-f="${f}" data-t="${ty || ""}" value="${esc(v)}" style="${ty === "w" ? "min-width:14rem" : ty === "n" ? "width:5.5rem" : "width:7rem"}"></td>`;
+    }).join("")}<td>${btn("Supprimer", `data-act="refDel" data-k="${T.k}" data-i="${i}"`, {kind:"tertiary-no-outline", icon:"delete-line", sm:true})}</td></tr>`).join("")}
+    </tbody>`)}</section>`).join("")}`;
 
 /* ---------- Aide ---------- */
-VIEWS.aide = () => `<div class="card">
-  <h2>Mode d'emploi</h2>
+VIEWS.aide = () => `${bar("Aide et informations", false)}
+  <section class="gren-panel"><h2 class="fr-h4">Mode d'emploi</h2>
   <ol>
-    <li><b>Exploitation</b> : saisissez une fois le PACAGE, la raison sociale, l'adresse, le département et le sol dominant.</li>
-    <li><b>Parcelles</b> : ajoutez vos îlots / parcelles PAC (ou importez un CSV), avec surface, type de sol et zonage.</li>
-    <li><b>Calcul des doses</b> : pour chaque parcelle, choisissez la culture, le rendement (référence, historique ou saisie libre), le reliquat sortie hiver, le couvert, les pratiques. La formule s'affiche en blocs : besoins − fournitures = dose.</li>
-    <li><b>Apports & épandages</b> : enregistrez les effluents et engrais prévus puis réalisés. Le calendrier d'épandage et le plafond de 170 kg N/ha sont contrôlés à chaque saisie.</li>
-    <li><b>Groupes</b> : validez les regroupements proposés pour gérer moins de situations.</li>
-    <li><b>PPF</b> : imprimez ou enregistrez le Plan Prévisionnel de Fumure en PDF, ou exportez-le en CSV.</li>
-    <li>L'année suivante, passez à la campagne suivante (flèche ▶ en haut) : précédents culturaux, arrière-effets des effluents et historique des rendements sont repris automatiquement.</li>
+    <li><strong>Exploitation</strong> : saisissez une fois le PACAGE, la raison sociale, l'adresse, le département et le sol dominant.</li>
+    <li><strong>Parcelles</strong> : ajoutez vos îlots / parcelles PAC (ou importez un CSV) avec surface, type de sol et zonage.</li>
+    <li><strong>Calcul des doses</strong> : pour chaque parcelle, choisissez la culture, le rendement, le reliquat sortie hiver, le couvert et les pratiques. La formule s'affiche en blocs : besoins − fournitures = dose.</li>
+    <li><strong>Apports</strong> : enregistrez les effluents et engrais prévus puis réalisés. Le calendrier d'épandage et le plafond de 170 kg N/ha sont contrôlés à chaque saisie.</li>
+    <li><strong>Groupes</strong> : validez les regroupements proposés pour gérer moins de situations.</li>
+    <li><strong>Plan de fumure</strong> : téléchargez le PPF en PDF (avec ou sans fiches détaillées par parcelle) ou en CSV.</li>
+    <li><strong>Comparer</strong> : importez des résultats (export de la Calculette, CSV d'un tableur ou d'un autre outil) et comparez-les à vos nouvelles saisies.</li>
+    <li>L'année suivante, passez à la campagne suivante : précédents, arrière-effets des effluents et historique des rendements sont repris automatiquement.</li>
   </ol>
-  <h3>Équation du bilan</h3>
+  <h3 class="fr-h6">Équation du bilan</h3>
   <p><code>Dose = b × Rendement + Rf (+ irrigation) − RSH − Mh − effet précédent − CIPAN − N organique efficace − arrière-effet − pâturage ± correction résidus</code>, puis <code>Dose finale = min(Dose, plafond culture)</code>.</p>
   <p><code>N organique efficace = quantité × teneur en N × Keq</code> ; le Keq dépend de l'effluent et de la période d'apport (automne : août–novembre, fin d'hiver : décembre–février, printemps : mars–juillet).</p>
-  <h3>Import CSV des parcelles</h3>
-  <p>Séparateur <code>;</code> ou <code>,</code>, première ligne d'en-têtes. Colonnes reconnues : <code>ilot</code>, <code>parcelle</code>, <code>nom</code>, <code>surface</code>, <code>sol</code>, <code>zone</code>, <code>culture</code>, <code>precedent</code>. Les noms de sol et de culture peuvent être les codes ou les libellés du référentiel.</p>
-  <h3>Avertissement</h3>
-  <p class="muted">Outil d'aide à la décision, <b>non réglementaire</b>. Il ne remplace ni l'arrêté référentiel régional GREN Bretagne, ni le programme d'actions régional, ni les arrêtés ZAR, ni le conseil d'un technicien. Les valeurs du référentiel doivent être vérifiées par l'utilisateur ou l'administration.</p>
-</div>`;
+  <h3 class="fr-h6">Import CSV des parcelles</h3>
+  <p>Séparateur <code>;</code> ou <code>,</code>, première ligne d'en-têtes. Colonnes reconnues : <code>ilot</code>, <code>parcelle</code>, <code>nom</code>, <code>surface</code>, <code>sol</code>, <code>zone</code>, <code>culture</code>, <code>precedent</code>.</p></section>
+  <section class="gren-panel" id="mentions"><h2 class="fr-h4">Mentions légales</h2>
+    <p>Éditeur : ${(CFG.MARQUE || ["Préfète","de la région","Bretagne"]).join(" ")}. ${CFG.CONTACT ? `Contact : ${esc(CFG.CONTACT)}.` : ""}</p>
+    <p>Outil d'aide à la décision, <strong>non réglementaire</strong>. Il ne remplace ni l'arrêté référentiel régional GREN Bretagne, ni le programme d'actions régional, ni les arrêtés ZAR, ni le conseil d'un technicien. Hébergement : GitHub Pages (GitHub Inc.)${SRV ? " ; statistiques et référentiel : Supabase" : ""}.</p></section>
+  <section class="gren-panel" id="donnees"><h2 class="fr-h4">Données personnelles</h2>
+    <p>Les données de votre exploitation (PACAGE, parcelles, apports, résultats) sont enregistrées <strong>uniquement dans votre navigateur</strong>. Elles ne sont transmises à aucun serveur.</p>
+    ${SRV ? `<p>Une mesure d'audience <strong>anonyme</strong> est réalisée : type d'action (visite, calcul, export), département, culture calculée et type d'appareil, rattachés à un identifiant aléatoire valable le temps de la session. Aucune adresse IP, aucun nom ni numéro PACAGE n'est enregistré.</p>` : ""}</section>
+  <section class="gren-panel" id="cookies"><h2 class="fr-h4">Gestion des cookies</h2><p class="fr-mb-0">Ce site ne dépose aucun cookie. Le stockage local du navigateur sert uniquement à conserver vos saisies sur votre appareil.</p></section>
+  <section class="gren-panel" id="accessibilite"><h2 class="fr-h4">Accessibilité : non conforme</h2><p class="fr-mb-0">Ce service n'a pas encore fait l'objet d'un audit de conformité au RGAA. Il utilise le Système de Design de l'État (DSFR) afin de faciliter son accessibilité.</p></section>`;
+/* =========================================================================
+   PDF (jsPDF, police Marianne embarquée)
+   ========================================================================= */
+const loaded = {};
+function loadScript(src){
+  return loaded[src] || (loaded[src] = new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = () => { delete loaded[src]; rej(new Error("Chargement impossible : " + src)); }; document.head.appendChild(s); }));
+}
+async function pdfDoc(orientation = "landscape"){
+  await loadScript("lib/jspdf-4.2.1.umd.min.js");
+  await loadScript("lib/jspdf-autotable-5.0.8.min.js");
+  await loadScript("lib/marianne-pdf.js");
+  const { jsPDF } = window.jspdf;
+  const at = window.jspdf_autotable; if (at && at.applyPlugin) at.applyPlugin(jsPDF);
+  const doc = new jsPDF({orientation, unit:"mm", format:"a4"});
+  doc.addFileToVFS("Marianne-Regular.ttf", window.GREN_FONTS.Regular); doc.addFont("Marianne-Regular.ttf", "Marianne", "normal");
+  doc.addFileToVFS("Marianne-Bold.ttf", window.GREN_FONTS.Bold); doc.addFont("Marianne-Bold.ttf", "Marianne", "bold");
+  doc.setFont("Marianne", "normal");
+  doc.setProperties({title:"Calculette GREN", creator:"Calculette GREN", author:(CFG.MARQUE || []).join(" ")});
+  return doc;
+}
+function AT(doc, o){
+  const at = window.jspdf_autotable;
+  const base = {styles:{font:"Marianne", fontSize:8, cellPadding:1.6, lineColor:[221,221,221], lineWidth:.1, textColor:[22,22,22]},
+    headStyles:{fillColor:[0,0,145], textColor:255, fontStyle:"bold"}, footStyles:{fillColor:[238,238,238], textColor:[22,22,22], fontStyle:"bold"},
+    alternateRowStyles:{fillColor:[246,246,246]}, margin:{left:14, right:14, top:40, bottom:16}, didDrawPage: () => {}};
+  const opt = Object.assign({}, base, o, {styles:Object.assign({}, base.styles, o.styles || {}), headStyles:Object.assign({}, base.headStyles, o.headStyles || {})});
+  if (at && typeof at.autoTable === "function") at.autoTable(doc, opt);
+  else if (at && typeof at.default === "function") at.default(doc, opt);
+  else doc.autoTable(opt);
+  return doc.lastAutoTable.finalY;
+}
+function pdfEntete(doc, titre, sousTitre){
+  const W = doc.internal.pageSize.getWidth();
+  const marque = (CFG.MARQUE || ["Préfète", "de la région", "Bretagne"]).map(s => s.toUpperCase());
+  doc.setFillColor(0, 0, 145); doc.rect(14, 10, 5, 2, "F"); doc.setFillColor(225, 0, 15); doc.rect(24, 10, 5, 2, "F");
+  doc.setDrawColor(200); doc.setLineWidth(.2); doc.rect(19, 10, 5, 2, "S");
+  doc.setFont("Marianne", "bold"); doc.setFontSize(9.5); doc.setTextColor(0, 0, 0);
+  marque.forEach((l, i) => doc.text(l, 14, 17 + i * 3.9));
+  doc.setFont("Marianne", "normal"); doc.setFontSize(6.5);
+  ["Liberté", "Égalité", "Fraternité"].forEach((l, i) => doc.text(l, 14, 17 + marque.length * 3.9 + 1 + i * 2.6));
+  doc.setFont("Marianne", "bold"); doc.setFontSize(14); doc.setTextColor(0, 0, 145);
+  doc.text(titre, W - 14, 17, {align:"right"});
+  doc.setFont("Marianne", "normal"); doc.setFontSize(9); doc.setTextColor(58, 58, 58);
+  if (sousTitre) doc.text(sousTitre, W - 14, 22.5, {align:"right"});
+  doc.text("Calculette GREN — " + new Date().toLocaleDateString("fr-FR"), W - 14, 27, {align:"right"});
+  doc.setTextColor(22, 22, 22);
+}
+function pdfPied(doc){
+  const n = doc.getNumberOfPages();
+  for (let i = 1; i <= n; i++) {
+    doc.setPage(i); const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+    doc.setDrawColor(221); doc.setLineWidth(.2); doc.line(14, H - 11, W - 14, H - 11);
+    doc.setFont("Marianne", "normal"); doc.setFontSize(7); doc.setTextColor(102, 102, 102);
+    doc.text("Calculette GREN — document d'aide à la décision, non réglementaire. Référentiel : " + refLabel() + ".", 14, H - 7);
+    doc.text(`Page ${i} / ${n}`, W - 14, H - 7, {align:"right"});
+  }
+}
+function pdfMeta(doc, y0){
+  const e = S.exploitation;
+  const items = [["Exploitation", e.raison], ["N° PACAGE", e.pacage], ["Exploitant·e", e.exploitant], ["Commune", e.commune], ["SAU", fmt(sau(), 2) + " ha"]];
+  doc.setFontSize(8.5); let x = 14; const W = doc.internal.pageSize.getWidth();
+  items.forEach(([k, v]) => { doc.setFont("Marianne", "bold"); const w = doc.getTextWidth(k + " : "); const t = String(v || "—");
+    doc.setFont("Marianne", "normal"); const wt = doc.getTextWidth(t);
+    if (x > 14 && x + w + wt > W - 14) { x = 14; y0 += 4.5; }
+    doc.setFont("Marianne", "bold"); doc.text(k + " : ", x, y0); doc.setFont("Marianne", "normal"); doc.text(t, x + w, y0); x += w + wt + 8; });
+  return y0 + 5;
+}
+const pdfNom = (base) => `${base}_${(S.exploitation.pacage || "exploitation")}_${S.annee}.pdf`;
+function pdfPPFPages(doc, y){
+  const lines = ppfLines(y); const b = bilanOrga(y);
+  pdfEntete(doc, "Plan Prévisionnel de Fumure azotée", `Campagne ${y - 1}-${y}`);
+  let cy = pdfMeta(doc, 42);
+  const body = lines.map(({p, r, members}) => !r
+    ? [parcelLabel(p) + "\n" + parcelCode(p), fmt(num(p.surface), 2), p.zone || "standard", {content:"culture non renseignée", colSpan:13, styles:{textColor:[102,102,102]}}]
+    : [parcelLabel(p) + "\n" + (members ? p._members : parcelCode(p)), fmt(num(p.surface), 2), p.zone || "standard", r.cult.nom, r.prec?.nom || "—",
+       r.forfait ? "forfait" : fmt(r.rdt.val, 1) + " " + r.cult.unite, fmt(r.besoin), fmt(r.rsh), fmt(r.mh), fmt(r.precEff + r.cipanEff + r.arriere + r.pat.nEff),
+       fmt(r.nOrgEff), r.corr ? (r.corr > 0 ? "+" : "") + fmt(r.corr) : "0", fmt(r.doseCalc), r.cult.plafond === "" ? "—" : fmt(r.plafond),
+       {content:fmt(r.doseFinale), styles:{fontStyle:"bold"}}, fmt(r.doseFinale * num(p.surface))]);
+  const totN = lines.reduce((a, x) => a + (x.r ? x.r.doseFinale * num(x.p.surface) : 0), 0);
+  const numCols = {}; for (let i = 5; i <= 15; i++) numCols[i] = {halign:"right"}; numCols[1] = {halign:"right"};
+  cy = AT(doc, {startY:cy + 2,
+    head:[["Parcelle / îlot", "ha", "Zone", "Culture", "Précédent", "Rdt obj.", "Besoin", "RSH", "Mh", "Autres fourn.", "N org. eff.", "Corr.", "Dose calc.", "Plafond", "Dose finale", "Total kg N"]],
+    body, foot:[["Total", fmt(lines.reduce((a, x) => a + num(x.p.surface), 0), 2), "", "", "", "", "", "", "", "", "", "", "", "", "", fmt(totN)]],
+    columnStyles:Object.assign({0:{cellWidth:42}}, numCols), footStyles:{halign:"right"}, showFoot:"lastPage"});
+  const H = doc.internal.pageSize.getHeight();
+  if (cy > H - 50) { doc.addPage("a4", "landscape"); cy = 20; }
+  doc.setFontSize(9); doc.setFont("Marianne", "bold");
+  doc.text(`Azote organique (épandu + pâturage) : ${fmt(b.tot)} kg N, soit ${fmt(b.parHa)} kg N/ha SAU (plafond ${b.plafond}) — ${b.parHa > b.plafond ? "NON CONFORME" : "conforme"}`, 14, cy + 7);
+  doc.setFont("Marianne", "normal"); doc.setFontSize(7.5); doc.setTextColor(80, 80, 80);
+  doc.text(doc.splitTextToSize("Doses en kg N/ha calculées par la méthode du bilan prévisionnel (besoins − fournitures du sol − azote organique efficace ± corrections), plafonnées par culture.", doc.internal.pageSize.getWidth() - 28), 14, cy + 12);
+  doc.setTextColor(22, 22, 22); doc.setDrawColor(22); doc.setLineWidth(.3);
+  const W = doc.internal.pageSize.getWidth(), mid = W / 2;
+  doc.line(14, cy + 22, mid - 6, cy + 22); doc.line(mid + 6, cy + 22, W - 14, cy + 22);
+  doc.setFontSize(8); doc.text("Date et signature de l'exploitant·e", 14, cy + 26); doc.text("Observations", mid + 6, cy + 26);
+}
+function pdfFichePage(doc, p, y){
+  const r = calc(p, y); if (!r) return false;
+  const c = r.c;
+  pdfEntete(doc, "Fiche de calcul — dose d'azote", `${parcelLabel(p)} · récolte ${y}`);
+  let cy = pdfMeta(doc, 42);
+  cy = AT(doc, {startY:cy + 2, theme:"plain", styles:{fontSize:8.5}, columnStyles:{0:{fontStyle:"bold", cellWidth:48}, 2:{fontStyle:"bold", cellWidth:44}},
+    body:[["Parcelle", `${parcelLabel(p)} (${parcelCode(p)})`, "Surface", fmt(num(p.surface), 2) + " ha"],
+      ["Type de sol", solById(p.sol).nom, "Zonage", p.zone || "standard"],
+      ["Culture", r.cult.nom, "Précédent", r.prec?.nom || "—"],
+      ["Rendement objectif", r.forfait ? "forfait GREN" : `${fmt(r.rdt.val, 1)} ${r.cult.unite} (${r.rdt.src})`, "RSH", c.rshMode === "mesure" ? "analyse de sol" : "forfait"],
+      ["Couvert / CIPAN", (byId(R().cipan, c.cipan) || {nom:"—"}).nom + (c.cipanDate ? ` — détruit le ${frDate(c.cipanDate)}` : ""), "Pailles / irrigation", `${c.paille === "exportee" ? "exportées" : c.paille === "enfouie" ? "enfouies" : "sans objet"} / ${c.irrigation ? "irriguée" : "non irriguée"}`]]});
+  const L = [["Besoins de la culture" + (r.forfait ? " (forfait)" : ` (${fmt(r.rdt.val, 1)} × ${r.cult.b}${r.rf ? " + Rf " + r.rf : ""}${r.irrig ? " + irrigation " + r.irrig : ""})`), "", fmt(r.besoin)]];
+  if (!r.forfait) { L.push(["Reliquat sortie hiver (RSH)", "−", fmt(r.rsh)], ["Minéralisation de l'humus (Mh)", "−", fmt(r.mh)]);
+    if (r.precEff) L.push(["Effet du précédent", "−", fmt(r.precEff)]); if (r.cipanEff) L.push(["Couvert / CIPAN", "−", fmt(r.cipanEff)]); }
+  r.org.forEach(o => L.push([`${o.e.nom} du ${frDate(o.i.date)} : ${fmt(num(o.i.qte), 1)} ${o.e.unite || ""}/ha × ${fmt(o.teneur, 1)} kg N × Keq ${fmt(o.keq, 2)}`, "−", fmt(o.nEff)]));
+  if (r.arriere) L.push([`Arrière-effet des apports organiques ${y - 1}`, "−", fmt(r.arriere)]);
+  if (r.pat.nEff) L.push([`Restitutions au pâturage (${fmt(r.pat.ugb, 1)} UGB × ${r.pat.jours} j)`, "−", fmt(r.pat.nEff)]);
+  if (r.corr) L.push([`Correction résidus (paille ${c.paille === "exportee" ? "exportée" : "enfouie"})`, r.corr > 0 ? "+" : "−", fmt(Math.abs(r.corr))]);
+  cy = AT(doc, {startY:cy + 4, head:[["Poste du bilan", "", "kg N/ha"]], body:L,
+    foot:[["Dose calculée", "=", fmt(r.doseCalc)], [`Plafond GREN ${r.cult.nom}`, "", r.cult.plafond === "" ? "—" : fmt(r.plafond)], ["DOSE FINALE PRÉVISIONNELLE", "", fmt(r.doseFinale)]],
+    columnStyles:{1:{halign:"center", cellWidth:10}, 2:{halign:"right", cellWidth:28}}, footStyles:{fillColor:[227,227,253], textColor:[0,0,145]}, styles:{fontSize:8.5}, showFoot:"lastPage"});
+  doc.setFont("Marianne", "bold"); doc.setFontSize(10); doc.setTextColor(0, 0, 145);
+  doc.text(`Soit ${fmt(r.doseFinale * num(p.surface))} kg N sur la parcelle · engrais minéral prévu : ${fmt(r.minPrevu)} kg N/ha${r.reste > 0 ? ` (reste à apporter : ${fmt(r.reste)})` : ""}`, 14, cy + 7);
+  doc.setTextColor(22, 22, 22);
+  if (c.notes) { doc.setFont("Marianne", "normal"); doc.setFontSize(8.5); doc.text(doc.splitTextToSize("Notes : " + c.notes, doc.internal.pageSize.getWidth() - 28), 14, cy + 14); }
+  return true;
+}
+async function pdfAction(fn, nom){
+  toast("Préparation du PDF…");
+  try { const doc = await fn(); pdfPied(doc); doc.save(nom); toast("PDF téléchargé."); }
+  catch(e){ console.error(e); toast("Le PDF n'a pas pu être créé : " + e.message, true); }
+}
+const pdfPPF = (fiches) => pdfAction(async () => {
+  const doc = await pdfDoc("landscape"); const y = S.annee;
+  pdfPPFPages(doc, y);
+  if (fiches) for (const p of S.parcelles) { if (!calc(p, y)) continue; doc.addPage("a4", "portrait"); pdfFichePage(doc, p, y); }
+  suivre("export_ppf"); return doc;
+}, pdfNom(fiches ? "PPF_et_fiches" : "PPF"));
+const pdfFiche = () => pdfAction(async () => {
+  const doc = await pdfDoc("portrait"); const p = byId(S.parcelles, S.sel); pdfFichePage(doc, p, S.annee); suivre("export_ppf"); return doc;
+}, pdfNom("Fiche_" + normTxt(parcelLabel(byId(S.parcelles, S.sel) || {})).replace(/ /g, "-")));
+const pdfComparatif = () => pdfAction(async () => {
+  const y = S.annee; const ref = byId(S.references, S.refSel) || S.references[0];
+  const doc = await pdfDoc("landscape");
+  pdfEntete(doc, "Comparatif des résultats", `Récolte ${y} · référence : ${ref.nom}`.slice(0, 110));
+  let cy = pdfMeta(doc, 42);
+  const {rows, orphelines} = comparaison(ref, y);
+  const sign = v => v > 0 ? "+" + fmt(v) : v < 0 ? "−" + fmt(-v) : "0";
+  const cmp = rows.filter(x => x.ecart != null);
+  const totA = cmp.reduce((a, x) => a + x.a.dose * x.a.surface, 0), totO = cmp.reduce((a, x) => a + x.o.dose * x.a.surface, 0);
+  const nc = {}; [1, 3, 4, 5, 6, 7, 8, 9].forEach(i => nc[i] = {halign:"right"});
+  cy = AT(doc, {startY:cy + 2, head:[["Parcelle", "ha", "Culture (réf. → actuelle)", "Rdt réf.", "Rdt actuel", "Dose réf.", "Dose actuelle", "Écart kg N/ha", "Écart %", "Écart total kg N", "Tendance"]],
+    body:rows.map(({p, a, o, ecart, ecartPct}) => [parcelLabel(p) + "\n" + a.code, fmt(a.surface, 2),
+      o && o.culture && !memeCulture(o.culture, a.culture) ? `${o.culture} → ${a.culture || "?"}` : (a.culture || o?.culture || "—"),
+      o && o.rendement != null ? fmt(o.rendement, 1) : "—", a.rendement != null ? fmt(a.rendement, 1) : "—",
+      o && o.dose != null ? fmt(o.dose) : o ? "—" : "absente", a.dose != null ? fmt(a.dose) : "—",
+      {content:ecart != null ? sign(ecart) : "—", styles:{fontStyle:"bold"}}, ecartPct != null ? (ecartPct > 0 ? "+" : ecartPct < 0 ? "−" : "") + fmt(Math.abs(ecartPct), 1) + " %" : "—",
+      ecart != null ? sign(ecart * a.surface) : "—", ecart == null ? "" : ecart >= 10 ? "Hausse" : ecart <= -10 ? "Baisse" : "Stable"]),
+    foot:[["Total comparé", "", "", "", "", fmt(totO), fmt(totA), "", "", sign(totA - totO), ""]], columnStyles:Object.assign({0:{cellWidth:46}}, nc), showFoot:"lastPage"});
+  if (orphelines.length) { doc.setFontSize(8); doc.text(doc.splitTextToSize(`${orphelines.length} ligne(s) du fichier de référence sans parcelle correspondante : ` + orphelines.map(l => l.nom || l.code || `îlot ${l.ilot}`).join(", "), doc.internal.pageSize.getWidth() - 28), 14, cy + 7); }
+  return doc;
+}, pdfNom("Comparatif"));
+
+/* =========================================================================
+   UTILITAIRES D'INTERFACE
+   ========================================================================= */
+function toast(msg, err){
+  document.querySelectorAll(".gren-toast").forEach(t => t.remove());
+  const t = document.createElement("div"); t.className = "gren-toast fr-alert fr-alert--sm " + (err ? "fr-alert--error" : "fr-alert--success");
+  t.setAttribute("role", err ? "alert" : "status"); t.innerHTML = `<p>${esc(msg)}</p>`; document.body.appendChild(t); setTimeout(() => t.remove(), 4000);
+}
+function dialog({title, body, buttons = [{label:"OK"}], block = false}){
+  const d = $("#dlg"); d.className = "gren-modal" + (block ? " block" : "");
+  $("#dlgH").textContent = title; $("#dlgB").innerHTML = body; const f = $("#dlgF"); f.innerHTML = "";
+  return new Promise(res => { let done = false;
+    buttons.forEach((b, i) => { const el = document.createElement("button"); el.type = "button";
+      el.className = "fr-btn" + (b.cls === "ghost" ? " fr-btn--secondary" : b.cls === "danger" ? " fr-btn--secondary" : "");
+      el.textContent = b.label; el.onclick = () => { done = true; d.close(); res(b.value ?? i); }; f.appendChild(el); });
+    d.onclose = () => { if (!done) res(null); }; d.showModal(); });
+}
+const confirmer = (title, body, ok = "Confirmer") => dialog({title, body:`<p>${body}</p>`, buttons:[{label:"Annuler", cls:"ghost", value:0}, {label:ok, value:1}]}).then(v => v === 1);
+async function demander(title, label, value){
+  const v = await dialog({title, body:fInput(label, 'data-dlg-input', value), buttons:[{label:"Annuler", cls:"ghost", value:0}, {label:"Valider", value:1}]});
+  return v === 1 ? ($("[data-dlg-input]")?.value || "").trim() : null;
+}
+function aller(tab, ancre){
+  S.tab = tab; save(); render();
+  try { if (window.dsfr) window.dsfr($("#menu-principal")).modal.conceal(); } catch(e){}
+  if (ancre) setTimeout(() => document.getElementById(ancre)?.scrollIntoView({behavior:"smooth"}), 50); else { window.scrollTo(0, 0); $("#contenu").focus({preventScroll:true}); }
+}
 
 /* =========================================================================
    ÉVÉNEMENTS
    ========================================================================= */
 document.addEventListener("click", async ev => {
   const t = ev.target.closest("[data-tab],[data-act],[data-selp]"); if (!t) return;
-  if (t.dataset.tab) { ev.preventDefault(); S.tab = t.dataset.tab; save(); render(); window.scrollTo(0, 0); return; }
-  if (t.dataset.selp) { S.sel = t.dataset.selp; save(); render(); if (innerWidth < 980) $(".layout2 > div:last-child")?.scrollIntoView({behavior:"smooth"}); return; }
-  const a = t.dataset.act; if (t.tagName === "INPUT" && (t.type === "file" || t.type === "checkbox")) return;
-  ev.preventDefault();
-  const y = S.annee;
+  if (t.dataset.tab) { ev.preventDefault(); aller(t.dataset.tab, t.dataset.ancre); return; }
+  if (t.dataset.selp) { S.sel = t.dataset.selp; save(); render(); if (innerWidth < 992) $("#detail")?.scrollIntoView({behavior:"smooth"}); return; }
+  if (t.tagName === "INPUT" || t.tagName === "SELECT") return;
+  const a = t.dataset.act; ev.preventDefault(); const y = S.annee;
   switch (a) {
-    case "demo": if (S.parcelles.length && await dialog({title:"Charger l'exemple ?", body:"Vos données actuelles seront remplacées.", buttons:[{label:"Annuler", cls:"ghost", value:0},{label:"Remplacer", value:1}]}) !== 1) return;
-      S = demoState(); save(); S.tab = "campagne"; render(); toast("Exemple chargé"); break;
-    case "reset": if (await dialog({title:"Tout effacer ?", body:"Toutes les données de ce navigateur seront supprimées. Exportez une sauvegarde avant si besoin.", buttons:[{label:"Annuler", cls:"ghost", value:0},{label:"Effacer", cls:"danger", value:1}]}) !== 1) return;
+    case "yPrev": S.annee--; save(); render(); break;
+    case "yNext": S.annee++; save(); render(); break;
+    case "demo": if (S.parcelles.length && !await confirmer("Charger l'exemple ?", "Vos données actuelles seront remplacées.", "Remplacer")) return;
+      S = demoState(); save(); render(); toast("Exemple chargé."); suivre("exemple"); break;
+    case "reset": if (!await confirmer("Tout effacer ?", "Toutes les données de ce navigateur seront supprimées. Exportez une sauvegarde avant si besoin.", "Effacer")) return;
       S = newState(); save(); render(); break;
-    case "export": download(`calculette-gren_${S.exploitation.pacage || "exploitation"}_${new Date().toISOString().slice(0,10)}.json`, JSON.stringify(S, null, 1), "application/json"); break;
+    case "export": download(`calculette-gren_${S.exploitation.pacage || "exploitation"}_${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(S, null, 1), "application/json"); suivre("export_sauvegarde"); break;
     case "addParcelle": S.parcelles.push({id:uid(), ilot:String(S.parcelles.length + 1), num:"1", nom:"", surface:"", sol:S.exploitation.sol || "limsain", zone:"standard", dept:S.exploitation.departement}); save(); render(); break;
     case "delParcelle": { const pid = t.closest("tr").dataset.pid; const p = byId(S.parcelles, pid);
-      if (await dialog({title:"Supprimer la parcelle ?", body:`${esc(parcelLabel(p))} et ses données de campagne seront supprimées.`, buttons:[{label:"Annuler", cls:"ghost", value:0},{label:"Supprimer", cls:"danger", value:1}]}) !== 1) return;
+      if (!await confirmer("Supprimer la parcelle ?", `${esc(parcelLabel(p))} et ses données de campagne seront supprimées.`, "Supprimer")) return;
       S.parcelles = S.parcelles.filter(x => x.id !== pid);
-      for (const c of Object.values(S.campagnes)) { delete c.cultures[pid]; c.interventions = c.interventions.filter(i => i.pid !== pid); c.groupes = (c.groupes||[]).map(g => ({...g, ids:g.ids.filter(i => i !== pid)})).filter(g => g.ids.length > 1); }
+      for (const c of Object.values(S.campagnes)) { delete c.cultures[pid]; c.interventions = c.interventions.filter(i => i.pid !== pid); c.groupes = (c.groupes || []).map(g => ({...g, ids:g.ids.filter(i => i !== pid)})).filter(g => g.ids.length > 1); }
       save(); render(); break; }
     case "csvParcelles": csvDialog(); break;
     case "addInterv": interventionForm(t.dataset.pid || S.sel); break;
@@ -1034,19 +1248,34 @@ document.addEventListener("click", async ev => {
     case "delAnimal": { const c = entry(S.sel, y); c.pature.animaux.splice(+t.dataset.i, 1); save(); render(); break; }
     case "valGroupe": { const ids = t.dataset.ids.split(","); const cc = camp(y); cc.groupes = (cc.groupes || []).map(g => ({...g, ids:g.ids.filter(i => !ids.includes(i))})).filter(g => g.ids.length > 1);
       const k = groupKey(byId(S.parcelles, ids[0]), y);
-      cc.groupes.push({nom:`${cultureById(k.culture).nom} / ${precById(k.precedent)?.nom || "?"} — ${solById(k.sol).nom}${k.zone !== "standard" ? " — " + k.zone : ""}`, ids}); save(); render(); toast("Groupe validé"); break; }
+      cc.groupes.push({nom:`${cultureById(k.culture).nom} / ${precById(k.precedent)?.nom || "?"} — ${solById(k.sol).nom}${k.zone !== "standard" ? " — " + k.zone : ""}`, ids}); save(); render(); toast("Groupe validé."); break; }
     case "delGroupe": camp(y).groupes.splice(+t.dataset.g, 1); save(); render(); break;
     case "harmo": { const g = camp(y).groupes[+t.dataset.g]; const src = entry(g.ids[0], y);
       for (const id of g.ids.slice(1)) { const c = entry(id, y); for (const f of ["rdtMode","rdtLibre","rdtHist","rshMode","rshMesure","cipan","cipanDate","paille","irrigation"]) c[f] = clone(src[f]); }
-      save(); render(); toast("Saisies alignées sur la 1re parcelle du groupe"); break; }
-    case "csvPPF": exportPPFcsv(); break;
+      save(); render(); toast("Saisies alignées sur la première parcelle du groupe."); break; }
+    case "print": window.print(); break;
+    case "pdfPPF": pdfPPF(false); break;
+    case "pdfPPFfiches": pdfPPF(true); break;
+    case "pdfFiche": pdfFiche(); break;
+    case "pdfComparatif": pdfComparatif(); break;
+    case "csvPPF": exportPPFcsv(); suivre("export_csv"); break;
+    case "csvComparatif": exportComparatifCsv(); break;
+    case "snapshot": { const nom = await demander("Enregistrer comme référence", "Nom de la référence", `Mes résultats du ${new Date().toLocaleDateString("fr-FR")} — récolte ${y}`); if (!nom) return;
+      S.references = S.references || []; const r = {id:uid(), nom, source:"instantane", date:new Date().toISOString(), annee:y, lignes:resultatsActuels(y)};
+      S.references.unshift(r); S.refSel = r.id; save(); render(); toast("Résultats enregistrés comme référence."); break; }
+    case "exportResultats": download(`resultats_${S.exploitation.pacage || "exploitation"}_${y}.json`, JSON.stringify({type:"calculette-gren-resultats", version:1, nom:`Résultats ${S.exploitation.raison || ""} — récolte ${y}`.trim(), annee:y, date:new Date().toISOString(), exploitation:{pacage:S.exploitation.pacage, raison:S.exploitation.raison}, lignes:resultatsActuels(y)}, null, 1), "application/json"); break;
+    case "refRename": { const r = byId(S.references, S.refSel) || S.references[0]; const nom = await demander("Renommer la référence", "Nom", r.nom); if (nom) { r.nom = nom; save(); render(); } break; }
+    case "refDelete": { const r = byId(S.references, S.refSel) || S.references[0]; if (!await confirmer("Supprimer cette référence ?", esc(r.nom), "Supprimer")) return;
+      S.references = S.references.filter(x => x.id !== r.id); S.refSel = S.references[0]?.id; save(); render(); break; }
     case "exportRef": download("referentiel-gren.json", JSON.stringify(R(), null, 1), "application/json"); break;
-    case "resetRef": if (await dialog({title:"Rétablir le référentiel par défaut ?", body:"Vos modifications du référentiel seront perdues.", buttons:[{label:"Annuler", cls:"ghost", value:0},{label:"Rétablir", cls:"danger", value:1}]}) !== 1) return;
-      S.ref = clone(REF_DEFAULT); save(); render(); break;
-    case "refAdd": { const T = REF_TABLES.find(x => x.k === t.dataset.k); const row = {}; T.cols.forEach(([f,,ty]) => row[f] = Array.isArray(ty) ? ty[0] : ty === "n" ? 0 : ""); if ("id" in row) row.id = uid().slice(0,5); R()[T.k].push(row); save(); render(); break; }
-    case "refDel": R()[t.dataset.k].splice(+t.dataset.i, 1); save(); render(); break;
+    case "resetRef": if (!await confirmer("Rétablir le référentiel ?", "Vos modifications du référentiel seront perdues.", "Rétablir")) return;
+      S.ref = clone(REF_DEFAULT); S.refSource = null; S.refVersion = null; save(); render(); syncServeur(); break;
+    case "refOfficiel": S.refSource = null; S.refVersion = null; save(); syncServeur(); break;
+    case "refAdd": { const T = REF_TABLES.find(x => x.k === t.dataset.k); const row = {}; T.cols.forEach(([f,, ty]) => row[f] = Array.isArray(ty) ? ty[0] : ty === "n" ? 0 : ""); if ("id" in row) row.id = uid().slice(0, 5); R()[T.k].push(row); S.refSource = "perso"; save(); render(); break; }
+    case "refDel": R()[t.dataset.k].splice(+t.dataset.i, 1); S.refSource = "perso"; save(); render(); break;
   }
 });
+document.addEventListener("keydown", ev => { if (ev.key === "Enter" && ev.target.matches && ev.target.matches("tr[data-selp]")) ev.target.click(); });
 document.addEventListener("change", ev => {
   const t = ev.target; const y = S.annee;
   if (t.dataset.e) { if (t.dataset.e === "pacage") t.value = t.value.replace(/\D/g, ""); S.exploitation[t.dataset.e] = t.value; save(); if (["sau","departement"].includes(t.dataset.e)) render(); return; }
@@ -1055,18 +1284,26 @@ document.addEventListener("change", ev => {
     const c = entry(t.closest("[data-pid]").dataset.pid, y); const f = t.dataset.c;
     const v = t.type === "checkbox" ? t.checked : t.value;
     if (f.includes(".")) { const [a, b] = f.split("."); c[a] = c[a] || {}; c[a][b] = v; } else c[f] = v;
-    save(); render(); return;
+    if (f === "culture" && v) suivre("calcul", v);
+    save(); const sy = scrollY; render(); scrollTo(0, sy); return;
   }
   if (t.dataset.pat) { const c = entry(S.sel, y); c.pature.animaux[+t.dataset.i][t.dataset.pat] = t.value; save(); render(); return; }
   if (t.dataset.i === "statut") { const it = camp(y).interventions.find(i => i.id === t.closest("tr").dataset.iid); it.statut = t.value; save(); render(); return; }
-  if (t.dataset.param) { const k = t.dataset.param; R().params[k] = k === "cipanLimite" ? t.value : num(t.value); save(); return; }
-  if (t.dataset.ref) { const row = R()[t.dataset.ref][+t.dataset.i]; row[t.dataset.f] = t.dataset.t === "n" ? (t.value.trim() === "" ? "" : num(t.value)) : t.value; save(); return; }
-  if (t.dataset.act === "import") readFile(t, txt => { try { const s = JSON.parse(txt); if (!s.version || !s.parcelles) throw 0; S = migrate(s); save(); render(); toast("Sauvegarde importée"); } catch(e){ toast("Fichier invalide", true); } });
-  if (t.dataset.act === "importRef") readFile(t, txt => { try { const r = JSON.parse(txt); if (!r.cultures) throw 0; S.ref = migrate({version:1, ref:r}).ref; save(); render(); toast("Référentiel importé"); } catch(e){ toast("Fichier invalide", true); } });
-  if (t.dataset.act === "ppfGroup") { S.ppfGroup = t.checked; save(); render(); }
+  if (t.dataset.param) { const k = t.dataset.param; R().params[k] = k === "cipanLimite" ? t.value : num(t.value); S.refSource = "perso"; save(); return; }
+  if (t.dataset.ref) { const row = R()[t.dataset.ref][+t.dataset.i]; row[t.dataset.f] = t.dataset.t === "n" ? (t.value.trim() === "" ? "" : num(t.value)) : t.value; S.refSource = "perso"; save(); return; }
+  if (t.id === "csvFile") { readFile(t, txt => $("#csvTxt").value = txt); return; }
+  const a = t.dataset.act;
+  if (a === "import") readFile(t, txt => { try { const s = JSON.parse(txt); if (!s.version || !s.parcelles) throw 0; S = migrate(s); save(); render(); toast("Sauvegarde importée."); } catch(e){ toast("Fichier invalide.", true); } });
+  if (a === "importRef") readFile(t, txt => { try { const r = JSON.parse(txt); if (!r.cultures) throw 0; S.ref = migrateRef(r); S.refSource = "perso"; save(); render(); toast("Référentiel importé."); } catch(e){ toast("Fichier invalide.", true); } });
+  if (a === "importResultats") { const nomF = (t.files[0] || {}).name || "fichier"; readFile(t, txt => {
+      try { const r = parseResultats(txt, nomF); if (!r.lignes.length) throw new Error("Aucune ligne exploitable");
+        S.references = S.references || []; const ref = {id:uid(), nom:r.nom, source:"fichier", date:new Date().toISOString(), annee:S.annee, lignes:r.lignes};
+        S.references.unshift(ref); S.refSel = ref.id; save(); render(); toast(`${r.lignes.length} ligne(s) importée(s).`);
+      } catch(e){ toast("Fichier non reconnu : " + (e.message || "format invalide"), true); } }); }
+  if (a === "refSel") { S.refSel = t.value; save(); render(); }
+  if (a === "ppfGroup") { S.ppfGroup = t.checked; save(); render(); }
 });
-$("#yPrev").onclick = () => { S.annee--; save(); render(); };
-$("#yNext").onclick = () => { S.annee++; save(); render(); };
+window.addEventListener("hashchange", () => { const h = location.hash.slice(1); if (TABS.some(x => x[0] === h) && h !== S.tab) aller(h); });
 
 /* =========================================================================
    IMPORT / EXPORT
@@ -1076,27 +1313,32 @@ function download(name, content, type){
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
 function readFile(input, cb){ const f = input.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => cb(r.result); r.readAsText(f); input.value = ""; }
+const csvLine = l => l.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";");
+const csvNum = v => typeof v === "number" ? String(Math.round(v * 10) / 10).replace(".", ",") : v;
 function exportPPFcsv(){
   const y = S.annee; const head = ["Identifiant","Ilot","Parcelle","Nom","Surface ha","Zone","Sol","Culture","Precedent","Rendement objectif","Unite","Besoin","RSH","Mh","Effet precedent","CIPAN","N org efficace","Arriere-effet","Paturage","Correction","Dose calculee","Plafond","Dose finale kg N/ha","Total kg N","Mineral prevu kg N/ha"];
   const lines = S.parcelles.map(p => { const r = calc(p, y);
     const base = [parcelCode(p), p.ilot, p.num, p.nom, num(p.surface), p.zone, solById(p.sol).nom];
-    if (!r) return base;
-    return [...base, r.cult.nom, r.prec?.nom || "", r.forfait ? "" : fmt(r.rdt.val,1), r.cult.unite, r.besoin, r.rsh, r.mh, r.precEff, r.cipanEff, r.nOrgEff, r.arriere, r.pat.nEff, r.corr, r.doseCalc, r.plafond, r.doseFinale, r.doseFinale * num(p.surface), r.minPrevu]
-      .map(v => typeof v === "number" ? String(Math.round(v * 10) / 10).replace(".", ",") : v); });
-  const csv = [head, ...lines].map(l => l.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\r\n");
-  download(`PPF_${S.exploitation.pacage || "exploitation"}_${y}.csv`, "﻿" + csv, "text/csv");
+    if (!r) return base.map(csvNum);
+    return [...base, r.cult.nom, r.prec?.nom || "", r.forfait ? "" : Math.round(r.rdt.val * 10) / 10, r.cult.unite, r.besoin, r.rsh, r.mh, r.precEff, r.cipanEff, r.nOrgEff, r.arriere, r.pat.nEff, r.corr, r.doseCalc, r.plafond, r.doseFinale, r.doseFinale * num(p.surface), r.minPrevu].map(csvNum); });
+  download(`PPF_${S.exploitation.pacage || "exploitation"}_${y}.csv`, "﻿" + [head, ...lines].map(csvLine).join("\r\n"), "text/csv");
+}
+function exportComparatifCsv(){
+  const y = S.annee; const ref = byId(S.references, S.refSel) || S.references[0]; const {rows} = comparaison(ref, y);
+  const head = ["Identifiant","Nom","Surface ha","Culture reference","Culture actuelle","Rendement reference","Rendement actuel","Dose reference kg N/ha","Dose actuelle kg N/ha","Ecart kg N/ha","Ecart %","Ecart total kg N"];
+  const lines = rows.map(({p, a, o, ecart, ecartPct}) => [a.code, parcelLabel(p), a.surface, o?.culture || "", a.culture, o?.rendement ?? "", a.rendement ?? "", o?.dose ?? "", a.dose ?? "", ecart ?? "", ecartPct ?? "", ecart != null ? ecart * a.surface : ""].map(csvNum));
+  download(`Comparatif_${S.exploitation.pacage || "exploitation"}_${y}.csv`, "﻿" + [head, ...lines].map(csvLine).join("\r\n"), "text/csv");
 }
 function matchRef(arr, v){ v = String(v || "").trim().toLowerCase(); if (!v) return ""; const m = arr.find(o => o.id.toLowerCase() === v) || arr.find(o => o.nom.toLowerCase() === v) || arr.find(o => o.nom.toLowerCase().includes(v) || v.includes(o.nom.toLowerCase())); return m ? m.id : ""; }
 async function csvDialog(){
-  const r = await dialog({title:"Importer des parcelles (CSV)", body:`<p class="faint">Collez le contenu d'un fichier CSV (export tableur ou Telepac retravaillé). En-têtes reconnus : ilot ; parcelle ; nom ; surface ; sol ; zone ; culture ; precedent.</p>
-    <textarea id="csvTxt" rows="8" placeholder="ilot;parcelle;nom;surface;sol;zone;culture&#10;1;1;Champ du haut;4,2;Limon sain profond;standard;Blé tendre d'hiver"></textarea>
-    <label class="btn ghost sm" style="margin-top:8px">Choisir un fichier<input type="file" accept=".csv,.txt" id="csvFile" hidden></label>`,
-    buttons:[{label:"Annuler", cls:"ghost", value:0},{label:"Importer", value:1}]});
+  const r = await dialog({title:"Importer des parcelles (CSV)", body:`<p class="gren-mention">Collez le contenu d'un fichier CSV (export tableur ou Telepac retravaillé). En-têtes reconnus : ilot ; parcelle ; nom ; surface ; sol ; zone ; culture ; precedent.</p>
+    <div class="fr-input-group"><label class="fr-label" for="csvTxt">Contenu CSV</label><textarea class="fr-input" id="csvTxt" rows="8" placeholder="ilot;parcelle;nom;surface;sol;zone;culture&#10;1;1;Champ du haut;4,2;Limon sain profond;standard;Blé tendre d'hiver"></textarea></div>
+    <label class="fr-btn fr-btn--secondary fr-btn--sm fr-btn--icon-left fr-icon-upload-line">Choisir un fichier<input type="file" accept=".csv,.txt" id="csvFile" hidden></label>`,
+    buttons:[{label:"Annuler", cls:"ghost", value:0}, {label:"Importer", value:1}]});
   const ta = $("#csvTxt");
   if (r !== 1 || !ta || !ta.value.trim()) return;
-  const n = importCSV(ta.value); save(); render(); toast(`${n} parcelle(s) importée(s)`);
+  const n = importCSV(ta.value); save(); render(); toast(`${n} parcelle(s) importée(s).`); suivre("import_parcelles");
 }
-document.addEventListener("change", ev => { if (ev.target.id === "csvFile") readFile(ev.target, txt => $("#csvTxt").value = txt); });
 function importCSV(txt){
   const rows = txt.trim().split(/\r?\n/); const sep = rows[0].split(";").length >= rows[0].split(",").length ? ";" : ",";
   const head = rows[0].split(sep).map(h => h.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/["']/g, ""));
@@ -1145,7 +1387,14 @@ function demoState(){
   return s;
 }
 
+
+/* =========================================================================
+   DÉMARRAGE
+   ========================================================================= */
+{ const h = location.hash.slice(1); if (TABS.some(x => x[0] === h)) S.tab = h; }
 render();
+suivre("visite");
+syncServeur();
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
 </script>
 </body>
