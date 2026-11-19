@@ -114,6 +114,9 @@ Application web (HTML/JS, sans serveur obligatoire) au **Système de Design de l
 
 ### Application
 
+- **Accueil à 3 entrées** : saisie guidée dans l'application · modèle Excel à télécharger, remplir (listes déroulantes) et importer · guide pour trouver ses informations (PACAGE, îlots, sol, reliquats…) avec lexique.
+- **Pédagogie** : étapes numérotées (1 à 5), encadré « À quoi sert cette page ? », aides sous chaque champ, phrase d'explication du résultat.
+- **Données** : uniquement dans le navigateur ; case « Garder mes informations sur cet appareil » (sinon effacées à la fermeture de l'onglet) et bouton « Effacer toutes mes informations ».
 - **Exploitation / parcelles** saisies une fois (PACAGE, sol, zonage…), import CSV.
 - **Calcul** : rendement (référence GREN, historique 5 ans hors extrêmes, saisie libre), RSH, CIPAN, pailles, irrigation, effluents (Keq selon la période), arrière-effet N-1, pâturage (convertisseur UGB). Formule en blocs visuels et détail du calcul.
 - **Groupes** de parcelles selon les 5 conditions ; **verrous** calendrier d'épandage et plafond 170 kg N/ha.
@@ -130,7 +133,9 @@ Accès réservé (liste d'autorisation), **double authentification TOTP obligato
 
 | Fichier | Rôle |
 |---|---|
-| `calculette-gren/index.html` | application |
+| `calculette-gren/index.html`, `app.js` | application |
+| `calculette-gren/lib/xlsx-mini.js` | lecture / écriture Excel (.xlsx) écrite pour le projet |
+| `calculette-gren/SECURITE.md` | **diagnostic de sécurité complet** |
 | `calculette-gren/admin/` | backoffice (`index.html`, `admin.js`, `admin.css`) |
 | `calculette-gren/config.js` | adresse du projet Supabase et clé publique (vide = sans serveur) |
 | `calculette-gren/referentiel-defaut.js` | référentiel par défaut (indicatif) partagé |

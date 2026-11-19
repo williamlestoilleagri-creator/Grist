@@ -1,7 +1,7 @@
 // Service worker : permet d'utiliser la calculette hors connexion (au champ).
 // Le backoffice (admin/) et les appels au serveur ne sont jamais mis en cache.
-const CACHE = "calculette-gren-v3";
-const FILES = ["./", "index.html", "config.js", "referentiel-defaut.js", "manifest.webmanifest",
+const CACHE = "calculette-gren-v4";
+const FILES = ["./", "index.html", "app.js", "config.js", "referentiel-defaut.js", "lib/xlsx-mini.js", "manifest.webmanifest",
   "dsfr/dsfr.min.css", "dsfr/icons.css", "dsfr/dsfr.module.min.js", "dsfr/dsfr.nomodule.min.js",
   "dsfr/fonts/Marianne-Regular.woff2", "dsfr/fonts/Marianne-Bold.woff2", "dsfr/fonts/Marianne-Medium.woff2", "dsfr/fonts/Marianne-Light.woff2",
   "dsfr/favicon/favicon.svg", "dsfr/favicon/apple-touch-icon.png",
