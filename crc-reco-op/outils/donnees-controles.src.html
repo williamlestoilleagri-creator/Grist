@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-scheme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Données des contrôles</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/dsfr.min.css">
+<style>
+  :root{ --bf:#000091; --bf-2:#6A6AF4; --bf-soft:#E3E3FD; --bf-alt:#F5F5FE; --rouge:#E1000F; --erreur:#CE0500; --succes:#18753C;
+    --info:#0063CB; --alerte:#B34000; --gris:#3A3A3A; --gris-2:#666666; --gris-3:#929292; --fond:#F6F6F6; --trait:#DDDDDD; }
+  body{background:var(--fond);color:#161616}
+  .entete{background:#fff;box-shadow:0 2px 6px rgba(0,0,18,.16);position:relative;z-index:2}
+  .entete__in{max-width:1240px;margin:0 auto;padding:.75rem 1.25rem;display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap}
+  .entete .fr-logo{font-size:.95rem}
+  .entete__service{flex:1 1 240px;border-left:1px solid var(--trait);padding-left:1.25rem}
+  .entete__titre{font-weight:700;font-size:1.25rem;line-height:1.6rem;margin:0}
+  .entete__tag{font-size:.875rem;margin:0;color:var(--gris-2)}
+  .entete__op{height:64px;width:auto;margin-left:auto}
+  @media (max-width:640px){.entete__service{border-left:0;padding-left:0;order:3;flex-basis:100%}.entete__op{height:48px}}
+
+  /* bandeau d'ouverture */
+  .ouverture{background:var(--bf);color:#fff;position:relative;overflow:hidden}
+  .ouverture::after{content:"";position:absolute;right:-120px;top:-140px;width:460px;height:460px;border-radius:50%;background:rgba(255,255,255,.06)}
+  .ouverture::before{content:"";position:absolute;right:120px;bottom:-200px;width:340px;height:340px;border-radius:50%;background:rgba(106,106,244,.35)}
+  .ouverture__in{max-width:1240px;margin:0 auto;padding:2.5rem 1.25rem 3rem;position:relative;z-index:1}
+  .surtitre{display:inline-flex;align-items:center;gap:.5rem;font-size:.8rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin:0 0 .75rem;color:#CACAFB}
+  .surtitre i{width:28px;height:4px;background:linear-gradient(90deg,#fff 50%,var(--rouge) 50%)}
+  .ouverture h1{color:#fff;font-size:2.5rem;line-height:3rem;margin:0 0 .75rem;max-width:760px}
+  .ouverture p.chapo{font-size:1.125rem;line-height:1.75rem;max-width:720px;margin:0;color:#ECECFE}
+  .maj{margin-top:1.25rem !important;font-size:.8rem !important;color:#CACAFB !important}
+
+  .wrap{max-width:1240px;margin:0 auto;padding:0 1.25rem 3rem}
+  .chiffres{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem;margin-top:-1.75rem;position:relative;z-index:1}
+  @media (max-width:860px){.chiffres{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .chiffre{background:#fff;border-bottom:4px solid var(--bf);padding:1.25rem 1.25rem 1rem;box-shadow:0 6px 18px -10px rgba(0,0,18,.35)}
+  .chiffre.rouge{border-color:var(--rouge)}
+  .chiffre__ico{font-size:1.5rem;line-height:1}
+  .chiffre b{display:block;font-size:2.25rem;line-height:2.75rem;color:var(--bf);margin-top:.35rem;font-variant-numeric:tabular-nums}
+  .chiffre.rouge b{color:var(--erreur)}
+  .chiffre span{font-size:.875rem;color:var(--gris-2)}
+  .chiffre small{display:block;font-size:.75rem;color:var(--gris-3);margin-top:.25rem}
+
+  h2.titre-section{font-size:1.5rem;line-height:2rem;margin:3rem 0 .25rem;display:flex;align-items:center;gap:.75rem}
+  h2.titre-section::before{content:"";width:6px;height:1.75rem;background:var(--bf)}
+  .sous{color:var(--gris-2);margin:0 0 1.25rem;font-size:.95rem}
+  .carte{background:#fff;border:1px solid var(--trait);padding:1.5rem}
+  .carte h3{font-size:1.05rem;line-height:1.5rem;margin:0 0 .25rem}
+  .carte .note{font-size:.8rem;color:var(--gris-2);margin:0 0 1rem}
+  .grille-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}
+  @media (max-width:980px){.grille-3{grid-template-columns:1fr}}
+
+  /* schéma des données */
+  .schema{background:#fff;border:1px solid var(--trait);padding:1rem}
+  .schema svg{width:100%;height:auto;display:block}
+  .schema .noeud{cursor:default}
+  .schema .noeud:hover rect{stroke-width:2.5}
+
+  /* graphiques */
+  .barres{display:flex;flex-direction:column;gap:.7rem}
+  .barre{display:grid;grid-template-columns:110px minmax(0,1fr) 36px;align-items:center;gap:.6rem;font-size:.875rem}
+  .barre__lib{color:var(--gris);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .barre__piste{height:20px;position:relative}
+  .barres--larges .barre{grid-template-columns:170px minmax(0,1fr) 30px}
+  .barre__val{display:block;height:20px;background:var(--bf);border-radius:0 4px 4px 0;min-width:3px;transition:width .6s ease}
+  .barre:hover .barre__val{background:var(--bf-2)}
+  .barre__num{font-weight:700;font-variant-numeric:tabular-nums;text-align:right}
+  .segment{display:flex;height:22px;gap:2px;margin:.25rem 0 1rem}
+  .segment span{height:100%}
+  .segment span:first-child{border-radius:4px 0 0 4px}.segment span:last-child{border-radius:0 4px 4px 0}
+  .legende{list-style:none;margin:0;padding:0;display:grid;gap:.45rem;font-size:.875rem}
+  .legende li{display:flex;align-items:center;gap:.5rem;padding:0}
+  .legende i{width:12px;height:12px;border-radius:2px;flex:none}
+  .legende b{margin-left:auto;font-variant-numeric:tabular-nums}
+  .jauge{display:grid;place-items:center;margin:.5rem 0}
+  .vide{color:var(--gris-3);font-size:.875rem;font-style:italic}
+
+  /* tables */
+  .tables{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:1rem}
+  .table-carte{background:#fff;border:1px solid var(--trait);padding:1.1rem 1.25rem;display:flex;flex-direction:column;gap:.35rem;position:relative}
+  .table-carte::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--bf-soft)}
+  .table-carte:hover::before{background:var(--bf)}
+  .table-carte__tete{display:flex;align-items:center;gap:.6rem}
+  .table-carte__emoji{font-size:1.4rem;width:2.25rem;height:2.25rem;display:grid;place-items:center;background:var(--bf-alt);border-radius:50%}
+  .table-carte__nom{font-weight:700;margin:0}
+  .table-carte__nb{margin-left:auto;font-weight:700;color:var(--bf);font-variant-numeric:tabular-nums}
+  .table-carte p{margin:0;font-size:.85rem;color:var(--gris)}
+  .table-carte .xl{font-size:.75rem;color:var(--gris-2)}
+
+  .etapes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;counter-reset:etape}
+  @media (max-width:860px){.etapes{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .etape{padding:1.25rem 1.25rem 1.25rem 0;position:relative}
+  .etape::before{counter-increment:etape;content:counter(etape);display:grid;place-items:center;width:2.25rem;height:2.25rem;border-radius:50%;background:var(--bf);color:#fff;font-weight:700;margin-bottom:.75rem}
+  .etape::after{content:"";position:absolute;top:2.35rem;left:2.75rem;right:.5rem;height:2px;background:var(--bf-soft)}
+  .etape:last-child::after{display:none}
+  .etape h3{font-size:1rem;margin:0 0 .25rem}.etape p{font-size:.85rem;color:var(--gris);margin:0}
+
+  .tip{position:fixed;pointer-events:none;background:#161616;color:#fff;font-size:.8rem;padding:.35rem .6rem;border-radius:4px;z-index:20;display:none;max-width:260px}
+  .pied{border-top:2px solid var(--bf);background:#fff;margin-top:3rem}
+  .pied__in{max-width:1240px;margin:0 auto;padding:1rem 1.25rem;font-size:.8rem;color:var(--gris-2);display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+  .demo{background:#FFE9E6;color:#B34000;text-align:center;font-size:.8rem;padding:.35rem}
+</style>
+</head>
+<body>
+<div class="demo" id="demo" hidden>Données d'exemple : la page n'est pas reliée à un document Grist.</div>
+<header class="entete" role="banner">
+  <div class="entete__in">
+    <p class="fr-logo fr-mb-0">République<br>Française</p>
+    <div class="entete__service"><p class="entete__titre">Contrôle de reconnaissance des OP</p><p class="entete__tag">FranceAgriMer · Service territorial Bretagne</p></div>
+    <img class="entete__op" src="@@FAM_LOGO@@" alt="FranceAgriMer">
+  </div>
+</header>
+
+<section class="ouverture">
+  <div class="ouverture__in">
+    <p class="surtitre"><i></i>Rubrique</p>
+    <h1>Données des contrôles</h1>
+    <p class="chapo">Toutes les informations recueillies lors des contrôles de reconnaissance : la fiche de chaque organisation de producteurs, les réponses critère par critère et les tableaux annexes. Une seule base, alimentée par la saisie dans Grist ou par l'import des grilles Excel.</p>
+    <p class="maj" id="maj">Chargement des données…</p>
+  </div>
+</section>
+
+<main class="wrap" id="contenu">
+  <div class="chiffres" id="chiffres"></div>
+
+  <h2 class="titre-section">Comment les données s'articulent</h2>
+  <p class="sous">Chaque contrôle est le point de départ : toutes les autres tables s'y rattachent. Survolez une table pour voir son rôle.</p>
+  <div class="schema" id="schema"></div>
+
+  <h2 class="titre-section">Vue d'ensemble</h2>
+  <p class="sous">Calculée en direct à partir des tables de la rubrique.</p>
+  <div class="grille-3">
+    <div class="carte"><h3>Contrôles par filière</h3><p class="note">Nombre de contrôles enregistrés</p><div class="barres" id="gFilieres"></div></div>
+    <div class="carte"><h3>Avancement des contrôles</h3><p class="note">Répartition par statut</p><div id="gStatuts"></div></div>
+    <div class="carte"><h3>Thèmes les plus souvent en anomalie</h3><p class="note">Anomalies relevées, tous contrôles confondus</p><div class="barres barres--larges" id="gThemes"></div></div>
+  </div>
+
+  <h2 class="titre-section">Le cycle d'un contrôle</h2>
+  <p class="sous">Deux façons d'alimenter la base, un seul résultat.</p>
+  <div class="carte"><div class="etapes">
+    <div class="etape"><h3>Préparer</h3><p>Choisir l'OP et la filière : la grille ne retient que les critères de la filière.</p></div>
+    <div class="etape"><h3>Contrôler</h3><p>Saisir dans Grist, ou remplir la grille Excel et l'importer.</p></div>
+    <div class="etape"><h3>Consolider</h3><p>Réponses, anomalies et tableaux annexes rejoignent les mêmes tables.</p></div>
+    <div class="etape"><h3>Restituer</h3><p>Rapport PDF ou Word au format de l'État, avec schéma fonctionnel.</p></div>
+  </div></div>
+
+  <h2 class="titre-section">Les tables de la rubrique</h2>
+  <p class="sous">Chaque table reprend une partie du classeur Excel de contrôle.</p>
+  <div class="tables" id="tables"></div>
+</main>
+
+<footer class="pied"><div class="pied__in"><span>FranceAgriMer – Service territorial Bretagne · Outil interne de suivi des contrôles</span><span id="pied-maj"></span></div></footer>
+<div class="tip" id="tip" role="tooltip"></div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const fmt = n => Number(n || 0).toLocaleString("fr-FR");
+const TABLES = [
+  { id:"Controles", emoji:"📋", nom:"Contrôles", role:"Un contrôle par ligne : OP, filière, dates, statut, fichier importé.", xl:"page de garde · Fiche signalétique" },
+  { id:"OP", emoji:"🏢", nom:"OP", role:"Fiche signalétique de chaque organisation de producteurs, réutilisée d'un contrôle à l'autre.", xl:"Fiche signalétique" },
+  { id:"Filiales", emoji:"🏭", nom:"Filiales", role:"Filiales et participations de l'OP.", xl:"Fiche signalétique" },
+  { id:"Intervenants", emoji:"👥", nom:"Intervenants", role:"Personnes rencontrées et contrôleurs.", xl:"page de garde" },
+  { id:"Reponses", emoji:"✅", nom:"Réponses", role:"Une ligne par critère et par contrôle : résultat, description, observation.", xl:"onglets 1 à 13" },
+  { id:"Conventions", emoji:"🤝", nom:"Conventions", role:"Conventions d'externalisation, une par prestataire.", xl:"9.1 · 10.1 · 11.1 · 12.1" },
+  { id:"Producteurs_controles", emoji:"🚜", nom:"Producteurs contrôlés", role:"Contrôles en exploitation, un par producteur.", xl:"13. Producteur 1, 2, 3" },
+  { id:"Capital_social", emoji:"📊", nom:"Capital social", role:"Parts sociales et voix par adhérent, contrôle des 75 %.", xl:"4.1-K social et nb adh" },
+  { id:"Sondages", emoji:"🔎", nom:"Sondages", role:"Contrôles par sondage des bulletins d'adhésion et des mandats.", xl:"CTRL Bulletin adhésion · CTRL MANDATS" },
+  { id:"Rendements", emoji:"🌾", nom:"Rendements", role:"Rendements de l'OP comparés aux références AGRESTE.", xl:"7-Règles d'apport et dérogation" },
+  { id:"Stades_mise_en_marche", emoji:"🛒", nom:"Stades de mise en marché", role:"Part du chiffre d'affaires par stade de mise en marché.", xl:"12-Mise sur le marché" },
+];
+const STATUTS = [["En préparation", "#929292"], ["En cours", "#0063CB"], ["À valider", "#B34000"], ["Validé", "#18753C"]];
+
+function columnar(t){ const k = Object.keys(t), n = (t.id || []).length, o = []; for (let i = 0; i < n; i++){ const r = {}; for (const c of k) r[c] = t[c][i]; o.push(r); } return o; }
+async function charger(){
+  if (!window.grist || !grist.docApi) return null;
+  const noms = [...TABLES.map(t => t.id), "Filieres", "Referentiel"];
+  const res = await Promise.all(noms.map(n => grist.docApi.fetchTable(n).then(columnar).catch(() => [])));
+  return Object.fromEntries(noms.map((n, i) => [n, res[i]]));
+}
+function exemple(){
+  const F = ["F&L", "Veau", "Horticulture", "Lait", "Lapin"].map((Nom, i) => ({ id:i + 1, Nom }));
+  const C = [[1, "Validé"], [5, "À valider"], [5, "En cours"], [4, "Validé"], [4, "À valider"], [1, "En cours"]].map(([f, s], i) => ({ id:i + 1, Filiere:f, Statut:s, OP:i + 1 }));
+  const R = []; const th = [["3", "Statuts et règlement intérieur"], ["4", "Fonctionnement démocratique"], ["7", "Respect de l'apport total"], ["8", "Seuil minimal de VPC"], ["13", "Contrôle en exploitation"]];
+  const Ref = th.map(([o, t], i) => ({ id:i + 1, Onglet:o, Titre_onglet:t }));
+  [5, 4, 3, 2, 1].forEach((n, i) => { for (let k = 0; k < n; k++) R.push({ Point:i + 1, Resultat:"Non conforme", Controle:1 }); });
+  for (let k = 0; k < 600; k++) R.push({ Point:1, Resultat:"Oui", Controle:1 });
+  const vide = n => Array.from({ length:n }, (_, i) => ({ id:i + 1 }));
+  return { Controles:C, OP:vide(5), Filiales:vide(2), Intervenants:vide(16), Reponses:R, Conventions:vide(8), Producteurs_controles:vide(15), Capital_social:vide(6), Sondages:vide(30), Rendements:vide(7), Stades_mise_en_marche:vide(8), Filieres:F, Referentiel:Ref };
+}
+const anomalie = r => r.Resultat === "Non conforme" || (r.Resultat === "Non" && !!r.Observation);
+
+function tooltip(el, txt){ const t = $("tip");
+  el.addEventListener("mousemove", e => { t.textContent = txt; t.style.display = "block"; t.style.left = Math.min(e.clientX + 14, innerWidth - 270) + "px"; t.style.top = (e.clientY + 14) + "px"; });
+  el.addEventListener("mouseleave", () => t.style.display = "none"); }
+
+function chiffres(D){
+  const ctrls = D.Controles, reps = D.Reponses;
+  const remplies = reps.filter(r => r.Resultat || r.Reponse_texte || r.Description).length, ano = reps.filter(anomalie).length;
+  const filieres = new Set(ctrls.map(c => c.Filiere).filter(Boolean)).size;
+  const items = [["📋", fmt(ctrls.length), "contrôles enregistrés", `${filieres} filière${filieres > 1 ? "s" : ""} couverte${filieres > 1 ? "s" : ""}`],
+    ["🏢", fmt(D.OP.length), "organisations de producteurs", `${fmt(D.Filiales.length)} filiale${D.Filiales.length > 1 ? "s" : ""} déclarée${D.Filiales.length > 1 ? "s" : ""}`],
+    ["✅", fmt(remplies), "réponses renseignées", `sur ${fmt(reps.length)} critères de grille`],
+    ["⚠️", fmt(ano), "anomalies relevées", ctrls.length ? `soit ${(ano / ctrls.length).toLocaleString("fr-FR", { maximumFractionDigits:1 })} par contrôle` : "", "rouge"]];
+  $("chiffres").innerHTML = items.map(([i, v, l, s, c]) => `<div class="chiffre ${c || ""}"><span class="chiffre__ico" aria-hidden="true">${i}</span><b>${v}</b><span>${l}</span><small>${esc(s)}</small></div>`).join("");
+}
+
+function schema(D){
+  const n = id => (D[id] || []).length;
+  const W = 1180, H = 500, cx = W / 2, cy = 245, L = 205, R = W - 205, RG = [130, 245, 360];
+  const sat = [
+    ["OP", L, RG[0], "Fiche signalétique de l'OP"], ["Intervenants", L, RG[1], "Personnes rencontrées et contrôleurs"], ["Reponses", L, RG[2], "Les réponses aux critères"],
+    ["Conventions", R, RG[0], "Conventions d'externalisation"], ["Producteurs_controles", R, RG[1], "Contrôles en exploitation"], ["Capital_social", R, RG[2], "Répartition du capital social"],
+    ["Stades_mise_en_marche", cx, 48, "Mise en marché par stade"], ["Rendements", cx - 160, 450, "Rendements AGRESTE"], ["Sondages", cx + 160, 450, "Sondages bulletins et mandats"] ];
+  const info = id => TABLES.find(t => t.id === id);
+  const pos = t => [t[1], t[2]];
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Schéma des tables : chaque table est reliée à la table Contrôles">`;
+  s += `<defs><pattern id="pt" width="18" height="18" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r="1.5" fill="#E3E3FD"/></pattern></defs><rect width="${W}" height="${H}" fill="url(#pt)"/>`;
+  for (const t of sat){ const [x, y] = pos(t); s += `<path d="M${cx},${cy} C${(cx + x) / 2},${cy} ${(cx + x) / 2},${y} ${x},${y}" fill="none" stroke="#CACAFB" stroke-width="2"/>`; }
+  s += `<path d="M${L},${RG[0] - 30} L${L},58" stroke="#CACAFB" stroke-width="2" stroke-dasharray="4 4"/>` + noeud(L, 40, "Filiales", "🏭", n("Filiales"), "Filiales de l'OP (rattachées à l'OP)", 190);
+  s += `<path d="M${L},${RG[2] + 30} L${L},432" stroke="#CACAFB" stroke-width="2" stroke-dasharray="4 4"/>` + noeud(L, 460, "Référentiel", "📚", n("Referentiel"), "La grille de critères : chaque réponse renvoie à un critère", 190, true);
+  for (const t of sat){ const [x, y] = pos(t), i = info(t[0]); s += noeud(x, y, i.nom, i.emoji, n(t[0]), t[3]); }
+  s += `<g class="noeud"><circle cx="${cx}" cy="${cy}" r="86" fill="#000091"/><circle cx="${cx}" cy="${cy}" r="98" fill="none" stroke="#000091" stroke-opacity=".18" stroke-width="10"/>
+    <text x="${cx}" y="${cy - 22}" text-anchor="middle" font-size="28">📋</text><text x="${cx}" y="${cy + 12}" text-anchor="middle" font-size="20" font-weight="700" fill="#fff">Contrôles</text>
+    <text x="${cx}" y="${cy + 38}" text-anchor="middle" font-size="15" fill="#CACAFB">${fmt(n("Controles"))} enregistré${n("Controles") > 1 ? "s" : ""}</text></g></svg>`;
+  $("schema").innerHTML = s;
+  $("schema").querySelectorAll("[data-tip]").forEach(g => tooltip(g, g.dataset.tip));
+  function noeud(x, y, nom, emoji, nb, tip, w0 = 200, ref = false){
+    const w = Math.max(w0, 54 + nom.length * 9.2 + 22 + String(fmt(nb)).length * 9.5 + 16);
+    return `<g class="noeud" data-tip="${esc(tip)} · ${fmt(nb)} ligne${nb > 1 ? "s" : ""}"><rect x="${x - w / 2}" y="${y - 30}" width="${w}" height="60" rx="30" fill="#fff" stroke="${ref ? "#929292" : "#000091"}" stroke-width="1.5" ${ref ? 'stroke-dasharray="5 4"' : ""}/>
+      <text x="${x - w / 2 + 22}" y="${y + 7}" font-size="20">${emoji}</text><text x="${x - w / 2 + 54}" y="${y + 6}" font-size="15" font-weight="700" fill="#161616">${esc(nom)}</text>
+      <text x="${x + w / 2 - 20}" y="${y + 6}" text-anchor="end" font-size="15" font-weight="700" fill="#000091">${fmt(nb)}</text></g>`;
+  }
+}
+
+function barres(el, data, vide){
+  if (!data.length){ el.innerHTML = `<p class="vide">${vide}</p>`; return; }
+  const max = Math.max(...data.map(d => d[1]), 1);
+  el.innerHTML = data.map(([l, v, t]) => `<div class="barre" data-tip="${esc(t || l + " : " + v)}"><span class="barre__lib" title="${esc(l)}">${esc(l)}</span><span class="barre__piste"><span class="barre__val" style="width:0" data-w="${(v / max) * 100}"></span></span><span class="barre__num">${fmt(v)}</span></div>`).join("");
+  requestAnimationFrame(() => el.querySelectorAll(".barre__val").forEach(b => b.style.width = b.dataset.w + "%"));
+  el.querySelectorAll("[data-tip]").forEach(b => tooltip(b, b.dataset.tip));
+}
+function graphiques(D){
+  const fil = Object.fromEntries((D.Filieres || []).map(f => [f.id, f.Nom]));
+  const parF = {}; for (const c of D.Controles){ const k = fil[c.Filiere] || "Non renseignée"; parF[k] = (parF[k] || 0) + 1; }
+  barres($("gFilieres"), Object.entries(parF).sort((a, b) => b[1] - a[1]).map(([k, v]) => [k, v, `${k} : ${v} contrôle${v > 1 ? "s" : ""}`]), "Aucun contrôle pour l'instant.");
+  const tot = D.Controles.length, parS = STATUTS.map(([s, c]) => [s, c, D.Controles.filter(x => x.Statut === s).length]);
+  const autres = tot - parS.reduce((a, x) => a + x[2], 0); if (autres > 0) parS.push(["Sans statut", "#CECECE", autres]);
+  $("gStatuts").innerHTML = tot ? `<div class="segment" role="img" aria-label="Répartition des contrôles par statut">${parS.filter(x => x[2]).map(([s, c, v]) => `<span style="width:${(v / tot) * 100}%;background:${c}" data-tip="${esc(s)} : ${v} contrôle${v > 1 ? "s" : ""}"></span>`).join("")}</div>
+    <ul class="legende">${parS.map(([s, c, v]) => `<li><i style="background:${c}"></i>${esc(s)}<b>${v}</b></li>`).join("")}</ul>` : `<p class="vide">Aucun contrôle pour l'instant.</p>`;
+  $("gStatuts").querySelectorAll("[data-tip]").forEach(b => tooltip(b, b.dataset.tip));
+  const ref = Object.fromEntries((D.Referentiel || []).map(p => [p.id, p])), parT = {};
+  for (const r of D.Reponses.filter(anomalie)){ const p = ref[r.Point]; const k = p ? `${p.Onglet} · ${p.Titre_onglet || ""}` : "Autre"; parT[k] = (parT[k] || 0) + 1; }
+  barres($("gThemes"), Object.entries(parT).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, v]) => [k, v, `${k} : ${v} anomalie${v > 1 ? "s" : ""}`]), "Aucune anomalie relevée.");
+}
+function tables(D){
+  $("tables").innerHTML = TABLES.map(t => { const n = (D[t.id] || []).length;
+    return `<article class="table-carte"><div class="table-carte__tete"><span class="table-carte__emoji" aria-hidden="true">${t.emoji}</span><h3 class="table-carte__nom fr-text--md">${esc(t.nom)}</h3><span class="table-carte__nb" title="Nombre de lignes">${fmt(n)}</span></div>
+      <p>${esc(t.role)}</p><p class="xl">Classeur Excel : ${esc(t.xl)}</p></article>`; }).join("");
+}
+async function rendre(){
+  let D = null; try { D = await charger(); } catch(e){ D = null; }
+  const demo = !D || !D.Controles; if (demo){ D = exemple(); $("demo").hidden = false; }
+  chiffres(D); schema(D); graphiques(D); tables(D);
+  const h = new Date().toLocaleString("fr-FR", { dateStyle:"long", timeStyle:"short" });
+  $("maj").textContent = demo ? "Données d'exemple" : `Données à jour le ${h}`; $("pied-maj").textContent = demo ? "" : "Mise à jour : " + h;
+}
+try { grist.ready({ requiredAccess:"full" }); grist.onRecords(() => rendre()); } catch(e){}
+rendre();
+</script>
+</body>
+</html>
