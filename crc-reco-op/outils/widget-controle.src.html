@@ -89,6 +89,14 @@
   .opt .th{height:96px;display:grid;place-items:center;overflow:hidden;margin-bottom:.4rem}.opt .th svg{width:100%;height:100%}
   iframe.apercu{width:100%;height:760px;border:1px solid var(--border-default-grey,#DDD);background:#fff}
   .toast{position:fixed;right:1rem;bottom:1rem;z-index:10;max-width:420px}
+  .btn-suppr{color:#CE0500 !important}
+  .modale{border:0;padding:0;width:min(560px,calc(100% - 2rem));box-shadow:0 6px 18px rgba(0,0,18,.3)}
+  .modale::backdrop{background:rgba(22,22,22,.64)}
+  .modale__corps{padding:2rem 2rem 1rem;border-top:4px solid #CE0500}
+  .modale__etape{font-size:.75rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#CE0500;margin:0 0 .5rem}
+  .modale__pied{display:flex;justify-content:flex-end;gap:1rem;padding:1rem 2rem 2rem}
+  .btn-danger{background:#CE0500 !important;color:#fff !important}.btn-danger:hover:not(:disabled){background:#A90000 !important}.btn-danger:disabled{background:#E5E5E5 !important;color:#929292 !important}
+  .modale ul{margin:.5rem 0 1rem;font-size:.9rem}
   .liste-mini{font-size:.8rem;max-height:220px;overflow:auto;margin:0;padding-left:1.25rem}
 </style>
 </head>
@@ -124,7 +132,7 @@
     <div class="panel">
       <h2>Contrôles enregistrés</h2>
       <div class="fr-table fr-table--no-caption fr-mb-0"><table><caption>Contrôles</caption>
-        <thead><tr><th scope="col">Contrôle</th><th scope="col">Filière</th><th scope="col">Statut</th><th scope="col">Origine</th><th scope="col">Avancement</th><th scope="col">Anomalies</th></tr></thead>
+        <thead><tr><th scope="col">Contrôle</th><th scope="col">Filière</th><th scope="col">Statut</th><th scope="col">Origine</th><th scope="col">Avancement</th><th scope="col">Anomalies</th><th scope="col"><span class="fr-sr-only">Actions</span></th></tr></thead>
         <tbody id="listeCtrl"></tbody></table></div>
     </div>
     <div class="panel">
@@ -203,6 +211,14 @@
     </div>
   </section>
 </main>
+<dialog class="modale" id="modaleSuppr" aria-labelledby="mTitre">
+  <div class="modale__corps">
+    <p class="modale__etape" id="mEtape">Étape 1 sur 2</p>
+    <h2 class="fr-h5" id="mTitre"><span class="fr-icon-warning-line" aria-hidden="true"></span> Supprimer ce contrôle ?</h2>
+    <div id="mContenu"></div>
+  </div>
+  <div class="modale__pied"><button type="button" class="fr-btn fr-btn--secondary" id="mAnnuler">Annuler</button><button type="button" class="fr-btn btn-danger" id="mValider">Continuer</button></div>
+</dialog>
 <div class="toast" id="toast" aria-live="polite"></div>
 
 <script>
@@ -386,12 +402,13 @@ function renderControles(){
   $("listeCtrl").innerHTML = rows(T.CTRL).map(c => { const st = statsCtrl(c.id);
     return `<tr class="clic ${c.id === S.ctrlId ? "row-sel" : ""}" data-cid="${c.id}"><td><b>${esc(ctrlLabel(c))}</b><br><span class="fr-text--xs">${esc(c.N_demande || "")}</span></td><td>${esc(filNom(c.Filiere))}</td><td>${badgeStatut(c.Statut)}</td>
       <td>${c.Fichier_source && refList(c.Fichier_source).length ? '<span class="fr-tag fr-tag--sm">Import Excel</span>' : '<span class="fr-tag fr-tag--sm">Saisie Grist</span>'}</td>
-      <td>${Math.round(st.av * 100)} %<div class="barre"><i style="width:${Math.round(st.av * 100)}%"></i></div></td><td>${st.ano ? `<b style="color:#CE0500">${st.ano}</b>` : "0"}</td></tr>`; }).join("")
-    || '<tr><td colspan="6">Aucun contrôle pour l\'instant : créez-en un ci-dessous ou importez un fichier Excel.</td></tr>';
+      <td>${Math.round(st.av * 100)} %<div class="barre"><i style="width:${Math.round(st.av * 100)}%"></i></div></td><td>${st.ano ? `<b style="color:#CE0500">${st.ano}</b>` : "0"}</td><td><button type="button" class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-icon-delete-line btn-suppr" data-suppr="${c.id}" title="Supprimer ce contrôle" aria-label="Supprimer le contrôle ${esc(ctrlLabel(c))}">Supprimer</button></td></tr>`; }).join("")
+    || '<tr><td colspan="7">Aucun contrôle pour l\'instant : créez-en un ci-dessous ou importez un fichier Excel.</td></tr>';
   $("nOP").innerHTML = '<option value="">— Choisir —</option>' + rows(T.OP).map(o => `<option value="${o.id}">${esc(o.Raison_sociale || "OP n°" + o.id)}</option>`).join("");
   $("nFil").innerHTML = '<option value="">— Choisir —</option>' + rows(T.FIL).map(f => `<option value="${f.id}">${esc(f.Nom)}</option>`).join("");
 }
-$("listeCtrl").addEventListener("click", e => { const tr = e.target.closest("tr[data-cid]"); if (!tr) return; S.ctrlId = +tr.dataset.cid; S.groupe = null; setTab("saisie"); });
+$("listeCtrl").addEventListener("click", e => { const del = e.target.closest("[data-suppr]"); if (del){ e.stopPropagation(); ouvrirSuppression(+del.dataset.suppr); return; }
+  const tr = e.target.closest("tr[data-cid]"); if (!tr) return; S.ctrlId = +tr.dataset.cid; S.groupe = null; setTab("saisie"); });
 $("selCtrl").addEventListener("change", e => { S.ctrlId = +e.target.value; S.groupe = null; render(); });
 $("bCreer").addEventListener("click", async () => {
   const fid = +$("nFil").value; let opId = +$("nOP").value; const nouv = $("nOPnew").value.trim();
@@ -404,6 +421,44 @@ $("bCreer").addEventListener("click", async () => {
     S.ctrlId = cid; S.groupe = null; toast("success", `Contrôle créé : ${n} points de contrôle générés pour la filière ${esc(filNom(fid))}.`); setTab("saisie");
   } catch(e){ console.error(e); toast("error", "Création impossible : " + esc(e.message)); }
 });
+
+
+/* ---------------- Suppression d'un contrôle (double validation) */
+const LIEES = [[T.REP, "réponse aux critères|réponses aux critères"], [T.INT, "intervenant|intervenants"], [T.CONV, "convention|conventions"], [T.PROD, "producteur contrôlé|producteurs contrôlés"],
+  [T.CAP, "ligne de capital social|lignes de capital social"], [T.SOND, "sondage|sondages"], [T.REND, "rendement|rendements"], [T.STADES, "stade de mise en marché|stades de mise en marché"]];
+let SUPPR = null;
+function ouvrirSuppression(cid){
+  const c = byId(T.CTRL, cid); if (!c) return;
+  const liees = LIEES.map(([t, l]) => [t, l, rows(t).filter(r => r.Controle === cid).map(r => r.id)]);
+  SUPPR = { cid, etape:1, liees, label:ctrlLabel(c) };
+  $("mEtape").textContent = "Étape 1 sur 2"; $("mValider").textContent = "Continuer"; $("mValider").disabled = false;
+  $("mContenu").innerHTML = `<p>Vous allez supprimer le contrôle <b>${esc(SUPPR.label)}</b>${c.N_demande ? ` (demande ${esc(c.N_demande)})` : ""}.</p>
+    <p class="fr-mb-1w">Seront aussi supprimés :</p><ul>${liees.filter(x => x[2].length).map(([, l, ids]) => `<li>${ids.length} ${esc(l.split("|")[ids.length > 1 ? 1 : 0])}</li>`).join("") || "<li>aucune donnée rattachée</li>"}</ul>
+    <p class="fr-text--sm">La fiche de l'OP et ses filiales sont conservées : elles peuvent servir à d'autres contrôles.</p>`;
+  $("modaleSuppr").showModal();
+}
+$("mAnnuler").onclick = () => { $("modaleSuppr").close(); SUPPR = null; };
+$("modaleSuppr").addEventListener("cancel", () => { SUPPR = null; });
+$("mValider").onclick = async () => {
+  if (!SUPPR) return;
+  if (SUPPR.etape === 1){
+    SUPPR.etape = 2; $("mEtape").textContent = "Étape 2 sur 2 – confirmation définitive"; $("mValider").textContent = "Supprimer définitivement"; $("mValider").disabled = true;
+    $("mContenu").innerHTML = `<div class="fr-alert fr-alert--error fr-alert--sm fr-mb-2w"><p>Cette suppression est définitive depuis le widget. Elle reste récupérable par un administrateur via l'historique du document Grist.</p></div>
+      <div class="fr-input-group"><label class="fr-label" for="mSaisie">Pour confirmer, tapez <b>SUPPRIMER</b></label><input class="fr-input" id="mSaisie" autocomplete="off"></div>`;
+    $("mSaisie").addEventListener("input", e => { $("mValider").disabled = e.target.value.trim() !== "SUPPRIMER"; });
+    $("mSaisie").focus(); return;
+  }
+  if ($("mSaisie").value.trim() !== "SUPPRIMER") return;
+  $("mValider").disabled = true;
+  try {
+    const actions = SUPPR.liees.filter(x => x[2].length).map(([t, , ids]) => ["BulkRemoveRecord", t, ids]);
+    actions.push(["RemoveRecord", T.CTRL, SUPPR.cid]);
+    await act(actions);
+    const lab = SUPPR.label; $("modaleSuppr").close();
+    if (S.ctrlId === SUPPR.cid){ S.ctrlId = null; S.groupe = null; }
+    SUPPR = null; await reload(); render(); toast("success", `Contrôle « ${esc(lab)} » supprimé.`);
+  } catch(e){ console.error(e); toast("error", "Suppression impossible : " + esc(e.message), 0); $("mValider").disabled = false; }
+};
 
 /* ---------------- Saisie */
 function groupesCtrl(cid){
