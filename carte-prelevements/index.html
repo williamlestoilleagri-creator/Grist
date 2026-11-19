@@ -328,6 +328,8 @@
   // ---------- Paramètres (noms des colonnes du document) ----------
   const TABLE_PAR_DEFAUT = 'RDV_Prelevements';
   const TABLE_PARCELLES = 'DATA_Parcelles_DEF';   // parcelles de référence (clé, commune, latitude / longitude…)
+  // Tables de secours pour les coordonnées, dans l'ordre (lues si elles existent, sinon ignorées)
+  const SOURCES_COORDS = ['Parcelles_Reliquats', 'Parc_REF_coord', 'Centrodes'];
   const COL_PARCELLE = 'Cle_parcelle';   // Référence vers DATA_Parcelles_DEF
   const COL_LAT = 'latitude';
   const COL_LON = 'longitude';
@@ -356,6 +358,7 @@
   let tousRdvs = [];              // tous les rendez-vous de la table (pour la recherche)
   let parId = new Map();
   let indexParcelles = new Map(); // clé compacte -> [parcelles de DATA_Parcelles_DEF]
+  let indexCoords = new Map();    // clé compacte -> { pos, source } (tables de secours)
   const forces = new Set();       // résultats de recherche : toujours affichés, quels que soient les filtres
   let communes = new Map();       // nom -> { nom, rdvs: [] }
   let couleurStatut = new Map();
@@ -427,6 +430,54 @@
     return [a, b];
   }
   function coordsParcelle(p) { return p ? lireCoords(p.latitude, p.longitude) : null; }
+  // Lambert 93 (EPSG:2154) -> WGS84, même calcul que les formules TEMP_LAT / TEMP_LONG de la table Centrodes
+  function lambert93(a, b) {
+    const x = Math.min(a, b), y = Math.max(a, b);   // x = est (< 1,3 M), y = nord (> 6 M)
+    const n = 0.725607765053267, C = 11754255.426096, xs = 700000, ys = 12655612.049876, e = 0.08181919112;
+    const lon = 3 * Math.PI / 180 + Math.atan2(x - xs, ys - y) / n;
+    const L = -Math.log(Math.abs(Math.hypot(x - xs, y - ys) / C)) / n;
+    let phi = 2 * Math.atan(Math.exp(L)) - Math.PI / 2;
+    for (let i = 0; i < 10; i++) {
+      const sp = e * Math.sin(phi);
+      phi = 2 * Math.atan(Math.pow((1 + sp) / (1 - sp), e / 2) * Math.exp(L)) - Math.PI / 2;
+    }
+    return [phi * 180 / Math.PI, lon * 180 / Math.PI];
+  }
+  // Coordonnées d'une ligne quelconque : colonnes latitude/longitude (toutes graphies), en degrés ou en Lambert 93
+  const PAIRES_COORDS = [['latitude', 'longitude'], ['Latitude', 'Longitude'], ['LATITUDE', 'LONGITUDE'], ['lat', 'lon'],
+    ['TEMP_LAT', 'TEMP_LONG'], ['Y', 'X']];
+  function coordsLigne(l) {
+    for (const [cLat, cLon] of PAIRES_COORDS) {
+      if (!(cLat in l) || !(cLon in l)) continue;
+      const pos = lireCoords(l[cLat], l[cLon]);
+      if (pos) return pos;
+      const a = nombre(l[cLat]), b = nombre(l[cLon]);
+      if (isFinite(a) && isFinite(b) && Math.min(a, b) > 50000 && Math.max(a, b) > 6000000 && Math.max(a, b) < 7200000) {
+        const w = lambert93(a, b);
+        if (lireCoords(w[0], w[1])) return w;
+      }
+    }
+    return null;
+  }
+  // Clés possibles d'une ligne : CLE, CLE_CALCULEE, Cle2, Cle2_2, CLELAB, ou PACAGE + îlot + parcelle
+  function clesLigne(l) {
+    const k = [l.CLE, l.CLE_CALCULEE, l.Cle2, l.Cle2_2, l.CLELAB, l.Cle];
+    if (l.PACAGE && l.NUM_ILOT && l.NUM_PARCEL) k.push(propre(l.PACAGE) + '-' + propre(l.NUM_ILOT) + '-' + propre(l.NUM_PARCEL));
+    return [...new Set(k.map(cleCompacte).filter(function (c) { return c && c.split('-').length === 3; }))];
+  }
+  function indexerCoords() {
+    const idx = new Map();
+    for (const nom of SOURCES_COORDS) {
+      const t = tablesRef[nom];
+      if (!t) continue;
+      for (const l of t.values()) {
+        const pos = coordsLigne(l);
+        if (!pos) continue;
+        for (const c of clesLigne(l)) if (!idx.has(c)) idx.set(c, { pos: pos, source: nom });   // 1re source gagnante
+      }
+    }
+    return idx;
+  }
   // "022000005-3-5", "022000005|3|5", " 022000005 - 3 - 5 " -> "022000005-3-5"
   function normaliserCle(v) {
     return propre(v).toLowerCase().replace(/\s*[|\/_;]\s*|\s*-\s*/g, '-').replace(/\s+/g, '');
@@ -527,6 +578,11 @@
       try { tablesRef[t] = enLignes(await grist.docApi.fetchTable(t)); }
       catch (e) { erreurs.push(t); tablesRef[t] = tablesRef[t] || new Map(); }
     }));
+    // Sources de secours : facultatives, aucune alerte si elles n'existent pas
+    await Promise.all(SOURCES_COORDS.map(async function (t) {
+      try { tablesRef[t] = enLignes(await grist.docApi.fetchTable(t)); } catch (e) { delete tablesRef[t]; }
+    }));
+    indexCoords = indexerCoords();
     refsChargees = Date.now();
     if (erreurs.length) alerte('Impossible de lire : ' + erreurs.join(', ') + '. Vérifiez « Accès complet au document ».');
   }
@@ -598,9 +654,16 @@
       let pos = lireCoords(r[COL_LAT], r[COL_LON]), origine = 'rdv';
       if (!pos) {
         pos = coordsParcelle(parcelle) || memesCles.map(coordsParcelle).find(Boolean) || null;
-        origine = pos ? 'parcelle' : '';
+        origine = pos ? TABLE_PARCELLES : '';
       }
       const cle = affiche || propre(parcelle.Cle2_2) || propre(parcelle.CLE);
+      if (!pos) {   // dernier recours : Parcelles_Reliquats, Parc_REF_coord, Centrodes (Lambert 93)
+        const cles = [cle, affiche, typeof brut === 'string' ? brut : ''].concat(memesCles.flatMap(clesLigne), clesLigne(parcelle));
+        for (const c of cles.map(cleCompacte)) {
+          const t = c && indexCoords.get(c);
+          if (t) { pos = t.pos; origine = t.source; break; }
+        }
+      }
       const pacage = /^\d{9}$/.test(propre(r.PACAGETEXTE)) ? propre(r.PACAGETEXTE)
         : (propre(parcelle.PACAGE) || (cle.match(/^\d{9}/) || [''])[0]);
       const nomPreleveur = propre(preleveur.Nom_Prenom) ||
@@ -621,6 +684,7 @@
         statut: propre(r[COL_STATUT]),
         date: versDate(r[COL_DATE]),
         lat: pos ? pos[0] : NaN, lon: pos ? pos[1] : NaN, localise: !!pos, origineCoords: origine,
+        parcelleTrouvee: !!(parcelle && parcelle.id),
       });
     }
     rdvs = tousRdvs.filter(function (r) { return r.dansVue; });
@@ -777,7 +841,7 @@
       '<div><b>' + vis.length + '</b><span>parcelles</span></div>' +
       '<div><b>' + nbExpl + '</b><span>exploitations</span></div>' +
       '<div><b>' + communes.size + '</b><span>communes</span></div>' +
-      (nonLoc ? '<div class="cliquable" id="voir-non-loc" title="Sans latitude / longitude, ni dans le rendez-vous ni dans DATA_Parcelles_DEF. Cliquez pour les lister."><b style="color:var(--rouge-marianne)">' + nonLoc + '</b><span>non localisées</span></div>' : '');
+      (nonLoc ? '<div class="cliquable" id="voir-non-loc" title="Sans latitude / longitude, ni dans le rendez-vous ni dans les tables de parcelles. Cliquez pour les lister."><b style="color:var(--rouge-marianne)">' + nonLoc + '</b><span>non localisées</span></div>' : '');
     majResume(vis, nbExpl, nonLoc);
   }
   // Ligne affichée dans la poignée du panneau (téléphone)
@@ -881,7 +945,12 @@
       ligne('Culture 2026', propre(p.CULT_2026)) + ligne('Culture 2025', propre(p.CULT_2025)) +
       ligne('Raison de la sélection', propre(p.Raison_de_la_selection)) +
       ligne('Téléphone portable', propre(p.Telephone_portable)) + ligne('Téléphone fixe', propre(p.Telephone_Fixe)) +
-      ligne('Coordonnées GPS', coords + (r.origineCoords === 'parcelle' ? ' (reprises de ' + TABLE_PARCELLES + ', absentes du RDV)' : ''));
+      ligne('Coordonnées GPS', coords + (r.origineCoords && r.origineCoords !== 'rdv' ? ' (reprises de ' + r.origineCoords + ', absentes du RDV)' : '')) +
+      (r.localise ? '' : ligne('Pourquoi non localisée', (r.parcelleTrouvee
+        ? 'Parcelle trouvée dans ' + TABLE_PARCELLES + ' mais sans latitude / longitude'
+        : 'Clé absente de ' + TABLE_PARCELLES) +
+        ' ; aucune coordonnée non plus dans le RDV ni dans ' + SOURCES_COORDS.filter(function (t) { return tablesRef[t]; }).join(', ') +
+        '. À compléter dans ' + TABLE_PARCELLES + ' (colonnes latitude / longitude).'));
     let lignesRdv = '';
     for (const c of colonnes) {
       if (COLONNES_MASQUEES.has(c.colId)) continue;
