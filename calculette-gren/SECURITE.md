@@ -117,7 +117,7 @@ Le code de la Calculette n'y peut rien : c'est une question d'adresse web.
 
 ### M1 — Moyen — Comptes de l'espace administrateur vérifiés dans le navigateur
 
-**Constat.** Les comptes de l'espace administrateur de l'application sont listés dans `config.js`, un fichier public. Depuis le 19/11/2026, ils n'y figurent plus en clair : chaque mot de passe n'apparaît que sous forme d'**empreinte PBKDF2-SHA-256** (210 000 itérations, sel aléatoire propre à chaque compte). Le mot de passe de 12 caractères minimum (majuscule, minuscule, chiffre, caractère spécial) est imposé à la création.
+**Constat.** Les comptes de l'espace administrateur de l'application sont listés dans `comptes-admin.json`, un fichier public géré depuis l'application : créer, supprimer un compte ou changer un mot de passe produit une nouvelle version du fichier, à déposer sur GitHub par glisser-déposer, sans écrire de code. Les mots de passe n'y figurent jamais en clair : chaque mot de passe n'apparaît que sous forme d'**empreinte PBKDF2-SHA-256** (210 000 itérations, sel aléatoire propre à chaque compte). Le mot de passe de 12 caractères minimum (majuscule, minuscule, chiffre, caractère spécial) est imposé à la création.
 
 **Limites.**
 - La vérification se fait dans le navigateur : une personne compétente peut afficher cet espace sans mot de passe, en modifiant la page chez elle.
@@ -127,7 +127,8 @@ Le code de la Calculette n'y peut rien : c'est une question d'adresse web.
 
 **À faire** :
 - créer des comptes nominatifs ;
-- **supprimer le compte de départ `admin`** de `config.js` ;
+- **supprimer le compte de départ `admin`** (Administration → Comptes → Supprimer, puis déposer le fichier) ;
+- protéger le compte GitHub qui dépose ce fichier (double authentification) : quiconque peut publier dans le dépôt peut aussi modifier la liste des comptes ;
 - pour une vraie protection (comptes sur serveur, double authentification, journal des connexions), utiliser le backoffice sécurisé, rubrique « Administrateurs ».
 
 ### M2 — Moyen (à vérifier) — Adresse IP potentiellement falsifiable dans le backoffice

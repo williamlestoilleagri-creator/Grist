@@ -48,7 +48,8 @@ function migrate(s){
   s.sel = s.sel && /^[A-Za-z0-9_-]{1,40}$/.test(s.sel) ? s.sel : null;
   s.refSel = s.refSel && /^[A-Za-z0-9_-]{1,40}$/.test(s.refSel) ? s.refSel : null;
   s.tab = typeof s.tab === "string" ? s.tab : "accueil";
-  s.comptesPrepares = Array.isArray(s.comptesPrepares) ? s.comptesPrepares.filter(c => estObjet(c) && typeof c.identifiant === "string") : [];
+  s.comptesFichier = Array.isArray(s.comptesFichier) ? s.comptesFichier.filter(c => estObjet(c) && /^[a-z0-9._-]{3,40}$/i.test(String(c.identifiant || "")) && /^[0-9a-f]{32}$/.test(String(c.sel || "")) && /^[0-9a-f]{64}$/.test(String(c.empreinte || ""))) : null;
+  if (s.comptesFichier && !s.comptesFichier.length) s.comptesFichier = null; delete s.comptesPrepares;
   s.annee = Number.isInteger(s.annee) && s.annee > 2000 && s.annee < 2100 ? s.annee : harvestYear();
   return s;
 }
@@ -401,6 +402,7 @@ const TABS_BASE = [
 ];
 const TABS_ALIAS = {ppf:"exporter", comparer:"exporter", referentiel:"admin", guide:"aide"};
 let TABS = TABS_BASE;
+const VUES_CACHEES = {pourquoi:"Pourquoi calculer sa dose d'azote ?"};
 function campagneSwitch(){
   return `<div class="gren-campagne" role="group" aria-label="Campagne">
     ${btn("Campagne précédente", `data-act="yPrev" title="Campagne précédente"`, {kind:"tertiary-no-outline", icon:"arrow-left-s-line", sm:true}).replace(">Campagne précédente<", "><span class=\"fr-sr-only\">Campagne précédente</span><")}
@@ -448,14 +450,14 @@ function render(){
   _nid = 0;
   TABS = adminConnecte() ? [...TABS_BASE, ["admin","Administration"]] : TABS_BASE;
   if (TABS_ALIAS[S.tab]) S.tab = TABS_ALIAS[S.tab];
-  if (!TABS.some(t => t[0] === S.tab)) S.tab = "accueil";
+  if (!TABS.some(t => t[0] === S.tab) && !VUES_CACHEES[S.tab]) S.tab = "accueil";
   document.querySelectorAll("[data-marque]").forEach(el => el.innerHTML = (CFG.MARQUE || ["Préfète","de la région","Bretagne"]).map(esc).join("<br>"));
   $("#tabs").innerHTML = TABS.map(([k, l]) => `<li class="fr-nav__item"><a class="fr-nav__link" href="#${k}" data-tab="${k}" ${S.tab === k ? 'aria-current="page"' : ""}>${l}</a></li>`).join("");
   const v = $("#view");
   if (PUB.maintenance) { v.innerHTML = `<h1>Maintenance en cours</h1>${alerte("info", "", esc(PUB.maintenance_message || "Le service est momentanément indisponible."))}`; return; }
   v.innerHTML = (storageOK ? "" : alerte("warning", "Votre navigateur bloque l'enregistrement", "Vos informations ne pourront pas être gardées : téléchargez vos résultats avant de fermer la page (onglet Exporter et comparer).")) + (VIEWS[S.tab] || VIEWS.accueil)();
   if (VIEWS[S.tab + "_after"]) VIEWS[S.tab + "_after"]();
-  document.title = `${(TABS.find(t => t[0] === S.tab) || TABS[0])[1]} — Calculette GREN`;
+  document.title = `${VUES_CACHEES[S.tab] || (TABS.find(t => t[0] === S.tab) || TABS[0])[1]} — Calculette GREN`;
 }
 function globalBanners(){
   let h = "";
@@ -473,6 +475,7 @@ VIEWS.accueil = () => {
   const entree = (num_, titre, texte, boutons) => `<div class="fr-col-12 fr-col-lg-4"><div class="gren-entree"><p class="gren-entree__num" aria-hidden="true">${num_}</p><h2 class="fr-h5">${titre}</h2><p>${texte}</p><div class="gren-entree__btns">${boutons}</div></div></div>`;
   return `<h1>Calculer ma dose d'azote et préparer mon plan de fumure</h1>
   <p class="fr-text--lead">La Calculette GREN calcule, parcelle par parcelle, la quantité d'azote à apporter à vos cultures selon les règles du GREN Bretagne, puis prépare votre <strong>plan prévisionnel de fumure</strong> à télécharger.</p>
+  ${bandeauPourquoi()}
   ${n ? `<div class="fr-callout fr-mb-4w"><h2 class="fr-callout__title fr-h5">Reprendre où vous en étiez</h2>
       <p class="fr-callout__text fr-text--md">${esc(S.exploitation.raison || "Mon exploitation")} · ${n} parcelle${n > 1 ? "s" : ""} · ${calc_} dose${calc_ > 1 ? "s" : ""} calculée${calc_ > 1 ? "s" : ""} pour la récolte ${y}.</p>
       <ul class="fr-btns-group fr-btns-group--inline-sm fr-btns-group--icon-left"><li><a class="fr-btn fr-btn--icon-right fr-icon-arrow-right-s-line" href="#campagne" data-tab="campagne">Continuer</a></li><li><a class="fr-btn fr-btn--secondary" href="#exporter" data-tab="exporter">Télécharger mes résultats</a></li></ul></div>` : ""}
@@ -764,8 +767,9 @@ function detail(p, y){
     </div>` : ""}
 
     <h3 class="gren-section">Résultat</h3>
-    <p>La culture a besoin de <strong>${fmt(r.besoin)} kg</strong> d'azote par hectare. Le sol, la culture précédente${r.fournOrg ? " et vos effluents" : ""} en fournissent déjà <strong>${fmt(r.fournitures)} kg</strong>. ${r.doseFinale > 0 ? `Il reste donc <strong>${fmt(r.doseFinale)} kg/ha</strong> à apporter en engrais.` : "Vous n'avez donc <strong>pas besoin d'apporter d'engrais azoté</strong> sur cette parcelle."}</p>
-    ${formulaBlocks(r)}
+    ${resultatVisuel(r)}
+    <section class="fr-accordion fr-mt-2w"><h3 class="fr-accordion__title"><button type="button" class="fr-accordion__btn" aria-expanded="false" aria-controls="acc-etapes">Voir le calcul étape par étape</button></h3>
+      <div class="fr-collapse" id="acc-etapes">${formulaBlocks(r)}</div></section>
     ` : `<p class="fr-mt-2w">Choisissez la culture pour lancer le calcul.</p>`}
     <div class="fr-mt-3w">${fTextarea("Mes notes sur cette parcelle", 'data-c="notes"', c.notes, "Elles apparaissent dans le plan de fumure détaillé")}</div>
   </section>`;
@@ -797,6 +801,154 @@ function formulaBlocks(r){
     <section class="fr-accordion fr-mt-2w"><h3 class="fr-accordion__title"><button type="button" class="fr-accordion__btn" aria-expanded="false" aria-controls="acc-trace">Détail du calcul</button></h3>
       <div class="fr-collapse" id="acc-trace"><pre class="gren-trace">${esc(r.trace.join("\n"))}</pre></div></section>`;
 }
+
+/* ---------- Résultats visuels ---------- */
+// Couleurs de signification fixes (jamais réutilisées pour autre chose) ; chaque couleur est accompagnée d'un libellé.
+const POSTES = [
+  {k:"sol", l:"Fourni par le sol", d:"azote déjà présent en sortie d'hiver + azote libéré par le sol", c:"var(--background-flat-yellow-tournesol)", pdf:[200, 170, 57]},
+  {k:"prec", l:"Culture précédente et couvert", d:"azote laissé par la culture d'avant et le couvert d'interculture", c:"var(--background-flat-green-emeraude)", pdf:[0, 169, 95]},
+  {k:"org", l:"Fumier, lisier, pâturage", d:"part utile de l'azote des effluents (cette année et l'an dernier)", c:"var(--background-flat-purple-glycine)", pdf:[165, 88, 160]},
+  {k:"engrais", l:"Engrais à apporter", d:"votre dose", c:"var(--background-action-high-blue-france)", pdf:[0, 0, 145]}
+];
+function partsBilan(r){
+  const v = {sol:r.rsh + r.mh, prec:r.precEff + r.cipanEff, org:r.fournOrg, engrais:r.doseFinale};
+  const besoin = Math.max(0, r.besoin + r.corr);
+  const total = v.sol + v.prec + v.org + v.engrais;
+  const plafonne = r.dosePlaf < r.doseCalc - 0.5;   // l'écart dû au seul arrondi de la dose n'est pas un « manque »
+  return {v, besoin, total, plafonne, manque:plafonne ? Math.max(0, besoin - total) : 0, surplus:Math.max(0, (v.sol + v.prec + v.org) - besoin)};
+}
+const AMMONITRATE = 0.335;
+function equivalentEngrais(dose, surface){ const kgha = dose / AMMONITRATE; const t = kgha * surface / 1000; return {kgha, t, bags:kgha * surface / 500}; }
+function barreBilan(r, {echelle = null, compacte = false} = {}){
+  const b = partsBilan(r); const max = echelle || Math.max(b.besoin, b.total + b.manque, 1);
+  const pct = x => (x / max * 100).toFixed(2);
+  const segs = POSTES.filter(p => b.v[p.k] > 0.5).map(p => `<span class="gren-seg gren-seg--${p.k}" style="width:${pct(b.v[p.k])}%;background:${p.c}" title="${esc(p.l)} : ${fmt(b.v[p.k])} kg N/ha">${!compacte && p.k === "engrais" && b.v[p.k] / max > .14 ? `<span class="gren-seg__val">${fmt(b.v[p.k])}</span>` : ""}</span>`).join("")
+    + (b.manque > 0.5 ? `<span class="gren-seg gren-seg--manque" style="width:${pct(b.manque)}%" title="Non apporté : dose limitée par le plafond (${fmt(b.manque)} kg N/ha)"></span>` : "");
+  const repere = b.besoin > 0 ? `<span class="gren-repere" style="left:${pct(b.besoin)}%" aria-hidden="true"></span>` : "";
+  return `<div class="gren-barre${compacte ? " gren-barre--compacte" : ""}" role="img" aria-label="Besoin ${fmt(b.besoin)} kg N/ha : ${POSTES.map(p => `${p.l.toLowerCase()} ${fmt(b.v[p.k])}`).join(", ")}.">${segs}${repere}</div>`;
+}
+function legendeBilan(r){
+  const b = partsBilan(r); const ref = Math.max(b.besoin, 1);
+  return `<ul class="gren-legende">${POSTES.map(p => `<li><span class="gren-pastille" style="background:${p.c}"></span><span><strong>${p.l}</strong><span class="gren-mention"> — ${p.d}</span></span><span class="gren-legende__val">${fmt(b.v[p.k])} kg <span class="gren-mention">(${fmt(Math.min(100, b.v[p.k] / ref * 100))} %)</span></span></li>`).join("")}
+    ${b.manque > 0.5 ? `<li><span class="gren-pastille gren-seg--manque"></span><span><strong>Non apporté</strong><span class="gren-mention"> — la dose est limitée par le plafond de la culture</span></span><span class="gren-legende__val">${fmt(b.manque)} kg</span></li>` : ""}</ul>`;
+}
+function resultatVisuel(r){
+  const b = partsBilan(r); const eq = equivalentEngrais(r.doseFinale, num(r.p.surface));
+  const couvert = b.besoin > 0 ? Math.min(100, (b.v.sol + b.v.prec + b.v.org) / b.besoin * 100) : 100;
+  return `<div class="gren-resultat">
+    <div class="gren-resultat__dose">
+      <p class="gren-resultat__label">Dose d'engrais azoté à apporter</p>
+      <p class="gren-resultat__chiffre">${fmt(r.doseFinale)}<span> kg N/ha</span></p>
+      <p class="fr-mb-1w">soit <strong>${fmt(r.doseFinale * num(r.p.surface))} kg d'azote</strong> pour la parcelle (${fmt(num(r.p.surface), 2)} ha)</p>
+      ${r.doseFinale > 0 ? `<p class="gren-resultat__equiv"><span class="fr-icon-information-line" aria-hidden="true"></span> En ammonitrate 33,5 % : environ <strong>${fmt(eq.kgha)} kg/ha</strong>, soit <strong>${fmt(eq.t, 1)} t</strong> pour la parcelle (≈ ${fmt(Math.max(eq.bags, 0.1), 1)} big bag${eq.bags >= 2 ? "s" : ""} de 500 kg).</p>`
+        : `<p class="gren-resultat__equiv"><span class="fr-icon-check-line" aria-hidden="true"></span> <strong>Pas d'engrais azoté nécessaire</strong> : vous économisez l'achat d'engrais sur cette parcelle.</p>`}
+      ${b.plafonne ? `<p class="fr-badge fr-badge--warning fr-badge--sm">Dose limitée par le plafond (${fmt(r.plafond)} kg N/ha)</p>` : ""}
+    </div>
+    <div class="gren-resultat__bilan">
+      <p class="gren-resultat__label">D'où vient l'azote de votre culture ?</p>
+      <p class="fr-text--sm fr-mb-1w">La culture a besoin de <strong>${fmt(b.besoin)} kg N/ha</strong> (trait vertical). <strong>${fmt(couvert)} %</strong> sont déjà fournis gratuitement par le sol, la culture précédente et vos effluents.</p>
+      ${barreBilan(r)}
+      ${legendeBilan(r)}
+      ${b.surplus > 0.5 ? `<p class="fr-text--sm fr-mb-0">Le sol et vos effluents fournissent déjà <strong>${fmt(b.surplus)} kg de plus</strong> que le besoin : n'ajoutez pas d'engrais.</p>` : ""}
+    </div></div>`;
+}
+function vueEnsemble(y){
+  const rows = S.parcelles.map(p => ({p, r:calc(p, y)})).filter(x => x.r);
+  if (!rows.length) return "";
+  const surfT = rows.reduce((a, x) => a + num(x.p.surface), 0);
+  const totN = rows.reduce((a, x) => a + x.r.doseFinale * num(x.p.surface), 0);
+  const besT = rows.reduce((a, x) => a + partsBilan(x.r).besoin * num(x.p.surface), 0);
+  const fouT = rows.reduce((a, x) => { const b = partsBilan(x.r); return a + Math.min(b.besoin, b.v.sol + b.v.prec + b.v.org) * num(x.p.surface); }, 0);
+  const bo = bilanOrga(y); const jauge = Math.min(100, bo.parHa / bo.plafond * 100);
+  const echelle = Math.max(...rows.map(x => { const b = partsBilan(x.r); return Math.max(b.besoin, b.total + b.manque); }), 1);
+  const tri = [...rows].sort((a, b) => b.r.doseFinale * num(b.p.surface) - a.r.doseFinale * num(a.p.surface));
+  return `<section class="gren-panel gren-ensemble"><h2 class="fr-h4">Vos résultats en un coup d'œil</h2>
+    <div class="gren-tuiles">
+      <div class="gren-tuile gren-tuile--fort"><p class="gren-tuile__chiffre">${fmt(totN)} kg</p><p>d'azote à apporter en engrais sur ${fmt(surfT, 1)} ha</p></div>
+      <div class="gren-tuile"><p class="gren-tuile__chiffre">≈ ${fmt(totN / AMMONITRATE / 1000, 1)} t</p><p>d'ammonitrate 33,5 % (si tout l'azote est apporté sous cette forme)</p></div>
+      <div class="gren-tuile"><p class="gren-tuile__chiffre">${fmt(besT ? fouT / besT * 100 : 0)} %</p><p>du besoin des cultures couvert gratuitement par le sol, les précédents et vos effluents</p></div>
+      <div class="gren-tuile"><p class="gren-tuile__chiffre">${fmt(bo.parHa)} <span>/ ${bo.plafond}</span></p><p>kg d'azote organique par hectare (limite réglementaire)</p>
+        <div class="gren-jauge" role="meter" aria-valuemin="0" aria-valuemax="${bo.plafond}" aria-valuenow="${Math.round(bo.parHa)}" aria-label="Azote organique par hectare"><span style="width:${jauge.toFixed(1)}%" class="${bo.parHa > bo.plafond ? "depasse" : jauge > 85 ? "proche" : ""}"></span></div>
+        <p class="gren-mention fr-mb-0">${bo.parHa > bo.plafond ? "Limite dépassée" : jauge > 85 ? "Proche de la limite" : "Sous la limite"}</p></div>
+    </div>
+    <h3 class="fr-h6 fr-mt-3w">D'où vient l'azote, parcelle par parcelle ?</h3>
+    <ul class="gren-legende gren-legende--ligne">${POSTES.map(p => `<li><span class="gren-pastille" style="background:${p.c}"></span>${p.l}</li>`).join("")}<li><span class="gren-pastille gren-pastille--trait"></span>Besoin de la culture</li></ul>
+    <div class="gren-parcelles">${tri.map(({p, r}) => `<div class="gren-parcelle">
+        <div class="gren-parcelle__nom"><strong>${esc(parcelLabel(p))}</strong><span class="gren-mention">${esc(r.cult.nom)} · ${fmt(num(p.surface), 2)} ha</span></div>
+        ${barreBilan(r, {echelle, compacte:true})}
+        <div class="gren-parcelle__dose"><span><strong>${fmt(r.doseFinale)}</strong> kg/ha</span><span class="gren-mention">${fmt(r.doseFinale * num(p.surface))} kg</span></div></div>`).join("")}</div>
+    <p class="gren-mention fr-mb-0">Les parcelles sont classées de la plus grosse à la plus petite quantité d'engrais à apporter. Survolez une barre pour voir le détail.</p>
+  </section>`;
+}
+
+/* ---------- Infographie : pourquoi calculer sa dose d'azote ? ---------- */
+const picto = (chemin, taille = 80) => `<svg aria-hidden="true" class="fr-artwork" viewBox="0 0 80 80" width="${taille}" height="${taille}">${["decorative", "minor", "major"].map(c => `<use class="fr-artwork-${c}" href="dsfr/artwork/pictograms/${chemin}.svg#artwork-${c}"></use>`).join("")}</svg>`;
+const RAISONS = [
+  ["environment/leaf", "De bons rendements", "Trop peu d'azote limite la récolte. Trop d'azote ne l'augmente plus et favorise la verse et les maladies."],
+  ["institutions/money", "Chaque kilo compte", "20 kg d'azote de trop sur 50 ha, c'est 1 tonne d'azote, soit environ 3 tonnes d'ammonitrate achetées pour rien."],
+  ["environment/environment", "Une eau de qualité", "L'azote que la culture n'utilise pas part vers les rivières sous forme de nitrates. Il favorise aussi les marées vertes sur le littoral."],
+  ["environment/sun", "Moins de gaz à effet de serre", "Un excès d'azote augmente les émissions de protoxyde d'azote (N₂O), un gaz près de 300 fois plus réchauffant que le CO₂."]
+];
+function bandeauPourquoi(){
+  return `<section class="gren-pourquoi-mini fr-mb-4w" aria-labelledby="titre-pourquoi"><div class="gren-bar fr-mb-2w"><h2 class="fr-h4 fr-mb-0" id="titre-pourquoi">Pourquoi c'est important ?</h2>
+    <a class="fr-link fr-icon-arrow-right-line fr-link--icon-right" href="#pourquoi" data-tab="pourquoi">Voir l'infographie</a></div>
+    <div class="fr-grid-row fr-grid-row--gutters">${RAISONS.map(([p, t, d]) => `<div class="fr-col-12 fr-col-sm-6 fr-col-lg-3"><div class="gren-raison-mini">${picto(p, 56)}<p class="fr-mb-0"><strong>${t}</strong></p></div></div>`).join("")}</div></section>`;
+}
+VIEWS.pourquoi = () => {
+  const ble = cultureById("ble"); const exB = ble ? Math.round(num(ble.b) * num(ble.rdt22 || 80) + num(ble.rf)) : 260;
+  return `<div class="gren-info">
+  <p class="fr-mb-1w"><a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="#accueil" data-tab="accueil">Retour à l'accueil</a></p>
+  <div class="gren-info__entete">
+    <div><p class="fr-badge fr-badge--blue-ecume fr-badge--no-icon fr-mb-2w">Infographie</p>
+      <h1>Pourquoi calculer sa dose d'azote ?</h1>
+      <p class="fr-text--lead fr-mb-0">Apporter <strong>la juste dose</strong>, ni trop ni trop peu : c'est bon pour vos cultures, pour votre trésorerie et pour l'eau de Bretagne.</p></div>
+    ${picto("environment/leaf", 140)}
+  </div>
+
+  <section class="gren-info__bloc" aria-labelledby="ib1"><h2 class="fr-h3" id="ib1">L'azote de la culture, d'où vient-il ?</h2>
+    <p>Une culture ne puise pas seulement dans l'engrais : une grande partie de son azote est <strong>déjà disponible gratuitement</strong>. Le calcul de la dose consiste à ne compléter que ce qui manque.</p>
+    <div class="gren-flux">
+      <div class="gren-flux__sources">
+        <div class="gren-flux__source" style="--c:var(--background-flat-yellow-tournesol)"><strong>Le sol</strong><span>azote resté en sortie d'hiver et libéré par la matière organique</span></div>
+        <div class="gren-flux__source" style="--c:var(--background-flat-green-emeraude)"><strong>La culture précédente et le couvert</strong><span>légumineuses, prairie retournée, CIPAN…</span></div>
+        <div class="gren-flux__source" style="--c:var(--background-flat-purple-glycine)"><strong>Les effluents</strong><span>fumier, lisier, pâturage : une partie seulement est utile</span></div>
+        <div class="gren-flux__source gren-flux__source--engrais" style="--c:var(--background-action-high-blue-france)"><strong>L'engrais</strong><span>uniquement le complément : c'est <em>votre dose</em></span></div>
+      </div>
+      <div class="gren-flux__fleche" aria-hidden="true"><span class="fr-icon-arrow-right-line"></span></div>
+      <div class="gren-flux__culture"><p class="gren-flux__titre">La culture</p><p class="gren-flux__chiffre">≈ ${fmt(exB)} kg</p><p>d'azote par hectare pour un blé visant ${fmt(num(ble?.rdt22 || 80))} q/ha <span class="gren-mention">(exemple, valeurs du référentiel)</span></p></div>
+    </div>
+    <div class="gren-exces"><span class="fr-icon-warning-line" aria-hidden="true"></span><div><strong>Si l'on en apporte trop</strong>, l'azote en excès n'est pas utilisé : il part vers <strong>l'eau</strong> (nitrates dans les rivières, les nappes et sur le littoral) et vers <strong>l'air</strong> (protoxyde d'azote, gaz à effet de serre).</div></div>
+  </section>
+
+  <section class="gren-info__bloc" aria-labelledby="ib2"><h2 class="fr-h3" id="ib2">4 bonnes raisons de calculer sa dose</h2>
+    <div class="fr-grid-row fr-grid-row--gutters">${RAISONS.map(([p, t, d], i) => `<div class="fr-col-12 fr-col-md-6"><div class="gren-raison">${picto(p, 80)}<div><p class="gren-raison__num">${i + 1}</p><h3 class="fr-h5 fr-mb-1w">${t}</h3><p class="fr-mb-0">${d}</p></div></div></div>`).join("")}</div>
+  </section>
+
+  <section class="gren-info__bloc gren-info__loi" aria-labelledby="ib3"><div class="gren-info__loi-picto">${picto("institutions/justice", 96)}</div>
+    <div><h2 class="fr-h3" id="ib3">C'est aussi une obligation en Bretagne</h2>
+      <div class="gren-chiffres">
+        <div><p class="gren-chiffres__n">100 %</p><p>de la Bretagne est classée en <strong>zone vulnérable</strong> aux nitrates (directive européenne « Nitrates » de 1991)</p></div>
+        <div><p class="gren-chiffres__n">170</p><p>kg d'azote organique par hectare et par an : c'est la <strong>limite</strong> pour les effluents d'élevage</p></div>
+        <div><p class="gren-chiffres__n">50</p><p>mg de nitrates par litre : au-delà, l'eau <strong>n'est plus potable</strong></p></div>
+      </div>
+      <p class="fr-mb-1w">Chaque exploitation doit :</p>
+      <ul class="fr-mb-0"><li>établir un <strong>plan prévisionnel de fumure</strong> (PPF) avant les apports d'azote ;</li><li>tenir un <strong>cahier d'enregistrement</strong> des apports réellement réalisés ;</li><li>respecter le <strong>calendrier d'épandage</strong> et les règles renforcées des zones ZAR ;</li><li>pouvoir présenter ces documents en cas de <strong>contrôle</strong>.</li></ul></div>
+  </section>
+
+  <section class="gren-info__bloc" aria-labelledby="ib4"><h2 class="fr-h3" id="ib4">La Calculette fait le calcul pour vous</h2>
+    <div class="gren-etapes3">
+      <div>${picto("document/document", 64)}<p class="gren-etapes3__n">1</p><p><strong>Je saisis</strong> mon exploitation, mes parcelles et mes cultures, dans l'application ou avec le modèle Excel.</p></div>
+      <div>${picto("digital/data-visualization", 64)}<p class="gren-etapes3__n">2</p><p><strong>La dose est calculée</strong> pour chaque parcelle selon le référentiel GREN Bretagne, avec les contrôles réglementaires.</p></div>
+      <div>${picto("document/document-download", 64)}<p class="gren-etapes3__n">3</p><p><strong>Je télécharge</strong> mon plan prévisionnel de fumure en PDF ou en Excel, prêt à être présenté.</p></div>
+    </div>
+    <ul class="fr-btns-group fr-btns-group--inline-md fr-btns-group--icon-left fr-mt-3w gren-noprint">
+      <li><a class="fr-btn fr-btn--icon-right fr-icon-arrow-right-s-line" href="#exploitation" data-tab="exploitation">Calculer ma dose</a></li>
+      <li>${btn("Télécharger le modèle Excel", 'data-act="modele"', {kind:"secondary", icon:"download-line"})}</li>
+      <li>${btn("Imprimer l'infographie", 'data-act="print"', {kind:"tertiary", icon:"printer-line"})}</li></ul>
+  </section>
+  <p class="gren-mention">Sources : directive 91/676/CEE du 12 décembre 1991 dite « Nitrates » ; programme d'actions régional Nitrates de Bretagne ; code de la santé publique (limite de qualité de l'eau destinée à la consommation humaine : 50 mg/L de nitrates) ; GIEC (pouvoir de réchauffement du protoxyde d'azote). L'exemple chiffré du blé et l'équivalent en ammonitrate sont indicatifs.</p>
+  </div>`;
+};
 
 /* ---------- Groupes ---------- */
 VIEWS.groupes = () => {
@@ -1258,6 +1410,7 @@ VIEWS.exporter = () => {
   const refs = S.references; const ref = byId(refs, S.refSel) || refs[0];
   const pret = S.parcelles.some(p => calc(p, y));
   return `${bar("Exporter et comparer")}${etape("exporter")}
+  ${vueEnsemble(y)}
   ${aQuoiSert("Téléchargez votre <strong>plan prévisionnel de fumure</strong> (document à garder sur l'exploitation et à présenter en cas de contrôle), comparez vos doses avec d'autres résultats, et mettez vos informations à l'abri.")}
   ${globalBanners()}
 
@@ -1326,11 +1479,24 @@ function comparatif(ref, y){
 }
 
 /* ---------- Administration : comptes de l'espace administrateur ----------
-   Les comptes sont listés dans config.js (COMPTES_ADMIN) avec une empreinte PBKDF2-SHA-256
+   Les comptes sont listés dans comptes-admin.json (géré depuis l'application) avec une empreinte PBKDF2-SHA-256
    du mot de passe (jamais le mot de passe lui-même). Vérification dans le navigateur :
    cela masque les réglages aux agriculteurs mais ne remplace pas le backoffice sécurisé. */
 const ROLES_ADMIN = {superadmin:"Super-administrateur", admin:"Administrateur"};
-const comptesAdmin = () => (Array.isArray(CFG.COMPTES_ADMIN) ? CFG.COMPTES_ADMIN : []).filter(c => c && c.identifiant && c.sel && c.empreinte);
+let COMPTES = null, COMPTES_ERREUR = "";
+const compteValide = c => c && typeof c.identifiant === "string" && /^[a-z0-9._-]{3,40}$/i.test(c.identifiant) && /^[0-9a-f]{32}$/.test(c.sel || "") && /^[0-9a-f]{64}$/.test(c.empreinte || "");
+async function chargerComptes(){
+  try {
+    const r = await fetch("comptes-admin.json", {cache:"no-store"});
+    if (!r.ok) throw new Error("fichier comptes-admin.json introuvable");
+    const d = JSON.parse((await r.text()).replace(/^\uFEFF/, ""));
+    COMPTES = (Array.isArray(d) ? d : d.comptes || []).filter(compteValide).map(c => ({identifiant:c.identifiant.toLowerCase(), nom:String(c.nom || ""), role:c.role === "superadmin" ? "superadmin" : "admin", iterations:Math.min(Math.max(+c.iterations || 210000, 100000), 2000000), sel:c.sel, empreinte:c.empreinte}));
+    COMPTES_ERREUR = "";
+  } catch(e){ COMPTES = COMPTES || []; COMPTES_ERREUR = "Le fichier des comptes (comptes-admin.json) est illisible ou absent : " + e.message + "."; }
+  return COMPTES;
+}
+const comptesAdmin = () => [...(COMPTES || []), ...(Array.isArray(CFG.COMPTES_ADMIN) ? CFG.COMPTES_ADMIN.filter(compteValide) : [])]
+  .filter((c, i, a) => a.findIndex(x => x.identifiant.toLowerCase() === c.identifiant.toLowerCase()) === i);
 const hex = buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
 const deHex = h => new Uint8Array((h.match(/../g) || []).map(x => parseInt(x, 16)));
 async function empreinteMdp(mdp, sel, iterations = 210000){
@@ -1341,6 +1507,7 @@ async function empreinteMdp(mdp, sel, iterations = 210000){
 function adminSession(){ try { return JSON.parse(sessionStorage.getItem("gren-admin-local") || "null"); } catch(e){ return null; } }
 const adminConnecte = () => { const a = adminSession(); return !!(a && a.identifiant && comptesAdmin().some(c => c.identifiant === a.identifiant)); };
 async function adminConnexion(){
+  await chargerComptes();
   if (adminConnecte()) { aller("admin"); return; }
   let bloque = 0; try { bloque = +localStorage.getItem("gren-admin-bloque") || 0; } catch(e){}
   if (bloque > Date.now()) { await dialog({title:"Connexion bloquée", body:alerte("error", "", `Trop d'essais. Réessayez dans ${Math.ceil((bloque - Date.now()) / 60000)} minute(s).`)}); return; }
@@ -1360,6 +1527,26 @@ async function adminConnexion(){
   if (SRV) rpc("echec_connexion", {p_email:"appli:" + id.slice(0, 60), p_motif:"mot_de_passe"}).catch(() => {});
   toast("Identifiant ou mot de passe incorrect.", true);
 }
+/* Gestion des comptes sans écrire de code : l'application produit le nouveau fichier
+   comptes-admin.json, à déposer sur GitHub par glisser-déposer. */
+const URL_DEPOT = "https://github.com/williamlestoilleagri-creator/Grist/upload/main/calculette-gren";
+const motDePasseSolide = m => m.length >= 12 && /[a-z]/.test(m) && /[A-Z]/.test(m) && /\d/.test(m) && /[^A-Za-z0-9]/.test(m);
+async function nouvelleEmpreinte(mdp){ const sel = hex(crypto.getRandomValues(new Uint8Array(16))); return {iterations:210000, sel, empreinte:await empreinteMdp(mdp, sel)}; }
+async function deposerComptes(liste, quoi){
+  const contenu = JSON.stringify({_explication:"Comptes de l'espace administrateur de la Calculette GREN. Ne pas modifier à la main : utiliser Administration → Comptes dans l'application, qui produit ce fichier à déposer sur GitHub. Les mots de passe ne figurent jamais ici, seulement leur empreinte chiffrée (PBKDF2-SHA-256).", comptes:liste}, null, 2);
+  telechargerBlob(new Blob([contenu], {type:"application/json"}), "comptes-admin.json");
+  S.comptesFichier = liste; save(); render();
+  await dialog({title:"Dernière étape : déposer le fichier sur GitHub", body:`
+    <p>${quoi} Le fichier <strong>comptes-admin.json</strong> vient d'être enregistré dans vos téléchargements. Il ne reste qu'à le déposer sur GitHub, <strong>sans rien écrire</strong> :</p>
+    <ol>
+      <li>Ouvrez la page de dépôt : <a href="${URL_DEPOT}" target="_blank" rel="noopener">GitHub → dossier calculette-gren → Upload files</a> (connectez-vous à GitHub si nécessaire).</li>
+      <li><strong>Glissez le fichier comptes-admin.json</strong> depuis vos téléchargements dans la zone « Drag files here » (ou cliquez sur « choose your files »).</li>
+      <li>En bas de la page, cliquez sur le bouton vert <strong>« Commit changes »</strong>.</li>
+    </ol>
+    <p>Le fichier existant est remplacé automatiquement. Environ <strong>2 minutes</strong> plus tard, le changement est actif sur tous les appareils.</p>
+    <p class="gren-mention fr-mb-0">Ce fichier ne contient aucun mot de passe, seulement des empreintes chiffrées : il peut être transmis sans risque. Communiquez le mot de passe à la personne par un autre moyen (de vive voix, par téléphone).</p>`});
+}
+const listeDeTravail = () => { const base = comptesAdmin().map(c => ({...c})); return Array.isArray(S.comptesFichier) && S.comptesFichier.length ? S.comptesFichier.filter(compteValide).map(c => ({...c})) : base; };
 async function creerCompteAdmin(){
   const moi = adminSession(); if (!moi || moi.role !== "superadmin") { toast("Seul un super-administrateur peut créer des comptes.", true); return; }
   const r = await dialog({title:"Créer un compte administrateur", body:`
@@ -1367,40 +1554,63 @@ async function creerCompteAdmin(){
     ${fInput("Identifiant de connexion", 'data-nc="id" autocomplete="off"', "", {hint:"Par exemple prenom.nom — lettres, chiffres, point, tiret"})}
     ${fInput("Mot de passe", 'data-nc="mdp" autocomplete="new-password"', "", {type:"password", hint:"12 caractères minimum, avec majuscule, minuscule, chiffre et caractère spécial"})}
     ${fInput("Confirmation du mot de passe", 'data-nc="mdp2" autocomplete="new-password"', "", {type:"password"})}
-    ${fSelect("Rôle", 'data-nc="role"', `<option value="admin">Administrateur : référentiel</option><option value="superadmin">Super-administrateur : référentiel et création de comptes</option>`)}`,
-    buttons:[{label:"Annuler", cls:"ghost", value:0}, {label:"Préparer le compte", value:1}]});
+    ${fSelect("Rôle", 'data-nc="role"', `<option value="admin">Administrateur : référentiel</option><option value="superadmin">Super-administrateur : référentiel et gestion des comptes</option>`)}`,
+    buttons:[{label:"Annuler", cls:"ghost", value:0}, {label:"Créer le compte", value:1}]});
   if (r !== 1) return;
   const v = k => (($(`[data-nc="${k}"]`) || {}).value || "");
   const nom = v("nom").trim(), id = v("id").trim().toLowerCase(), mdp = v("mdp"), role = v("role") === "superadmin" ? "superadmin" : "admin";
+  const liste = listeDeTravail();
   const err = !nom ? "Indiquez le nom." : !/^[a-z0-9._-]{3,40}$/.test(id) ? "Identifiant : 3 à 40 caractères parmi lettres minuscules, chiffres, point, tiret." :
-    comptesAdmin().some(c => c.identifiant.toLowerCase() === id) ? "Cet identifiant existe déjà : choisissez-en un autre (pour changer un mot de passe, voir l'aide en bas de la page)." :
-    !(mdp.length >= 12 && /[a-z]/.test(mdp) && /[A-Z]/.test(mdp) && /\d/.test(mdp) && /[^A-Za-z0-9]/.test(mdp)) ? "Mot de passe trop faible : 12 caractères minimum, avec majuscule, minuscule, chiffre et caractère spécial." :
+    liste.some(c => c.identifiant.toLowerCase() === id) ? "Cet identifiant existe déjà." : !motDePasseSolide(mdp) ? "Mot de passe trop faible : 12 caractères minimum, avec majuscule, minuscule, chiffre et caractère spécial." :
     mdp !== v("mdp2") ? "Les deux mots de passe ne correspondent pas." : "";
   if (err) { await dialog({title:"Compte non créé", body:alerte("error", "", esc(err))}); return; }
-  const sel = hex(crypto.getRandomValues(new Uint8Array(16)));
-  const compte = {identifiant:id, nom, role, iterations:210000, sel, empreinte:await empreinteMdp(mdp, sel)};
-  const ligne = "    " + JSON.stringify(compte) + ",";
-  S.comptesPrepares = [...(S.comptesPrepares || []).filter(c => c.identifiant !== id), compte]; save(); render();
-  await dialog({title:"Compte prêt : dernière étape", body:`
-    <p>Le compte <strong>${esc(id)}</strong> (${esc(ROLES_ADMIN[role])}) est prêt. Pour l'activer sur tous les appareils, ajoutez cette ligne dans le fichier <strong>config.js</strong>, dans la liste <code>COMPTES_ADMIN</code> :</p>
-    <pre class="gren-trace" id="ligneCompte">${esc(ligne)}</pre>
-    ${btn("Copier la ligne", 'data-act="copierLigne"', {kind:"secondary", sm:true, icon:"file-text-line"})}
-    <ol class="fr-mt-2w"><li>Sur GitHub, ouvrez <a href="https://github.com/williamlestoilleagri-creator/Grist/edit/main/calculette-gren/config.js" target="_blank" rel="noopener">calculette-gren/config.js</a> (bouton crayon « Edit »).</li>
-      <li>Collez la ligne sous <code>COMPTES_ADMIN: [</code>.</li><li>Cliquez sur « Commit changes… » puis « Commit changes ». Le compte fonctionne environ 2 minutes après.</li></ol>
-    <p class="gren-mention">Cette ligne ne contient pas le mot de passe, seulement son empreinte chiffrée : vous pouvez la transmettre sans risque. Communiquez le mot de passe à la personne par un autre moyen (de vive voix, par téléphone).</p>`});
+  liste.push({identifiant:id, nom:nom.slice(0, 80), role, ...(await nouvelleEmpreinte(mdp))});
+  await deposerComptes(liste, `Le compte <strong>${esc(id)}</strong> (${esc(ROLES_ADMIN[role])}) est créé.`);
 }
-VIEWS.admin = () => { const moi = adminSession() || {}; const comptes = comptesAdmin(); const prepares = (S.comptesPrepares || []).filter(c => !comptes.some(k => k.identifiant === c.identifiant));
+async function supprimerCompteAdmin(id){
+  const moi = adminSession(); if (!moi || moi.role !== "superadmin" || id === moi.identifiant) return;
+  const liste = listeDeTravail(); const c = liste.find(x => x.identifiant === id); if (!c) return;
+  if (liste.filter(x => x.role === "superadmin" && x.identifiant !== id).length === 0) { toast("Il doit rester au moins un super-administrateur.", true); return; }
+  if (!await confirmer("Supprimer ce compte ?", `Le compte <strong>${esc(c.nom || id)}</strong> (${esc(id)}) ne pourra plus se connecter une fois le fichier déposé.`, "Supprimer")) return;
+  await deposerComptes(liste.filter(x => x.identifiant !== id), `Le compte <strong>${esc(id)}</strong> est supprimé.`);
+}
+async function changerMdpAdmin(id){
+  const moi = adminSession(); if (!moi || (moi.role !== "superadmin" && id !== moi.identifiant)) return;
+  const r = await dialog({title:`Nouveau mot de passe pour ${esc(id)}`, body:`
+    ${fInput("Nouveau mot de passe", 'data-nc="mdp" autocomplete="new-password"', "", {type:"password", hint:"12 caractères minimum, avec majuscule, minuscule, chiffre et caractère spécial"})}
+    ${fInput("Confirmation", 'data-nc="mdp2" autocomplete="new-password"', "", {type:"password"})}`, buttons:[{label:"Annuler", cls:"ghost", value:0}, {label:"Enregistrer", value:1}]});
+  if (r !== 1) return;
+  const mdp = ($('[data-nc="mdp"]') || {}).value || "";
+  if (!motDePasseSolide(mdp) || mdp !== (($('[data-nc="mdp2"]') || {}).value || "")) { await dialog({title:"Mot de passe non changé", body:alerte("error", "", "Le mot de passe est trop faible ou les deux saisies sont différentes.")}); return; }
+  const liste = listeDeTravail(); const c = liste.find(x => x.identifiant === id); if (!c) return;
+  Object.assign(c, await nouvelleEmpreinte(mdp));
+  await deposerComptes(liste, `Le mot de passe de <strong>${esc(id)}</strong> est changé.`);
+}
+VIEWS.admin = () => { const moi = adminSession() || {}; const sup = moi.role === "superadmin";
+  const actifs = comptesAdmin(); const fichier = Array.isArray(S.comptesFichier) && S.comptesFichier.length ? S.comptesFichier : null;
+  const memeListe = fichier && JSON.stringify(fichier.map(c => [c.identifiant, c.role, c.empreinte]).sort()) === JSON.stringify(actifs.map(c => [c.identifiant, c.role, c.empreinte]).sort());
+  if (fichier && memeListe) { S.comptesFichier = null; save(); }
+  const enAttente = fichier && !memeListe;
+  const tous = [...new Set([...actifs.map(c => c.identifiant), ...(enAttente ? fichier.map(c => c.identifiant) : [])])];
+  const etat = id => { const a = actifs.find(c => c.identifiant === id), f = enAttente ? fichier.find(c => c.identifiant === id) : a;
+    if (!a) return badge("Nouveau : fichier à déposer", "warning"); if (!f) return badge("Supprimé : fichier à déposer", "warning");
+    if (f.empreinte !== a.empreinte) return badge("Mot de passe changé : fichier à déposer", "warning"); if (f.role !== a.role) return badge("Rôle changé : fichier à déposer", "warning");
+    return badge("Actif", "success"); };
   return `${bar("Administration", false)}
   <p>Connecté en tant que <strong>${esc(moi.nom || moi.identifiant || "")}</strong> (${esc(ROLES_ADMIN[moi.role] || "")}). ${btn("Se déconnecter", 'data-act="adminDeconnexion"', {kind:"tertiary", sm:true, icon:"logout-box-r-line"})}</p>
-  <section class="gren-panel"><div class="gren-bar"><h2 class="fr-h4 fr-mb-0">Comptes administrateurs</h2>${moi.role === "superadmin" ? btn("Créer un compte", 'data-act="creerCompte"', {icon:"add-line"}) : ""}</div>
-    ${table(`<thead><tr><th scope="col">Nom</th><th scope="col">Identifiant</th><th scope="col">Rôle</th><th scope="col">État</th></tr></thead><tbody>
-      ${comptes.map(c => `<tr><td>${esc(c.nom || "—")}${c.identifiant === moi.identifiant ? " " + badge("Vous", "info") : ""}</td><td>${esc(c.identifiant)}</td><td>${esc(ROLES_ADMIN[c.role] || ROLES_ADMIN.admin)}</td><td>${badge("Actif", "success")}</td></tr>`).join("")}
-      ${prepares.map(c => `<tr><td>${esc(c.nom)}</td><td>${esc(c.identifiant)}</td><td>${esc(ROLES_ADMIN[c.role])}</td><td>${badge("À ajouter dans config.js", "warning")}</td></tr>`).join("")}</tbody>`)}
-    <section class="fr-accordion"><h3 class="fr-accordion__title"><button type="button" class="fr-accordion__btn" aria-expanded="false" aria-controls="acc-comptes">Supprimer un compte, changer un mot de passe, limites</button></h3>
+  ${COMPTES_ERREUR ? alerte("error", "Fichier des comptes", esc(COMPTES_ERREUR)) : ""}
+  <section class="gren-panel"><div class="gren-bar"><h2 class="fr-h4 fr-mb-0">Comptes administrateurs</h2>${sup ? btn("Créer un compte", 'data-act="creerCompte"', {icon:"add-line"}) : ""}</div>
+    ${enAttente ? alerte("warning", "Des changements attendent d'être déposés sur GitHub", `Déposez le fichier comptes-admin.json téléchargé sur <a href="${URL_DEPOT}" target="_blank" rel="noopener">la page de dépôt GitHub</a> (glisser-déposer, puis « Commit changes »). ${btn("Télécharger à nouveau le fichier", 'data-act="retelechargerComptes"', {kind:"secondary", sm:true})}`) : ""}
+    ${table(`<thead><tr><th scope="col">Nom</th><th scope="col">Identifiant</th><th scope="col">Rôle</th><th scope="col">État</th><th scope="col"><span class="fr-sr-only">Actions</span></th></tr></thead><tbody>
+      ${tous.map(id => { const c = (enAttente ? fichier : actifs).find(x => x.identifiant === id) || actifs.find(x => x.identifiant === id);
+        return `<tr><td>${esc(c.nom || "—")}${id === moi.identifiant ? " " + badge("Vous", "info") : ""}</td><td>${esc(id)}</td><td>${esc(ROLES_ADMIN[c.role] || ROLES_ADMIN.admin)}</td><td>${etat(id)}</td>
+        <td><ul class="fr-btns-group fr-btns-group--inline fr-btns-group--sm fr-btns-group--icon-left fr-mb-0">
+          ${sup || id === moi.identifiant ? `<li>${btn("Changer le mot de passe", `data-act="mdpCompte" data-id="${esc(id)}"`, {kind:"tertiary", sm:true, icon:"lock-line"})}</li>` : ""}
+          ${sup && id !== moi.identifiant && (!enAttente || fichier.some(x => x.identifiant === id)) ? `<li>${btn("Supprimer", `data-act="supprCompte" data-id="${esc(id)}"`, {kind:"tertiary-no-outline", sm:true, icon:"delete-line"})}</li>` : ""}</ul></td></tr>`; }).join("")}</tbody>`)}
+    <section class="fr-accordion"><h3 class="fr-accordion__title"><button type="button" class="fr-accordion__btn" aria-expanded="false" aria-controls="acc-comptes">Comment ça marche ? Limites</button></h3>
       <div class="fr-collapse" id="acc-comptes">
-        <p><strong>Supprimer un compte</strong> : dans config.js, supprimez la ligne qui contient son identifiant, puis enregistrez (« Commit changes »).</p>
-        <p><strong>Changer un mot de passe</strong> : supprimez la ligne du compte dans config.js, puis recréez le compte ici avec le même identifiant et le nouveau mot de passe.</p>
-        <p class="fr-mb-0"><strong>Limites</strong> : ces comptes protègent l'accès à cet espace dans l'application, qui ne contient que des réglages valables sur l'appareil utilisé. La vérification se fait dans le navigateur et la liste des comptes est publique (les mots de passe y sont chiffrés, mais un mot de passe faible pourrait être deviné). Pour des comptes réellement sécurisés (stockés sur un serveur, avec double authentification et journal des connexions), utilisez le <strong>backoffice en ligne</strong> ci-dessous, rubrique « Administrateurs ».</p>
+        <p>Les comptes sont rangés dans un fichier, <strong>comptes-admin.json</strong>, publié avec l'application. Quand vous créez, supprimez un compte ou changez un mot de passe, l'application prépare la nouvelle version de ce fichier : il suffit de la <strong>glisser-déposer sur GitHub</strong>. Aucun code à écrire.</p>
+        <p class="fr-mb-0"><strong>Limites</strong> : ces comptes protègent l'accès à cet espace, qui ne contient que des réglages valables sur l'appareil utilisé. La vérification se fait dans le navigateur et le fichier des comptes est public (les mots de passe y sont chiffrés, mais un mot de passe faible pourrait être deviné). Pour des comptes réellement sécurisés, créés d'un simple clic avec invitation par courriel, double authentification et journal des connexions, utilisez le <strong>backoffice en ligne</strong> ci-dessous, rubrique « Administrateurs ».</p>
       </div></section>
   </section>
   <section class="gren-panel"><h2 class="fr-h4">Backoffice en ligne</h2>
@@ -1466,6 +1676,7 @@ const LEXIQUE = [
 VIEWS.aide = () => `${bar("Guide et aide", false)}
   <p class="fr-text--lead">Tout ce qu'il faut savoir pour remplir la Calculette et comprendre vos résultats.</p>
   <nav class="fr-summary fr-mb-4w" role="navigation" aria-labelledby="sommaire"><p class="fr-summary__title" id="sommaire">Sommaire</p><ol class="fr-summary__list">
+    <li><a class="fr-summary__link" href="#pourquoi" data-tab="pourquoi">Pourquoi calculer sa dose d'azote ? (infographie)</a></li>
     <li><a class="fr-summary__link" href="#g-etapes" data-ancre-local="g-etapes">Les étapes</a></li><li><a class="fr-summary__link" href="#g-trouver" data-ancre-local="g-trouver">Où trouver mes informations ?</a></li>
     <li><a class="fr-summary__link" href="#g-calcul" data-ancre-local="g-calcul">Comment est calculée la dose ?</a></li><li><a class="fr-summary__link" href="#g-excel" data-ancre-local="g-excel">Utiliser le modèle Excel</a></li>
     <li><a class="fr-summary__link" href="#g-lexique" data-ancre-local="g-lexique">Lexique</a></li><li><a class="fr-summary__link" href="#donnees" data-ancre-local="donnees">Mes informations et la confidentialité</a></li></ol></nav>
@@ -1623,6 +1834,17 @@ function pdfFichePage(doc, p, y){
   cy = AT(doc, {startY:cy + 4, head:[["Poste du bilan", "", "kg N/ha"]], body:L,
     foot:[["Dose calculée", "=", fmt(r.doseCalc)], [`Plafond GREN ${r.cult.nom}`, "", r.cult.plafond === "" ? "—" : fmt(r.plafond)], ["DOSE FINALE PRÉVISIONNELLE", "", fmt(r.doseFinale)]],
     columnStyles:{1:{halign:"center", cellWidth:10}, 2:{halign:"right", cellWidth:28}}, footStyles:{fillColor:[227,227,253], textColor:[0,0,145]}, styles:{fontSize:8.5}, showFoot:"lastPage"});
+  { // Barre « D'où vient l'azote de la culture ? »
+    const b = partsBilan(r); const W = doc.internal.pageSize.getWidth() - 28; const max = Math.max(b.besoin, b.total + b.manque, 1); let x = 14; const y0 = cy + 12;
+    doc.setFont("Marianne", "bold"); doc.setFontSize(9.5); doc.setTextColor(22, 22, 22); doc.text("D'où vient l'azote de la culture ?", 14, cy + 8);
+    for (const p_ of POSTES) { const w = b.v[p_.k] / max * W; if (w < 0.3) continue; doc.setFillColor(...p_.pdf); doc.rect(x, y0, w, 7, "F");
+      if (p_.k === "engrais" && w > 14) { doc.setTextColor(255, 255, 255); doc.setFontSize(8); doc.text(fmt(b.v[p_.k]), x + w / 2, y0 + 4.8, {align:"center"}); } x += w; }
+    if (b.manque > 0.5) { const w = b.manque / max * W; doc.setDrawColor(150); doc.setLineDashPattern([1, 1], 0); doc.rect(x, y0, w, 7, "S"); doc.setLineDashPattern([], 0); }
+    if (b.besoin > 0) { const xb = 14 + b.besoin / max * W; doc.setDrawColor(22); doc.setLineWidth(.6); doc.line(xb, y0 - 2, xb, y0 + 9); doc.setLineWidth(.2); doc.setFontSize(7); doc.setTextColor(22, 22, 22); doc.text(`besoin ${fmt(b.besoin)}`, xb, y0 - 3, {align:"center"}); }
+    let lx = 14; const ly = y0 + 13; doc.setFont("Marianne", "normal"); doc.setFontSize(7.5);
+    for (const p_ of POSTES) { doc.setFillColor(...p_.pdf); doc.rect(lx, ly - 2.6, 3, 3, "F"); doc.setTextColor(22, 22, 22); const t = `${p_.l} : ${fmt(b.v[p_.k])} kg`; doc.text(t, lx + 4.5, ly); lx += doc.getTextWidth(t) + 10; }
+    cy = ly + 2;
+  }
   doc.setFont("Marianne", "bold"); doc.setFontSize(10); doc.setTextColor(0, 0, 145);
   doc.text(`Soit ${fmt(r.doseFinale * num(p.surface))} kg N sur la parcelle · engrais minéral prévu : ${fmt(r.minPrevu)} kg N/ha${r.reste > 0 ? ` (reste à apporter : ${fmt(r.reste)})` : ""}`, 14, cy + 7);
   doc.setTextColor(22, 22, 22);
@@ -1714,7 +1936,9 @@ document.addEventListener("click", async ev => {
     case "export": download(`Calculette-GREN_${(normTxt(S.exploitation.raison) || S.exploitation.pacage || "mes-donnees").replace(/ /g, "-")}_${new Date().toLocaleDateString("fr-FR").replace(/\//g, "-")}.gren`, JSON.stringify(S), "application/octet-stream"); toast("Copie enregistrée dans vos téléchargements."); suivre("export_sauvegarde"); break;
     case "adminOuvrir": adminConnexion(); break;
     case "creerCompte": creerCompteAdmin(); break;
-    case "copierLigne": { const t_ = $("#ligneCompte")?.textContent || ""; try { await navigator.clipboard.writeText(t_.trim()); toast("Ligne copiée : collez-la dans config.js."); } catch(e){ toast("Copie impossible : sélectionnez la ligne à la main.", true); } break; }
+    case "supprCompte": supprimerCompteAdmin(t.dataset.id); break;
+    case "mdpCompte": changerMdpAdmin(t.dataset.id); break;
+    case "retelechargerComptes": if (S.comptesFichier) deposerComptes(S.comptesFichier, "Le fichier est prêt."); break;
     case "adminDeconnexion": try { sessionStorage.removeItem("gren-admin-local"); } catch(e){} toast("Déconnecté de l'espace administrateur."); aller("exploitation"); break;
     case "addParcelle": S.parcelles.push({id:uid(), ilot:String(S.parcelles.length + 1), num:"1", nom:"", surface:"", sol:S.exploitation.sol || "limsain", zone:"standard", dept:S.exploitation.departement}); save(); render(); break;
     case "delParcelle": { const pid = t.closest("tr").dataset.pid; const p = byId(S.parcelles, pid);
@@ -1806,7 +2030,7 @@ document.addEventListener("change", ev => {
   if (a === "refSel") { S.refSel = t.value; save(); render(); }
   if (a === "ppfGroup") { S.ppfGroup = t.checked; save(); render(); }
 });
-window.addEventListener("hashchange", () => { const h = location.hash.slice(1); if (TABS.some(x => x[0] === h) && h !== S.tab) aller(h); });
+window.addEventListener("hashchange", () => { const h = location.hash.slice(1); if ((TABS.some(x => x[0] === h) || VUES_CACHEES[h]) && h !== S.tab) aller(h); });
 
 /* =========================================================================
    IMPORT / EXPORT
@@ -1851,8 +2075,9 @@ function demoState(){
 /* =========================================================================
    DÉMARRAGE
    ========================================================================= */
-{ const h = location.hash.slice(1); if (TABS.some(x => x[0] === h)) S.tab = h; }
+{ const h = location.hash.slice(1); if (TABS.some(x => x[0] === h) || VUES_CACHEES[h]) S.tab = h; }
 render();
+chargerComptes().then(() => { if (S.tab === "admin") render(); });
 suivre("visite");
 syncServeur();
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});

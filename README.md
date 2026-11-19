@@ -121,7 +121,8 @@ Application web (HTML/JS, sans serveur obligatoire) au **Système de Design de l
 - **Calcul** : rendement (référence GREN, historique 5 ans hors extrêmes, saisie libre), RSH, CIPAN, pailles, irrigation, effluents (Keq selon la période), arrière-effet N-1, pâturage (convertisseur UGB). Formule en blocs visuels et détail du calcul.
 - **Groupes** de parcelles selon les 5 conditions ; **verrous** calendrier d'épandage et plafond 170 kg N/ha.
 - **Exporter et comparer** (un seul onglet) : plan de fumure en PDF (simple ou détaillé par parcelle), tableau pour Excel ; comparaison avec un fichier de résultats (tableau Excel en CSV avec une colonne « dose », ou copie Calculette GREN) ou avec ses résultats gardés de côté ; copie des données (fichier `.gren`) pour changer d'appareil.
-- **Espace administrateur** dans l'application (bouton en haut à droite) : référentiel GREN et lien vers le backoffice. Accès **temporaire** `admin` / `nimda`, réglable dans `config.js` — il masque les réglages mais ne protège rien (visible dans le code de la page).
+- **Espace administrateur** dans l'application (bouton en haut à droite) : référentiel GREN, comptes et lien vers le backoffice. Comptes dans `comptes-admin.json` (empreintes PBKDF2), gérés depuis l'application : le fichier mis à jour se dépose sur GitHub par glisser-déposer, sans écrire de code.
+- **Résultats visuels** : barre « D'où vient l'azote ? » par parcelle (sol, précédent, effluents, engrais), équivalent en ammonitrate, vue d'ensemble de l'exploitation ; **infographie** « Pourquoi calculer sa dose d'azote ? » (`#pourquoi`).
 - Mémoire pluriannuelle, sauvegarde JSON, hors connexion, installable sur mobile.
 - Données de l'exploitation **uniquement dans le navigateur**. Si un serveur est configuré : bandeau d'annonce, mode maintenance, référentiel officiel publié et mesure d'audience anonyme.
 
