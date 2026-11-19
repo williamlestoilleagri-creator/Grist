@@ -59,7 +59,7 @@ function analyserOrigine(wb){
     if (/^(9|10|11|12)\.1/.test(og.sheet)){ const cv = { Domaine:null, Prestataire:(D.conventions.find(x => x.sheet === og.sheet) || {}).nom || null, Fonction_signataire:null, reps:[] }; P.conventions.push(cv); cible = cv.reps; }
     if (/^13\./.test(og.sheet)){ const pr = D.producteurs.find(x => x.sheet === og.sheet) || {}; const pv = { Nom:pr.nom || null, Produits_adhesion:pr.produits || null, reps:[] }; P.producteurs.push(pv); cible = pv.reps; }
     for (const it of og.items){
-      const p = REF_BY_TEXT.get(feuille + "|" + norm(it.critere)) || rapprocher(feuille, it.critere, cible);
+      const p = REF_BY_TEXT.get(feuille + "|" + norm(it.critere)) || (/^nom du prestataire/i.test(one(it.critere)) && REF.find(q => q.Feuille === feuille && /^nom du prestataire/i.test(q.Libelle || ""))) || rapprocher(feuille, it.critere, cible);
       if (!p){ P.nonReconnus.push(`${og.sheet} : ${one(it.critere).slice(0, 90)}`); continue; }
       if (p.Type_reponse === "Montant (calculé)" || !["Question", "Sous-question"].includes(p.Niveau)) continue; // calculé par Grist, ou simple consigne
       const v = { Avec_quoi:it.avec || null, Description:it.desc || null, Observation:it.obs || null, Resultat:resultatDe(it.res, p) };
@@ -147,7 +147,8 @@ function opExistante(P){ const n = norm(P.op.N_OP || ""), rs = norm(P.op.Raison_
   return rows(T.OP).find(o => (n && norm(o.N_OP || "") === n) || (rs && norm(o.Raison_sociale || "") === rs)) || null; }
 function renderImport(){
   const I = S.import; if (!I) return; const P = I.plan;
-  const op = opExistante(P), fil = rows(T.FIL).find(f => norm(f.Nom) === norm(P.filiereNom));
+  const ALIAS = { fl:"f l", "fruits et legumes":"f l", horti:"horticulture" }; const nf = ALIAS[norm(P.filiereNom)] || norm(P.filiereNom);
+  const op = opExistante(P), fil = rows(T.FIL).find(f => norm(f.Nom) === nf);
   const nRep = P.reps.length + P.conventions.reduce((s, c) => s + c.reps.length, 0) + P.producteurs.reduce((s, c) => s + c.reps.length, 0);
   const nRemplis = [P.reps, ...P.conventions.map(c => c.reps), ...P.producteurs.map(c => c.reps)].flat().filter(x => Object.values(x.v).some(v => v != null && v !== "")).length;
   const doublon = fil && op && rows(T.CTRL).find(c => c.OP === op.id && c.Filiere === fil.id && c.Date_debut && c.Date_debut === P.ctrl.Date_debut);
@@ -192,7 +193,10 @@ async function executerImport(fid){
     P.reps.forEach(x => rep(x, 0, 0));
     for (const cv of P.conventions){ const [id] = await act([["AddRecord", T.CONV, null, { Controle:cid, Domaine:cv.Domaine, Prestataire:cv.Prestataire, Fonction_signataire:cv.Fonction_signataire || null }]]); cv.reps.forEach(x => rep(x, id, 0)); }
     for (const pv of P.producteurs){ const [id] = await act([["AddRecord", T.PROD, null, { Controle:cid, Nom:pv.Nom, Produits_adhesion:pv.Produits_adhesion || null, SIRET:pv.SIRET || null, Montant_rapprochement:pv.Montant_rapprochement ?? null }]]); pv.reps.forEach(x => rep(x, 0, id)); }
-    const vus = new Set(); const uniques = reps.filter(r => { const k = `${r.Point}|${r.Convention}|${r.Producteur}`; if (vus.has(k)) return false; vus.add(k); return true; });
+    // classeur complet : on ne garde pas les critères vides réservés à une autre filière
+    const dropF = dropSheets(fid), utiles = new Set(["Resultat", "Avec_quoi", "Description", "Reponse_texte", "Valeur_n_1", "Valeur_n", "Montant", "Observation"]);
+    const garder = r => { const p = REF_BY_ID.get(r.Point); return Object.keys(r).some(k => utiles.has(k)) || (p && !p.Retire && p.fils.includes(fid) && !dropF.has(p.Feuille)); };
+    const vus = new Set(); const uniques = reps.filter(garder).filter(r => { const k = `${r.Point}|${r.Convention}|${r.Producteur}`; if (vus.has(k)) return false; vus.add(k); return true; });
     await bulkAdd(T.REP, uniques);
     await reload(); const ajout = await genererGrille(cid);
     S.ctrlId = cid; S.groupe = null; S.import = null; $("fImport").value = ""; $("apercuImport").innerHTML = "";

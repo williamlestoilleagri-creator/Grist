@@ -220,7 +220,7 @@ function parseOnglet(name, g, D){
     if (/observations complémentaires|^observations du contr/.test(low)){ obsNext = true; continue; }
     if (/^(i|ii|iii|iv|v|vi)\s*[-–.]/.test(low) || /^(secteur |op sans|op avec|a- |b- |a\) |b\) |c\) |achats extérieurs|respect de l.apport|cas des op)/.test(low)){ section = one(crit); continue; }
     if (/^(point de vigilance|précision|observation :|→|etablir la vpc|contrôle du respect des dispositions|remarque|>)/.test(low)) continue;
-    if (/^nom du prestataire/.test(low)){ const v = one(crit).split(":").slice(1).join(":").replace(/[.…]+/g,"").trim(); if (v) D.conventions.push({ sheet:name, nom:v }); }
+    if (/^nom du prestataire/.test(low)){ const v = one(crit).split(":").slice(1).join(":").split(/fonction\s*:/i)[0].replace(/[.…]+/g,"").trim(); if (v) D.conventions.push({ sheet:name, nom:v }); }
     const item = { num, critere:crit, section, type:"text", avec:"", desc:"", res:null, obs:"", v1:null, v2:null, texte:"" };
     const right = g.mergeAt(r, hdr.crit + 1) || g.mergeAt(r, hdr.crit + 2);
     if (right && right.c2 >= (hdr.obs || 7) - 1){ item.texte = g.txt(r, right.c1); og.items.push(item); continue; }
