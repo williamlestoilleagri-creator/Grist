@@ -49,7 +49,10 @@ function dialog({title, body, buttons = [{label:"OK"}]}){
 }
 const confirmer = async (title, body, ok = "Confirmer") => (await dialog({title, body:`<p>${body}</p>`, buttons:[{label:"Annuler", secondaire:true, value:0}, {label:ok, value:1}]})).choix === 1;
 function download(name, content, type){ const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([content], {type})); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
-function csv(name, head, rows){ const l = r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";"); download(name, "﻿" + [head, ...rows].map(l).join("\r\n"), "text/csv"); }
+// Neutralise l'« injection de formule » : une cellule commençant par = + - @ (ou tabulation / retour) serait
+// exécutée comme formule par Excel. Ces journaux contiennent des textes saisis par des attaquants.
+const cellSure = v => { const t = String(v ?? ""); return /^[=+\-@\t\r]/.test(t) ? "'" + t : t; };
+function csv(name, head, rows){ const l = r => r.map(v => `"${cellSure(v).replace(/"/g, '""')}"`).join(";"); download(name, "﻿" + [head, ...rows].map(l).join("\r\n"), "text/csv"); }
 function ua(s){ s = String(s || ""); if (!s) return "—";
   const nav = /Edg\//.test(s) ? "Edge" : /Firefox\//.test(s) ? "Firefox" : /Chrome\//.test(s) ? "Chrome" : /Safari\//.test(s) ? "Safari" : /curl|python|wget|go-http|java|node|axios|okhttp/i.test(s) ? "Script / robot" : "Autre";
   const os = /Windows/.test(s) ? "Windows" : /Android/.test(s) ? "Android" : /iPhone|iPad/.test(s) ? "iOS" : /Mac OS/.test(s) ? "macOS" : /Linux/.test(s) ? "Linux" : "";
