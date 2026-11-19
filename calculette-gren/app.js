@@ -213,7 +213,7 @@ function calc(p, y){
   const nOrgEff = org.reduce((a, o) => a + o.nEff, 0);
   const nOrgTot = org.reduce((a, o) => a + o.nTot, 0);
   const arrItems = orgItems(p.id, y-1);
-  const arriere = arrItems.reduce((a, o) => a + o.arr, 0);
+  const arriere = arrItems.length ? arrItems.reduce((a, o) => a + o.arr, 0) : num(c.arriereSaisi);
   const pat = patureN(p, c);
   const fournSol = rsh + mh + precEff + cipanEff;
   const fournOrg = nOrgEff + arriere + pat.nEff;
@@ -1009,7 +1009,10 @@ const enTete = t => ({v:t, s:1}), aRemplir = v => ({v:v ?? "", s:4}), cadre = v 
 const nomFichier = base => `${base}_${(normTxt(S.exploitation.raison) || S.exploitation.pacage || "exploitation").replace(/ /g, "-")}_${S.annee}.xlsx`;
 function telechargerBlob(blob, nom){ const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = nom; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); }
 
-function telechargerModele(){
+/* Un seul format de classeur : le modèle à remplir. Avec avecRes, les résultats calculés sont ajoutés
+   (colonnes grises « Résultat : … ») : le fichier reste réimportable et sert aussi à la comparaison. */
+const enTeteRes = t => ({v:t, s:6}), resultat = v => ({v:v ?? "", s:7});
+function classeurGREN(avecRes){
   const y = S.annee; const e = S.exploitation; const XL = window.XLSX_MINI;
   const L = {sols:R().sols.map(x => x.nom), zones:ZONES_XL, cultures:R().cultures.map(x => x.nom), precedents:R().precedents.map(x => x.nom), couverts:R().cipan.map(x => x.nom),
     pailles:PAILLES_XL, ouinon:["Oui", "Non"], types:["Organique", "Minéral"], produits:[...R().effluents.map(x => x.nom), ...R().mineraux.map(x => x.nom)], statuts:["Prévu", "Réalisé"],
@@ -1028,31 +1031,49 @@ function telechargerModele(){
     [cadre("Département"), aRemplir(e.departement ? `${e.departement} — ${DEPTS[e.departement] || ""}` : ""), {v:"Choisissez dans la liste (flèche dans la cellule)", s:3}],
     [cadre("Commune du siège"), aRemplir(e.commune), {v:"", s:3}],
     [cadre("Type de sol le plus courant"), aRemplir(dSol), {v:"Choisissez dans la liste. Utilisé quand une parcelle n'a pas de type de sol", s:3}],
-    [cadre("SAU totale (ha) — facultatif"), aRemplir(e.sau), {v:"Laissez vide : la somme des parcelles sera utilisée", s:3}]],
+    [cadre("SAU totale (ha) — facultatif"), aRemplir(e.sau), {v:"Laissez vide : la somme des parcelles sera utilisée", s:3}],
+    ...(avecRes ? (() => { const b = bilanOrga(y); const tot = S.parcelles.reduce((a, p) => { const r = calc(p, y); return a + (r ? r.doseFinale * num(p.surface) : 0); }, 0);
+      return [[""], [enTeteRes("Résultat"), enTeteRes("Valeur"), enTeteRes("Explication")],
+        [cadre("Résultat : azote à apporter en engrais sur l'exploitation (kg N)"), resultat(Math.round(tot)), {v:"Somme, pour toutes les parcelles, de la dose finale × la surface", s:3}],
+        [cadre("Résultat : azote organique par hectare de SAU (kg N/ha)"), resultat(Math.round(b.parHa)), {v:`Limite de la Directive Nitrates : ${b.plafond} kg N/ha — ${b.parHa > b.plafond ? "DÉPASSEMENT" : "conforme"}`, s:3}],
+        [cadre("Résultat : référentiel utilisé"), resultat(refLabel()), {v:`Calculé le ${new Date().toLocaleDateString("fr-FR")} par la Calculette GREN`, s:3}]]; })() : [])],
     validations:[{ref:"B7", liste:ref("depts")}, {ref:"B9", liste:ref("sols")}]};
   const H = ["N° îlot", "N° parcelle", "Nom de la parcelle", "Surface (ha)", "Type de sol", "Zonage", `Culture récoltée en ${y}`, "Culture précédente",
     "Rendement visé (facultatif, en q/ha ou t MS/ha)", "Reliquat sortie hiver mesuré en kg N/ha (facultatif)", "Couvert avant la culture", "Date de destruction du couvert (jj/mm/aaaa)",
-    "Pailles du précédent", "Irrigation (Oui / Non)", "Notes"];
+    "Pailles du précédent", "Irrigation (Oui / Non)", "Notes",
+    "Animaux au pâturage, en nombre d'UGB (facultatif, prairies)", "Jours de pâture (facultatif)", "Effet des effluents de l'an dernier en kg N/ha (facultatif)"];
   const lignesP = S.parcelles.map(p => { const c = (S.campagnes[y] || {cultures:{}}).cultures[p.id] || {};
+    const r = c.culture ? calc(p, y) : null; const pat = patureN(p, c);
+    const rdtVise = c.rdtMode === "libre" && num(c.rdtLibre) ? num(c.rdtLibre) : c.rdtMode === "hist" && r && !r.forfait && r.rdt.val ? Math.round(r.rdt.val * 10) / 10 : "";
     return [aRemplir(p.ilot), aRemplir(p.num), aRemplir(p.nom), aRemplir(num(p.surface) || ""), aRemplir((solById(p.sol) || {}).nom), aRemplir(ZONES_XL[["standard","ZAR","BV"].indexOf(p.zone || "standard")]),
-      aRemplir(cultureById(c.culture)?.nom || ""), aRemplir(precById(c.precedent)?.nom || ""), aRemplir(c.rdtMode === "libre" && num(c.rdtLibre) ? num(c.rdtLibre) : ""),
+      aRemplir(cultureById(c.culture)?.nom || ""), aRemplir(precById(c.precedent)?.nom || ""), aRemplir(rdtVise),
       aRemplir(c.rshMode === "mesure" && c.rshMesure !== "" ? num(c.rshMesure) : ""), aRemplir((byId(R().cipan, c.cipan) || {}).nom || R().cipan[0].nom), aRemplir(c.cipanDate ? frDate(c.cipanDate) : ""),
-      aRemplir(PAILLES_XL[["", "exportee", "enfouie"].indexOf(c.paille || "")] || PAILLES_XL[0]), aRemplir(c.irrigation ? "Oui" : "Non"), aRemplir(c.notes || "")]; });
+      aRemplir(PAILLES_XL[["", "exportee", "enfouie"].indexOf(c.paille || "")] || PAILLES_XL[0]), aRemplir(c.irrigation ? "Oui" : "Non"), aRemplir(c.notes || ""),
+      aRemplir(pat.ugb ? Math.round(pat.ugb * 100) / 100 : ""), aRemplir(pat.ugb && num(c.pature?.jours) ? num(c.pature.jours) : ""), aRemplir(r && r.arriere ? Math.round(r.arriere) : "")]; });
+  const HR = ["Résultat : besoin de la culture (kg N/ha)", "Résultat : azote fourni par le sol, le précédent et le couvert (kg N/ha)", "Résultat : azote utile des effluents et du pâturage (kg N/ha)",
+    "Résultat : plafond de la culture (kg N/ha)", "Résultat : dose finale (kg N/ha)", "Résultat : total pour la parcelle (kg N)", "Résultat : engrais déjà prévu (kg N/ha)"];
+  if (avecRes) S.parcelles.forEach((p, i) => { const r = calc(p, y);
+    lignesP[i].push(...(r ? [Math.round(r.besoin), Math.round(r.fournSol), Math.round(r.fournOrg), r.cult.plafond === "" ? "" : num(r.plafond), r.doseFinale, Math.round(r.doseFinale * num(p.surface)), Math.round(r.minPrevu)]
+      : ["culture à choisir", "", "", "", "", "", ""]).map(resultat)); });
   const vides = Math.max(20, lignesP.length + 10) - lignesP.length;
-  const parcelles = {name:"Parcelles", actif:true, widths:[10, 11, 24, 12, 30, 30, 34, 34, 22, 22, 34, 20, 28, 14, 30], freeze:1,
-    rows:[{h:48, cells:H.map(enTete)}, ...lignesP, ...Array.from({length:vides}, () => H.map(() => aRemplir("")))],
+  const parcelles = {name:"Parcelles", actif:true, widths:[10, 11, 24, 12, 30, 30, 34, 34, 22, 22, 34, 20, 28, 14, 30, 18, 14, 20, ...(avecRes ? [16, 20, 20, 16, 16, 16, 16] : [])], freeze:1,
+    rows:[{h:avecRes ? 64 : 48, cells:[...H.map(enTete), ...(avecRes ? HR.map(enTeteRes) : [])]}, ...lignesP, ...Array.from({length:vides}, () => H.map(() => aRemplir("")))],
     validations:[["E", "sols"], ["F", "zones"], ["G", "cultures"], ["H", "precedents"], ["K", "couverts"], ["M", "pailles"], ["N", "ouinon"]].map(([c, k]) => ({ref:`${c}2:${c}400`, liste:ref(k)}))};
   const HA = ["N° îlot", "N° parcelle", "Date (jj/mm/aaaa)", "Type d'apport", "Produit", "Quantité par hectare", "Unité (pour information)", "Statut"];
   const lignesA = (S.campagnes[y]?.interventions || []).map(i => { const p = byId(S.parcelles, i.pid) || {}; const org = i.type === "organique"; const pr = org ? effById(i.produit) : minById(i.produit);
-    return [aRemplir(p.ilot), aRemplir(p.num), aRemplir(frDate(i.date)), aRemplir(org ? "Organique" : "Minéral"), aRemplir(pr?.nom || ""), aRemplir(num(i.qte)), cadre(org ? (pr?.unite || "") : "kg de produit"), aRemplir(i.statut === "realise" ? "Réalisé" : "Prévu")]; });
-  const apports = {name:"Apports", widths:[10, 11, 18, 16, 36, 18, 22, 12], freeze:1,
-    rows:[{h:32, cells:HA.map(enTete)}, ...lignesA, ...Array.from({length:Math.max(20, lignesA.length + 10) - lignesA.length}, () => HA.map((_, k) => k === 6 ? cadre("") : aRemplir("")))],
+    const nha = org ? num(i.qte) * (i.teneur !== "" && i.teneur != null ? num(i.teneur) : num(pr?.n)) : num(i.qte) * num(pr?.teneur) / 100;
+    return [aRemplir(p.ilot), aRemplir(p.num), aRemplir(frDate(i.date)), aRemplir(org ? "Organique" : "Minéral"), aRemplir(pr?.nom || ""), aRemplir(num(i.qte)), cadre(org ? (pr?.unite || "") : "kg de produit"), aRemplir(i.statut === "realise" ? "Réalisé" : "Prévu"), ...(avecRes ? [resultat(Math.round(nha))] : [])]; });
+  const apports = {name:"Apports", widths:[10, 11, 18, 16, 36, 18, 22, 12, ...(avecRes ? [18] : [])], freeze:1,
+    rows:[{h:avecRes ? 48 : 32, cells:[...HA.map(enTete), ...(avecRes ? [enTeteRes("Résultat : azote total apporté (kg N/ha)")] : [])]}, ...lignesA, ...Array.from({length:Math.max(20, lignesA.length + 10) - lignesA.length}, () => HA.map((_, k) => k === 6 ? cadre("") : aRemplir("")))],
     validations:[["D", "types"], ["E", "produits"], ["H", "statuts"]].map(([c, k]) => ({ref:`${c}2:${c}400`, liste:ref(k)}))};
   const T = s => ({v:s, s:3});
   const mode = {name:"Mode d'emploi", widths:[110], rows:[
-    [{v:`Calculette GREN — modèle à remplir (campagne ${y - 1}-${y})`, s:2}], [""],
+    [{v:avecRes ? `Calculette GREN — mes résultats (campagne ${y - 1}-${y}), édités le ${new Date().toLocaleDateString("fr-FR")}` : `Calculette GREN — modèle à remplir (campagne ${y - 1}-${y})`, s:2}], [""],
+    ...(avecRes ? [[T("Ce fichier contient vos informations ET vos résultats. Les colonnes grises « Résultat : … » (onglets Parcelles, Apports et Exploitation) sont calculées par la Calculette : modifiez plutôt les cellules jaunes, les résultats seront recalculés à l'import.")],
+      [T("Vous pouvez : • le garder comme trace de votre plan de fumure ; • le modifier puis le réimporter (Accueil → « Importer mon fichier Excel ») ; • l'utiliser pour comparer avec de nouveaux résultats (Exporter et comparer → « J'ai un fichier de résultats »).")], [""]] : []),
     [T("1. Onglet « Exploitation » : remplissez les cellules jaunes (une seule fois, elles seront gardées les années suivantes).")],
     [T("2. Onglet « Parcelles » : une ligne par parcelle. Les colonnes Type de sol, Zonage, Cultures, Couvert, Pailles et Irrigation proposent une liste : cliquez dans la cellule puis sur la petite flèche.")],
+    [T("   Colonnes facultatives en fin de ligne : animaux au pâturage (en UGB : 1 vache laitière = 1 UGB) et jours de pâture pour les prairies, effet des effluents épandus l'an dernier (laissez vide si vous utilisiez déjà la Calculette l'an dernier : il est calculé automatiquement).")],
     [T("3. Onglet « Apports » (facultatif) : vos épandages de fumier, lisier et engrais. Le n° d'îlot et de parcelle doivent être les mêmes que dans l'onglet Parcelles.")],
     [T("4. Enregistrez le fichier au format Excel (.xlsx), puis dans la Calculette : Accueil → « Importer mon fichier Excel ». Un résumé s'affiche avant tout changement.")], [""],
     [{v:"Conseils", s:2}],
@@ -1062,7 +1083,10 @@ function telechargerModele(){
     [T("• Les épandages à une date interdite ne sont pas importés : la Calculette vous les signale.")],
     [T("• Où trouver vos informations (PACAGE, îlots, type de sol, reliquats…) ? Voir « Guide et aide » dans la Calculette.")], [""],
     [T("Ce fichier reste sur votre ordinateur : la Calculette le lit dans votre navigateur et ne l'envoie à personne.")]]};
-  telechargerBlob(XL.ecrire([mode, exploitation, parcelles, apports, listes]), nomFichier("Modele_Calculette-GREN"));
+  return XL.ecrire([mode, exploitation, parcelles, apports, listes]);
+}
+function telechargerModele(){
+  telechargerBlob(classeurGREN(false), nomFichier("Modele_Calculette-GREN"));
   toast("Modèle Excel téléchargé : ouvrez-le, remplissez les cellules jaunes, puis importez-le.");
 }
 
@@ -1075,7 +1099,7 @@ async function importerModele(file){
   const avert = []; const y0 = S.annee;
   // Exploitation
   const exp = {}; let annee = y0;
-  for (const row of feuille("exploitation") || []) { const k = normTxt(versTexte(row[0])); const v = versTexte(row[1]).trim(); if (!k || !v) continue;
+  for (const row of feuille("exploitation") || []) { const k = normTxt(versTexte(row[0])); const v = versTexte(row[1]).trim(); if (!k || !v || k.startsWith("resultat")) continue;
     if (k.includes("campagne")) { const a = parseInt(v, 10); if (a > 2000 && a < 2100) annee = a; }
     else if (k.includes("pacage")) exp.pacage = v.replace(/\D/g, "").slice(0, 9);
     else if (k.includes("raison")) exp.raison = v; else if (k.includes("exploitant")) exp.exploitant = v; else if (k.includes("adresse")) exp.adresse = v;
@@ -1090,7 +1114,8 @@ async function importerModele(file){
     surface:col(h => h.includes("surface")), sol:col(h => h.includes("type de sol") || h === "sol"), zone:col(h => h.includes("zonage") || h === "zone"),
     culture:col(h => h.startsWith("culture recoltee") || h === "culture"), precedent:col(h => h.includes("culture precedente") || h === "precedent"),
     rdt:col(h => h.includes("rendement")), rsh:col(h => h.includes("reliquat")), couvert:col(h => h.includes("couvert") && !h.includes("destruction")),
-    date:col(h => h.includes("destruction")), paille:col(h => h.includes("paille")), irrig:col(h => h.includes("irrig")), notes:col(h => h.includes("note"))};
+    date:col(h => h.includes("destruction")), paille:col(h => h.includes("paille")), irrig:col(h => h.includes("irrig")), notes:col(h => h.includes("note")),
+    ugb:col(h => h.includes("ugb") && !h.startsWith("resultat")), jours:col(h => h.includes("jours de pature")), arr:col(h => h.includes("an dernier") && !h.startsWith("resultat"))};
   if (C.ilot < 0 && C.nom < 0) { await dialog({title:"Colonnes introuvables", body:`<p>L'onglet « Parcelles » doit garder les titres du modèle (N° îlot, N° parcelle, Nom de la parcelle…). Téléchargez un modèle neuf depuis l'accueil.</p>`}); return; }
   const parcelles = [];
   fP.slice(1).forEach((row, i) => { const g = k => C[k] >= 0 ? row[C[k]] : ""; const t = k => versTexte(g(k)).trim();
@@ -1108,6 +1133,9 @@ async function importerModele(file){
     c.cipanDate = versDate(g("date")); if (t("date") && !c.cipanDate) avert.push(`Ligne ${ligne} : date de destruction « ${t("date")} » illisible (jj/mm/aaaa attendu).`);
     const pa = normTxt(t("paille")); c.paille = pa.includes("export") || pa.includes("recolt") ? "exportee" : pa.includes("enfoui") || pa.includes("laiss") ? "enfouie" : "";
     c.irrigation = normTxt(t("irrig")) === "oui"; c.notes = t("notes");
+    const ugb = num(t("ugb")); const ref1 = (R().animaux.find(a => num(a.ugb) === 1) || R().animaux[0] || {}).id;
+    c.pature = ugb > 0 ? {jours:t("jours") ? String(num(t("jours"))) : "", animaux:[{cat:ref1, n:String(ugb)}]} : {jours:"", animaux:[]};
+    c.arriereSaisi = t("arr") !== "" && /\d/.test(t("arr")) ? String(num(t("arr"))) : "";
     parcelles.push({p, c, ligne}); });
   if (!parcelles.length) { await dialog({title:"Aucune parcelle trouvée", body:`<p>L'onglet « Parcelles » est vide. Remplissez au moins une ligne (n° d'îlot ou nom, et surface).</p>`}); return; }
   // Apports
@@ -1184,7 +1212,8 @@ async function lireResultats(file){
   if (file.size > MAX_TEXTE) throw new Error("fichier trop volumineux (10 Mo maximum)");
   const debut = new Uint8Array(await file.slice(0, 2).arrayBuffer());
   if (debut[0] === 0x50 && debut[1] === 0x4B) { const sh = await window.XLSX_MINI.lire(file);
-    const noms = Object.keys(sh); const k = noms.find(n => (sh[n] || []).slice(0, 20).some(r => (r || []).some(c => normTxt(versTexte(c)).includes("dose")))) || noms[0];
+    const ligneTitre = r => (r || []).some(c => normTxt(versTexte(c)).includes("dose")) && (r || []).some(c => /\b(ilot|nom|identifiant|parcelle)\b/.test(normTxt(versTexte(c))));
+    const noms = Object.keys(sh); const k = noms.find(n => (sh[n] || []).slice(0, 20).some(ligneTitre)) || noms.find(n => normTxt(n) === "parcelles") || noms[0];
     return parseTableau(sh[k] || [], file.name); }
   const txt = await file.text();
   return parseResultats(txt, file.name);
@@ -1192,32 +1221,8 @@ async function lireResultats(file){
 
 /* Exports en tableau Excel */
 function exporterPPFxlsx(){
-  const y = S.annee; const e = S.exploitation; const lines = ppfLines(y);
-  const H = ["N° îlot", "N° parcelle", "Nom de la parcelle", "Surface (ha)", "Zonage", "Culture", "Culture précédente", "Rendement visé", "Unité", "Besoin de la culture (kg N/ha)",
-    "Reliquat sortie hiver", "Fourni par le sol (humus)", "Autres fournitures (précédent, couvert, an dernier, pâturage)", "Azote utile des effluents", "Correction", "Dose calculée",
-    "Plafond", "Dose finale (kg N/ha)", "Total pour la parcelle (kg N)", "Engrais déjà prévu (kg N/ha)"];
-  const rows = lines.map(({p, r, members}) => { const b = [cadre(members ? "" : p.ilot), cadre(members ? "" : p.num), cadre(members ? `${p.nom} (${p._members})` : p.nom), cadre(num(p.surface)), cadre(p.zone || "standard")];
-    if (!r) return [...b, cadre("culture pas encore choisie")];
-    const n = v => cadre(Math.round(v)); return [...b, cadre(r.cult.nom), cadre(r.prec?.nom || ""), cadre(r.forfait ? "" : Math.round(r.rdt.val * 10) / 10), cadre(r.forfait ? "forfait" : r.cult.unite),
-      n(r.besoin), n(r.rsh), n(r.mh), n(r.precEff + r.cipanEff + r.arriere + r.pat.nEff), n(r.nOrgEff), n(r.corr), n(r.doseCalc), cadre(r.cult.plafond === "" ? "" : num(r.plafond)), {v:r.doseFinale, s:4},
-      n(r.doseFinale * num(p.surface)), n(r.minPrevu)]; });
-  const tot = lines.reduce((a, x) => a + (x.r ? x.r.doseFinale * num(x.p.surface) : 0), 0);
-  const b = bilanOrga(y);
-  const feuille = {name:"Plan de fumure", actif:true, freeze:6, widths:[9, 10, 26, 10, 10, 24, 24, 11, 9, 13, 11, 11, 18, 13, 10, 10, 9, 13, 14, 13], rows:[
-    [{v:`Plan prévisionnel de fumure azotée — campagne ${y - 1}-${y}`, s:2}],
-    [`Exploitation : ${e.raison || "—"}`, "", "", "", "", `N° PACAGE : ${e.pacage || "—"}`, "", "", "", `Exploitant·e : ${e.exploitant || "—"}`],
-    [`SAU : ${fmt(sau(), 2)} ha`, "", "", "", "", `Azote organique : ${fmt(b.parHa)} kg N/ha (limite ${b.plafond})`, "", "", "", `Édité le ${new Date().toLocaleDateString("fr-FR")} — Calculette GREN`],
-    [{v:"Doses en kg d'azote par hectare, calculées par la méthode du bilan (référentiel : " + refLabel() + "). Document d'aide à la décision, non réglementaire.", s:3}], [""],
-    {h:60, cells:H.map(enTete)}, ...rows,
-    [{v:"Total", s:1}, "", "", {v:Math.round(lines.reduce((a, x) => a + num(x.p.surface), 0) * 100) / 100, s:1}, "", "", "", "", "", "", "", "", "", "", "", "", "", "", {v:Math.round(tot), s:1}]]};
-  const ap = (S.campagnes[y]?.interventions || []).slice().sort((a, b_) => (a.date || "").localeCompare(b_.date || ""));
-  const apports = {name:"Apports", freeze:1, widths:[9, 10, 24, 12, 12, 34, 14, 12, 14, 12], rows:[
-    ["N° îlot", "N° parcelle", "Parcelle", "Date", "Type", "Produit", "Quantité / ha", "Unité", "Azote total (kg N/ha)", "Statut"].map(enTete),
-    ...ap.map(i => { const p = byId(S.parcelles, i.pid) || {}; const org = i.type === "organique"; const pr = org ? effById(i.produit) : minById(i.produit);
-      const nha = org ? num(i.qte) * (i.teneur !== "" && i.teneur != null ? num(i.teneur) : num(pr?.n)) : num(i.qte) * num(pr?.teneur) / 100;
-      return [p.ilot, p.num, parcelLabel(p), frDate(i.date), org ? "Organique" : "Minéral", pr?.nom || "", num(i.qte), org ? (pr?.unite || "") : "kg", Math.round(nha), i.statut === "realise" ? "Réalisé" : "Prévu"].map(cadre); })]};
-  telechargerBlob(window.XLSX_MINI.ecrire([feuille, apports]), nomFichier("Plan-de-fumure"));
-  suivre("export_csv"); toast("Tableau Excel téléchargé.");
+  telechargerBlob(classeurGREN(true), nomFichier("Resultats_Calculette-GREN"));
+  suivre("export_csv"); toast("Résultats téléchargés au format du modèle Excel (colonnes grises « Résultat »).");
 }
 function exporterComparatifXlsx(){
   const y = S.annee; const ref = byId(S.references, S.refSel) || S.references[0]; const {rows} = comparaison(ref, y);
@@ -1260,7 +1265,7 @@ VIEWS.exporter = () => {
     ${pret ? `<div class="fr-grid-row fr-grid-row--gutters">
       ${choix("Plan de fumure", "Le document récapitulatif de la campagne, à garder ou à présenter lors d'un contrôle.", btn("Télécharger (PDF)", 'data-act="pdfPPF"', {icon:"download-line"}))}
       ${choix("Plan de fumure détaillé", "Le plan de fumure suivi d'une page de calcul pour chaque parcelle.", btn("Télécharger (PDF)", 'data-act="pdfPPFfiches"', {kind:"secondary", icon:"download-line"}))}
-      ${choix("Tableau Excel", "Tous les chiffres dans un fichier Excel, pour les retravailler ou les transmettre à votre technicien.", btn("Télécharger (Excel)", 'data-act="xlsxPPF"', {kind:"secondary", icon:"download-line"}))}
+      ${choix("Mes résultats en Excel", "Le modèle Excel rempli avec vos informations et vos résultats (colonnes grises). Vous pouvez le modifier et le réimporter, ou le garder pour comparer l'an prochain.", btn("Télécharger (Excel)", 'data-act="xlsxPPF"', {kind:"secondary", icon:"download-line"}))}
     </div>
     ${(camp(y).groupes || []).length ? `<div class="fr-mt-2w">${fCheckbox("Regrouper les parcelles des groupes validés", 'data-act="ppfGroup"', S.ppfGroup)}</div>` : ""}
     <section class="fr-accordion fr-mt-2w"><h3 class="fr-accordion__title"><button type="button" class="fr-accordion__btn" aria-expanded="false" aria-controls="acc-apercu">Voir l'aperçu de mon plan de fumure</button></h3>
@@ -1486,6 +1491,7 @@ VIEWS.aide = () => `${bar("Guide et aide", false)}
     <ol><li>Sur l'accueil, cliquez sur <strong>« Télécharger le modèle Excel »</strong>. S'il y a déjà des informations dans la Calculette, elles sont reprises dans le fichier.</li>
       <li>Ouvrez le fichier et remplissez les <strong>cellules jaunes</strong> des onglets Exploitation, Parcelles et (si vous le souhaitez) Apports. Les colonnes avec une flèche proposent une liste de choix.</li>
       <li>Enregistrez le fichier (format .xlsx), puis cliquez sur <strong>« Importer mon fichier Excel »</strong>. Un résumé s'affiche : vous confirmez avant tout changement.</li></ol>
+    <p><strong>Un seul format pour tout</strong> : quand vous téléchargez « Mes résultats en Excel » (onglet Exporter et comparer), vous obtenez ce même modèle, rempli avec vos informations, plus des <strong>colonnes grises « Résultat : … »</strong> (besoin, azote fourni, dose finale, total). Ce fichier peut être gardé comme trace, modifié puis réimporté, ou utilisé l'an prochain pour comparer vos résultats.</p>
     <p class="fr-mb-0">${btn("Télécharger le modèle Excel", 'data-act="modele"', {kind:"secondary", sm:true, icon:"download-line"})}</p></section>
   <section class="gren-panel" id="g-lexique"><h2 class="fr-h4">Lexique</h2>
     <dl class="gren-lexique">${LEXIQUE.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join("")}</dl></section>
