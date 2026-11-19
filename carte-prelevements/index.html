@@ -100,6 +100,10 @@
   }
   #legende button i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
   #legende button.masque { opacity: .4; text-decoration: line-through; }
+  #legende .groupe-leg { width: 100%; font-size: 11px; font-weight: 700; color: var(--bleu-france); text-transform: uppercase; margin-top: 4px; }
+  #legende .groupe-leg:first-child { margin-top: 0; }
+  .etiq.ref { background: #e3e3fd; color: #000091; }
+  .etiq.manque { background: #ffe9e6; color: #b60000; }
   #contenu { flex: 1; overflow: auto; padding: 8px 12px 16px; -webkit-overflow-scrolling: touch; }
   #carte { flex: 1; min-width: 0; position: relative; }
 
@@ -337,6 +341,9 @@
   const COL_DATE = 'Date_RDV';
   const COL_PRELEVEUR = 'Preleveur';
   const COL_ORGANISME = 'Organisme';
+  const COL_RAISON = 'Cle_parcelle_PACAGE_ilot_parcelle__Raison_de_la_selection';
+  const RAISON_REFERENCE = /r[ée]f[ée]rence/i;    // « Parcelles de référence » : 2 prélèvements attendus
+  const PRELEVEMENTS_REFERENCE = 2;
   const ZOOM_PARCELLES = 12;             // en dessous : bulles par commune ; au-dessus : parcelles
   const COLONNES_MASQUEES = new Set(['id', 'manualSort', 'Description', 'Description_2', COL_LAT, COL_LON]);
   const COULEURS = ['#000091', '#18753c', '#b34000', '#6a6af4', '#009081', '#a558a0', '#c3992a', '#ce0500', '#7d4e5b', '#417dc4'];
@@ -363,6 +370,8 @@
   let communes = new Map();       // nom -> { nom, rdvs: [] }
   let couleurStatut = new Map();
   const statutsMasques = new Set();
+  const raisonsMasquees = new Set();
+  const typesMasques = new Set();   // 'avec' / 'sans' : rendez-vous daté ou non
   let vue = { type: 'communes' };
   let rdvActif = null;
   let curseurParMoi = null;
@@ -682,10 +691,22 @@
         telPreleveur: propre(preleveur.Telephone),
         organisme: propre(r[COL_ORGANISME]) || propre(preleveur.Organisme),
         statut: propre(r[COL_STATUT]),
+        raison: propre(r[COL_RAISON]) || propre(parcelle.Raison_de_la_selection) || 'Raison non renseignée',
         date: versDate(r[COL_DATE]),
         lat: pos ? pos[0] : NaN, lon: pos ? pos[1] : NaN, localise: !!pos, origineCoords: origine,
         parcelleTrouvee: !!(parcelle && parcelle.id),
       });
+    }
+    // Rang du prélèvement pour une même parcelle (les parcelles de référence en ont 2)
+    const parCle = new Map();
+    for (const r of tousRdvs) {
+      const k = cleCompacte(r.cle) || '#' + r.id;
+      if (!parCle.has(k)) parCle.set(k, []);
+      parCle.get(k).push(r);
+    }
+    for (const l of parCle.values()) {
+      l.sort(function (a, b) { return ((a.date || Infinity) - (b.date || Infinity)) || a.id - b.id; });
+      l.forEach(function (r, i) { r.rang = i + 1; r.nbPrel = l.length; });
     }
     rdvs = tousRdvs.filter(function (r) { return r.dansVue; });
     parId = new Map(tousRdvs.map(function (r) { return [r.id, r]; }));
@@ -716,10 +737,14 @@
     if (jourChoisi) { if (!r.date || jour(r.date) !== jourChoisi) return false; }   // jour choisi : seulement ses rendez-vous
     else if ($('masquer-passes').checked && estPasse(r)) return false;
     if (statutsMasques.has(r.statut)) return false;
+    if (raisonsMasquees.has(r.raison)) return false;
+    if (typesMasques.has(typeRdv(r))) return false;
     const f = sansAccents($('filtre').value.trim());
     if (!f) return true;
-    return sansAccents([r.commune, r.cp, r.exploitation, r.pacage, r.cle, r.preleveur, r.organisme].join(' ')).includes(f);
+    return sansAccents([r.commune, r.cp, r.exploitation, r.pacage, r.cle, r.preleveur, r.organisme, r.raison].join(' ')).includes(f);
   }
+  function typeRdv(r) { return r.date ? 'avec' : 'sans'; }
+  function estReference(r) { return RAISON_REFERENCE.test(r.raison); }
   function cleExploitation(r) { return r.pacage || r.exploitation; }
 
   function regrouper() {
@@ -838,7 +863,9 @@
     const nbExpl = new Set(vis.map(cleExploitation)).size;
     const nonLoc = vis.filter(function (r) { return !r.localise; }).length;
     $('chiffres').innerHTML =
-      '<div><b>' + vis.length + '</b><span>parcelles</span></div>' +
+      '<div title="Lignes de ' + esc(tableId) + ' affichées (' + rdvs.length + ' dans la vue' + (nbPasses && $('masquer-passes').checked ? ', dont ' + nbPasses + ' passées écartées' : '') + ')"><b>' + vis.length + '</b><span>prélèvements</span></div>' +
+      '<div title="Parcelles distinctes (une parcelle de référence compte 2 prélèvements)"><b>' + new Set(vis.map(function (r) { return cleCompacte(r.cle) || '#' + r.id; })).size + '</b><span>parcelles</span></div>' +
+      (vis.some(function (r) { return !r.date; }) ? '<div title="Lignes sans date de rendez-vous"><b style="color:#ce0500">' + vis.filter(function (r) { return !r.date; }).length + '</b><span>sans RDV</span></div>' : '') +
       '<div><b>' + nbExpl + '</b><span>exploitations</span></div>' +
       '<div><b>' + communes.size + '</b><span>communes</span></div>' +
       (nonLoc ? '<div class="cliquable" id="voir-non-loc" title="Sans latitude / longitude, ni dans le rendez-vous ni dans les tables de parcelles. Cliquez pour les lister."><b style="color:var(--rouge-marianne)">' + nonLoc + '</b><span>non localisées</span></div>' : '');
@@ -878,16 +905,25 @@
       }).join('');
       return;
     }
-    const comptes = new Map();
+    const st = new Map(), ty = new Map(), ra = new Map();
+    const plus = function (m, k) { m.set(k, (m.get(k) || 0) + 1); };
     for (const r of rdvs) {
       if ($('masquer-passes').checked && estPasse(r)) continue;
-      comptes.set(r.statut, (comptes.get(r.statut) || 0) + 1);
+      plus(st, r.statut); plus(ty, typeRdv(r)); plus(ra, r.raison);
     }
-    $('legende').innerHTML = [...comptes.keys()].sort().map(function (s) {
-      return '<button type="button" data-statut="' + esc(s) + '" class="' + (statutsMasques.has(s) ? 'masque' : '') +
-        '" title="Afficher / masquer"><i style="background:' + couleur(s) + '"></i>' + esc(s || 'Sans statut') +
-        ' (' + comptes.get(s) + ')</button>';
-    }).join('');
+    const bouton = function (filtre, val, masque, pastille, texte, n) {
+      return '<button type="button" data-filtre="' + filtre + '" data-val="' + esc(val) + '" class="' + (masque ? 'masque' : '') +
+        '" title="Afficher / masquer">' + (pastille ? '<i style="background:' + pastille + '"></i>' : '') + esc(texte) + ' (' + n + ')</button>';
+    };
+    $('legende').innerHTML =
+      '<span class="groupe-leg">Statut</span>' +
+      [...st.keys()].sort().map(function (s) { return bouton('statut', s, statutsMasques.has(s), couleur(s), s || 'Sans statut', st.get(s)); }).join('') +
+      '<span class="groupe-leg">Rendez-vous</span>' +
+      [['avec', 'Avec rendez-vous (date fixée)'], ['sans', 'Parcelle sans rendez-vous']].filter(function (e) { return ty.has(e[0]); })
+        .map(function (e) { return bouton('type', e[0], typesMasques.has(e[0]), e[0] === 'avec' ? '#18753c' : '#ce0500', e[1], ty.get(e[0])); }).join('') +
+      '<span class="groupe-leg">Raison de la sélection</span>' +
+      [...ra.keys()].sort(function (a, b) { return a.localeCompare(b, 'fr'); })
+        .map(function (s) { return bouton('raison', s, raisonsMasquees.has(s), '', s, ra.get(s)); }).join('');
   }
 
   function barreStatuts(l) {
@@ -943,10 +979,11 @@
       ligne('Préleveur', r.preleveur) + ligne('Organisme de prélèvement', r.organisme) +
       ligne('Îlot - parcelle', ilot) + ligne('Surface (ha)', propre(p.SURF_CALC)) +
       ligne('Culture 2026', propre(p.CULT_2026)) + ligne('Culture 2025', propre(p.CULT_2025)) +
-      ligne('Raison de la sélection', propre(p.Raison_de_la_selection)) +
+      ligne('Raison de la sélection', r.raison) +
+      ligne('Prélèvement', r.rang + ' sur ' + r.nbPrel + (estReference(r) ? ' (parcelle de référence : ' + PRELEVEMENTS_REFERENCE + ' attendus)' : '')) +
       ligne('Téléphone portable', propre(p.Telephone_portable)) + ligne('Téléphone fixe', propre(p.Telephone_Fixe)) +
       ligne('Coordonnées GPS', coords + (r.origineCoords && r.origineCoords !== 'rdv' ? ' (reprises de ' + r.origineCoords + ', absentes du RDV)' : '')) +
-      (r.localise ? '' : ligne('Pourquoi non localisée', (r.parcelleTrouvee
+      (r.localise ? '' : ligne('Pourquoi non localisée', !r.cle ? 'Aucune clé parcelle renseignée dans le RDV (colonne ' + COL_PARCELLE + ' vide)' : (r.parcelleTrouvee
         ? 'Parcelle trouvée dans ' + TABLE_PARCELLES + ' mais sans latitude / longitude'
         : 'Clé absente de ' + TABLE_PARCELLES) +
         ' ; aucune coordonnée non plus dans le RDV ni dans ' + SOURCES_COORDS.filter(function (t) { return tablesRef[t]; }).join(', ') +
@@ -964,11 +1001,15 @@
       !r.dansVue && 'hors filtre de la vue Grist',
       statutsMasques.has(r.statut) && 'statut masqué',
     ].filter(Boolean) : [];
+    const ref = estReference(r);
+    const etiqRef = (ref || r.nbPrel > 1 ? '<span class="etiq ref" title="' + esc(r.raison) + '">' + (ref ? 'Réf. · ' : '') + 'prélèvement ' + r.rang + '/' + Math.max(r.nbPrel, ref ? PRELEVEMENTS_REFERENCE : 1) + '</span>' : '') +
+      (ref && r.nbPrel < PRELEVEMENTS_REFERENCE ? '<span class="etiq manque" title="Une parcelle de référence doit avoir ' + PRELEVEMENTS_REFERENCE + ' lignes de RDV">' + (PRELEVEMENTS_REFERENCE - r.nbPrel) + ' prélèvement manquant</span>' : '') +
+      (r.date ? '' : '<span class="etiq manque">sans rendez-vous</span>');
 
     return '<div class="rdv' + (actif ? ' actif ouvert' : '') + '" data-id="' + r.id + '">' +
       '<div class="rdv-entete">' + (jourChoisi && r.date ? '<span class="heure">' + heureDe(r.date) + '</span><span class="expl-jour">' + esc(r.exploitation) + '</span>' : '') +
       '<span class="cle">' + esc(r.cle || 'Sans identifiant') + '</span>' +
-      '<span class="pastille" style="background:' + couleur(r.statut) + '">' + esc(r.statut || 'Sans statut') + '</span>' +
+      '<span class="pastille" style="background:' + couleur(r.statut) + '">' + esc(r.statut || 'Sans statut') + '</span>' + etiqRef +
       (r.date ? '<span class="mention">' + esc(dateHeure(r.date)) + '</span>' : '') +
       (r.localise ? '' : '<span class="mention" style="color:var(--rouge-marianne)">non localisée</span>') +
       (r.refCassee ? '<span class="mention" style="color:var(--rouge-marianne)" title="La cellule Cle_parcelle ne pointe vers aucune ligne de ' + TABLE_PARCELLES + '">référence cassée</span>' : '') +
@@ -1416,10 +1457,11 @@
     minuterie = setTimeout(toutRafraichir, 200);
   });
   $('legende').addEventListener('click', function (ev) {
-    const b = ev.target.closest('button[data-statut]');
+    const b = ev.target.closest('button[data-filtre]');
     if (!b) return;
-    const s = b.dataset.statut;
-    if (statutsMasques.has(s)) statutsMasques.delete(s); else statutsMasques.add(s);
+    const ens = { statut: statutsMasques, type: typesMasques, raison: raisonsMasquees }[b.dataset.filtre];
+    const v = b.dataset.val;
+    if (ens.has(v)) ens.delete(v); else ens.add(v);
     toutRafraichir();
   });
   $('contenu').addEventListener('click', function (ev) {
