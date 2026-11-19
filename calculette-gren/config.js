@@ -18,8 +18,8 @@ window.GREN_CONFIG = {
   // Pour ajouter un compte : se connecter, Administration → « Créer un compte », puis coller ici
   // la ligne proposée. Le mot de passe n'apparaît jamais : seulement son empreinte chiffrée (PBKDF2).
   // Compte de départ : identifiant « admin » (mot de passe communiqué séparément) — à remplacer dès que possible.
-  COMPTES_ADMIN: [.
-     {"identifiant":"hugoleguennic","nom":"LE GUENNIC Hugo","role":"admin","iterations":210000,"sel":"0507d20b0ce5448a81daaa84ad66d99a","empreinte":"9598e830422f8618064f9d9b584e3864dd1f1b76440ee620a3ddb9d3e3d273d6"}
-    {"identifiant": "admin", "nom": "Administrateur (compte de départ)", "role": "superadmin", "iterations": 210000, "sel": "dd7898d0cf7a09eec8987b04557f8bf7", "empreinte": "ec49737da872881c240a73c149df7c22936e7e8adea4752ddfc4b969f2e54885"},
+  COMPTES_ADMIN: [
+   {"identifiant":"hugoleguennic","nom":"LE GUENNIC Hugo","role":"admin","iterations":210000,"sel":"0507d20b0ce5448a81daaa84ad66d99a","empreinte":"9598e830422f8618064f9d9b584e3864dd1f1b76440ee620a3ddb9d3e3d273d6"}
+   {"identifiant": "admin", "nom": "Administrateur (compte de départ)", "role": "superadmin", "iterations": 210000, "sel": "dd7898d0cf7a09eec8987b04557f8bf7", "empreinte": "ec49737da872881c240a73c149df7c22936e7e8adea4752ddfc4b969f2e54885"},
   ]
 };
