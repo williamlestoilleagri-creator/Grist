@@ -203,6 +203,7 @@ function parseOnglet(name, g, D){
         const a = +g.get(k, 5), o = +g.get(k, 6);
         D.rendements.push({ produit:g.txt(k,2), annee:g.txt(k,3), dept:g.txt(k,4), agreste:a, op:o, variation: a ? (o - a) / a : null, justif:g.txt(k,8) });
       }
+      while (r + 1 <= g.maxR && g.txt(r + 1, 2) && (g.get(r + 1, 5) != null || g.get(r + 1, 6) != null || /^=/.test(String(g.get(r + 1, 7) || "")) || g.txt(r + 1, 7))) r++; // lignes du tableau déjà lues
       continue;
     }
     // stades de mise en marché (onglet 12)
@@ -212,7 +213,9 @@ function parseOnglet(name, g, D){
     if (!hdr) continue;
     const crit = g.txt(r, hdr.crit), low = one(crit).toLowerCase();
     const num = one(g.txt(r, 1) || (hdr.crit > 2 ? g.txt(r, hdr.crit - 1) : ""));
-    if (obsNext && !crit){ const m = g.mergeAt(r, hdr.crit); const t = m ? g.txt(r, hdr.crit) : ""; if (t) og.observations.push(t); obsNext = false; continue; }
+    if (obsNext){ const m = g.mergeAt(r, hdr.crit);
+      if (!crit || (m && m.c2 >= (hdr.obs || 7) - 1)){ const t = m ? g.txt(r, hdr.crit) : ""; if (t) og.observations.push(t); obsNext = false; continue; }
+      obsNext = false; }
     if (!crit) continue;
     if (/observations complémentaires|^observations du contr/.test(low)){ obsNext = true; continue; }
     if (/^(i|ii|iii|iv|v|vi)\s*[-–.]/.test(low) || /^(secteur |op sans|op avec|a- |b- |a\) |b\) |c\) |achats extérieurs|respect de l.apport|cas des op)/.test(low)){ section = one(crit); continue; }

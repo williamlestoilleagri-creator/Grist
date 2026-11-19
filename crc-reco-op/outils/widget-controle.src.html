@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-scheme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contrôle de reconnaissance des OP</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx@9.7.1/dist/index.iife.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/dsfr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/utility/icons/icons.min.css">
+<style>
+  body{background:var(--background-alt-grey,#F6F6F6)}
+  .entete{background:#fff;box-shadow:0 2px 6px rgba(0,0,18,.16);position:relative;z-index:2}
+  .entete__in{max-width:1400px;margin:0 auto;padding:.75rem 1.25rem;display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap}
+  .entete .fr-logo{font-size:.95rem}
+  .entete__service{flex:1 1 240px;border-left:1px solid var(--border-default-grey,#DDD);padding-left:1.25rem;min-width:0}
+  .entete__titre{font-weight:700;font-size:1.25rem;line-height:1.6rem;margin:0}
+  .entete__tag{font-size:.875rem;line-height:1.4rem;margin:0;color:var(--text-mention-grey,#666)}
+  .entete__op{height:64px;width:auto;margin-left:auto}
+  @media (max-width:640px){.entete__service{border-left:0;padding-left:0;order:3;flex-basis:100%}.entete__op{height:48px}}
+  .onglets{background:#fff;border-bottom:1px solid var(--border-default-grey,#DDD);position:sticky;top:0;z-index:1}
+  .onglets .fr-tabs__list{max-width:1400px;margin:0 auto;padding:.5rem 1rem 0;overflow-x:auto;flex-wrap:nowrap;min-height:auto}
+  .onglets .fr-tabs__tab{white-space:nowrap}
+  .wrap{max-width:1400px;margin:0 auto;padding:1.5rem 1rem 3rem}
+  .panel{background:#fff;border:1px solid var(--border-default-grey,#DDD);padding:1.5rem;margin-bottom:1.5rem}
+  .panel > h2,.panel > h3{font-size:1.25rem;line-height:1.75rem;margin-bottom:1rem}
+  .bandeau{display:flex;gap:1rem;align-items:center;flex-wrap:wrap;margin-bottom:1rem}
+  .bandeau .fr-select-group{flex:1 1 360px;margin:0}
+  .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem}
+  @media (max-width:760px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .kpi{background:var(--background-alt-blue-france,#F5F5FE);border-left:4px solid var(--border-plain-blue-france,#000091);padding:.75rem 1rem}
+  .kpi b{display:block;font-size:1.5rem;line-height:2rem;color:var(--text-title-blue-france,#000091)}
+  .kpi span{font-size:.8rem;color:var(--text-mention-grey,#666)}
+  .kpi.rouge{border-color:#CE0500}.kpi.rouge b{color:#CE0500}.kpi.vert{border-color:#18753C}.kpi.vert b{color:#18753C}
+  .barre{height:.5rem;background:#E5E5E5;margin-top:.5rem}.barre i{display:block;height:100%;background:var(--background-action-high-blue-france,#000091)}
+  .saisie{display:grid;grid-template-columns:290px minmax(0,1fr);gap:1.5rem;align-items:start}
+  @media (max-width:900px){.saisie{grid-template-columns:1fr}}
+  .saisie .fr-sidemenu{position:sticky;top:3.5rem;max-height:calc(100vh - 5rem);overflow:auto;background:#fff;border:1px solid var(--border-default-grey,#DDD);padding:.5rem 0}
+  .saisie .fr-sidemenu__inner{box-shadow:none;padding:0}
+  .saisie .fr-sidemenu__link{display:flex;justify-content:space-between;gap:.5rem;font-size:.875rem;padding:.5rem 1rem}
+  .nav-cpt{font-size:.75rem;color:var(--text-mention-grey,#666);white-space:nowrap}
+  .crit{background:#fff;border:1px solid var(--border-default-grey,#DDD);border-left:4px solid #929292;padding:1rem 1.25rem;margin-bottom:1rem}
+  .crit.st-ok{border-left-color:#18753C}.crit.st-obs{border-left-color:#B34000}.crit.st-ano{border-left-color:#CE0500}
+  .crit__head{display:flex;justify-content:space-between;gap:1rem;align-items:center;margin-bottom:.25rem}
+  .crit__num{font-weight:700;color:var(--text-title-blue-france,#000091);font-size:.875rem}
+  .crit__lib{font-weight:500;margin:0 0 .75rem;white-space:pre-line}
+  .crit .fr-segmented{margin-bottom:.75rem}
+  .champs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}
+  .champs .plein{grid-column:1/-1}
+  @media (max-width:700px){.champs{grid-template-columns:1fr}}
+  .champs .fr-input-group{margin:0}
+  .champs .fr-label{font-size:.8rem}
+  textarea.fr-input{min-height:2.5rem;resize:vertical}
+  .sect{font-weight:700;color:var(--text-title-blue-france,#000091);background:var(--background-alt-blue-france,#F5F5FE);padding:.5rem 1rem;margin:1.5rem 0 1rem;border-left:4px solid #000091}
+  .consigne{font-size:.85rem;font-style:italic;color:#3A3A3A;background:#F6F6F6;padding:.5rem 1rem;margin:0 0 1rem}
+  .obs-oblig textarea{box-shadow:inset 0 -2px 0 0 #B34000}
+  .grille-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.25rem 1.5rem}
+  @media (max-width:700px){.grille-form{grid-template-columns:1fr}}
+  .fr-table table{display:table;width:100%}
+  .fr-table td{vertical-align:top}
+  .t-edit td{padding:.25rem .4rem}
+  .t-edit .fr-input,.t-edit .fr-select{font-size:.875rem;padding:.35rem .5rem;min-width:7rem}
+  .t-edit .bool{display:flex;justify-content:center;padding-top:.5rem}
+  .invalide{box-shadow:inset 0 -2px 0 0 #CE0500 !important;background:#FFE9E9 !important}
+  .row-sel{background:var(--background-alt-blue-france,#F5F5FE) !important}
+  tr.clic{cursor:pointer}
+  .hidden{display:none !important}
+  .actions{display:flex;gap:.75rem;flex-wrap:wrap;align-items:center}
+  .schemas{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem}
+  @media (max-width:760px){.schemas{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .opt{border:2px solid var(--border-default-grey,#DDD);padding:.4rem;cursor:pointer;background:#fff;text-align:center;font-size:.85rem}
+  .opt.sel{border-color:#000091;box-shadow:0 0 0 2px #E3E3FD}
+  .opt .th{height:96px;display:grid;place-items:center;overflow:hidden;margin-bottom:.4rem}.opt .th svg{width:100%;height:100%}
+  iframe.apercu{width:100%;height:760px;border:1px solid var(--border-default-grey,#DDD);background:#fff}
+  .toast{position:fixed;right:1rem;bottom:1rem;z-index:10;max-width:420px}
+  .liste-mini{font-size:.8rem;max-height:220px;overflow:auto;margin:0;padding-left:1.25rem}
+</style>
+</head>
+<body>
+<header role="banner" class="entete">
+  <div class="entete__in">
+    <p class="fr-logo fr-mb-0">République<br>Française</p>
+    <div class="entete__service">
+      <p class="entete__titre">Contrôle de reconnaissance des OP</p>
+      <p class="entete__tag">Saisie, import et rapport des contrôles · Région Bretagne</p>
+    </div>
+    <img class="entete__op" src="@@FAM_LOGO@@" alt="FranceAgriMer">
+  </div>
+</header>
+<nav class="onglets fr-tabs" aria-label="Sections">
+  <ul class="fr-tabs__list" role="tablist" id="tabs">
+    <li role="presentation"><button class="fr-tabs__tab fr-icon-list-unordered fr-tabs__tab--icon-left" role="tab" data-tab="controles" aria-selected="true">Contrôles</button></li>
+    <li role="presentation"><button class="fr-tabs__tab fr-icon-edit-line fr-tabs__tab--icon-left" role="tab" data-tab="saisie" aria-selected="false">Saisie de la grille</button></li>
+    <li role="presentation"><button class="fr-tabs__tab fr-icon-file-text-line fr-tabs__tab--icon-left" role="tab" data-tab="fiche" aria-selected="false">Fiche et tableaux annexes</button></li>
+    <li role="presentation"><button class="fr-tabs__tab fr-icon-upload-line fr-tabs__tab--icon-left" role="tab" data-tab="import" aria-selected="false">Importer un Excel</button></li>
+    <li role="presentation"><button class="fr-tabs__tab fr-icon-article-line fr-tabs__tab--icon-left" role="tab" data-tab="rapport" aria-selected="false">Rapport PDF</button></li>
+    <li role="presentation"><button class="fr-tabs__tab fr-icon-download-line fr-tabs__tab--icon-left" role="tab" data-tab="excel" aria-selected="false">Grilles Excel</button></li>
+  </ul>
+</nav>
+
+<main class="wrap" id="contenu">
+  <div id="bandeauCtrl" class="bandeau hidden">
+    <div class="fr-select-group"><label class="fr-label" for="selCtrl">Contrôle en cours</label><select class="fr-select" id="selCtrl"></select></div>
+  </div>
+
+  <!-- ===================== CONTRÔLES ===================== -->
+  <section data-panel="controles">
+    <div class="panel">
+      <h2>Contrôles enregistrés</h2>
+      <div class="fr-table fr-table--no-caption fr-mb-0"><table><caption>Contrôles</caption>
+        <thead><tr><th scope="col">Contrôle</th><th scope="col">Filière</th><th scope="col">Statut</th><th scope="col">Origine</th><th scope="col">Avancement</th><th scope="col">Anomalies</th></tr></thead>
+        <tbody id="listeCtrl"></tbody></table></div>
+    </div>
+    <div class="panel">
+      <h2>Nouveau contrôle</h2>
+      <div class="grille-form">
+        <div class="fr-select-group"><label class="fr-label" for="nOP">Organisation de producteurs</label><select class="fr-select" id="nOP"></select></div>
+        <div class="fr-input-group"><label class="fr-label" for="nOPnew">ou nouvelle OP (raison sociale)</label><input class="fr-input" id="nOPnew"></div>
+        <div class="fr-select-group"><label class="fr-label" for="nFil">Filière contrôlée</label><select class="fr-select" id="nFil"></select></div>
+        <div class="fr-input-group"><label class="fr-label" for="nDem">N° de demande de contrôle</label><input class="fr-input" id="nDem"></div>
+        <div class="fr-input-group"><label class="fr-label" for="nDu">Contrôle du</label><input class="fr-input" type="date" id="nDu"></div>
+        <div class="fr-input-group"><label class="fr-label" for="nAu">au</label><input class="fr-input" type="date" id="nAu"></div>
+        <div class="fr-input-group"><label class="fr-label" for="nServ">Service territorial</label><input class="fr-input" id="nServ" value="FranceAgriMer – Service territorial Bretagne"></div>
+      </div>
+      <button class="fr-btn fr-btn--icon-left fr-icon-add-line fr-mt-2w" id="bCreer">Créer le contrôle et générer la grille</button>
+    </div>
+  </section>
+
+  <!-- ===================== SAISIE ===================== -->
+  <section data-panel="saisie" class="hidden">
+    <div class="panel"><div class="kpis" id="kpis"></div><div class="barre"><i id="barre" style="width:0"></i></div></div>
+    <div class="saisie">
+      <nav class="fr-sidemenu" aria-label="Feuilles de la grille"><div class="fr-sidemenu__inner"><ul class="fr-sidemenu__list" id="navGroupes"></ul></div></nav>
+      <div id="zoneSaisie"></div>
+    </div>
+  </section>
+
+  <!-- ===================== FICHE ET ANNEXES ===================== -->
+  <section data-panel="fiche" class="hidden"><div id="zoneFiche"></div></section>
+
+  <!-- ===================== IMPORT ===================== -->
+  <section data-panel="import" class="hidden">
+    <div class="panel">
+      <h2>Importer un fichier de contrôle rempli</h2>
+      <p class="fr-text--sm">Accepte la grille Excel <b>d'origine</b> (export par filière) et la grille <b>modernisée</b>. Le contenu est réparti dans les tables Grist, et le fichier est joint au contrôle (origine « Import Excel »).</p>
+      <div class="fr-upload-group"><label class="fr-label" for="fImport">Fichier Excel rempli<span class="fr-hint-text">Format .xlsx</span></label><input class="fr-upload" type="file" id="fImport" accept=".xlsx"></div>
+      <div id="apercuImport" class="fr-mt-3w"></div>
+    </div>
+  </section>
+
+  <!-- ===================== RAPPORT ===================== -->
+  <section data-panel="rapport" class="hidden">
+    <div class="panel">
+      <h2>Schéma fonctionnel de l'OP</h2>
+      <div class="schemas" id="schemas"></div>
+      <div class="grille-form fr-mt-3w">
+        <div class="fr-input-group"><label class="fr-label" for="rLieu">Fait à</label><input class="fr-input" id="rLieu" placeholder="Rennes"></div>
+        <div class="fr-input-group"><label class="fr-label" for="rDate">Le</label><input class="fr-input" id="rDate"></div>
+      </div>
+      <div class="fr-checkbox-group fr-mt-1w"><input type="checkbox" id="rAnnexe" checked><label class="fr-label" for="rAnnexe">Annexe : détail de tous les points contrôlés</label></div>
+    </div>
+    <div class="actions fr-mb-3w">
+      <button class="fr-btn fr-btn--icon-left fr-icon-file-pdf-line" id="bPdf">Télécharger en PDF</button>
+      <button class="fr-btn fr-btn--secondary fr-btn--icon-left fr-icon-file-text-line" id="bDocx">Télécharger en Word</button>
+      <button class="fr-btn fr-btn--tertiary fr-btn--icon-left fr-icon-eye-line" id="bApercu">Aperçu</button>
+    </div>
+    <iframe class="apercu hidden" id="apercu" title="Aperçu du rapport"></iframe>
+  </section>
+
+  <!-- ===================== GRILLES EXCEL ===================== -->
+  <section data-panel="excel" class="hidden">
+    <div class="panel">
+      <h2>Grilles Excel vierges par filière</h2>
+      <div class="fr-select-group"><label class="fr-label" for="xFil">Filière</label><select class="fr-select" id="xFil"></select></div>
+      <div class="actions">
+        <button class="fr-btn fr-btn--icon-left fr-icon-file-download-line" id="bXOrig">Version d'origine</button>
+        <button class="fr-btn fr-btn--secondary fr-btn--icon-left fr-icon-file-download-line" id="bXMod">Version modernisée</button>
+      </div>
+      <p class="fr-text--xs fr-mt-2w fr-mb-0">La <b>version d'origine</b> reprend exactement le classeur de référence (table <b>Modele</b>) sans les critères hors filière. La <b>version modernisée</b> présente une feuille claire par thème, avec listes déroulantes et contrôles de saisie. Les deux se réimportent dans l'onglet « Importer un Excel ».</p>
+      <p class="fr-text--xs fr-mb-0" id="xModeleStatus"></p>
+      <div id="xFileWrap" class="fr-upload-group fr-mt-2w hidden"><label class="fr-label" for="xFile">Classeur de référence<span class="fr-hint-text">Non trouvé dans la table Modele : choisissez le fichier Excel d'origine.</span></label><input class="fr-upload" type="file" id="xFile" accept=".xlsx"></div>
+    </div>
+    <div class="panel">
+      <h2>Exporter le contrôle en cours</h2>
+      <p class="fr-text--sm">Produit la grille modernisée <b>remplie</b> avec les réponses saisies dans Grist.</p>
+      <button class="fr-btn fr-btn--secondary fr-btn--icon-left fr-icon-file-download-line" id="bXCtrl">Exporter le contrôle (version modernisée)</button>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast" aria-live="polite"></div>
+
+<script>
+"use strict";
+/* =====================================================================
+   0. CONFIGURATION (noms des tables et colonnes Grist)
+   ===================================================================== */
+const T = { REF:"Referentiel", FIL:"Filieres", ONG:"Onglets", MOD:"Modele", OP:"OP", FILIALES:"Filiales", CTRL:"Controles",
+  INT:"Intervenants", CONV:"Conventions", PROD:"Producteurs_controles", REP:"Reponses", CAP:"Capital_social",
+  SOND:"Sondages", REND:"Rendements", STADES:"Stades_mise_en_marche" };
+const DOMAINES = ["Appui technique", "Tri, stockage, conditionnement", "Agréage", "Mise en marché"];
+const DOMAINE_FEUILLE = { "Appui technique":"9.1-Conventions d'extern", "Tri, stockage, conditionnement":"10.1-Conventions d'exter",
+  "Agréage":"11.1-Autres conventions d'exter", "Mise en marché":"12.1-Autres conventions d'exter" };
+const STADES = ["Vrac", "Brut de cueille", "Conditionné", "Destiné à la transformation", "Transformé", "Autres"];
+const STATUTS = ["En préparation", "En cours", "À valider", "Validé"];
+const FAM_LOGO = "@@FAM_LOGO@@";
+const MARKER = "CRC-RECO-OP:modernise:v1";
+
+/* champs : [colonne, libellé, type, options]  types : text | area | num | pct | date | bool | choice | email | reflist */
+const OP_FIELDS = [["Raison_sociale","Raison sociale OP","text"],["N_OP","N° OP (n° de reconnaissance)","text"],["Forme","Forme","choice",["SCA","UCA","Pas SCA"]],
+  ["Statut_juridique","Statut juridique","text"],["SIRET","Numéro SIRET","text"],["Marques","Marques commerciales utilisées","text"],
+  ["Adresse_siege","Adresse du siège social","area"],["Adresse_bureaux","Adresse du siège effectif des bureaux","area"],
+  ["Responsable_legal","Responsable légal (préciser la fonction)","text"],["Contact","Personne à contacter","text"],["Telephone","Téléphone","text"],
+  ["Courriel","Courriel","email"],["AOP","Raison(s) sociale(s) AOP","text"],["Produits","Produits concernés","text"],
+  ["Filieres_reconnues","Filières reconnues","reflist"],["Date_arrete","Date de l'arrêté de reconnaissance","date"],
+  ["Arretes_modificatifs","Arrêtés modificatifs","text"],["Categorie_reconnaissance","Catégorie / secteur de reconnaissance","text"],
+  ["Production_ciblee","Production ciblée","text"],["Zone_reconnaissance","Zone de reconnaissance géographique","text"]];
+const CTRL_FIELDS = [["N_demande","N° de demande de contrôle","text"],["Service_territorial","Service territorial","text"],
+  ["Date_debut","Contrôle du","date"],["Date_fin","au","date"],["Statut","Statut du contrôle","choice",STATUTS],
+  ["PO_en_cours","PO en cours","text"],["Montant_FO","Montant d'aide prévisionnel FO (€)","num"],["Nb_adherents","Nombre d'adhérents","num"],
+  ["Montant_VPC","Montant VPC (€)","num"],["Date_dernier_controle","Date du dernier contrôle de reconnaissance FAM","date"],
+  ["Sanction_precedente","Type de sanction appliquée et suite","text"],["Situation_entreprise","Situation de l'entreprise (INFOGREFFE / PAPPERS…)","area"],
+  ["Categorie_VPC","Catégorie de reconnaissance (onglet 8)","text"],["Seuil_VPC","Seuil de VPC (€)","num"],["Produits_VPC","Produits constituant la VPC","text"],
+  ["CA_reconnu","Chiffre d'affaires des produits reconnus (€)","num"],["Nb_clients","Nombre de clients de l'OP","num"],
+  ["Observation_capital_social","Observations sur le capital social (onglet 4.1)","area"]];
+const ANNEXES = [
+  { t:T.INT, titre:"Personnes rencontrées et contrôleurs", feuille:"page de garde", cols:[["Role","Rôle","choice",["Personne rencontrée","Contrôleur"]],["Fonction_service","Fonction / service","text"],["Nom","Nom et prénom","text"],["Email","Courriel","email"]] },
+  { t:T.CONV, titre:"Conventions d'externalisation", feuille:"9.1 à 12.1 – Conventions", gen:true, cols:[["Domaine","Domaine","choice",DOMAINES],["Prestataire","Prestataire","text"],["Fonction_signataire","Signataire (fonction)","text"]] },
+  { t:T.PROD, titre:"Producteurs contrôlés en exploitation", feuille:"13. Producteur 1, 2, 3", gen:true, cols:[["Nom","Producteur","text"],["SIRET","SIRET","text"],["Produits_adhesion","Produits (bulletin d'adhésion)","text"],["Montant_rapprochement","Montant rapproché (€)","num"]] },
+  { t:T.CAP, titre:"Répartition du capital social", feuille:"4.1-K social et nb adh", cols:[["Adherent","Adhérent","text"],["Activite_principale","Activité principale (SIRENE)","text"],["Membres_personne_morale","Membres (personnes morales)","text"],["Producteur","Producteur","bool"],["Pct_parts","% parts","pct"],["Pct_voix","% voix","pct"]] },
+  { t:T.SOND, titre:"Contrôles par sondage", feuille:"CTRL Bulletin adhésion / CTRL MANDATS", cols:[["Type","Type","choice",["Bulletin d'adhésion","Mandat"]],["SIRET","N° SIRET","text"],["Nom_prenom","Nom - prénom","text"],["Societe","Société","text"],["Critere_choix","Critère de choix","text"],["Date_adhesion","Date début adhésion","date"],["Mandat_present","Mandat présent","bool"],["Resultat","C / NC","choice",["C","NC"]],["Observation","Observation","text"]] },
+  { t:T.REND, titre:"Rendements AGRESTE", feuille:"7-Règles d'apport et dérogation", cols:[["Produit","Produit","text"],["Annee","Année","text"],["Departement","Département","text"],["Rendement_AGRESTE","Rendement AGRESTE","num"],["Rendement_OP","Rendement OP","num"],["Justification","Justifications de l'OP","text"]] },
+  { t:T.STADES, titre:"Mise en marché par stade", feuille:"12-Mise sur le marché", cols:[["Stade","Stade du produit sorti OP","choice",STADES],["Produits","Produits","text"],["Pct_CA","% CA","pct"]] },
+];
+const FILIALES_CFG = { t:T.FILIALES, titre:"Filiales et participations", feuille:"Fiche signalétique", link:"OP", cols:[["Raison_sociale","Raison sociale","text"],["Pct_participation","% participation","pct"],["Objet","Objet","text"]] };
+
+/* =====================================================================
+   1. UTILITAIRES
+   ===================================================================== */
+const NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+const NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+const NS_XDR = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+const NS_PKG = "http://schemas.openxmlformats.org/package/2006/relationships";
+const NS_CT = "http://schemas.openxmlformats.org/package/2006/content-types";
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const clean = v => String(v == null ? "" : v).replace(/\u00a0/g," ").replace(/[ \t]+/g," ").replace(/\s*\n\s*/g,"\n").trim();
+const one = v => clean(v).replace(/\n/g," ");
+const cleanText = s => String(s == null ? "" : s).replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+const norm = s => one(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9%]+/g, " ").trim();
+const FONT_URL = w => `https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/fonts/Marianne-${w}.woff2`;
+function el(parent, ns, name){ return Array.from(parent.getElementsByTagNameNS(ns, name)); }
+function colToNum(c){ let n = 0; for (const ch of c) n = n * 26 + (ch.charCodeAt(0) - 64); return n; }
+function parseCell(ref){ const m = /^\$?([A-Z]{1,3})\$?(\d+)$/.exec(ref); return m ? { col: m[1], row: +m[2] } : null; }
+function refList(v){ if (!v) return []; if (Array.isArray(v)) return v[0] === "L" ? v.slice(1) : v; return []; }
+function columnar(t){ const keys = Object.keys(t), n = (t.id || []).length, out = []; for (let i = 0; i < n; i++){ const o = {}; for (const k of keys) o[k] = t[k][i]; out.push(o); } return out; }
+function num(v){ if (v == null || v === "") return null; if (typeof v === "number") return v; let s = String(v).replace(/[\s\u00a0€]/g, "").replace(",", "."); const pctv = s.endsWith("%"); s = s.replace("%", ""); const n = parseFloat(s); return isNaN(n) ? null : (pctv ? n / 100 : n); }
+function isoToSec(s){ if (!s) return null; const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) / 1000 : null; }
+function secToIso(n){ if (n == null || n === "") return ""; const d = new Date(n * 1000); return isNaN(d) ? "" : d.toISOString().slice(0, 10); }
+function secToFr(n){ const s = secToIso(n); return s ? s.split("-").reverse().join("/") : ""; }
+function anyToSec(v){ // « 14/10/2026 », numéro de série Excel, objet Date
+  if (v == null || v === "") return null;
+  if (v instanceof Date) return Date.UTC(v.getFullYear(), v.getMonth(), v.getDate()) / 1000;
+  if (typeof v === "number" || /^\d{5}(\.\d+)?$/.test(String(v))) return Math.round((+v - 25569)) * 86400;
+  const m = /(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(String(v)); if (!m) return null;
+  const y = +m[3] < 100 ? 2000 + +m[3] : +m[3]; return Date.UTC(y, +m[2] - 1, +m[1]) / 1000;
+}
+function toast(kind, html, ms = 4500){ const t = $("toast"); t.innerHTML = `<div class="fr-alert fr-alert--${kind} fr-alert--sm"><p>${html}</p></div>`; clearTimeout(toast.t); if (ms) toast.t = setTimeout(() => t.innerHTML = "", ms); }
+function download(blob, name){ const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\u2013\u2014]/g, "-").replace(/[^\x20-\x7E]/g, "").replace(/[\\/:*?"<>|]/g, "-"); document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000); }
+function b64ToBytes(b64){ const s = atob(b64.split(",").pop()); const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; }
+
+/* =====================================================================
+   2. DONNÉES GRIST
+   ===================================================================== */
+const D0 = { tab:"controles", ctrlId:null, groupe:null, schema:"flux", import:null };
+const S = { ...D0, t:{} };
+async function fetchSafe(name){ try { return columnar(await grist.docApi.fetchTable(name)); } catch(e){ return null; } }
+async function reload(names){ const list = names || Object.values(T); const res = await Promise.all(list.map(fetchSafe)); list.forEach((n, i) => S.t[n] = res[i] || []); indexRef(); }
+async function act(actions){ const r = await grist.docApi.applyUserActions(actions); return (r && r.retValues) || []; }
+const rows = n => S.t[n] || [];
+const byId = (n, id) => rows(n).find(r => r.id === id) || null;
+let REF = [], REF_BY_ID = new Map(), REF_BY_CODE = new Map(), REF_BY_TEXT = new Map();
+function indexRef(){
+  REF = rows(T.REF).map(p => ({ ...p, ordre:(+p.Rang_onglet || 0) * 10000 + (+p.Ordre || 0), fils:refList(p.Filieres_applicables) }));
+  REF.sort((a, b) => a.ordre - b.ordre);
+  REF_BY_ID = new Map(REF.map(p => [p.id, p])); REF_BY_CODE = new Map(REF.map(p => [p.Code, p]));
+  REF_BY_TEXT = new Map(); for (const p of REF) REF_BY_TEXT.set(p.Feuille + "|" + norm(p.Libelle), p);
+}
+const ctrl = () => byId(T.CTRL, S.ctrlId);
+const filNom = id => (byId(T.FIL, id) || {}).Nom || "";
+function ctrlLabel(c){ const op = byId(T.OP, c.OP); return `${(op && op.Raison_sociale) || "OP ?"} – ${filNom(c.Filiere) || "?"} – ${secToFr(c.Date_debut) || "date ?"}`; }
+function dropSheets(fid){ const s = new Set(); for (const o of rows(T.ONG)) if (o.Feuille && !refList(o.Filieres_applicables).includes(fid)) s.add(o.Feuille); return s; }
+function repsOf(cid){ return rows(T.REP).filter(r => r.Controle === cid); }
+function statutRep(r){ const p = REF_BY_ID.get(r.Point); if (p && p.Type_reponse === "Aucune") return "Aucun";
+  if (!(r.Resultat || r.Reponse_texte || r.Description || r.Montant || r.Valeur_n || r.Valeur_n_1)) return "À renseigner";
+  if (["Non conforme", "Non conclusif"].includes(r.Resultat) && !r.Observation) return "Observation obligatoire"; return "OK"; }
+const anomalieRep = r => r.Resultat === "Non conforme" || (r.Resultat === "Non" && !!r.Observation);
+function statsCtrl(cid){ const rs = repsOf(cid).filter(r => statutRep(r) !== "Aucun");
+  const ok = rs.filter(r => statutRep(r) === "OK").length; return { points:rs.length, ok, obs:rs.filter(r => statutRep(r) === "Observation obligatoire").length,
+    ano:rs.filter(anomalieRep).length, av: rs.length ? ok / rs.length : 0 }; }
+
+/* points de la grille d'un contrôle (filière, feuilles applicables) */
+function pointsGrille(c, portee, domaine){
+  const fid = c.Filiere, drop = dropSheets(fid);
+  return REF.filter(p => p.Portee === portee && (domaine == null || p.Domaine_convention === domaine) && ["Question", "Sous-question"].includes(p.Niveau)
+    && !p.Retire && p.fils.includes(fid) && !drop.has(p.Feuille));
+}
+async function genererGrille(cid){
+  const c = byId(T.CTRL, cid); if (!c || !c.Filiere) return 0;
+  const have = new Set(repsOf(cid).map(r => `${r.Point}|${r.Convention || 0}|${r.Producteur || 0}`));
+  const add = [];
+  const push = (p, conv, prod) => { const k = `${p.id}|${conv}|${prod}`; if (!have.has(k)){ have.add(k); add.push({ Controle:cid, Point:p.id, Convention:conv || 0, Producteur:prod || 0, Libelle:p.Libelle }); } };
+  pointsGrille(c, "Contrôle").forEach(p => push(p, 0, 0));
+  rows(T.CONV).filter(v => v.Controle === cid && v.Domaine).forEach(v => pointsGrille(c, "Convention", v.Domaine).forEach(p => push(p, v.id, 0)));
+  rows(T.PROD).filter(v => v.Controle === cid).forEach(v => pointsGrille(c, "Producteur").forEach(p => push(p, 0, v.id)));
+  if (add.length) await bulkAdd(T.REP, add);
+  await reload([T.REP]); return add.length;
+}
+async function bulkAdd(table, recs){
+  if (!recs.length) return [];
+  const cols = [...new Set(recs.flatMap(r => Object.keys(r)))];
+  const ids = [];
+  for (let i = 0; i < recs.length; i += 400){
+    const part = recs.slice(i, i + 400), data = {};
+    for (const k of cols) data[k] = part.map(r => r[k] === undefined ? null : r[k]);
+    const res = await act([["BulkAddRecord", table, part.map(() => null), data]]); ids.push(...(res[0] || []));
+  }
+  return ids;
+}
+
+/* =====================================================================
+   3. NAVIGATION
+   ===================================================================== */
+function setTab(t){
+  S.tab = t;
+  for (const b of document.querySelectorAll("#tabs [data-tab]")) b.setAttribute("aria-selected", b.dataset.tab === t);
+  for (const p of document.querySelectorAll("[data-panel]")) p.classList.toggle("hidden", p.dataset.panel !== t);
+  $("bandeauCtrl").classList.toggle("hidden", !["saisie", "fiche", "rapport"].includes(t) && !(t === "excel"));
+  render();
+}
+function render(){
+  renderSelCtrl();
+  if (S.tab === "controles") renderControles();
+  if (S.tab === "saisie") renderSaisie();
+  if (S.tab === "fiche") renderFiche();
+  if (S.tab === "rapport") renderRapport();
+  if (S.tab === "excel") renderExcel();
+}
+function renderSelCtrl(){
+  const sel = $("selCtrl"), list = rows(T.CTRL);
+  sel.innerHTML = list.length ? list.map(c => `<option value="${c.id}" ${c.id === S.ctrlId ? "selected" : ""}>${esc(ctrlLabel(c))}</option>`).join("") : '<option value="">Aucun contrôle</option>';
+  if (!S.ctrlId && list.length){ S.ctrlId = list[list.length - 1].id; sel.value = S.ctrlId; }
+}
+function badgeStatut(s){ const k = { "Validé":"success", "À valider":"warning", "En cours":"info", "En préparation":"new" }[s] || "info"; return s ? `<span class="fr-badge fr-badge--sm fr-badge--${k} fr-badge--no-icon">${esc(s)}</span>` : ""; }
+
+/* ---------------- Contrôles */
+function renderControles(){
+  $("listeCtrl").innerHTML = rows(T.CTRL).map(c => { const st = statsCtrl(c.id);
+    return `<tr class="clic ${c.id === S.ctrlId ? "row-sel" : ""}" data-cid="${c.id}"><td><b>${esc(ctrlLabel(c))}</b><br><span class="fr-text--xs">${esc(c.N_demande || "")}</span></td><td>${esc(filNom(c.Filiere))}</td><td>${badgeStatut(c.Statut)}</td>
+      <td>${c.Fichier_source && refList(c.Fichier_source).length ? '<span class="fr-tag fr-tag--sm">Import Excel</span>' : '<span class="fr-tag fr-tag--sm">Saisie Grist</span>'}</td>
+      <td>${Math.round(st.av * 100)} %<div class="barre"><i style="width:${Math.round(st.av * 100)}%"></i></div></td><td>${st.ano ? `<b style="color:#CE0500">${st.ano}</b>` : "0"}</td></tr>`; }).join("")
+    || '<tr><td colspan="6">Aucun contrôle pour l\'instant : créez-en un ci-dessous ou importez un fichier Excel.</td></tr>';
+  $("nOP").innerHTML = '<option value="">— Choisir —</option>' + rows(T.OP).map(o => `<option value="${o.id}">${esc(o.Raison_sociale || "OP n°" + o.id)}</option>`).join("");
+  $("nFil").innerHTML = '<option value="">— Choisir —</option>' + rows(T.FIL).map(f => `<option value="${f.id}">${esc(f.Nom)}</option>`).join("");
+}
+$("listeCtrl").addEventListener("click", e => { const tr = e.target.closest("tr[data-cid]"); if (!tr) return; S.ctrlId = +tr.dataset.cid; S.groupe = null; setTab("saisie"); });
+$("selCtrl").addEventListener("change", e => { S.ctrlId = +e.target.value; S.groupe = null; render(); });
+$("bCreer").addEventListener("click", async () => {
+  const fid = +$("nFil").value; let opId = +$("nOP").value; const nouv = $("nOPnew").value.trim();
+  if (!fid || (!opId && !nouv)){ toast("error", "Choisissez une OP (ou saisissez une nouvelle raison sociale) et une filière."); return; }
+  try {
+    if (!opId){ [opId] = await act([["AddRecord", T.OP, null, { Raison_sociale:nouv }]]); }
+    const [cid] = await act([["AddRecord", T.CTRL, null, { OP:opId, Filiere:fid, N_demande:$("nDem").value.trim(), Service_territorial:$("nServ").value.trim(),
+      Date_debut:isoToSec($("nDu").value), Date_fin:isoToSec($("nAu").value), Statut:"En cours" }]]);
+    await reload(); const n = await genererGrille(cid);
+    S.ctrlId = cid; S.groupe = null; toast("success", `Contrôle créé : ${n} points de contrôle générés pour la filière ${esc(filNom(fid))}.`); setTab("saisie");
+  } catch(e){ console.error(e); toast("error", "Création impossible : " + esc(e.message)); }
+});
+
+/* ---------------- Saisie */
+function groupesCtrl(cid){
+  const g = new Map();
+  for (const r of repsOf(cid)){
+    const p = REF_BY_ID.get(r.Point); if (!p) continue;
+    let key, label, feuille = p.Feuille, sub = "";
+    if (r.Convention){ const v = byId(T.CONV, r.Convention) || {}; key = "C" + r.Convention; label = `Convention – ${v.Domaine || ""}`; sub = v.Prestataire || "prestataire ?"; }
+    else if (r.Producteur){ const v = byId(T.PROD, r.Producteur) || {}; key = "P" + r.Producteur; label = "Contrôle en exploitation"; sub = v.Nom || "producteur ?"; }
+    else { key = "S" + feuille; label = `${p.Onglet} – ${p.Titre_onglet}`; }
+    if (!g.has(key)) g.set(key, { key, label, sub, feuille, ordre:p.ordre + (r.Convention || r.Producteur || 0) / 1000, reps:[] });
+    const G = g.get(key); G.reps.push(r); G.ordre = Math.min(G.ordre, p.ordre + (r.Convention || r.Producteur || 0) / 1000);
+  }
+  const list = [...g.values()].sort((a, b) => a.ordre - b.ordre);
+  for (const G of list) G.reps.sort((a, b) => REF_BY_ID.get(a.Point).ordre - REF_BY_ID.get(b.Point).ordre);
+  return list;
+}
+function renderKpis(cid){
+  const st = statsCtrl(cid);
+  $("kpis").innerHTML = `<div class="kpi"><b>${st.points}</b><span>points de contrôle</span></div><div class="kpi vert"><b>${st.ok}</b><span>renseignés</span></div>
+    <div class="kpi ${st.obs ? "rouge" : ""}"><b>${st.obs}</b><span>observations manquantes</span></div><div class="kpi ${st.ano ? "rouge" : ""}"><b>${st.ano}</b><span>anomalies</span></div>`;
+  $("barre").style.width = Math.round(st.av * 100) + "%";
+}
+function renderSaisie(){
+  const c = ctrl();
+  if (!c){ $("zoneSaisie").innerHTML = `<div class="fr-alert fr-alert--info"><p>Choisissez ou créez un contrôle dans l'onglet « Contrôles ».</p></div>`; $("navGroupes").innerHTML = ""; $("kpis").innerHTML = ""; return; }
+  renderKpis(c.id);
+  const gs = groupesCtrl(c.id);
+  if (!gs.length){ $("navGroupes").innerHTML = ""; $("zoneSaisie").innerHTML = `<div class="fr-alert fr-alert--warning"><p>La grille de ce contrôle est vide.</p></div><button class="fr-btn fr-mt-2w" id="bGen">Générer la grille de la filière ${esc(filNom(c.Filiere))}</button>`;
+    $("bGen").onclick = async () => { const n = await genererGrille(c.id); toast("success", `${n} points générés.`); renderSaisie(); }; return; }
+  if (!S.groupe || !gs.some(G => G.key === S.groupe)) S.groupe = gs[0].key;
+  $("navGroupes").innerHTML = gs.map(G => { const done = G.reps.filter(r => ["OK", "Aucun"].includes(statutRep(r))).length, ano = G.reps.filter(anomalieRep).length;
+    return `<li class="fr-sidemenu__item"><a class="fr-sidemenu__link" href="#" data-g="${esc(G.key)}" ${G.key === S.groupe ? 'aria-current="page"' : ""}><span>${esc(G.label)}${G.sub ? `<br><span class="fr-text--xs">${esc(G.sub)}</span>` : ""}</span><span class="nav-cpt">${done}/${G.reps.length}${ano ? ` · <b style="color:#CE0500">${ano}</b>` : ""}</span></a></li>`; }).join("");
+  const G = gs.find(x => x.key === S.groupe);
+  const fid = c.Filiere;
+  const ordres = G.reps.map(r => REF_BY_ID.get(r.Point).ordre), lo = Math.min(...ordres), hi = Math.max(...ordres);
+  const extras = REF.filter(p => p.Feuille === G.feuille && ["Section", "Consigne"].includes(p.Niveau) && p.ordre >= lo - 9999 && p.ordre <= hi + 9 && !p.Retire && (p.Niveau === "Section" ? p.fils.includes(fid) : (p.fils.length === 0 || p.fils.includes(fid))));
+  const items = [...G.reps.map(r => ({ o:REF_BY_ID.get(r.Point).ordre, r })), ...extras.filter(p => p.ordre >= lo - 9999 && p.ordre <= hi).map(p => ({ o:p.ordre, p }))].sort((a, b) => a.o - b.o);
+  let h = `<div class="panel fr-py-2w"><h2 class="fr-h5 fr-mb-0">${esc(G.label)}${G.sub ? " – " + esc(G.sub) : ""}</h2><p class="fr-text--xs fr-mb-0">Feuille Excel : ${esc(G.feuille)}</p></div>`;
+  for (const it of items) h += it.r ? critHtml(it.r) : it.p.Niveau === "Section" ? `<div class="sect">${esc(one(it.p.Libelle))}</div>` : `<p class="consigne">${esc(one(it.p.Libelle))}</p>`;
+  $("zoneSaisie").innerHTML = h;
+}
+$("navGroupes").addEventListener("click", e => { const a = e.target.closest("[data-g]"); if (!a) return; e.preventDefault(); S.groupe = a.dataset.g; renderSaisie(); window.scrollTo({ top:0 }); });
+
+const OPTIONS = { "Oui/Non":["Oui", "Non", "Non conclusif", "Sans objet"], "Conforme/Non conforme":["Conforme", "Non conforme", "Non conclusif", "Sans objet"], "Montant + C/NC":["Conforme", "Non conforme", "Sans objet"] };
+function critHtml(r){
+  const p = REF_BY_ID.get(r.Point), t = p.Type_reponse || "Oui/Non", st = statutRep(r), id = r.id;
+  const cls = anomalieRep(r) ? "st-ano" : st === "Observation obligatoire" ? "st-obs" : st === "OK" ? "st-ok" : "";
+  const badge = { "OK":'<span class="fr-badge fr-badge--sm fr-badge--success">Renseigné</span>', "À renseigner":'<span class="fr-badge fr-badge--sm fr-badge--info fr-badge--no-icon">À renseigner</span>',
+    "Observation obligatoire":'<span class="fr-badge fr-badge--sm fr-badge--warning">Observation obligatoire</span>' }[st] || "";
+  const field = (f, label, type = "text", cls2 = "") => { const v = r[f]; const val = v == null ? "" : v;
+    return `<div class="fr-input-group ${cls2}"><label class="fr-label" for="f${f}${id}">${label}</label>${type === "area" ? `<textarea class="fr-input" id="f${f}${id}" data-id="${id}" data-f="${f}" rows="2">${esc(val)}</textarea>` : `<input class="fr-input" id="f${f}${id}" data-id="${id}" data-f="${f}" type="${type === "num" ? "text" : type}" inputmode="${type === "num" ? "decimal" : "text"}" value="${esc(type === "num" && val !== "" ? String(val).replace(".", ",") : val)}">`}</div>`; };
+  let corps = "";
+  if (t === "Montant (calculé)"){
+    const c = ctrl(), bloc = p.Bloc_VPC; const tot = repsOf(c.id).reduce((s, x) => { const q = REF_BY_ID.get(x.Point); return s + (q && q.Bloc_VPC === bloc && q.Signe_VPC ? (+x.Montant || 0) * q.Signe_VPC : 0); }, 0);
+    return `<div class="crit st-ok"><div class="crit__head"><span class="crit__num">N° ${esc(fmtNum(p.Num))}</span><span class="fr-badge fr-badge--sm fr-badge--info fr-badge--no-icon">Calcul automatique</span></div><p class="crit__lib">${esc(r.Libelle || p.Libelle)}</p><p class="fr-h5 fr-mb-0">${tot.toLocaleString("fr-FR")} €</p></div>`;
+  }
+  if (OPTIONS[t] || !["Texte", "Nombre", "Pourcentage", "Valeur n-1 / n"].includes(t)){
+    const opts = OPTIONS[t] || OPTIONS["Oui/Non"];
+    corps += `<fieldset class="fr-segmented fr-segmented--sm"><legend class="fr-segmented__legend fr-sr-only">Résultat</legend><div class="fr-segmented__elements">${opts.map((o, i) =>
+      `<div class="fr-segmented__element"><input type="radio" id="r${id}_${i}" name="r${id}" value="${esc(o)}" data-id="${id}" data-f="Resultat" ${r.Resultat === o ? "checked" : ""}><label class="fr-label" for="r${id}_${i}">${esc(o)}</label></div>`).join("")}</div></fieldset>
+      ${r.Resultat ? `<button class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-ml-1w" data-clear="${id}">Effacer</button>` : ""}`;
+  }
+  corps += '<div class="champs">';
+  const rempli = f => r[f] != null && r[f] !== "";
+  if (t === "Valeur n-1 / n" || rempli("Valeur_n_1") || rempli("Valeur_n")) corps += field("Valeur_n_1", "Valeur au 01/01/n-1", "num") + field("Valeur_n", "Valeur au 01/01/n", "num");
+  if (["Texte", "Nombre", "Pourcentage"].includes(t) || rempli("Reponse_texte")) corps += field("Reponse_texte", t === "Nombre" ? "Nombre" : t === "Pourcentage" ? "Pourcentage" : "Réponse rédigée", ["Nombre", "Pourcentage"].includes(t) ? "text" : "area", "plein");
+  if (t === "Montant + C/NC" || rempli("Montant")) corps += field("Montant", "Montant (€)", "num");
+  corps += field("Avec_quoi", "Avec quoi le contrôle a-t-il été fait ?") + field("Description", "Description du contrôle effectué", "area");
+  corps += field("Observation", "Observation du contrôleur" + (st === "Observation obligatoire" ? " (obligatoire)" : ""), "area", "plein" + (st === "Observation obligatoire" ? " obs-oblig" : ""));
+  corps += "</div>";
+  return `<div class="crit ${cls}" id="crit${id}"><div class="crit__head"><span class="crit__num">${p.Num ? "N° " + esc(fmtNum(p.Num)) : (p.Niveau === "Sous-question" ? "Précision" : "")}</span>${badge}${anomalieRep(r) ? ' <span class="fr-badge fr-badge--sm fr-badge--error">Anomalie</span>' : ""}</div>
+    <p class="crit__lib">${esc(r.Libelle || p.Libelle)}</p>${corps}</div>`;
+}
+function fmtNum(v){ return v == null || v === "" ? "" : String(+v === Math.round(+v) ? Math.round(+v) : v); }
+async function saveRep(id, f, v){
+  const r = byId(T.REP, id); if (!r) return;
+  if (["Valeur_n", "Valeur_n_1", "Montant"].includes(f)) v = num(v);
+  if (r[f] === v) return;
+  r[f] = v;
+  try { await act([["UpdateRecord", T.REP, id, { [f]:v }]]); } catch(e){ toast("error", "Enregistrement impossible : " + esc(e.message)); return; }
+  const box = $("crit" + id); if (box){ const tmp = document.createElement("div"); tmp.innerHTML = critHtml(r); const nb = tmp.firstElementChild; box.replaceWith(nb); }
+  renderKpis(S.ctrlId);
+  const a = document.querySelector(`#navGroupes [data-g="${CSS.escape(S.groupe)}"] .nav-cpt`);
+  if (a){ const G = groupesCtrl(S.ctrlId).find(x => x.key === S.groupe); const done = G.reps.filter(x => ["OK", "Aucun"].includes(statutRep(x))).length, ano = G.reps.filter(anomalieRep).length; a.innerHTML = `${done}/${G.reps.length}${ano ? ` · <b style="color:#CE0500">${ano}</b>` : ""}`; }
+}
+$("zoneSaisie").addEventListener("change", e => { const t = e.target; if (t.dataset && t.dataset.id) saveRep(+t.dataset.id, t.dataset.f, t.type === "radio" ? t.value : t.value.trim() || null); });
+$("zoneSaisie").addEventListener("click", e => { const b = e.target.closest("[data-clear]"); if (b){ e.preventDefault(); saveRep(+b.dataset.clear, "Resultat", null); } });
+
+/* ---------------- Fiche et annexes (éditeurs génériques) */
+function inputFor(table, rec, col, label, type, opts, inTable){
+  const id = `e_${table}_${rec.id}_${col}`, v = rec[col], data = `data-t="${table}" data-r="${rec.id}" data-c="${col}" data-k="${type}"`;
+  const lab = inTable ? `<label class="fr-label fr-sr-only" for="${id}">${esc(label)}</label>` : `<label class="fr-label" for="${id}">${esc(label)}</label>`;
+  let ctl;
+  if (type === "choice") ctl = `<select class="fr-select" id="${id}" ${data}><option value=""></option>${opts.map(o => `<option ${v === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
+  else if (type === "bool") return `<div class="fr-checkbox-group ${inTable ? "bool" : ""}"><input type="checkbox" id="${id}" ${data} ${v ? "checked" : ""}><label class="fr-label" for="${id}">${inTable ? `<span class="fr-sr-only">${esc(label)}</span>` : esc(label)}</label></div>`;
+  else if (type === "reflist") return `<fieldset class="fr-fieldset"><legend class="fr-fieldset__legend fr-text--regular">${esc(label)}</legend>${rows(T.FIL).map(f => `<div class="fr-fieldset__element fr-fieldset__element--inline"><div class="fr-checkbox-group"><input type="checkbox" id="${id}_${f.id}" ${data} data-v="${f.id}" ${refList(v).includes(f.id) ? "checked" : ""}><label class="fr-label" for="${id}_${f.id}">${esc(f.Nom)}</label></div></div>`).join("")}</fieldset>`;
+  else if (type === "area") ctl = `<textarea class="fr-input" id="${id}" ${data} rows="2">${esc(v || "")}</textarea>`;
+  else if (type === "date") ctl = `<input class="fr-input" type="date" id="${id}" ${data} value="${secToIso(v)}">`;
+  else if (type === "pct") ctl = `<input class="fr-input" inputmode="decimal" id="${id}" ${data} value="${v == null || v === "" ? "" : String(Math.round(v * 10000) / 100).replace(".", ",") + " %"}">`;
+  else if (type === "num") ctl = `<input class="fr-input" inputmode="decimal" id="${id}" ${data} value="${v == null || v === "" ? "" : String(v).replace(".", ",")}">`;
+  else ctl = `<input class="fr-input ${type === "email" && v && (String(v).split("@").length !== 2) ? "invalide" : ""}" id="${id}" ${data} value="${esc(v == null ? "" : v)}" ${type === "email" ? 'type="email"' : ""}>`;
+  return inTable ? lab + ctl : `<div class="fr-input-group">${lab}${ctl}</div>`;
+}
+function convertInput(t){
+  const k = t.dataset.k;
+  if (k === "bool") return t.checked;
+  if (k === "num") return num(t.value);
+  if (k === "pct"){ const n = num(String(t.value).replace("%", "")); return n == null ? null : n / 100; }
+  if (k === "date") return isoToSec(t.value);
+  return t.value.trim() || null;
+}
+function formHtml(table, rec, fields){ return `<div class="grille-form">${fields.map(([c, l, k, o]) => `<div class="${k === "area" || k === "reflist" ? "" : ""}">${inputFor(table, rec, c, l, k, o, false)}</div>`).join("")}</div>`; }
+function annexHtml(cfg, link, linkId){
+  const recs = rows(cfg.t).filter(r => r[link] === linkId);
+  return `<div class="panel"><h3>${esc(cfg.titre)}</h3><p class="fr-text--xs fr-mt-n2w">Feuille Excel : ${esc(cfg.feuille)}</p>
+    <div class="fr-table fr-table--sm fr-table--no-caption t-edit fr-mb-1w"><table><caption>${esc(cfg.titre)}</caption><thead><tr>${cfg.cols.map(c => `<th scope="col">${esc(c[1])}</th>`).join("")}<th scope="col"><span class="fr-sr-only">Supprimer</span></th></tr></thead>
+    <tbody>${recs.map(r => `<tr>${cfg.cols.map(([c, l, k, o]) => `<td>${inputFor(cfg.t, r, c, l, k, o, true)}</td>`).join("")}<td><button class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-icon-delete-line" title="Supprimer la ligne" data-del="${cfg.t}" data-r="${r.id}">Supprimer</button></td></tr>`).join("")
+      || `<tr><td colspan="${cfg.cols.length + 1}" class="fr-text--sm">Aucune ligne.</td></tr>`}</tbody></table></div>
+    <div class="actions"><button class="fr-btn fr-btn--secondary fr-btn--sm fr-btn--icon-left fr-icon-add-line" data-add="${cfg.t}" data-link="${link}" data-lid="${linkId}">Ajouter une ligne</button>
+    ${cfg.gen ? '<button class="fr-btn fr-btn--tertiary fr-btn--sm fr-btn--icon-left fr-icon-refresh-line" data-gen="1">Générer les check-lists dans la grille</button>' : ""}</div></div>`;
+}
+function renderFiche(){
+  const c = ctrl();
+  if (!c){ $("zoneFiche").innerHTML = `<div class="fr-alert fr-alert--info"><p>Choisissez ou créez un contrôle.</p></div>`; return; }
+  const op = byId(T.OP, c.OP) || { id:0 };
+  let h = `<div class="panel"><h3>Organisation de producteurs – fiche signalétique</h3><p class="fr-text--xs fr-mt-n2w">Feuille Excel : Fiche signalétique · commune à tous les contrôles de cette OP</p>${op.id ? formHtml(T.OP, op, OP_FIELDS) : "<p>OP introuvable.</p>"}</div>`;
+  if (op.id) h += annexHtml(FILIALES_CFG, "OP", op.id);
+  h += `<div class="panel"><h3>Données du contrôle</h3><p class="fr-text--xs fr-mt-n2w">Feuilles Excel : page de garde, Fiche signalétique, 8-Respect du seuil minimal VPC, 12-Mise sur le marché</p>${formHtml(T.CTRL, c, CTRL_FIELDS)}</div>`;
+  for (const cfg of ANNEXES) h += annexHtml(cfg, "Controle", c.id);
+  $("zoneFiche").innerHTML = h;
+}
+$("zoneFiche").addEventListener("change", async e => {
+  const t = e.target; if (!t.dataset || !t.dataset.t) return;
+  const table = t.dataset.t, id = +t.dataset.r, col = t.dataset.c; let v;
+  if (t.dataset.k === "reflist"){ const rec = byId(table, id); const cur = new Set(refList(rec[col])); t.checked ? cur.add(+t.dataset.v) : cur.delete(+t.dataset.v); v = ["L", ...cur]; }
+  else v = convertInput(t);
+  if (t.dataset.k === "email") t.classList.toggle("invalide", !!v && String(v).split("@").length !== 2);
+  try { await act([["UpdateRecord", table, id, { [col]:v }]]); const rec = byId(table, id); if (rec) rec[col] = v;
+    if (table === T.CTRL || table === T.OP) renderSelCtrl(); } catch(err){ toast("error", "Enregistrement impossible : " + esc(err.message)); }
+});
+$("zoneFiche").addEventListener("click", async e => {
+  const add = e.target.closest("[data-add]"), del = e.target.closest("[data-del]"), gen = e.target.closest("[data-gen]");
+  try {
+    if (add){ await act([["AddRecord", add.dataset.add, null, { [add.dataset.link]:+add.dataset.lid }]]); await reload([add.dataset.add]); renderFiche(); }
+    if (del && confirm("Supprimer cette ligne ?")){
+      const extra = [];
+      if (del.dataset.del === T.CONV) repsOf(S.ctrlId).filter(r => r.Convention === +del.dataset.r).forEach(r => extra.push(["RemoveRecord", T.REP, r.id]));
+      if (del.dataset.del === T.PROD) repsOf(S.ctrlId).filter(r => r.Producteur === +del.dataset.r).forEach(r => extra.push(["RemoveRecord", T.REP, r.id]));
+      await act([...extra, ["RemoveRecord", del.dataset.del, +del.dataset.r]]); await reload([del.dataset.del, T.REP]); renderFiche(); }
+    if (gen){ await reload([T.CONV, T.PROD]); const n = await genererGrille(S.ctrlId); toast("success", n ? `${n} points ajoutés à la grille (onglet « Saisie de la grille »).` : "La grille est déjà à jour."); }
+  } catch(err){ console.error(err); toast("error", esc(err.message)); }
+});
+
+@@IMPORT@@
+
+@@EXCEL_MODERNE@@
+
+/* =====================================================================
+   7. RAPPORT : données Grist -> structure du rapport
+   ===================================================================== */
+const RES_CODE = { "Oui":"OUI", "Non":"NON", "Conforme":"C", "Non conforme":"NC", "Non conclusif":"NCL", "Sans objet":"SO" };
+function dataRapport(cid){
+  const c = byId(T.CTRL, cid), op = byId(T.OP, c.OP) || {};
+  const D = { cover:{ rs:op.Raison_sociale || "", reco:op.N_OP || "", secteur:filNom(c.Filiere), du:secToFr(c.Date_debut), au:secToFr(c.Date_fin), demande:c.N_demande || "", service:c.Service_territorial || "" },
+    fiche:[], filiales:[], personnes:[], controleurs:[], onglets:[], sondages:[], rendements:[], stades:[], capital:[], producteurs:[], conventions:[] };
+  const F = (l, v) => { if (v != null && v !== "") D.fiche.push({ label:l, value:String(v) }); };
+  F("Raison sociale OP", op.Raison_sociale); F("Secteur concerné", filNom(c.Filiere)); F("Statut juridique", op.Statut_juridique); F("Numéro Siret", op.SIRET);
+  F("Adresse du Siège Social", op.Adresse_siege); F("Responsable légal de la personne morale", op.Responsable_legal); F("Raison(s) sociale(s) AOP", op.AOP);
+  F("Nombre d'adhérents", c.Nb_adherents != null ? c.Nb_adherents + " adhérents" : ""); F("Date de l'arrêté de reconnaissance", [secToFr(op.Date_arrete), op.Arretes_modificatifs].filter(Boolean).join(" – "));
+  F("Zone de reconnaissance géographique", op.Zone_reconnaissance); F("Date du dernier contrôle de reconnaissance FAM", secToFr(c.Date_dernier_controle));
+  D.filiales = rows(T.FILIALES).filter(f => f.OP === op.id).map(f => ({ nom:f.Raison_sociale, pct:f.Pct_participation, objet:f.Objet || "" }));
+  for (const i of rows(T.INT).filter(i => i.Controle === cid)) (i.Role === "Contrôleur" ? D.controleurs : D.personnes).push({ fonction:i.Fonction_service || "", nom:i.Nom || "" });
+  for (const G of groupesCtrl(cid)){
+    const p0 = REF_BY_ID.get(G.reps[0].Point);
+    const og = { sheet:G.key[0] === "C" ? DOMAINE_FEUILLE[(byId(T.CONV, +G.key.slice(1)) || {}).Domaine] || G.feuille : G.feuille, code:G.key[0] === "S" ? String(p0.Onglet) : (G.key[0] === "C" ? String(p0.Onglet) : "13"),
+      titre:"ONGLET " + G.label + (G.sub ? " – " + G.sub : ""), items:[], observations:[] };
+    for (const r of G.reps){
+      const p = REF_BY_ID.get(r.Point), t = p.Type_reponse; if (t === "Aucune" || t === "Montant (calculé)") continue;
+      const it = { num:fmtNum(p.Num), critere:r.Libelle || p.Libelle, section:p.Section || "", type:t === "Valeur n-1 / n" ? "num" : ["Texte", "Nombre", "Pourcentage"].includes(t) ? "text" : "yn",
+        avec:r.Avec_quoi || "", desc:[r.Description, r.Montant != null && r.Montant !== "" ? Number(r.Montant).toLocaleString("fr-FR") + " €" : ""].filter(Boolean).join(" – "),
+        res:RES_CODE[r.Resultat] || null, obs:r.Observation || "", v1:r.Valeur_n_1, v2:r.Valeur_n, texte:r.Reponse_texte || "" };
+      og.items.push(it);
+    }
+    if (og.items.length) D.onglets.push(og);
+    if (G.key[0] === "C"){ const v = byId(T.CONV, +G.key.slice(1)); if (v && v.Prestataire) D.conventions.push({ sheet:og.sheet, nom:v.Prestataire }); }
+  }
+  const so = rows(T.SOND).filter(s => s.Controle === cid);
+  const bul = so.filter(s => s.Type !== "Mandat"), man = so.filter(s => s.Type === "Mandat");
+  if (bul.length) D.sondages.push({ titre:"Contrôle par sondage des bulletins d'adhésion", head:["N° SIRET", "Nom - prénom", "Société", "Critère de choix", "Date début adhésion", "C/NC"], rows:bul.map(s => [s.SIRET || "", s.Nom_prenom || "", s.Societe || "", s.Critere_choix || "", secToFr(s.Date_adhesion), s.Resultat || ""]) });
+  if (man.length) D.sondages.push({ titre:"Contrôle par sondage des mandats", head:["N° SIRET", "Nom - prénom", "Société", "Critère de choix", "Mandat présent", "C/NC"], rows:man.map(s => [s.SIRET || "", s.Nom_prenom || "", s.Societe || "", s.Critere_choix || "", s.Mandat_present ? "Oui" : "Non", s.Resultat || ""]) });
+  D.rendements = rows(T.REND).filter(r => r.Controle === cid).map(r => ({ produit:r.Produit || "", annee:r.Annee || "", dept:r.Departement || "", agreste:r.Rendement_AGRESTE, op:r.Rendement_OP,
+    variation:r.Rendement_AGRESTE ? (r.Rendement_OP - r.Rendement_AGRESTE) / r.Rendement_AGRESTE : null, justif:r.Justification || "" }));
+  D.stades = rows(T.STADES).filter(s => s.Controle === cid).map(s => ({ stade:s.Stade || "", produits:s.Produits || "", pct:s.Pct_CA || 0 }));
+  D.capital = rows(T.CAP).filter(s => s.Controle === cid);
+  D.producteurs = rows(T.PROD).filter(p => p.Controle === cid).map(p => ({ nom:p.Nom, produits:p.Produits_adhesion }));
+  return D;
+}
+
+@@RAPPORT@@
+
+/* ---------------- Onglet rapport */
+function renderRapport(){
+  const c = ctrl(); if (!c){ $("schemas").innerHTML = '<p>Choisissez un contrôle.</p>'; return; }
+  const Sd = schemaData(dataRapport(c.id));
+  const opts = [["none", "Sans schéma"], ...Object.entries(SCHEMAS).map(([k, v]) => [k, v.label])];
+  $("schemas").innerHTML = opts.map(([k, label]) => `<div class="opt ${S.schema === k ? "sel" : ""}" data-k="${k}" role="radio" aria-checked="${S.schema === k}" tabindex="0"><div class="th">${k === "none" ? '<span class="fr-text--xs">Le rapport ne contiendra pas de schéma</span>' : SCHEMAS[k].fn(Sd, "").replace(/width="\d+" height="\d+"/, "")}</div>${label}</div>`).join("");
+  if (!$("rDate").value) $("rDate").value = new Date().toLocaleDateString("fr-FR");
+}
+$("schemas").addEventListener("click", e => { const o = e.target.closest(".opt"); if (!o) return; S.schema = o.dataset.k; renderRapport(); if (!$("apercu").classList.contains("hidden")) apercu(); });
+function optsRapport(print){ const D = dataRapport(S.ctrlId); return { D, o:{ lieu:$("rLieu").value.trim(), date:$("rDate").value.trim(), annexe:$("rAnnexe").checked, print,
+  schemaSvg:S.schema !== "none" ? SCHEMAS[S.schema].fn(schemaData(D), "") : "" } }; }
+function nomRapport(){ const c = ctrl(); return "Rapport de controle - " + ctrlLabel(c).replace(/\//g, "-"); }
+function apercu(){ const { D, o } = optsRapport(false); const f = $("apercu"); f.classList.remove("hidden"); f.srcdoc = reportHtml(D, o); }
+$("bApercu").onclick = () => ctrl() && apercu();
+$("bPdf").onclick = () => { if (!ctrl()) return; const { D, o } = optsRapport(true); const html = reportHtml(D, o); const w = window.open("", "_blank");
+  if (w){ w.document.open(); w.document.write(html); w.document.close(); toast("info", "Le rapport s'ouvre dans un nouvel onglet : choisissez « Enregistrer au format PDF »."); }
+  else { download(new Blob([html], { type:"text/html" }), nomRapport() + ".html"); toast("info", "Fenêtre bloquée : rapport téléchargé en HTML, à imprimer en PDF (Ctrl+P)."); } };
+$("bDocx").onclick = async () => { if (!ctrl()) return; try { const { D, o } = optsRapport(false); let png = null;
+  if (S.schema !== "none") png = await svgToPng(SCHEMAS[S.schema].fn(schemaData(D), await marianneCss()));
+  download(await buildDocx(D, { ...o, schemaPng:png }), nomRapport() + ".docx"); toast("success", "Rapport Word téléchargé."); } catch(e){ console.error(e); toast("error", esc(e.message)); } };
+
+/* =====================================================================
+   8. GRILLES EXCEL (version d'origine par filière)
+   ===================================================================== */
+@@GRILLE@@
+let MODELE = null, MODELE_NOM = "Grille CRC Reco OP.xlsx";
+async function chargerModele(){
+  if (MODELE) return MODELE;
+  const row = rows(T.MOD).find(r => refList(r.Fichier).length);
+  if (row){ try { const attId = refList(row.Fichier)[0]; const tok = await grist.docApi.getAccessToken({ readOnly:true });
+    const resp = await fetch(`${tok.baseUrl}/attachments/${attId}/download?auth=${tok.token}`); if (!resp.ok) throw new Error(resp.status);
+    MODELE = await resp.arrayBuffer(); const att = await fetchSafe("_grist_Attachments"); const meta = att && att.find(a => a.id === attId); if (meta && meta.fileName) MODELE_NOM = meta.fileName; return MODELE; } catch(e){ console.warn(e); } }
+  return null;
+}
+function planOrigine(fid, fname){
+  const delBySheet = {}, newText = {};
+  for (const p of REF){ if (!p.Feuille || !p.Ligne) continue; const keep = !p.Retire && p.fils.includes(fid);
+    if (keep) (newText[p.Feuille] = newText[p.Feuille] || {})[Math.round(p.Ligne)] = String(p.Libelle || "");
+    else (delBySheet[p.Feuille] = delBySheet[p.Feuille] || new Set()).add(Math.round(p.Ligne)); }
+  return { delBySheet, newText, dropSheets:dropSheets(fid), filiereName:fname };
+}
+async function renderExcel(){
+  $("xFil").innerHTML = rows(T.FIL).map(f => `<option value="${f.id}" ${ctrl() && ctrl().Filiere === f.id ? "selected" : ""}>${esc(f.Nom)}</option>`).join("");
+  $("bXCtrl").disabled = !ctrl();
+  const m = await chargerModele();
+  $("xModeleStatus").innerHTML = m ? `Classeur de référence : <b>${esc(MODELE_NOM)}</b> (table Modele).` : "";
+  $("xFileWrap").classList.toggle("hidden", !!m);
+}
+$("xFile").addEventListener("change", async e => { const f = e.target.files[0]; if (!f) return; MODELE = await f.arrayBuffer(); MODELE_NOM = f.name; renderExcel(); });
+$("bXOrig").onclick = async () => { const fid = +$("xFil").value, fname = filNom(fid); const m = await chargerModele();
+  if (!m){ toast("warning", "Classeur de référence introuvable : ajoutez-le dans la table Modele ou choisissez-le ci-dessous."); $("xFileWrap").classList.remove("hidden"); return; }
+  try { await reload([T.REF, T.ONG]); const blob = await buildWorkbook(m.slice(0), planOrigine(fid, fname)); download(blob, `${MODELE_NOM.replace(/\.xlsx$/i, "")} - ${fname}.xlsx`); toast("success", `Grille d'origine ${esc(fname)} téléchargée.`); }
+  catch(e){ console.error(e); toast("error", esc(e.message)); } };
+$("bXMod").onclick = async () => { const fid = +$("xFil").value; try { await reload([T.REF, T.ONG]); download(await buildModerne(fid, null), `Grille de controle modernisee - ${filNom(fid)}.xlsx`); toast("success", "Grille modernisée téléchargée."); } catch(e){ console.error(e); toast("error", esc(e.message)); } };
+$("bXCtrl").onclick = async () => { const c = ctrl(); if (!c) return; try { download(await buildModerne(c.Filiere, c.id), `Controle - ${ctrlLabel(c)}.xlsx`); toast("success", "Contrôle exporté."); } catch(e){ console.error(e); toast("error", esc(e.message)); } };
+
+/* =====================================================================
+   9. DÉMARRAGE
+   ===================================================================== */
+document.querySelectorAll("#tabs [data-tab]").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
+(async () => {
+  grist.ready({ requiredAccess:"full" });
+  await reload();
+  setTab("controles");
+})();
+</script>
+</body>
+</html>

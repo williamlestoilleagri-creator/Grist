@@ -1,0 +1,1920 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-scheme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contrôle de reconnaissance des OP</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx@9.7.1/dist/index.iife.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/dsfr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/utility/icons/icons.min.css">
+<style>
+  body{background:var(--background-alt-grey,#F6F6F6)}
+  .entete{background:#fff;box-shadow:0 2px 6px rgba(0,0,18,.16);position:relative;z-index:2}
+  .entete__in{max-width:1400px;margin:0 auto;padding:.75rem 1.25rem;display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap}
+  .entete .fr-logo{font-size:.95rem}
+  .entete__service{flex:1 1 240px;border-left:1px solid var(--border-default-grey,#DDD);padding-left:1.25rem;min-width:0}
+  .entete__titre{font-weight:700;font-size:1.25rem;line-height:1.6rem;margin:0}
+  .entete__tag{font-size:.875rem;line-height:1.4rem;margin:0;color:var(--text-mention-grey,#666)}
+  .entete__op{height:64px;width:auto;margin-left:auto}
+  @media (max-width:640px){.entete__service{border-left:0;padding-left:0;order:3;flex-basis:100%}.entete__op{height:48px}}
+  .onglets{background:#fff;border-bottom:1px solid var(--border-default-grey,#DDD);position:sticky;top:0;z-index:1}
+  .onglets .fr-tabs__list{max-width:1400px;margin:0 auto;padding:.5rem 1rem 0;overflow-x:auto;flex-wrap:nowrap;min-height:auto}
+  .onglets .fr-tabs__tab{white-space:nowrap}
+  .wrap{max-width:1400px;margin:0 auto;padding:1.5rem 1rem 3rem}
+  .panel{background:#fff;border:1px solid var(--border-default-grey,#DDD);padding:1.5rem;margin-bottom:1.5rem}
+  .panel > h2,.panel > h3{font-size:1.25rem;line-height:1.75rem;margin-bottom:1rem}
+  .bandeau{display:flex;gap:1rem;align-items:center;flex-wrap:wrap;margin-bottom:1rem}
+  .bandeau .fr-select-group{flex:1 1 360px;margin:0}
+  .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem}
+  @media (max-width:760px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .kpi{background:var(--background-alt-blue-france,#F5F5FE);border-left:4px solid var(--border-plain-blue-france,#000091);padding:.75rem 1rem}
+  .kpi b{display:block;font-size:1.5rem;line-height:2rem;color:var(--text-title-blue-france,#000091)}
+  .kpi span{font-size:.8rem;color:var(--text-mention-grey,#666)}
+  .kpi.rouge{border-color:#CE0500}.kpi.rouge b{color:#CE0500}.kpi.vert{border-color:#18753C}.kpi.vert b{color:#18753C}
+  .barre{height:.5rem;background:#E5E5E5;margin-top:.5rem}.barre i{display:block;height:100%;background:var(--background-action-high-blue-france,#000091)}
+  .saisie{display:grid;grid-template-columns:290px minmax(0,1fr);gap:1.5rem;align-items:start}
+  @media (max-width:900px){.saisie{grid-template-columns:1fr}}
+  .saisie .fr-sidemenu{position:sticky;top:3.5rem;max-height:calc(100vh - 5rem);overflow:auto;background:#fff;border:1px solid var(--border-default-grey,#DDD);padding:.5rem 0}
+  .saisie .fr-sidemenu__inner{box-shadow:none;padding:0}
+  .saisie .fr-sidemenu__link{display:flex;justify-content:space-between;gap:.5rem;font-size:.875rem;padding:.5rem 1rem}
+  .nav-cpt{font-size:.75rem;color:var(--text-mention-grey,#666);white-space:nowrap}
+  .crit{background:#fff;border:1px solid var(--border-default-grey,#DDD);border-left:4px solid #929292;padding:1rem 1.25rem;margin-bottom:1rem}
+  .crit.st-ok{border-left-color:#18753C}.crit.st-obs{border-left-color:#B34000}.crit.st-ano{border-left-color:#CE0500}
+  .crit__head{display:flex;justify-content:space-between;gap:1rem;align-items:center;margin-bottom:.25rem}
+  .crit__num{font-weight:700;color:var(--text-title-blue-france,#000091);font-size:.875rem}
+  .crit__lib{font-weight:500;margin:0 0 .75rem;white-space:pre-line}
+  .crit .fr-segmented{margin-bottom:.75rem}
+  .champs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}
+  .champs .plein{grid-column:1/-1}
+  @media (max-width:700px){.champs{grid-template-columns:1fr}}
+  .champs .fr-input-group{margin:0}
+  .champs .fr-label{font-size:.8rem}
+  textarea.fr-input{min-height:2.5rem;resize:vertical}
+  .sect{font-weight:700;color:var(--text-title-blue-france,#000091);background:var(--background-alt-blue-france,#F5F5FE);padding:.5rem 1rem;margin:1.5rem 0 1rem;border-left:4px solid #000091}
+  .consigne{font-size:.85rem;font-style:italic;color:#3A3A3A;background:#F6F6F6;padding:.5rem 1rem;margin:0 0 1rem}
+  .obs-oblig textarea{box-shadow:inset 0 -2px 0 0 #B34000}
+  .grille-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.25rem 1.5rem}
+  @media (max-width:700px){.grille-form{grid-template-columns:1fr}}
+  .fr-table table{display:table;width:100%}
+  .fr-table td{vertical-align:top}
+  .t-edit td{padding:.25rem .4rem}
+  .t-edit .fr-input,.t-edit .fr-select{font-size:.875rem;padding:.35rem .5rem;min-width:7rem}
+  .t-edit .bool{display:flex;justify-content:center;padding-top:.5rem}
+  .invalide{box-shadow:inset 0 -2px 0 0 #CE0500 !important;background:#FFE9E9 !important}
+  .row-sel{background:var(--background-alt-blue-france,#F5F5FE) !important}
+  tr.clic{cursor:pointer}
+  .hidden{display:none !important}
+  .actions{display:flex;gap:.75rem;flex-wrap:wrap;align-items:center}
+  .schemas{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem}
+  @media (max-width:760px){.schemas{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .opt{border:2px solid var(--border-default-grey,#DDD);padding:.4rem;cursor:pointer;background:#fff;text-align:center;font-size:.85rem}
+  .opt.sel{border-color:#000091;box-shadow:0 0 0 2px #E3E3FD}
+  .opt .th{height:96px;display:grid;place-items:center;overflow:hidden;margin-bottom:.4rem}.opt .th svg{width:100%;height:100%}
+  iframe.apercu{width:100%;height:760px;border:1px solid var(--border-default-grey,#DDD);background:#fff}
+  .toast{position:fixed;right:1rem;bottom:1rem;z-index:10;max-width:420px}
+  .liste-mini{font-size:.8rem;max-height:220px;overflow:auto;margin:0;padding-left:1.25rem}
+</style>
+</head>
+<body>
+<header role="banner" class="entete">
+  <div class="entete__in">
+    <p class="fr-logo fr-mb-0">République<br>Française</p>
+    <div class="entete__service">
+      <p class="entete__titre">Contrôle de reconnaissance des OP</p>
+      <p class="entete__tag">Saisie, import et rapport des contrôles · Région Bretagne</p>
+    </div>
+    <img class="entete__op" src="data:image/png;base64,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" alt="FranceAgriMer">
+  </div>
+</header>
+<nav class="onglets fr-tabs" aria-label="Sections">
+  <ul class="fr-tabs__list" role="tablist" id="tabs">
+    <li role="presentation"><button class="fr-tabs__tab fr-icon-list-unordered fr-tabs__tab--icon-left" role="tab" data-tab="controles" aria-selected="true">Contrôles</button></li>
+    <li role="presentation"><button class="fr-tabs__tab fr-icon-edit-line fr-tabs__tab--icon-left" role="tab" data-tab="saisie" aria-selected="false">Saisie de la grille</button></li>
+    <li role="presentation"><button class="fr-tabs__tab fr-icon-file-text-line fr-tabs__tab--icon-left" role="tab" data-tab="fiche" aria-selected="false">Fiche et tableaux annexes</button></li>
+    <li role="presentation"><button class="fr-tabs__tab fr-icon-upload-line fr-tabs__tab--icon-left" role="tab" data-tab="import" aria-selected="false">Importer un Excel</button></li>
+    <li role="presentation"><button class="fr-tabs__tab fr-icon-article-line fr-tabs__tab--icon-left" role="tab" data-tab="rapport" aria-selected="false">Rapport PDF</button></li>
+    <li role="presentation"><button class="fr-tabs__tab fr-icon-download-line fr-tabs__tab--icon-left" role="tab" data-tab="excel" aria-selected="false">Grilles Excel</button></li>
+  </ul>
+</nav>
+
+<main class="wrap" id="contenu">
+  <div id="bandeauCtrl" class="bandeau hidden">
+    <div class="fr-select-group"><label class="fr-label" for="selCtrl">Contrôle en cours</label><select class="fr-select" id="selCtrl"></select></div>
+  </div>
+
+  <!-- ===================== CONTRÔLES ===================== -->
+  <section data-panel="controles">
+    <div class="panel">
+      <h2>Contrôles enregistrés</h2>
+      <div class="fr-table fr-table--no-caption fr-mb-0"><table><caption>Contrôles</caption>
+        <thead><tr><th scope="col">Contrôle</th><th scope="col">Filière</th><th scope="col">Statut</th><th scope="col">Origine</th><th scope="col">Avancement</th><th scope="col">Anomalies</th></tr></thead>
+        <tbody id="listeCtrl"></tbody></table></div>
+    </div>
+    <div class="panel">
+      <h2>Nouveau contrôle</h2>
+      <div class="grille-form">
+        <div class="fr-select-group"><label class="fr-label" for="nOP">Organisation de producteurs</label><select class="fr-select" id="nOP"></select></div>
+        <div class="fr-input-group"><label class="fr-label" for="nOPnew">ou nouvelle OP (raison sociale)</label><input class="fr-input" id="nOPnew"></div>
+        <div class="fr-select-group"><label class="fr-label" for="nFil">Filière contrôlée</label><select class="fr-select" id="nFil"></select></div>
+        <div class="fr-input-group"><label class="fr-label" for="nDem">N° de demande de contrôle</label><input class="fr-input" id="nDem"></div>
+        <div class="fr-input-group"><label class="fr-label" for="nDu">Contrôle du</label><input class="fr-input" type="date" id="nDu"></div>
+        <div class="fr-input-group"><label class="fr-label" for="nAu">au</label><input class="fr-input" type="date" id="nAu"></div>
+        <div class="fr-input-group"><label class="fr-label" for="nServ">Service territorial</label><input class="fr-input" id="nServ" value="FranceAgriMer – Service territorial Bretagne"></div>
+      </div>
+      <button class="fr-btn fr-btn--icon-left fr-icon-add-line fr-mt-2w" id="bCreer">Créer le contrôle et générer la grille</button>
+    </div>
+  </section>
+
+  <!-- ===================== SAISIE ===================== -->
+  <section data-panel="saisie" class="hidden">
+    <div class="panel"><div class="kpis" id="kpis"></div><div class="barre"><i id="barre" style="width:0"></i></div></div>
+    <div class="saisie">
+      <nav class="fr-sidemenu" aria-label="Feuilles de la grille"><div class="fr-sidemenu__inner"><ul class="fr-sidemenu__list" id="navGroupes"></ul></div></nav>
+      <div id="zoneSaisie"></div>
+    </div>
+  </section>
+
+  <!-- ===================== FICHE ET ANNEXES ===================== -->
+  <section data-panel="fiche" class="hidden"><div id="zoneFiche"></div></section>
+
+  <!-- ===================== IMPORT ===================== -->
+  <section data-panel="import" class="hidden">
+    <div class="panel">
+      <h2>Importer un fichier de contrôle rempli</h2>
+      <p class="fr-text--sm">Accepte la grille Excel <b>d'origine</b> (export par filière) et la grille <b>modernisée</b>. Le contenu est réparti dans les tables Grist, et le fichier est joint au contrôle (origine « Import Excel »).</p>
+      <div class="fr-upload-group"><label class="fr-label" for="fImport">Fichier Excel rempli<span class="fr-hint-text">Format .xlsx</span></label><input class="fr-upload" type="file" id="fImport" accept=".xlsx"></div>
+      <div id="apercuImport" class="fr-mt-3w"></div>
+    </div>
+  </section>
+
+  <!-- ===================== RAPPORT ===================== -->
+  <section data-panel="rapport" class="hidden">
+    <div class="panel">
+      <h2>Schéma fonctionnel de l'OP</h2>
+      <div class="schemas" id="schemas"></div>
+      <div class="grille-form fr-mt-3w">
+        <div class="fr-input-group"><label class="fr-label" for="rLieu">Fait à</label><input class="fr-input" id="rLieu" placeholder="Rennes"></div>
+        <div class="fr-input-group"><label class="fr-label" for="rDate">Le</label><input class="fr-input" id="rDate"></div>
+      </div>
+      <div class="fr-checkbox-group fr-mt-1w"><input type="checkbox" id="rAnnexe" checked><label class="fr-label" for="rAnnexe">Annexe : détail de tous les points contrôlés</label></div>
+    </div>
+    <div class="actions fr-mb-3w">
+      <button class="fr-btn fr-btn--icon-left fr-icon-file-pdf-line" id="bPdf">Télécharger en PDF</button>
+      <button class="fr-btn fr-btn--secondary fr-btn--icon-left fr-icon-file-text-line" id="bDocx">Télécharger en Word</button>
+      <button class="fr-btn fr-btn--tertiary fr-btn--icon-left fr-icon-eye-line" id="bApercu">Aperçu</button>
+    </div>
+    <iframe class="apercu hidden" id="apercu" title="Aperçu du rapport"></iframe>
+  </section>
+
+  <!-- ===================== GRILLES EXCEL ===================== -->
+  <section data-panel="excel" class="hidden">
+    <div class="panel">
+      <h2>Grilles Excel vierges par filière</h2>
+      <div class="fr-select-group"><label class="fr-label" for="xFil">Filière</label><select class="fr-select" id="xFil"></select></div>
+      <div class="actions">
+        <button class="fr-btn fr-btn--icon-left fr-icon-file-download-line" id="bXOrig">Version d'origine</button>
+        <button class="fr-btn fr-btn--secondary fr-btn--icon-left fr-icon-file-download-line" id="bXMod">Version modernisée</button>
+      </div>
+      <p class="fr-text--xs fr-mt-2w fr-mb-0">La <b>version d'origine</b> reprend exactement le classeur de référence (table <b>Modele</b>) sans les critères hors filière. La <b>version modernisée</b> présente une feuille claire par thème, avec listes déroulantes et contrôles de saisie. Les deux se réimportent dans l'onglet « Importer un Excel ».</p>
+      <p class="fr-text--xs fr-mb-0" id="xModeleStatus"></p>
+      <div id="xFileWrap" class="fr-upload-group fr-mt-2w hidden"><label class="fr-label" for="xFile">Classeur de référence<span class="fr-hint-text">Non trouvé dans la table Modele : choisissez le fichier Excel d'origine.</span></label><input class="fr-upload" type="file" id="xFile" accept=".xlsx"></div>
+    </div>
+    <div class="panel">
+      <h2>Exporter le contrôle en cours</h2>
+      <p class="fr-text--sm">Produit la grille modernisée <b>remplie</b> avec les réponses saisies dans Grist.</p>
+      <button class="fr-btn fr-btn--secondary fr-btn--icon-left fr-icon-file-download-line" id="bXCtrl">Exporter le contrôle (version modernisée)</button>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast" aria-live="polite"></div>
+
+<script>
+"use strict";
+/* =====================================================================
+   0. CONFIGURATION (noms des tables et colonnes Grist)
+   ===================================================================== */
+const T = { REF:"Referentiel", FIL:"Filieres", ONG:"Onglets", MOD:"Modele", OP:"OP", FILIALES:"Filiales", CTRL:"Controles",
+  INT:"Intervenants", CONV:"Conventions", PROD:"Producteurs_controles", REP:"Reponses", CAP:"Capital_social",
+  SOND:"Sondages", REND:"Rendements", STADES:"Stades_mise_en_marche" };
+const DOMAINES = ["Appui technique", "Tri, stockage, conditionnement", "Agréage", "Mise en marché"];
+const DOMAINE_FEUILLE = { "Appui technique":"9.1-Conventions d'extern", "Tri, stockage, conditionnement":"10.1-Conventions d'exter",
+  "Agréage":"11.1-Autres conventions d'exter", "Mise en marché":"12.1-Autres conventions d'exter" };
+const STADES = ["Vrac", "Brut de cueille", "Conditionné", "Destiné à la transformation", "Transformé", "Autres"];
+const STATUTS = ["En préparation", "En cours", "À valider", "Validé"];
+const FAM_LOGO = "data:image/png;base64,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";
+const MARKER = "CRC-RECO-OP:modernise:v1";
+
+/* champs : [colonne, libellé, type, options]  types : text | area | num | pct | date | bool | choice | email | reflist */
+const OP_FIELDS = [["Raison_sociale","Raison sociale OP","text"],["N_OP","N° OP (n° de reconnaissance)","text"],["Forme","Forme","choice",["SCA","UCA","Pas SCA"]],
+  ["Statut_juridique","Statut juridique","text"],["SIRET","Numéro SIRET","text"],["Marques","Marques commerciales utilisées","text"],
+  ["Adresse_siege","Adresse du siège social","area"],["Adresse_bureaux","Adresse du siège effectif des bureaux","area"],
+  ["Responsable_legal","Responsable légal (préciser la fonction)","text"],["Contact","Personne à contacter","text"],["Telephone","Téléphone","text"],
+  ["Courriel","Courriel","email"],["AOP","Raison(s) sociale(s) AOP","text"],["Produits","Produits concernés","text"],
+  ["Filieres_reconnues","Filières reconnues","reflist"],["Date_arrete","Date de l'arrêté de reconnaissance","date"],
+  ["Arretes_modificatifs","Arrêtés modificatifs","text"],["Categorie_reconnaissance","Catégorie / secteur de reconnaissance","text"],
+  ["Production_ciblee","Production ciblée","text"],["Zone_reconnaissance","Zone de reconnaissance géographique","text"]];
+const CTRL_FIELDS = [["N_demande","N° de demande de contrôle","text"],["Service_territorial","Service territorial","text"],
+  ["Date_debut","Contrôle du","date"],["Date_fin","au","date"],["Statut","Statut du contrôle","choice",STATUTS],
+  ["PO_en_cours","PO en cours","text"],["Montant_FO","Montant d'aide prévisionnel FO (€)","num"],["Nb_adherents","Nombre d'adhérents","num"],
+  ["Montant_VPC","Montant VPC (€)","num"],["Date_dernier_controle","Date du dernier contrôle de reconnaissance FAM","date"],
+  ["Sanction_precedente","Type de sanction appliquée et suite","text"],["Situation_entreprise","Situation de l'entreprise (INFOGREFFE / PAPPERS…)","area"],
+  ["Categorie_VPC","Catégorie de reconnaissance (onglet 8)","text"],["Seuil_VPC","Seuil de VPC (€)","num"],["Produits_VPC","Produits constituant la VPC","text"],
+  ["CA_reconnu","Chiffre d'affaires des produits reconnus (€)","num"],["Nb_clients","Nombre de clients de l'OP","num"],
+  ["Observation_capital_social","Observations sur le capital social (onglet 4.1)","area"]];
+const ANNEXES = [
+  { t:T.INT, titre:"Personnes rencontrées et contrôleurs", feuille:"page de garde", cols:[["Role","Rôle","choice",["Personne rencontrée","Contrôleur"]],["Fonction_service","Fonction / service","text"],["Nom","Nom et prénom","text"],["Email","Courriel","email"]] },
+  { t:T.CONV, titre:"Conventions d'externalisation", feuille:"9.1 à 12.1 – Conventions", gen:true, cols:[["Domaine","Domaine","choice",DOMAINES],["Prestataire","Prestataire","text"],["Fonction_signataire","Signataire (fonction)","text"]] },
+  { t:T.PROD, titre:"Producteurs contrôlés en exploitation", feuille:"13. Producteur 1, 2, 3", gen:true, cols:[["Nom","Producteur","text"],["SIRET","SIRET","text"],["Produits_adhesion","Produits (bulletin d'adhésion)","text"],["Montant_rapprochement","Montant rapproché (€)","num"]] },
+  { t:T.CAP, titre:"Répartition du capital social", feuille:"4.1-K social et nb adh", cols:[["Adherent","Adhérent","text"],["Activite_principale","Activité principale (SIRENE)","text"],["Membres_personne_morale","Membres (personnes morales)","text"],["Producteur","Producteur","bool"],["Pct_parts","% parts","pct"],["Pct_voix","% voix","pct"]] },
+  { t:T.SOND, titre:"Contrôles par sondage", feuille:"CTRL Bulletin adhésion / CTRL MANDATS", cols:[["Type","Type","choice",["Bulletin d'adhésion","Mandat"]],["SIRET","N° SIRET","text"],["Nom_prenom","Nom - prénom","text"],["Societe","Société","text"],["Critere_choix","Critère de choix","text"],["Date_adhesion","Date début adhésion","date"],["Mandat_present","Mandat présent","bool"],["Resultat","C / NC","choice",["C","NC"]],["Observation","Observation","text"]] },
+  { t:T.REND, titre:"Rendements AGRESTE", feuille:"7-Règles d'apport et dérogation", cols:[["Produit","Produit","text"],["Annee","Année","text"],["Departement","Département","text"],["Rendement_AGRESTE","Rendement AGRESTE","num"],["Rendement_OP","Rendement OP","num"],["Justification","Justifications de l'OP","text"]] },
+  { t:T.STADES, titre:"Mise en marché par stade", feuille:"12-Mise sur le marché", cols:[["Stade","Stade du produit sorti OP","choice",STADES],["Produits","Produits","text"],["Pct_CA","% CA","pct"]] },
+];
+const FILIALES_CFG = { t:T.FILIALES, titre:"Filiales et participations", feuille:"Fiche signalétique", link:"OP", cols:[["Raison_sociale","Raison sociale","text"],["Pct_participation","% participation","pct"],["Objet","Objet","text"]] };
+
+/* =====================================================================
+   1. UTILITAIRES
+   ===================================================================== */
+const NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+const NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+const NS_XDR = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+const NS_PKG = "http://schemas.openxmlformats.org/package/2006/relationships";
+const NS_CT = "http://schemas.openxmlformats.org/package/2006/content-types";
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const clean = v => String(v == null ? "" : v).replace(/\u00a0/g," ").replace(/[ \t]+/g," ").replace(/\s*\n\s*/g,"\n").trim();
+const one = v => clean(v).replace(/\n/g," ");
+const cleanText = s => String(s == null ? "" : s).replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+const norm = s => one(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9%]+/g, " ").trim();
+const FONT_URL = w => `https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.12.1/dist/fonts/Marianne-${w}.woff2`;
+function el(parent, ns, name){ return Array.from(parent.getElementsByTagNameNS(ns, name)); }
+function colToNum(c){ let n = 0; for (const ch of c) n = n * 26 + (ch.charCodeAt(0) - 64); return n; }
+function parseCell(ref){ const m = /^\$?([A-Z]{1,3})\$?(\d+)$/.exec(ref); return m ? { col: m[1], row: +m[2] } : null; }
+function refList(v){ if (!v) return []; if (Array.isArray(v)) return v[0] === "L" ? v.slice(1) : v; return []; }
+function columnar(t){ const keys = Object.keys(t), n = (t.id || []).length, out = []; for (let i = 0; i < n; i++){ const o = {}; for (const k of keys) o[k] = t[k][i]; out.push(o); } return out; }
+function num(v){ if (v == null || v === "") return null; if (typeof v === "number") return v; let s = String(v).replace(/[\s\u00a0€]/g, "").replace(",", "."); const pctv = s.endsWith("%"); s = s.replace("%", ""); const n = parseFloat(s); return isNaN(n) ? null : (pctv ? n / 100 : n); }
+function isoToSec(s){ if (!s) return null; const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) / 1000 : null; }
+function secToIso(n){ if (n == null || n === "") return ""; const d = new Date(n * 1000); return isNaN(d) ? "" : d.toISOString().slice(0, 10); }
+function secToFr(n){ const s = secToIso(n); return s ? s.split("-").reverse().join("/") : ""; }
+function anyToSec(v){ // « 14/10/2026 », numéro de série Excel, objet Date
+  if (v == null || v === "") return null;
+  if (v instanceof Date) return Date.UTC(v.getFullYear(), v.getMonth(), v.getDate()) / 1000;
+  if (typeof v === "number" || /^\d{5}(\.\d+)?$/.test(String(v))) return Math.round((+v - 25569)) * 86400;
+  const m = /(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(String(v)); if (!m) return null;
+  const y = +m[3] < 100 ? 2000 + +m[3] : +m[3]; return Date.UTC(y, +m[2] - 1, +m[1]) / 1000;
+}
+function toast(kind, html, ms = 4500){ const t = $("toast"); t.innerHTML = `<div class="fr-alert fr-alert--${kind} fr-alert--sm"><p>${html}</p></div>`; clearTimeout(toast.t); if (ms) toast.t = setTimeout(() => t.innerHTML = "", ms); }
+function download(blob, name){ const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\u2013\u2014]/g, "-").replace(/[^\x20-\x7E]/g, "").replace(/[\\/:*?"<>|]/g, "-"); document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000); }
+function b64ToBytes(b64){ const s = atob(b64.split(",").pop()); const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; }
+
+/* =====================================================================
+   2. DONNÉES GRIST
+   ===================================================================== */
+const D0 = { tab:"controles", ctrlId:null, groupe:null, schema:"flux", import:null };
+const S = { ...D0, t:{} };
+async function fetchSafe(name){ try { return columnar(await grist.docApi.fetchTable(name)); } catch(e){ return null; } }
+async function reload(names){ const list = names || Object.values(T); const res = await Promise.all(list.map(fetchSafe)); list.forEach((n, i) => S.t[n] = res[i] || []); indexRef(); }
+async function act(actions){ const r = await grist.docApi.applyUserActions(actions); return (r && r.retValues) || []; }
+const rows = n => S.t[n] || [];
+const byId = (n, id) => rows(n).find(r => r.id === id) || null;
+let REF = [], REF_BY_ID = new Map(), REF_BY_CODE = new Map(), REF_BY_TEXT = new Map();
+function indexRef(){
+  REF = rows(T.REF).map(p => ({ ...p, ordre:(+p.Rang_onglet || 0) * 10000 + (+p.Ordre || 0), fils:refList(p.Filieres_applicables) }));
+  REF.sort((a, b) => a.ordre - b.ordre);
+  REF_BY_ID = new Map(REF.map(p => [p.id, p])); REF_BY_CODE = new Map(REF.map(p => [p.Code, p]));
+  REF_BY_TEXT = new Map(); for (const p of REF) REF_BY_TEXT.set(p.Feuille + "|" + norm(p.Libelle), p);
+}
+const ctrl = () => byId(T.CTRL, S.ctrlId);
+const filNom = id => (byId(T.FIL, id) || {}).Nom || "";
+function ctrlLabel(c){ const op = byId(T.OP, c.OP); return `${(op && op.Raison_sociale) || "OP ?"} – ${filNom(c.Filiere) || "?"} – ${secToFr(c.Date_debut) || "date ?"}`; }
+function dropSheets(fid){ const s = new Set(); for (const o of rows(T.ONG)) if (o.Feuille && !refList(o.Filieres_applicables).includes(fid)) s.add(o.Feuille); return s; }
+function repsOf(cid){ return rows(T.REP).filter(r => r.Controle === cid); }
+function statutRep(r){ const p = REF_BY_ID.get(r.Point); if (p && p.Type_reponse === "Aucune") return "Aucun";
+  if (!(r.Resultat || r.Reponse_texte || r.Description || r.Montant || r.Valeur_n || r.Valeur_n_1)) return "À renseigner";
+  if (["Non conforme", "Non conclusif"].includes(r.Resultat) && !r.Observation) return "Observation obligatoire"; return "OK"; }
+const anomalieRep = r => r.Resultat === "Non conforme" || (r.Resultat === "Non" && !!r.Observation);
+function statsCtrl(cid){ const rs = repsOf(cid).filter(r => statutRep(r) !== "Aucun");
+  const ok = rs.filter(r => statutRep(r) === "OK").length; return { points:rs.length, ok, obs:rs.filter(r => statutRep(r) === "Observation obligatoire").length,
+    ano:rs.filter(anomalieRep).length, av: rs.length ? ok / rs.length : 0 }; }
+
+/* points de la grille d'un contrôle (filière, feuilles applicables) */
+function pointsGrille(c, portee, domaine){
+  const fid = c.Filiere, drop = dropSheets(fid);
+  return REF.filter(p => p.Portee === portee && (domaine == null || p.Domaine_convention === domaine) && ["Question", "Sous-question"].includes(p.Niveau)
+    && !p.Retire && p.fils.includes(fid) && !drop.has(p.Feuille));
+}
+async function genererGrille(cid){
+  const c = byId(T.CTRL, cid); if (!c || !c.Filiere) return 0;
+  const have = new Set(repsOf(cid).map(r => `${r.Point}|${r.Convention || 0}|${r.Producteur || 0}`));
+  const add = [];
+  const push = (p, conv, prod) => { const k = `${p.id}|${conv}|${prod}`; if (!have.has(k)){ have.add(k); add.push({ Controle:cid, Point:p.id, Convention:conv || 0, Producteur:prod || 0, Libelle:p.Libelle }); } };
+  pointsGrille(c, "Contrôle").forEach(p => push(p, 0, 0));
+  rows(T.CONV).filter(v => v.Controle === cid && v.Domaine).forEach(v => pointsGrille(c, "Convention", v.Domaine).forEach(p => push(p, v.id, 0)));
+  rows(T.PROD).filter(v => v.Controle === cid).forEach(v => pointsGrille(c, "Producteur").forEach(p => push(p, 0, v.id)));
+  if (add.length) await bulkAdd(T.REP, add);
+  await reload([T.REP]); return add.length;
+}
+async function bulkAdd(table, recs){
+  if (!recs.length) return [];
+  const cols = [...new Set(recs.flatMap(r => Object.keys(r)))];
+  const ids = [];
+  for (let i = 0; i < recs.length; i += 400){
+    const part = recs.slice(i, i + 400), data = {};
+    for (const k of cols) data[k] = part.map(r => r[k] === undefined ? null : r[k]);
+    const res = await act([["BulkAddRecord", table, part.map(() => null), data]]); ids.push(...(res[0] || []));
+  }
+  return ids;
+}
+
+/* =====================================================================
+   3. NAVIGATION
+   ===================================================================== */
+function setTab(t){
+  S.tab = t;
+  for (const b of document.querySelectorAll("#tabs [data-tab]")) b.setAttribute("aria-selected", b.dataset.tab === t);
+  for (const p of document.querySelectorAll("[data-panel]")) p.classList.toggle("hidden", p.dataset.panel !== t);
+  $("bandeauCtrl").classList.toggle("hidden", !["saisie", "fiche", "rapport"].includes(t) && !(t === "excel"));
+  render();
+}
+function render(){
+  renderSelCtrl();
+  if (S.tab === "controles") renderControles();
+  if (S.tab === "saisie") renderSaisie();
+  if (S.tab === "fiche") renderFiche();
+  if (S.tab === "rapport") renderRapport();
+  if (S.tab === "excel") renderExcel();
+}
+function renderSelCtrl(){
+  const sel = $("selCtrl"), list = rows(T.CTRL);
+  sel.innerHTML = list.length ? list.map(c => `<option value="${c.id}" ${c.id === S.ctrlId ? "selected" : ""}>${esc(ctrlLabel(c))}</option>`).join("") : '<option value="">Aucun contrôle</option>';
+  if (!S.ctrlId && list.length){ S.ctrlId = list[list.length - 1].id; sel.value = S.ctrlId; }
+}
+function badgeStatut(s){ const k = { "Validé":"success", "À valider":"warning", "En cours":"info", "En préparation":"new" }[s] || "info"; return s ? `<span class="fr-badge fr-badge--sm fr-badge--${k} fr-badge--no-icon">${esc(s)}</span>` : ""; }
+
+/* ---------------- Contrôles */
+function renderControles(){
+  $("listeCtrl").innerHTML = rows(T.CTRL).map(c => { const st = statsCtrl(c.id);
+    return `<tr class="clic ${c.id === S.ctrlId ? "row-sel" : ""}" data-cid="${c.id}"><td><b>${esc(ctrlLabel(c))}</b><br><span class="fr-text--xs">${esc(c.N_demande || "")}</span></td><td>${esc(filNom(c.Filiere))}</td><td>${badgeStatut(c.Statut)}</td>
+      <td>${c.Fichier_source && refList(c.Fichier_source).length ? '<span class="fr-tag fr-tag--sm">Import Excel</span>' : '<span class="fr-tag fr-tag--sm">Saisie Grist</span>'}</td>
+      <td>${Math.round(st.av * 100)} %<div class="barre"><i style="width:${Math.round(st.av * 100)}%"></i></div></td><td>${st.ano ? `<b style="color:#CE0500">${st.ano}</b>` : "0"}</td></tr>`; }).join("")
+    || '<tr><td colspan="6">Aucun contrôle pour l\'instant : créez-en un ci-dessous ou importez un fichier Excel.</td></tr>';
+  $("nOP").innerHTML = '<option value="">— Choisir —</option>' + rows(T.OP).map(o => `<option value="${o.id}">${esc(o.Raison_sociale || "OP n°" + o.id)}</option>`).join("");
+  $("nFil").innerHTML = '<option value="">— Choisir —</option>' + rows(T.FIL).map(f => `<option value="${f.id}">${esc(f.Nom)}</option>`).join("");
+}
+$("listeCtrl").addEventListener("click", e => { const tr = e.target.closest("tr[data-cid]"); if (!tr) return; S.ctrlId = +tr.dataset.cid; S.groupe = null; setTab("saisie"); });
+$("selCtrl").addEventListener("change", e => { S.ctrlId = +e.target.value; S.groupe = null; render(); });
+$("bCreer").addEventListener("click", async () => {
+  const fid = +$("nFil").value; let opId = +$("nOP").value; const nouv = $("nOPnew").value.trim();
+  if (!fid || (!opId && !nouv)){ toast("error", "Choisissez une OP (ou saisissez une nouvelle raison sociale) et une filière."); return; }
+  try {
+    if (!opId){ [opId] = await act([["AddRecord", T.OP, null, { Raison_sociale:nouv }]]); }
+    const [cid] = await act([["AddRecord", T.CTRL, null, { OP:opId, Filiere:fid, N_demande:$("nDem").value.trim(), Service_territorial:$("nServ").value.trim(),
+      Date_debut:isoToSec($("nDu").value), Date_fin:isoToSec($("nAu").value), Statut:"En cours" }]]);
+    await reload(); const n = await genererGrille(cid);
+    S.ctrlId = cid; S.groupe = null; toast("success", `Contrôle créé : ${n} points de contrôle générés pour la filière ${esc(filNom(fid))}.`); setTab("saisie");
+  } catch(e){ console.error(e); toast("error", "Création impossible : " + esc(e.message)); }
+});
+
+/* ---------------- Saisie */
+function groupesCtrl(cid){
+  const g = new Map();
+  for (const r of repsOf(cid)){
+    const p = REF_BY_ID.get(r.Point); if (!p) continue;
+    let key, label, feuille = p.Feuille, sub = "";
+    if (r.Convention){ const v = byId(T.CONV, r.Convention) || {}; key = "C" + r.Convention; label = `Convention – ${v.Domaine || ""}`; sub = v.Prestataire || "prestataire ?"; }
+    else if (r.Producteur){ const v = byId(T.PROD, r.Producteur) || {}; key = "P" + r.Producteur; label = "Contrôle en exploitation"; sub = v.Nom || "producteur ?"; }
+    else { key = "S" + feuille; label = `${p.Onglet} – ${p.Titre_onglet}`; }
+    if (!g.has(key)) g.set(key, { key, label, sub, feuille, ordre:p.ordre + (r.Convention || r.Producteur || 0) / 1000, reps:[] });
+    const G = g.get(key); G.reps.push(r); G.ordre = Math.min(G.ordre, p.ordre + (r.Convention || r.Producteur || 0) / 1000);
+  }
+  const list = [...g.values()].sort((a, b) => a.ordre - b.ordre);
+  for (const G of list) G.reps.sort((a, b) => REF_BY_ID.get(a.Point).ordre - REF_BY_ID.get(b.Point).ordre);
+  return list;
+}
+function renderKpis(cid){
+  const st = statsCtrl(cid);
+  $("kpis").innerHTML = `<div class="kpi"><b>${st.points}</b><span>points de contrôle</span></div><div class="kpi vert"><b>${st.ok}</b><span>renseignés</span></div>
+    <div class="kpi ${st.obs ? "rouge" : ""}"><b>${st.obs}</b><span>observations manquantes</span></div><div class="kpi ${st.ano ? "rouge" : ""}"><b>${st.ano}</b><span>anomalies</span></div>`;
+  $("barre").style.width = Math.round(st.av * 100) + "%";
+}
+function renderSaisie(){
+  const c = ctrl();
+  if (!c){ $("zoneSaisie").innerHTML = `<div class="fr-alert fr-alert--info"><p>Choisissez ou créez un contrôle dans l'onglet « Contrôles ».</p></div>`; $("navGroupes").innerHTML = ""; $("kpis").innerHTML = ""; return; }
+  renderKpis(c.id);
+  const gs = groupesCtrl(c.id);
+  if (!gs.length){ $("navGroupes").innerHTML = ""; $("zoneSaisie").innerHTML = `<div class="fr-alert fr-alert--warning"><p>La grille de ce contrôle est vide.</p></div><button class="fr-btn fr-mt-2w" id="bGen">Générer la grille de la filière ${esc(filNom(c.Filiere))}</button>`;
+    $("bGen").onclick = async () => { const n = await genererGrille(c.id); toast("success", `${n} points générés.`); renderSaisie(); }; return; }
+  if (!S.groupe || !gs.some(G => G.key === S.groupe)) S.groupe = gs[0].key;
+  $("navGroupes").innerHTML = gs.map(G => { const done = G.reps.filter(r => ["OK", "Aucun"].includes(statutRep(r))).length, ano = G.reps.filter(anomalieRep).length;
+    return `<li class="fr-sidemenu__item"><a class="fr-sidemenu__link" href="#" data-g="${esc(G.key)}" ${G.key === S.groupe ? 'aria-current="page"' : ""}><span>${esc(G.label)}${G.sub ? `<br><span class="fr-text--xs">${esc(G.sub)}</span>` : ""}</span><span class="nav-cpt">${done}/${G.reps.length}${ano ? ` · <b style="color:#CE0500">${ano}</b>` : ""}</span></a></li>`; }).join("");
+  const G = gs.find(x => x.key === S.groupe);
+  const fid = c.Filiere;
+  const ordres = G.reps.map(r => REF_BY_ID.get(r.Point).ordre), lo = Math.min(...ordres), hi = Math.max(...ordres);
+  const extras = REF.filter(p => p.Feuille === G.feuille && ["Section", "Consigne"].includes(p.Niveau) && p.ordre >= lo - 9999 && p.ordre <= hi + 9 && !p.Retire && (p.Niveau === "Section" ? p.fils.includes(fid) : (p.fils.length === 0 || p.fils.includes(fid))));
+  const items = [...G.reps.map(r => ({ o:REF_BY_ID.get(r.Point).ordre, r })), ...extras.filter(p => p.ordre >= lo - 9999 && p.ordre <= hi).map(p => ({ o:p.ordre, p }))].sort((a, b) => a.o - b.o);
+  let h = `<div class="panel fr-py-2w"><h2 class="fr-h5 fr-mb-0">${esc(G.label)}${G.sub ? " – " + esc(G.sub) : ""}</h2><p class="fr-text--xs fr-mb-0">Feuille Excel : ${esc(G.feuille)}</p></div>`;
+  for (const it of items) h += it.r ? critHtml(it.r) : it.p.Niveau === "Section" ? `<div class="sect">${esc(one(it.p.Libelle))}</div>` : `<p class="consigne">${esc(one(it.p.Libelle))}</p>`;
+  $("zoneSaisie").innerHTML = h;
+}
+$("navGroupes").addEventListener("click", e => { const a = e.target.closest("[data-g]"); if (!a) return; e.preventDefault(); S.groupe = a.dataset.g; renderSaisie(); window.scrollTo({ top:0 }); });
+
+const OPTIONS = { "Oui/Non":["Oui", "Non", "Non conclusif", "Sans objet"], "Conforme/Non conforme":["Conforme", "Non conforme", "Non conclusif", "Sans objet"], "Montant + C/NC":["Conforme", "Non conforme", "Sans objet"] };
+function critHtml(r){
+  const p = REF_BY_ID.get(r.Point), t = p.Type_reponse || "Oui/Non", st = statutRep(r), id = r.id;
+  const cls = anomalieRep(r) ? "st-ano" : st === "Observation obligatoire" ? "st-obs" : st === "OK" ? "st-ok" : "";
+  const badge = { "OK":'<span class="fr-badge fr-badge--sm fr-badge--success">Renseigné</span>', "À renseigner":'<span class="fr-badge fr-badge--sm fr-badge--info fr-badge--no-icon">À renseigner</span>',
+    "Observation obligatoire":'<span class="fr-badge fr-badge--sm fr-badge--warning">Observation obligatoire</span>' }[st] || "";
+  const field = (f, label, type = "text", cls2 = "") => { const v = r[f]; const val = v == null ? "" : v;
+    return `<div class="fr-input-group ${cls2}"><label class="fr-label" for="f${f}${id}">${label}</label>${type === "area" ? `<textarea class="fr-input" id="f${f}${id}" data-id="${id}" data-f="${f}" rows="2">${esc(val)}</textarea>` : `<input class="fr-input" id="f${f}${id}" data-id="${id}" data-f="${f}" type="${type === "num" ? "text" : type}" inputmode="${type === "num" ? "decimal" : "text"}" value="${esc(type === "num" && val !== "" ? String(val).replace(".", ",") : val)}">`}</div>`; };
+  let corps = "";
+  if (t === "Montant (calculé)"){
+    const c = ctrl(), bloc = p.Bloc_VPC; const tot = repsOf(c.id).reduce((s, x) => { const q = REF_BY_ID.get(x.Point); return s + (q && q.Bloc_VPC === bloc && q.Signe_VPC ? (+x.Montant || 0) * q.Signe_VPC : 0); }, 0);
+    return `<div class="crit st-ok"><div class="crit__head"><span class="crit__num">N° ${esc(fmtNum(p.Num))}</span><span class="fr-badge fr-badge--sm fr-badge--info fr-badge--no-icon">Calcul automatique</span></div><p class="crit__lib">${esc(r.Libelle || p.Libelle)}</p><p class="fr-h5 fr-mb-0">${tot.toLocaleString("fr-FR")} €</p></div>`;
+  }
+  if (OPTIONS[t] || !["Texte", "Nombre", "Pourcentage", "Valeur n-1 / n"].includes(t)){
+    const opts = OPTIONS[t] || OPTIONS["Oui/Non"];
+    corps += `<fieldset class="fr-segmented fr-segmented--sm"><legend class="fr-segmented__legend fr-sr-only">Résultat</legend><div class="fr-segmented__elements">${opts.map((o, i) =>
+      `<div class="fr-segmented__element"><input type="radio" id="r${id}_${i}" name="r${id}" value="${esc(o)}" data-id="${id}" data-f="Resultat" ${r.Resultat === o ? "checked" : ""}><label class="fr-label" for="r${id}_${i}">${esc(o)}</label></div>`).join("")}</div></fieldset>
+      ${r.Resultat ? `<button class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-ml-1w" data-clear="${id}">Effacer</button>` : ""}`;
+  }
+  corps += '<div class="champs">';
+  const rempli = f => r[f] != null && r[f] !== "";
+  if (t === "Valeur n-1 / n" || rempli("Valeur_n_1") || rempli("Valeur_n")) corps += field("Valeur_n_1", "Valeur au 01/01/n-1", "num") + field("Valeur_n", "Valeur au 01/01/n", "num");
+  if (["Texte", "Nombre", "Pourcentage"].includes(t) || rempli("Reponse_texte")) corps += field("Reponse_texte", t === "Nombre" ? "Nombre" : t === "Pourcentage" ? "Pourcentage" : "Réponse rédigée", ["Nombre", "Pourcentage"].includes(t) ? "text" : "area", "plein");
+  if (t === "Montant + C/NC" || rempli("Montant")) corps += field("Montant", "Montant (€)", "num");
+  corps += field("Avec_quoi", "Avec quoi le contrôle a-t-il été fait ?") + field("Description", "Description du contrôle effectué", "area");
+  corps += field("Observation", "Observation du contrôleur" + (st === "Observation obligatoire" ? " (obligatoire)" : ""), "area", "plein" + (st === "Observation obligatoire" ? " obs-oblig" : ""));
+  corps += "</div>";
+  return `<div class="crit ${cls}" id="crit${id}"><div class="crit__head"><span class="crit__num">${p.Num ? "N° " + esc(fmtNum(p.Num)) : (p.Niveau === "Sous-question" ? "Précision" : "")}</span>${badge}${anomalieRep(r) ? ' <span class="fr-badge fr-badge--sm fr-badge--error">Anomalie</span>' : ""}</div>
+    <p class="crit__lib">${esc(r.Libelle || p.Libelle)}</p>${corps}</div>`;
+}
+function fmtNum(v){ return v == null || v === "" ? "" : String(+v === Math.round(+v) ? Math.round(+v) : v); }
+async function saveRep(id, f, v){
+  const r = byId(T.REP, id); if (!r) return;
+  if (["Valeur_n", "Valeur_n_1", "Montant"].includes(f)) v = num(v);
+  if (r[f] === v) return;
+  r[f] = v;
+  try { await act([["UpdateRecord", T.REP, id, { [f]:v }]]); } catch(e){ toast("error", "Enregistrement impossible : " + esc(e.message)); return; }
+  const box = $("crit" + id); if (box){ const tmp = document.createElement("div"); tmp.innerHTML = critHtml(r); const nb = tmp.firstElementChild; box.replaceWith(nb); }
+  renderKpis(S.ctrlId);
+  const a = document.querySelector(`#navGroupes [data-g="${CSS.escape(S.groupe)}"] .nav-cpt`);
+  if (a){ const G = groupesCtrl(S.ctrlId).find(x => x.key === S.groupe); const done = G.reps.filter(x => ["OK", "Aucun"].includes(statutRep(x))).length, ano = G.reps.filter(anomalieRep).length; a.innerHTML = `${done}/${G.reps.length}${ano ? ` · <b style="color:#CE0500">${ano}</b>` : ""}`; }
+}
+$("zoneSaisie").addEventListener("change", e => { const t = e.target; if (t.dataset && t.dataset.id) saveRep(+t.dataset.id, t.dataset.f, t.type === "radio" ? t.value : t.value.trim() || null); });
+$("zoneSaisie").addEventListener("click", e => { const b = e.target.closest("[data-clear]"); if (b){ e.preventDefault(); saveRep(+b.dataset.clear, "Resultat", null); } });
+
+/* ---------------- Fiche et annexes (éditeurs génériques) */
+function inputFor(table, rec, col, label, type, opts, inTable){
+  const id = `e_${table}_${rec.id}_${col}`, v = rec[col], data = `data-t="${table}" data-r="${rec.id}" data-c="${col}" data-k="${type}"`;
+  const lab = inTable ? `<label class="fr-label fr-sr-only" for="${id}">${esc(label)}</label>` : `<label class="fr-label" for="${id}">${esc(label)}</label>`;
+  let ctl;
+  if (type === "choice") ctl = `<select class="fr-select" id="${id}" ${data}><option value=""></option>${opts.map(o => `<option ${v === o ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
+  else if (type === "bool") return `<div class="fr-checkbox-group ${inTable ? "bool" : ""}"><input type="checkbox" id="${id}" ${data} ${v ? "checked" : ""}><label class="fr-label" for="${id}">${inTable ? `<span class="fr-sr-only">${esc(label)}</span>` : esc(label)}</label></div>`;
+  else if (type === "reflist") return `<fieldset class="fr-fieldset"><legend class="fr-fieldset__legend fr-text--regular">${esc(label)}</legend>${rows(T.FIL).map(f => `<div class="fr-fieldset__element fr-fieldset__element--inline"><div class="fr-checkbox-group"><input type="checkbox" id="${id}_${f.id}" ${data} data-v="${f.id}" ${refList(v).includes(f.id) ? "checked" : ""}><label class="fr-label" for="${id}_${f.id}">${esc(f.Nom)}</label></div></div>`).join("")}</fieldset>`;
+  else if (type === "area") ctl = `<textarea class="fr-input" id="${id}" ${data} rows="2">${esc(v || "")}</textarea>`;
+  else if (type === "date") ctl = `<input class="fr-input" type="date" id="${id}" ${data} value="${secToIso(v)}">`;
+  else if (type === "pct") ctl = `<input class="fr-input" inputmode="decimal" id="${id}" ${data} value="${v == null || v === "" ? "" : String(Math.round(v * 10000) / 100).replace(".", ",") + " %"}">`;
+  else if (type === "num") ctl = `<input class="fr-input" inputmode="decimal" id="${id}" ${data} value="${v == null || v === "" ? "" : String(v).replace(".", ",")}">`;
+  else ctl = `<input class="fr-input ${type === "email" && v && (String(v).split("@").length !== 2) ? "invalide" : ""}" id="${id}" ${data} value="${esc(v == null ? "" : v)}" ${type === "email" ? 'type="email"' : ""}>`;
+  return inTable ? lab + ctl : `<div class="fr-input-group">${lab}${ctl}</div>`;
+}
+function convertInput(t){
+  const k = t.dataset.k;
+  if (k === "bool") return t.checked;
+  if (k === "num") return num(t.value);
+  if (k === "pct"){ const n = num(String(t.value).replace("%", "")); return n == null ? null : n / 100; }
+  if (k === "date") return isoToSec(t.value);
+  return t.value.trim() || null;
+}
+function formHtml(table, rec, fields){ return `<div class="grille-form">${fields.map(([c, l, k, o]) => `<div class="${k === "area" || k === "reflist" ? "" : ""}">${inputFor(table, rec, c, l, k, o, false)}</div>`).join("")}</div>`; }
+function annexHtml(cfg, link, linkId){
+  const recs = rows(cfg.t).filter(r => r[link] === linkId);
+  return `<div class="panel"><h3>${esc(cfg.titre)}</h3><p class="fr-text--xs fr-mt-n2w">Feuille Excel : ${esc(cfg.feuille)}</p>
+    <div class="fr-table fr-table--sm fr-table--no-caption t-edit fr-mb-1w"><table><caption>${esc(cfg.titre)}</caption><thead><tr>${cfg.cols.map(c => `<th scope="col">${esc(c[1])}</th>`).join("")}<th scope="col"><span class="fr-sr-only">Supprimer</span></th></tr></thead>
+    <tbody>${recs.map(r => `<tr>${cfg.cols.map(([c, l, k, o]) => `<td>${inputFor(cfg.t, r, c, l, k, o, true)}</td>`).join("")}<td><button class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-icon-delete-line" title="Supprimer la ligne" data-del="${cfg.t}" data-r="${r.id}">Supprimer</button></td></tr>`).join("")
+      || `<tr><td colspan="${cfg.cols.length + 1}" class="fr-text--sm">Aucune ligne.</td></tr>`}</tbody></table></div>
+    <div class="actions"><button class="fr-btn fr-btn--secondary fr-btn--sm fr-btn--icon-left fr-icon-add-line" data-add="${cfg.t}" data-link="${link}" data-lid="${linkId}">Ajouter une ligne</button>
+    ${cfg.gen ? '<button class="fr-btn fr-btn--tertiary fr-btn--sm fr-btn--icon-left fr-icon-refresh-line" data-gen="1">Générer les check-lists dans la grille</button>' : ""}</div></div>`;
+}
+function renderFiche(){
+  const c = ctrl();
+  if (!c){ $("zoneFiche").innerHTML = `<div class="fr-alert fr-alert--info"><p>Choisissez ou créez un contrôle.</p></div>`; return; }
+  const op = byId(T.OP, c.OP) || { id:0 };
+  let h = `<div class="panel"><h3>Organisation de producteurs – fiche signalétique</h3><p class="fr-text--xs fr-mt-n2w">Feuille Excel : Fiche signalétique · commune à tous les contrôles de cette OP</p>${op.id ? formHtml(T.OP, op, OP_FIELDS) : "<p>OP introuvable.</p>"}</div>`;
+  if (op.id) h += annexHtml(FILIALES_CFG, "OP", op.id);
+  h += `<div class="panel"><h3>Données du contrôle</h3><p class="fr-text--xs fr-mt-n2w">Feuilles Excel : page de garde, Fiche signalétique, 8-Respect du seuil minimal VPC, 12-Mise sur le marché</p>${formHtml(T.CTRL, c, CTRL_FIELDS)}</div>`;
+  for (const cfg of ANNEXES) h += annexHtml(cfg, "Controle", c.id);
+  $("zoneFiche").innerHTML = h;
+}
+$("zoneFiche").addEventListener("change", async e => {
+  const t = e.target; if (!t.dataset || !t.dataset.t) return;
+  const table = t.dataset.t, id = +t.dataset.r, col = t.dataset.c; let v;
+  if (t.dataset.k === "reflist"){ const rec = byId(table, id); const cur = new Set(refList(rec[col])); t.checked ? cur.add(+t.dataset.v) : cur.delete(+t.dataset.v); v = ["L", ...cur]; }
+  else v = convertInput(t);
+  if (t.dataset.k === "email") t.classList.toggle("invalide", !!v && String(v).split("@").length !== 2);
+  try { await act([["UpdateRecord", table, id, { [col]:v }]]); const rec = byId(table, id); if (rec) rec[col] = v;
+    if (table === T.CTRL || table === T.OP) renderSelCtrl(); } catch(err){ toast("error", "Enregistrement impossible : " + esc(err.message)); }
+});
+$("zoneFiche").addEventListener("click", async e => {
+  const add = e.target.closest("[data-add]"), del = e.target.closest("[data-del]"), gen = e.target.closest("[data-gen]");
+  try {
+    if (add){ await act([["AddRecord", add.dataset.add, null, { [add.dataset.link]:+add.dataset.lid }]]); await reload([add.dataset.add]); renderFiche(); }
+    if (del && confirm("Supprimer cette ligne ?")){
+      const extra = [];
+      if (del.dataset.del === T.CONV) repsOf(S.ctrlId).filter(r => r.Convention === +del.dataset.r).forEach(r => extra.push(["RemoveRecord", T.REP, r.id]));
+      if (del.dataset.del === T.PROD) repsOf(S.ctrlId).filter(r => r.Producteur === +del.dataset.r).forEach(r => extra.push(["RemoveRecord", T.REP, r.id]));
+      await act([...extra, ["RemoveRecord", del.dataset.del, +del.dataset.r]]); await reload([del.dataset.del, T.REP]); renderFiche(); }
+    if (gen){ await reload([T.CONV, T.PROD]); const n = await genererGrille(S.ctrlId); toast("success", n ? `${n} points ajoutés à la grille (onglet « Saisie de la grille »).` : "La grille est déjà à jour."); }
+  } catch(err){ console.error(err); toast("error", esc(err.message)); }
+});
+
+/* =====================================================================
+   5. IMPORT D'UN FICHIER EXCEL REMPLI (grille d'origine ou modernisée)
+   ===================================================================== */
+const OP_MAP = [["N_OP", /^N°OP/i], ["Raison_sociale", /^Raison sociale OP/i], ["Marques", /^Marques/i], ["Statut_juridique", /^Statut juridique/i], ["SIRET", /^Numéro Siret/i],
+  ["Adresse_siege", /^Adresse du Siège Social/i], ["Adresse_bureaux", /^Adresse du Siège effectif/i], ["Responsable_legal", /^Responsable légal/i], ["Contact", /^Personne à contacter/i],
+  ["Telephone", /^Téléphone/i], ["Courriel", /^Courriel/i], ["AOP", /^Raison\(s\) sociale\(s\) AOP/i], ["Produits", /^Produits concernés/i],
+  ["Categorie_reconnaissance", /^Catégorie\/Secteur/i], ["Production_ciblee", /production ciblée/i], ["Zone_reconnaissance", /^Zone de reconnaissance/i]];
+const CTRL_MAP = [["PO_en_cours", /^PO en cours/i, "text"], ["Montant_FO", /^Montant d'aide/i, "num"], ["Date_dernier_controle", /^Date du dernier contrôle/i, "date"],
+  ["Sanction_precedente", /type de sanction/i, "text"], ["Nb_adherents", /^Nombre d'adhérents/i, "num"], ["Montant_VPC", /^Montant VPC/i, "num"],
+  ["Situation_entreprise", /^Consultation des sites|^Situation de l.entreprise/i, "text"]];
+const SANS_OBJET = v => /^sans objet$/i.test(one(v));
+function pctVal(v){ const n = num(v); return n == null ? null : (n > 1 ? n / 100 : n); }
+function estProducteur(activite, nom){ const txt = ((activite || "") + " " + (nom || "")).toLowerCase(); if (/\b01\.?\d/.test(txt)) return true;
+  return ["culture", "élevage", "elevage", "maraîch", "maraich", "arboricult", "viticult", "horticult", "exploitation agricole", "earl", "gaec", "scea", "producteur"].some(m => txt.includes(m)); }
+function planVide(format){ return { format, op:{}, ctrl:{}, filiereNom:"", intervenants:[], filiales:[], conventions:[], producteurs:[], reps:[], capital:[], sondages:[], rendements:[], stades:[], nonReconnus:[] }; }
+function resultatDe(code, p){ const cnc = /Conforme|C\/NC/.test(p.Type_reponse || "");
+  return { OUI:cnc ? "Conforme" : "Oui", NON:cnc ? "Non conforme" : "Non", C:"Conforme", NC:"Non conforme" }[code] || null; }
+
+/* rapprochement approché : libellé légèrement différent (accord, ponctuation, libellé modifié dans Grist) */
+function rapprocher(feuille, texte, dejaPris){
+  const mots = new Set(norm(texte).split(" ").filter(w => w.length > 2)); if (mots.size < 2) return null;
+  const pris = new Set(dejaPris.map(x => x.p.id)); let best = null, score = 0;
+  for (const p of REF){ if (p.Feuille !== feuille || !["Question", "Sous-question"].includes(p.Niveau) || pris.has(p.id)) continue;
+    const m2 = new Set(norm(p.Libelle).split(" ").filter(w => w.length > 2)); let c = 0; for (const w of mots) if (m2.has(w)) c++;
+    const sc = c / Math.max(mots.size, m2.size); if (sc > score){ score = sc; best = p; } }
+  return score >= 0.6 ? best : null;
+}
+/* ---------- grille d'origine (export par filière) */
+function champsEntete(wb){
+  const out = {};
+  for (const n of wb.SheetNames){ if (!/^(8|12)-/.test(n)) continue; const g = sheetGrid(wb.Sheets[n]);
+    for (let r = 1; r <= Math.min(g.maxR, 20); r++){ const b = one(g.txt(r, 2)); if (!b) continue; let v = ""; for (let c = 3; c <= 8 && !v; c++) v = g.txt(r, c);
+      if (!v) continue;
+      if (/^Catégorie de reconnaissance/i.test(b) && !out.Categorie_VPC) out.Categorie_VPC = one(v);
+      else if (/^Seuil de VPC/i.test(b) && out.Seuil_VPC == null) out.Seuil_VPC = num(v);
+      else if (/^Lister les produits/i.test(b) && !out.Produits_VPC) out.Produits_VPC = one(v);
+      else if (/^Chiffre d'affaires/i.test(b) && out.CA_reconnu == null) out.CA_reconnu = num(v);
+      else if (/^Nombre de clients/i.test(b) && out.Nb_clients == null) out.Nb_clients = num(v); } }
+  return out;
+}
+function analyserOrigine(wb){
+  const D = parseControl(wb), P = planVide("origine");
+  const fv = re => (D.fiche.find(x => re.test(x.label)) || {}).value || "";
+  for (const [c, re] of OP_MAP){ const v = fv(re); if (v && !SANS_OBJET(v)) P.op[c] = one(v); }
+  if (!P.op.Raison_sociale && D.cover.rs) P.op.Raison_sociale = one(D.cover.rs);
+  if (!P.op.N_OP && D.cover.reco) P.op.N_OP = one(D.cover.reco);
+  const arr = fv(/^Date de l.arrêté/i); if (arr){ P.op.Date_arrete = anyToSec(arr); P.op.Arretes_modificatifs = one(arr); }
+  for (const [c, re, k] of CTRL_MAP){ const v = fv(re); if (!v) continue; P.ctrl[c] = k === "num" ? num(v) : k === "date" ? anyToSec(v) : one(v); }
+  Object.assign(P.ctrl, champsEntete(wb));
+  P.ctrl.N_demande = D.cover.demande || null; P.ctrl.Service_territorial = D.cover.service || null;
+  P.ctrl.Date_debut = anyToSec(D.cover.du); P.ctrl.Date_fin = anyToSec(D.cover.au);
+  P.filiereNom = one(D.cover.secteur || fv(/^Secteur concern/i));
+  D.personnes.forEach(p => P.intervenants.push({ Role:"Personne rencontrée", Fonction_service:p.fonction || null, Nom:p.nom || null }));
+  D.controleurs.forEach(p => P.intervenants.push({ Role:"Contrôleur", Fonction_service:p.fonction || null, Nom:p.nom || null }));
+  D.filiales.forEach(f => P.filiales.push({ Raison_sociale:f.nom, Pct_participation:pctVal(f.pct), Objet:f.objet || null }));
+  for (const og of D.onglets){
+    const feuille = /^13\./.test(og.sheet) ? "13. Producteur 1" : og.sheet;
+    let cible = P.reps;
+    if (/^(9|10|11|12)\.1/.test(og.sheet)){ const cv = { Domaine:null, Prestataire:(D.conventions.find(x => x.sheet === og.sheet) || {}).nom || null, Fonction_signataire:null, reps:[] }; P.conventions.push(cv); cible = cv.reps; }
+    if (/^13\./.test(og.sheet)){ const pr = D.producteurs.find(x => x.sheet === og.sheet) || {}; const pv = { Nom:pr.nom || null, Produits_adhesion:pr.produits || null, reps:[] }; P.producteurs.push(pv); cible = pv.reps; }
+    for (const it of og.items){
+      const p = REF_BY_TEXT.get(feuille + "|" + norm(it.critere)) || rapprocher(feuille, it.critere, cible);
+      if (!p){ P.nonReconnus.push(`${og.sheet} : ${one(it.critere).slice(0, 90)}`); continue; }
+      if (p.Type_reponse === "Montant (calculé)" || !["Question", "Sous-question"].includes(p.Niveau)) continue; // calculé par Grist, ou simple consigne
+      const v = { Avec_quoi:it.avec || null, Description:it.desc || null, Observation:it.obs || null, Resultat:resultatDe(it.res, p) };
+      if (it.type === "num"){ v.Valeur_n_1 = num(it.v1); v.Valeur_n = num(it.v2); }
+      if (it.texte) v.Reponse_texte = it.texte;
+      if (/^Montant/.test(p.Type_reponse || "") && it.desc){ const n = num(it.desc); if (n != null){ v.Montant = n; if (/^[\d\s.,€\u00a0]+$/.test(it.desc)) v.Description = null; } }
+      cible.push({ p, v });
+    }
+    if (og.observations.length){ const p = REF.find(q => q.Feuille === feuille && /observations complémentaires/i.test(q.Libelle || "") && q.Niveau !== "Section");
+      if (p) cible.push({ p, v:{ Reponse_texte:og.observations.join("\n") } }); }
+  }
+  for (const cv of P.conventions){ const q = cv.reps.find(x => x.p.Domaine_convention); cv.Domaine = q ? q.p.Domaine_convention : null; }
+  P.conventions = P.conventions.filter(cv => cv.Prestataire || cv.reps.some(x => Object.values(x.v).some(Boolean)));
+  P.producteurs = P.producteurs.filter(pv => pv.Nom || pv.reps.some(x => Object.values(x.v).some(Boolean)));
+  D.capital.forEach(c => P.capital.push({ Adherent:c.adherent, Activite_principale:c.activite || null, Membres_personne_morale:c.membres || null, Pct_parts:pctVal(c.parts), Pct_voix:pctVal(c.voix), Producteur:estProducteur(c.activite, c.adherent) }));
+  for (const s of D.sondages){ const mandat = /mandat/i.test(s.titre);
+    for (const r of s.rows){ if (!r[0] && !r[1]) continue;
+      P.sondages.push({ Type:mandat ? "Mandat" : "Bulletin d'adhésion", SIRET:r[0] || null, Nom_prenom:r[1] || null, Societe:r[2] || null, Critere_choix:r[3] || null,
+        Date_adhesion:mandat ? null : anyToSec(r[4]), Mandat_present:mandat ? /^(oui|x|vrai|true|1|présent)/i.test(r[4] || "") : null, Resultat:/^nc$/i.test(r[5] || "") ? "NC" : /^c$/i.test(r[5] || "") ? "C" : null }); } }
+  D.rendements.forEach(r => P.rendements.push({ Produit:r.produit, Annee:r.annee ? String(r.annee) : null, Departement:r.dept || null, Rendement_AGRESTE:isNaN(r.agreste) ? null : r.agreste, Rendement_OP:isNaN(r.op) ? null : r.op, Justification:r.justif || null }));
+  D.stades.forEach(s => P.stades.push({ Stade:s.stade, Produits:s.produits || null, Pct_CA:pctVal(s.pct) }));
+  return P;
+}
+
+/* ---------- grille modernisée */
+const MOD_SHEETS = { [T.INT]:"Intervenants", [T.FILIALES]:"Filiales", [T.CONV]:"Conventions", [T.PROD]:"Producteurs", [T.CAP]:"Capital social", [T.SOND]:"Sondages", [T.REND]:"Rendements", [T.STADES]:"Stades mise en marché" };
+const isModerne = wb => { const ws = wb.Sheets["Contrôle"]; return !!(ws && ws.A1 && ws.A1.v === MARKER); };
+function convType(v, k){
+  if (v == null || v === "") return null;
+  if (k === "date") return anyToSec(v);
+  if (k === "num") return num(v);
+  if (k === "pct") return typeof v === "number" ? v : pctVal(v);
+  if (k === "bool") return v === true || /^(oui|x|vrai|true|1)$/i.test(String(v).trim());
+  if (k === "reflist"){ const noms = String(v).split(/[,;]/).map(s => s.trim()).filter(Boolean); return ["L", ...rows(T.FIL).filter(f => noms.includes(f.Nom)).map(f => f.id)]; }
+  return one(v);
+}
+function analyserModerne(wb){
+  const P = planVide("modernisée");
+  const aoa = n => XLSX.utils.sheet_to_json(wb.Sheets[n], { header:1, raw:true, defval:null });
+  const types = Object.fromEntries([...OP_FIELDS.map(f => ["OP." + f[0], f[2]]), ...CTRL_FIELDS.map(f => ["CTRL." + f[0], f[2]])]);
+  for (const r of aoa("Contrôle")){ const k = r[0], v = r[2]; if (!k || typeof k !== "string") continue;
+    if (k === "FILIERE") P.filiereNom = one(v);
+    else if (types[k]){ const val = convType(v, types[k]); if (val != null) (k.startsWith("OP.") ? P.op : P.ctrl)[k.split(".")[1]] = val; } }
+  const cfgs = Object.fromEntries([FILIALES_CFG, ...ANNEXES].map(c => [c.t, c]));
+  for (const n of wb.SheetNames){
+    const data = aoa(n), a1 = data[0] && data[0][0];
+    if (typeof a1 !== "string") continue;
+    if (a1.startsWith("#table:")){
+      const t = a1.slice(7), cfg = cfgs[t]; if (!cfg) continue;
+      const kr = data.findIndex(r => r[0] === "#colonnes"); if (kr < 0) continue;
+      const keys = data[kr].slice(1), kt = Object.fromEntries(cfg.cols.map(c => [c[0], c[2]]));
+      for (const r of data.slice(kr + 2)){ const rec = {}; keys.forEach((k, i) => { if (k && kt[k]) rec[k] = convType(r[i + 1], kt[k]); });
+        if (!Object.values(rec).some(x => x != null && x !== false)) continue;
+        const target = { [T.INT]:P.intervenants, [T.FILIALES]:P.filiales, [T.CAP]:P.capital, [T.SOND]:P.sondages, [T.REND]:P.rendements, [T.STADES]:P.stades }[t];
+        if (t === T.CONV) P.conventions.push({ ...rec, reps:[] }); else if (t === T.PROD) P.producteurs.push({ ...rec, reps:[] }); else if (target) target.push(rec);
+        if (t === T.CAP && rec.Producteur == null) rec.Producteur = estProducteur(rec.Activite_principale, rec.Adherent); }
+    }
+    if (a1.startsWith("#grille:")){
+      let cible = P.reps, cur = null; const domaine = Object.keys(DOMAINE_FEUILLE).find(d => DOMAINE_FEUILLE[d] === a1.slice(8));
+      for (const r of data.slice(1)){
+        const a = r[0];
+        if (a === "#conv"){ const nom = one(r[2]); cur = P.conventions.find(c => norm(c.Prestataire) === norm(nom) && (!c.Domaine || c.Domaine === domaine));
+          if (!cur){ cur = { Domaine:domaine, Prestataire:nom || null, Fonction_signataire:null, reps:[] }; P.conventions.push(cur); } if (!cur.Domaine) cur.Domaine = domaine; cible = cur.reps; continue; }
+        if (a === "#prod"){ const nom = one(r[2]); cur = P.producteurs.find(c => norm(c.Nom) === norm(nom));
+          if (!cur){ cur = { Nom:nom || null, Produits_adhesion:null, reps:[] }; P.producteurs.push(cur); } cible = cur.reps; continue; }
+        if (a === "#prod-produits"){ if (cur && r[2]) cur.Produits_adhesion = one(r[2]); continue; }
+        const p = typeof a === "string" && REF_BY_CODE.get(a); if (!p) continue;
+        if (p.Type_reponse === "Montant (calculé)") continue;
+        const res = r[4] ? one(r[4]) : null;
+        const v = { Resultat:["Oui", "Non", "Conforme", "Non conforme", "Non conclusif", "Sans objet"].includes(res) ? res : null, Avec_quoi:r[5] ? one(r[5]) : null,
+          Description:r[6] ? clean(r[6]) : null, Reponse_texte:r[7] != null && r[7] !== "" ? clean(r[7]) : null, Valeur_n_1:num(r[8]), Valeur_n:num(r[9]), Montant:num(r[10]), Observation:r[11] ? clean(r[11]) : null };
+        cible.push({ p, v });
+      }
+    }
+  }
+  for (const cv of P.conventions) for (const x of cv.reps) if (!cv.Domaine) cv.Domaine = x.p.Domaine_convention;
+  const rempli = x => Object.values(x.v).some(v => v != null && v !== "");
+  P.conventions = P.conventions.filter(cv => cv.Prestataire || cv.reps.some(rempli));
+  P.producteurs = P.producteurs.filter(pv => pv.Nom || pv.reps.some(rempli));
+  return P;
+}
+
+/* ---------- aperçu et exécution */
+function opExistante(P){ const n = norm(P.op.N_OP || ""), rs = norm(P.op.Raison_sociale || "");
+  return rows(T.OP).find(o => (n && norm(o.N_OP || "") === n) || (rs && norm(o.Raison_sociale || "") === rs)) || null; }
+function renderImport(){
+  const I = S.import; if (!I) return; const P = I.plan;
+  const op = opExistante(P), fil = rows(T.FIL).find(f => norm(f.Nom) === norm(P.filiereNom));
+  const nRep = P.reps.length + P.conventions.reduce((s, c) => s + c.reps.length, 0) + P.producteurs.reduce((s, c) => s + c.reps.length, 0);
+  const nRemplis = [P.reps, ...P.conventions.map(c => c.reps), ...P.producteurs.map(c => c.reps)].flat().filter(x => Object.values(x.v).some(v => v != null && v !== "")).length;
+  const doublon = fil && op && rows(T.CTRL).find(c => c.OP === op.id && c.Filiere === fil.id && c.Date_debut && c.Date_debut === P.ctrl.Date_debut);
+  $("apercuImport").innerHTML = `
+    <div class="fr-alert fr-alert--info fr-alert--sm fr-mb-2w"><p>Fichier <b>${esc(I.file.name)}</b> · format ${esc(P.format)}</p></div>
+    <div class="fr-table fr-table--sm fr-table--no-caption"><table><caption>Contenu détecté</caption><tbody>
+      <tr><th scope="row">Organisation de producteurs</th><td><b>${esc(P.op.Raison_sociale || "?")}</b> ${op ? '<span class="fr-badge fr-badge--sm fr-badge--info fr-badge--no-icon">déjà dans Grist : fiche complétée</span>' : '<span class="fr-badge fr-badge--sm fr-badge--new">nouvelle OP</span>'}</td></tr>
+      <tr><th scope="row">Filière</th><td><select class="fr-select" id="iFil">${rows(T.FIL).map(f => `<option value="${f.id}" ${fil && fil.id === f.id ? "selected" : ""}>${esc(f.Nom)}</option>`).join("")}</select></td></tr>
+      <tr><th scope="row">Dates du contrôle</th><td>${esc(secToFr(P.ctrl.Date_debut) || "?")} → ${esc(secToFr(P.ctrl.Date_fin) || "?")}</td></tr>
+      <tr><th scope="row">Critères reconnus</th><td>${nRep} (dont ${nRemplis} renseignés)</td></tr>
+      <tr><th scope="row">Conventions / producteurs</th><td>${P.conventions.length} / ${P.producteurs.length}</td></tr>
+      <tr><th scope="row">Tableaux annexes</th><td>${P.intervenants.length} intervenants · ${P.filiales.length} filiales · ${P.capital.length} adhérents (capital) · ${P.sondages.length} sondages · ${P.rendements.length} rendements · ${P.stades.length} stades</td></tr>
+    </tbody></table></div>
+    ${P.nonReconnus.length ? `<div class="fr-alert fr-alert--warning fr-alert--sm fr-mb-2w"><p>${P.nonReconnus.length} critère(s) du fichier ne correspondent à aucun critère du référentiel et ne seront pas importés :</p><ul class="liste-mini">${P.nonReconnus.map(t => `<li>${esc(t)}</li>`).join("")}</ul></div>` : ""}
+    ${doublon ? `<div class="fr-alert fr-alert--warning fr-alert--sm fr-mb-2w"><p>Un contrôle de cette OP, pour cette filière et à cette date, existe déjà : « ${esc(ctrlLabel(doublon))} ». L'import en créera un second.</p></div>` : ""}
+    <button class="fr-btn fr-btn--icon-left fr-icon-upload-line" id="bImporter">Importer dans Grist</button>`;
+  $("bImporter").onclick = () => executerImport(+$("iFil").value);
+}
+async function joindreFichier(file){
+  const tok = await grist.docApi.getAccessToken({ readOnly:false }); const fd = new FormData(); fd.append("upload", file, file.name);
+  const r = await fetch(`${tok.baseUrl}/attachments?auth=${tok.token}`, { method:"POST", body:fd }); if (!r.ok) throw new Error("pièce jointe : " + r.status);
+  const ids = await r.json(); return ids[0];
+}
+async function executerImport(fid){
+  const I = S.import, P = I.plan; $("bImporter").disabled = true;
+  try {
+    let op = opExistante(P), opId;
+    if (op){ const maj = {}; for (const [k, v] of Object.entries(P.op)) if (v != null && v !== "" && (op[k] == null || op[k] === "" || (Array.isArray(op[k]) && op[k].length < 2))) maj[k] = v;
+      if (Object.keys(maj).length) await act([["UpdateRecord", T.OP, op.id, maj]]); opId = op.id; }
+    else [opId] = await act([["AddRecord", T.OP, null, { ...P.op, Filieres_reconnues:P.op.Filieres_reconnues || ["L", fid] }]]);
+    const [cid] = await act([["AddRecord", T.CTRL, null, { ...P.ctrl, OP:opId, Filiere:fid, Statut:P.ctrl.Statut || "À valider" }]]);
+    try { const att = await joindreFichier(I.file); await act([["UpdateRecord", T.CTRL, cid, { Fichier_source:["L", att] }]]); }
+    catch(e){ console.warn(e); toast("warning", "Le fichier n'a pas pu être joint au contrôle (" + esc(e.message) + "), les données sont importées."); }
+    await bulkAdd(T.INT, P.intervenants.map(x => ({ ...x, Controle:cid })));
+    if (!op || !rows(T.FILIALES).some(f => f.OP === opId)) await bulkAdd(T.FILIALES, P.filiales.map(x => ({ ...x, OP:opId })));
+    await bulkAdd(T.CAP, P.capital.map(x => ({ ...x, Controle:cid })));
+    await bulkAdd(T.SOND, P.sondages.map(x => ({ ...x, Controle:cid })));
+    await bulkAdd(T.REND, P.rendements.map(x => ({ ...x, Controle:cid })));
+    await bulkAdd(T.STADES, P.stades.map(x => ({ ...x, Controle:cid })));
+    const reps = []; const rep = (x, conv, prod) => reps.push({ Controle:cid, Point:x.p.id, Convention:conv, Producteur:prod, Libelle:x.p.Libelle,
+      ...Object.fromEntries(Object.entries(x.v).filter(([k, v]) => v != null && v !== "")) });
+    P.reps.forEach(x => rep(x, 0, 0));
+    for (const cv of P.conventions){ const [id] = await act([["AddRecord", T.CONV, null, { Controle:cid, Domaine:cv.Domaine, Prestataire:cv.Prestataire, Fonction_signataire:cv.Fonction_signataire || null }]]); cv.reps.forEach(x => rep(x, id, 0)); }
+    for (const pv of P.producteurs){ const [id] = await act([["AddRecord", T.PROD, null, { Controle:cid, Nom:pv.Nom, Produits_adhesion:pv.Produits_adhesion || null, SIRET:pv.SIRET || null, Montant_rapprochement:pv.Montant_rapprochement ?? null }]]); pv.reps.forEach(x => rep(x, 0, id)); }
+    const vus = new Set(); const uniques = reps.filter(r => { const k = `${r.Point}|${r.Convention}|${r.Producteur}`; if (vus.has(k)) return false; vus.add(k); return true; });
+    await bulkAdd(T.REP, uniques);
+    await reload(); const ajout = await genererGrille(cid);
+    S.ctrlId = cid; S.groupe = null; S.import = null; $("fImport").value = ""; $("apercuImport").innerHTML = "";
+    toast("success", `Import terminé : ${uniques.length} réponses${ajout ? ` (+ ${ajout} critères de la filière absents du fichier)` : ""}.`, 7000);
+    setTab("saisie");
+  } catch(e){ console.error(e); toast("error", "Import interrompu : " + esc(e.message), 0); $("bImporter").disabled = false; }
+}
+$("fImport").addEventListener("change", async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try { await reload(); const wb = XLSX.read(await f.arrayBuffer(), { type:"array" });
+    S.import = { file:f, plan:isModerne(wb) ? analyserModerne(wb) : analyserOrigine(wb) }; renderImport(); }
+  catch(err){ console.error(err); $("apercuImport").innerHTML = `<div class="fr-alert fr-alert--error"><p>Fichier illisible : ${esc(err.message)}</p></div>`; }
+});
+
+
+/* =====================================================================
+   6. GRILLE EXCEL MODERNISÉE (vierge ou remplie) – ExcelJS
+   ===================================================================== */
+const XL = { bf:"FF000091", bfSoft:"FFE3E3FD", gris:"FFF6F6F6", grisT:"FF666666", blanc:"FFFFFFFF", rouge:"FFCE0500", orangeSoft:"FFFFE9E6", bord:"FFDDDDDD" };
+const XFONT = (o = {}) => ({ name:"Marianne", size:o.size || 10, bold:!!o.bold, italic:!!o.italic, color:{ argb:o.color || "FF161616" } });
+const FILL = argb => ({ type:"pattern", pattern:"solid", fgColor:{ argb } });
+const BORD = { top:{ style:"thin", color:{ argb:XL.bord } }, left:{ style:"thin", color:{ argb:XL.bord } }, bottom:{ style:"thin", color:{ argb:XL.bord } }, right:{ style:"thin", color:{ argb:XL.bord } } };
+const LISTES = { "Oui/Non":["Oui", "Non", "Non conclusif", "Sans objet"], "Conforme/Non conforme":["Conforme", "Non conforme", "Non conclusif", "Sans objet"], "Montant + C/NC":["Conforme", "Non conforme", "Sans objet"] };
+function nomFeuille(s){ return s.replace(/[\\/*?:[\]]/g, " ").replace(/\s+/g, " ").trim().slice(0, 31); }
+function hauteur(textes){ // estimation de la hauteur d'une ligne à retour automatique
+  let l = 1; for (const [t, w] of textes){ if (!t) continue; const n = String(t).split("\n").reduce((s, x) => s + Math.max(1, Math.ceil(x.length / (w * 1.15))), 0); l = Math.max(l, n); }
+  return Math.min(409, Math.max(18, l * 13 + 6));
+}
+function xlVal(v, k){ if (v == null || v === "") return null; if (k === "date"){ const s = secToIso(v); return s ? new Date(s + "T00:00:00Z") : null; } if (k === "bool") return v ? "Oui" : "Non";
+  if (k === "reflist") return refList(v).map(filNom).filter(Boolean).join(", "); return v; }
+function enTete(ws, titre, sousTitre, cols){
+  ws.getCell("A1").value = ws.__marker; ws.getColumn(1).hidden = true;
+  ws.mergeCells(1, 2, 1, cols); const t = ws.getCell(1, 2); t.value = titre; t.font = XFONT({ size:13, bold:true, color:XL.blanc }); t.fill = FILL(XL.bf); t.alignment = { vertical:"middle", indent:1 };
+  ws.getRow(1).height = 26;
+  ws.mergeCells(2, 2, 2, cols); const s = ws.getCell(2, 2); s.value = sousTitre; s.font = XFONT({ size:9, italic:true, color:XL.grisT });
+}
+function ligneEntetes(ws, r, labels){ labels.forEach((l, i) => { const c = ws.getCell(r, i + 2); c.value = l; c.font = XFONT({ bold:true, color:XL.blanc, size:9 }); c.fill = FILL(XL.bf); c.alignment = { wrapText:true, vertical:"middle" }; c.border = BORD; });
+  ws.getRow(r).height = 32; }
+function validation(cell, liste){ cell.dataValidation = { type:"list", allowBlank:true, formulae:['"' + liste.join(",") + '"'], showErrorMessage:true, errorTitle:"Valeur non prévue", error:"Choisissez une valeur dans la liste." }; }
+
+async function buildModerne(fid, cid){
+  const wb = new ExcelJS.Workbook(); wb.creator = "Grist – Contrôle de reconnaissance des OP"; wb.created = new Date();
+  const c = cid ? byId(T.CTRL, cid) : null, op = c ? byId(T.OP, c.OP) || {} : {};
+  const fname = filNom(fid), drop = dropSheets(fid);
+  const repDe = (pid, conv, prod) => cid ? rows(T.REP).find(r => r.Controle === cid && r.Point === pid && (r.Convention || 0) === conv && (r.Producteur || 0) === prod) : null;
+  const logo = wb.addImage({ base64:FAM_LOGO, extension:"png" });
+
+  /* --- feuille Contrôle */
+  const ws = wb.addWorksheet("Contrôle", { views:[{ showGridLines:false }], properties:{ tabColor:{ argb:XL.bf } } });
+  ws.columns = [{ width:4 }, { width:52 }, { width:62 }];
+  ws.pageSetup = { orientation:"portrait", paperSize:9, fitToPage:true, fitToWidth:1, fitToHeight:0 };
+  ws.getCell("A1").value = MARKER; ws.getColumn(1).hidden = true;
+  ws.addImage(logo, { tl:{ col:2.62, row:0.15 }, ext:{ width:118, height:65 } });
+  ws.getCell("B2").value = "RÉPUBLIQUE FRANÇAISE"; ws.getCell("B2").font = XFONT({ bold:true, size:11 });
+  ws.getCell("B3").value = "Liberté · Égalité · Fraternité"; ws.getCell("B3").font = XFONT({ italic:true, size:8 });
+  ws.getCell("B5").value = "Contrôle de reconnaissance des organisations de producteurs"; ws.getCell("B5").font = XFONT({ bold:true, size:16, color:XL.bf });
+  ws.getCell("B6").value = `Grille de contrôle – filière ${fname}` + (c ? ` – ${ctrlLabel(c)}` : ""); ws.getCell("B6").font = XFONT({ size:11, color:XL.bf });
+  ws.getCell("B7").value = "Version modernisée. Une feuille par thème ; les colonnes « Résultat » proposent une liste déroulante. Ce classeur se réimporte dans Grist (onglet « Importer un Excel »). Ne modifiez pas la colonne A masquée.";
+  ws.getCell("B7").font = XFONT({ italic:true, size:9, color:XL.grisT }); ws.mergeCells("B7:C7"); ws.getCell("B7").alignment = { wrapText:true }; ws.getRow(7).height = 30;
+  let r = 9;
+  const section = t => { ws.mergeCells(r, 2, r, 3); const x = ws.getCell(r, 2); x.value = t; x.font = XFONT({ bold:true, color:XL.blanc }); x.fill = FILL(XL.bf); ws.getRow(r).height = 20; r++; };
+  const champ = (key, label, val, k, opts) => { ws.getCell(r, 1).value = key; const a = ws.getCell(r, 2), b = ws.getCell(r, 3); a.value = label; a.font = XFONT({ bold:true, size:9 }); a.fill = FILL(XL.gris); a.border = BORD; a.alignment = { wrapText:true, vertical:"top" };
+    b.value = val; b.font = XFONT(); b.border = BORD; b.alignment = { wrapText:true, vertical:"top" };
+    if (k === "date") b.numFmt = "dd/mm/yyyy"; if (k === "num") b.numFmt = "#,##0"; if (k === "choice") validation(b, opts);
+    ws.getRow(r).height = hauteur([[label, 52], [val, 62]]); r++; };
+  section("Contrôle");
+  champ("FILIERE", "Filière contrôlée", fname, "text");
+  for (const [k, l, t, o] of CTRL_FIELDS) champ("CTRL." + k, l, xlVal(c && c[k], t), t, o);
+  r++; section("Organisation de producteurs (fiche signalétique)");
+  for (const [k, l, t, o] of OP_FIELDS) champ("OP." + k, l, xlVal(op[k], t), t, o);
+
+  /* --- tableaux annexes */
+  const annexes = [FILIALES_CFG, ...ANNEXES].filter(cfg => !(cfg.t === T.CAP && drop.has("4.1-K social et nb adh")));
+  for (const cfg of annexes){
+    const wa = wb.addWorksheet(MOD_SHEETS[cfg.t], { views:[{ state:"frozen", ySplit:5, showGridLines:false }] });
+    wa.__marker = "#table:" + cfg.t; const n = cfg.cols.length + 1;
+    wa.columns = [{ width:4 }, ...cfg.cols.map(([, , k]) => ({ width:k === "bool" || k === "pct" ? 12 : k === "date" ? 14 : 26 }))]; wa.getColumn(1).hidden = true;
+    wa.pageSetup = { orientation:"landscape", paperSize:9, fitToPage:true, fitToWidth:1, fitToHeight:0 };
+    enTete(wa, cfg.titre, `Correspond à : ${cfg.feuille}${cfg.t === T.CONV ? " · les check-lists sont dans les feuilles « Conv. … »" : ""}${cfg.t === T.PROD ? " · la check-list est dans la feuille « 13 Producteurs »" : ""}`, n);
+    wa.getCell(4, 1).value = "#colonnes"; cfg.cols.forEach(([k], i) => wa.getCell(4, i + 2).value = k); wa.getRow(4).hidden = true;
+    ligneEntetes(wa, 5, cfg.cols.map(x => x[1]));
+    const link = cfg.link || "Controle", linkId = cfg.t === T.FILIALES ? op.id : cid;
+    const recs = linkId ? rows(cfg.t).filter(x => x[link] === linkId) : [];
+    const total = Math.max(recs.length + 5, 12);
+    for (let i = 0; i < total; i++){
+      const rec = recs[i] || {}, rr = 6 + i;
+      cfg.cols.forEach(([k, , t, o], j) => { const cell = wa.getCell(rr, j + 2); cell.value = xlVal(rec[k], t); cell.border = BORD; cell.font = XFONT(); cell.alignment = { wrapText:true, vertical:"top" };
+        if (t === "date") cell.numFmt = "dd/mm/yyyy"; if (t === "pct") cell.numFmt = "0%"; if (t === "num") cell.numFmt = "#,##0.##";
+        if (t === "choice") validation(cell, o); if (t === "bool") validation(cell, ["Oui", "Non"]); });
+    }
+  }
+
+  /* --- feuilles de critères */
+  const feuillesCtrl = [...new Set(REF.filter(p => p.Portee === "Contrôle").map(p => p.Feuille))].filter(f => !drop.has(f));
+  const COLS = ["N°", "Critère", "Type de réponse", "Résultat", "Avec quoi le contrôle a-t-il été fait ?", "Description du contrôle effectué", "Réponse rédigée", "Valeur au 01/01/n-1", "Valeur au 01/01/n", "Montant (€)", "Observation du contrôleur"];
+  const WID = [6, 60, 14, 16, 30, 36, 34, 12, 12, 14, 40];
+  const ecrireGrille = (wg, feuille, blocs) => {
+    wg.columns = [{ width:4 }, ...WID.map(w => ({ width:w }))]; wg.getColumn(1).hidden = true;
+    ligneEntetes(wg, 4, COLS);
+    let rr = 5, utilise = { texte:false, n:false, montant:false };
+    const ligneTitre = (t, fill, font) => { wg.mergeCells(rr, 2, rr, 12); const x = wg.getCell(rr, 2); x.value = t; x.fill = FILL(fill); x.font = font; x.alignment = { wrapText:true, vertical:"middle", indent:1 }; wg.getRow(rr).height = hauteur([[t, 230]]); rr++; };
+    for (const b of blocs){
+      if (b.marque){ wg.getCell(rr, 1).value = b.marque; const l = wg.getCell(rr, 2), v = wg.getCell(rr, 3); l.value = b.label; l.font = XFONT({ bold:true }); v.value = b.valeur || null; v.font = XFONT({ bold:true, color:XL.bf });
+        v.border = BORD; v.fill = FILL(XL.bfSoft); wg.getRow(rr).height = 22; rr++;
+        if (b.marque2){ wg.getCell(rr, 1).value = b.marque2; wg.getCell(rr, 2).value = b.label2; wg.getCell(rr, 2).font = XFONT({ bold:true, size:9 }); const v2 = wg.getCell(rr, 3); v2.value = b.valeur2 || null; v2.border = BORD; v2.font = XFONT(); rr++; } }
+      const pts = REF.filter(p => p.Feuille === feuille && ((cid && repDe(p.id, b.conv || 0, b.prod || 0)) || !p.Retire && (p.Niveau === "Section" ? p.fils.includes(fid) : ["Question", "Sous-question"].includes(p.Niveau) ? p.fils.includes(fid) : p.Niveau === "Consigne" && (p.fils.length === 0 || p.fils.includes(fid)))
+        ) && (b.portee ? p.Portee === b.portee : true) && (b.domaine ? (p.Niveau === "Section" || p.Niveau === "Consigne" || p.Domaine_convention === b.domaine) : true));
+      for (const p of pts){
+        if (p.Niveau === "Section"){ ligneTitre(one(p.Libelle), XL.bfSoft, XFONT({ bold:true, color:XL.bf })); continue; }
+        if (p.Niveau === "Consigne"){ ligneTitre(one(p.Libelle), XL.gris, XFONT({ italic:true, size:9, color:"FF3A3A3A" })); continue; }
+        const t = p.Type_reponse || "Oui/Non", rep = repDe(p.id, b.conv || 0, b.prod || 0) || {};
+        const row = wg.getRow(rr); row.getCell(1).value = p.Code;
+        const vals = [fmtNum(p.Num) || null, rep.Libelle || p.Libelle, t, rep.Resultat || null, rep.Avec_quoi || null, rep.Description || null, rep.Reponse_texte || null, rep.Valeur_n_1 ?? null, rep.Valeur_n ?? null, rep.Montant ?? null, rep.Observation || null];
+        if (t === "Montant (calculé)"){ vals[2] = "Calcul automatique"; vals[3] = null; if (cid){ const tot = repsOf(cid).reduce((s, x) => { const q = REF_BY_ID.get(x.Point); return s + (q && q.Bloc_VPC === p.Bloc_VPC && q.Signe_VPC ? (+x.Montant || 0) * q.Signe_VPC : 0); }, 0); vals[9] = tot; } }
+        vals.forEach((v, j) => { const cell = row.getCell(j + 2); cell.value = v; cell.border = BORD; cell.font = XFONT({ size:j === 2 ? 8 : 10, color:j === 2 ? XL.grisT : undefined, bold:j === 0 });
+          cell.alignment = { wrapText:true, vertical:"top" }; });
+        row.getCell(3).font = XFONT({ bold:p.Niveau === "Question" });
+        if (LISTES[t]) validation(row.getCell(5), LISTES[t]); else if (t !== "Montant (calculé)") row.getCell(5).fill = FILL(XL.gris);
+        if (t === "Valeur n-1 / n"){ utilise.n = true; row.getCell(9).numFmt = row.getCell(10).numFmt = "#,##0"; }
+        if (["Texte", "Nombre", "Pourcentage"].includes(t)) utilise.texte = true;
+        if (/^Montant/.test(t)){ utilise.montant = true; row.getCell(11).numFmt = "#,##0 €"; }
+        row.height = hauteur([[vals[1], 60], [vals[5], 36], [vals[6], 34], [vals[10], 40]]);
+        rr++;
+      }
+    }
+    wg.getColumn(8).hidden = !utilise.texte; wg.getColumn(9).hidden = wg.getColumn(10).hidden = !utilise.n; wg.getColumn(11).hidden = !utilise.montant;
+    if (rr > 5){
+      wg.addConditionalFormatting({ ref:`E5:E${rr}`, rules:[{ type:"containsText", operator:"containsText", text:"Non conforme", style:{ font:{ color:{ argb:XL.rouge }, bold:true } } },
+        { type:"cellIs", operator:"equal", formulae:['"Non"'], style:{ font:{ color:{ argb:XL.rouge }, bold:true } } }] });
+      wg.addConditionalFormatting({ ref:`L5:L${rr}`, rules:[{ type:"expression", formulae:['AND(OR($E5="Non conforme",$E5="Non conclusif"),LEN($L5)=0)'], style:{ fill:{ type:"pattern", pattern:"solid", bgColor:{ argb:XL.orangeSoft } } } }] });
+    }
+    wg.pageSetup = { orientation:"landscape", paperSize:9, fitToPage:true, fitToWidth:1, fitToHeight:0, printTitlesRow:"4:4" };
+  };
+  for (const feuille of feuillesCtrl){
+    const p0 = REF.find(p => p.Feuille === feuille && p.Portee === "Contrôle" && p.fils.includes(fid) && ["Question", "Sous-question"].includes(p.Niveau) && !p.Retire); if (!p0) continue;
+    const wg = wb.addWorksheet(nomFeuille(`${p0.Onglet} ${p0.Titre_onglet}`), { views:[{ state:"frozen", ySplit:4, xSplit:3, showGridLines:false }] });
+    wg.__marker = "#grille:" + feuille; enTete(wg, `Onglet ${p0.Onglet} – ${p0.Titre_onglet}`, `Feuille d'origine : ${feuille} · filière ${fname}`, 12);
+    ecrireGrille(wg, feuille, [{ portee:"Contrôle" }]);
+  }
+  for (const d of DOMAINES){
+    const feuille = DOMAINE_FEUILLE[d]; if (drop.has(feuille)) continue;
+    const p0 = REF.find(p => p.Feuille === feuille && p.fils.includes(fid) && ["Question", "Sous-question"].includes(p.Niveau) && !p.Retire); if (!p0) continue;
+    const convs = cid ? rows(T.CONV).filter(v => v.Controle === cid && v.Domaine === d) : [];
+    const blocs = (convs.length ? convs : [{ id:0, Prestataire:"" }]).map(v => ({ marque:"#conv", label:"Prestataire :", valeur:v.Prestataire, conv:v.id, portee:"Convention", domaine:d }));
+    const wg = wb.addWorksheet(nomFeuille(`${p0.Onglet} Conv. ${d}`), { views:[{ state:"frozen", ySplit:4, xSplit:3, showGridLines:false }] });
+    wg.__marker = "#grille:" + feuille; enTete(wg, `Onglet ${p0.Onglet} – Convention d'externalisation « ${d} »`, `Feuille d'origine : ${feuille} · un bloc par prestataire (copiez le bloc pour en ajouter un)`, 12);
+    ecrireGrille(wg, feuille, blocs);
+  }
+  if (!drop.has("13. Producteur 1") && REF.some(p => p.Portee === "Producteur" && p.fils.includes(fid) && !p.Retire)){
+    const prods = cid ? rows(T.PROD).filter(v => v.Controle === cid) : [];
+    const blocs = (prods.length ? prods : [{ id:0 }, { id:0 }, { id:0 }]).map(v => ({ marque:"#prod", label:"Producteur :", valeur:v.Nom, marque2:"#prod-produits", label2:"Produits (bulletin d'adhésion) :", valeur2:v.Produits_adhesion, prod:v.id, portee:"Producteur" }));
+    const wg = wb.addWorksheet("13 Producteurs", { views:[{ state:"frozen", ySplit:4, xSplit:3, showGridLines:false }] });
+    wg.__marker = "#grille:13. Producteur 1"; enTete(wg, "Onglet 13 – Contrôles en exploitation", "Feuilles d'origine : 13. Producteur 1, 2, 3 · un bloc par producteur contrôlé", 12);
+    ecrireGrille(wg, "13. Producteur 1", blocs);
+  }
+  const buf = await wb.xlsx.writeBuffer();
+  return new Blob([buf], { type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+
+
+/* =====================================================================
+   7. RAPPORT : données Grist -> structure du rapport
+   ===================================================================== */
+const RES_CODE = { "Oui":"OUI", "Non":"NON", "Conforme":"C", "Non conforme":"NC", "Non conclusif":"NCL", "Sans objet":"SO" };
+function dataRapport(cid){
+  const c = byId(T.CTRL, cid), op = byId(T.OP, c.OP) || {};
+  const D = { cover:{ rs:op.Raison_sociale || "", reco:op.N_OP || "", secteur:filNom(c.Filiere), du:secToFr(c.Date_debut), au:secToFr(c.Date_fin), demande:c.N_demande || "", service:c.Service_territorial || "" },
+    fiche:[], filiales:[], personnes:[], controleurs:[], onglets:[], sondages:[], rendements:[], stades:[], capital:[], producteurs:[], conventions:[] };
+  const F = (l, v) => { if (v != null && v !== "") D.fiche.push({ label:l, value:String(v) }); };
+  F("Raison sociale OP", op.Raison_sociale); F("Secteur concerné", filNom(c.Filiere)); F("Statut juridique", op.Statut_juridique); F("Numéro Siret", op.SIRET);
+  F("Adresse du Siège Social", op.Adresse_siege); F("Responsable légal de la personne morale", op.Responsable_legal); F("Raison(s) sociale(s) AOP", op.AOP);
+  F("Nombre d'adhérents", c.Nb_adherents != null ? c.Nb_adherents + " adhérents" : ""); F("Date de l'arrêté de reconnaissance", [secToFr(op.Date_arrete), op.Arretes_modificatifs].filter(Boolean).join(" – "));
+  F("Zone de reconnaissance géographique", op.Zone_reconnaissance); F("Date du dernier contrôle de reconnaissance FAM", secToFr(c.Date_dernier_controle));
+  D.filiales = rows(T.FILIALES).filter(f => f.OP === op.id).map(f => ({ nom:f.Raison_sociale, pct:f.Pct_participation, objet:f.Objet || "" }));
+  for (const i of rows(T.INT).filter(i => i.Controle === cid)) (i.Role === "Contrôleur" ? D.controleurs : D.personnes).push({ fonction:i.Fonction_service || "", nom:i.Nom || "" });
+  for (const G of groupesCtrl(cid)){
+    const p0 = REF_BY_ID.get(G.reps[0].Point);
+    const og = { sheet:G.key[0] === "C" ? DOMAINE_FEUILLE[(byId(T.CONV, +G.key.slice(1)) || {}).Domaine] || G.feuille : G.feuille, code:G.key[0] === "S" ? String(p0.Onglet) : (G.key[0] === "C" ? String(p0.Onglet) : "13"),
+      titre:"ONGLET " + G.label + (G.sub ? " – " + G.sub : ""), items:[], observations:[] };
+    for (const r of G.reps){
+      const p = REF_BY_ID.get(r.Point), t = p.Type_reponse; if (t === "Aucune" || t === "Montant (calculé)") continue;
+      const it = { num:fmtNum(p.Num), critere:r.Libelle || p.Libelle, section:p.Section || "", type:t === "Valeur n-1 / n" ? "num" : ["Texte", "Nombre", "Pourcentage"].includes(t) ? "text" : "yn",
+        avec:r.Avec_quoi || "", desc:[r.Description, r.Montant != null && r.Montant !== "" ? Number(r.Montant).toLocaleString("fr-FR") + " €" : ""].filter(Boolean).join(" – "),
+        res:RES_CODE[r.Resultat] || null, obs:r.Observation || "", v1:r.Valeur_n_1, v2:r.Valeur_n, texte:r.Reponse_texte || "" };
+      og.items.push(it);
+    }
+    if (og.items.length) D.onglets.push(og);
+    if (G.key[0] === "C"){ const v = byId(T.CONV, +G.key.slice(1)); if (v && v.Prestataire) D.conventions.push({ sheet:og.sheet, nom:v.Prestataire }); }
+  }
+  const so = rows(T.SOND).filter(s => s.Controle === cid);
+  const bul = so.filter(s => s.Type !== "Mandat"), man = so.filter(s => s.Type === "Mandat");
+  if (bul.length) D.sondages.push({ titre:"Contrôle par sondage des bulletins d'adhésion", head:["N° SIRET", "Nom - prénom", "Société", "Critère de choix", "Date début adhésion", "C/NC"], rows:bul.map(s => [s.SIRET || "", s.Nom_prenom || "", s.Societe || "", s.Critere_choix || "", secToFr(s.Date_adhesion), s.Resultat || ""]) });
+  if (man.length) D.sondages.push({ titre:"Contrôle par sondage des mandats", head:["N° SIRET", "Nom - prénom", "Société", "Critère de choix", "Mandat présent", "C/NC"], rows:man.map(s => [s.SIRET || "", s.Nom_prenom || "", s.Societe || "", s.Critere_choix || "", s.Mandat_present ? "Oui" : "Non", s.Resultat || ""]) });
+  D.rendements = rows(T.REND).filter(r => r.Controle === cid).map(r => ({ produit:r.Produit || "", annee:r.Annee || "", dept:r.Departement || "", agreste:r.Rendement_AGRESTE, op:r.Rendement_OP,
+    variation:r.Rendement_AGRESTE ? (r.Rendement_OP - r.Rendement_AGRESTE) / r.Rendement_AGRESTE : null, justif:r.Justification || "" }));
+  D.stades = rows(T.STADES).filter(s => s.Controle === cid).map(s => ({ stade:s.Stade || "", produits:s.Produits || "", pct:s.Pct_CA || 0 }));
+  D.capital = rows(T.CAP).filter(s => s.Controle === cid);
+  D.producteurs = rows(T.PROD).filter(p => p.Controle === cid).map(p => ({ nom:p.Nom, produits:p.Produits_adhesion }));
+  return D;
+}
+
+/* =====================================================================
+   1. LECTURE DU FICHIER DE CONTRÔLE
+   ===================================================================== */
+function sheetGrid(ws){
+  const rng = XLSX.utils.decode_range(ws["!ref"] || "A1:A1");
+  const merges = (ws["!merges"] || []).map(m => ({ r1:m.s.r+1, c1:m.s.c+1, r2:m.e.r+1, c2:m.e.c+1 }));
+  const get = (r, c) => { const cell = ws[XLSX.utils.encode_cell({ r:r-1, c:c-1 })]; return cell ? (cell.w != null && typeof cell.v === "number" ? cell.v : cell.v) : null; };
+  const txt = (r, c) => clean(get(r, c));
+  const mergeAt = (r, c) => merges.find(m => m.r1 === r && m.c1 === c);
+  return { maxR: rng.e.r+1, maxC: Math.min(rng.e.c+1, 30), get, txt, mergeAt };
+}
+const findSheet = (wb, re) => wb.SheetNames.find(n => re.test(n));
+
+function parseControl(wb){
+  const D = { cover:{}, fiche:[], filiales:[], personnes:[], controleurs:[], onglets:[], sondages:[], rendements:[], stades:[], capital:[], producteurs:[], conventions:[] };
+  // ---- page de garde
+  const gName = findSheet(wb, /garde/i);
+  if (gName){
+    const g = sheetGrid(wb.Sheets[gName]);
+    const right = (r, from=3) => { for (let c = from; c <= g.maxC; c++){ const t = g.txt(r, c); if (t && !/^(du|au)$/i.test(t)) return t; } return ""; };
+    let mode = null;
+    for (let r = 1; r <= g.maxR; r++){
+      const b = g.txt(r, 2), B = b.toUpperCase();
+      if (/^SERVICE TERRITORIAL/.test(B) && !mode) D.cover.service = right(r, 3);
+      else if (/^RAISON SOCIALE/.test(B)) D.cover.rs = right(r, 3);
+      else if (/^N° DE RECONNAISSANCE/.test(B)) D.cover.reco = right(r, 3);
+      else if (/^SECTEUR CONCERN/.test(B)) D.cover.secteur = right(r, 3);
+      else if (/^N° DE DEMANDE/.test(B)) D.cover.demande = right(r, 3);
+      else if (/^OBJET/.test(B)){ const v = []; for (let c = 3; c <= g.maxC; c++){ const t = g.txt(r, c); if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(t) || typeof g.get(r,c) === "number") v.push(typeof g.get(r,c) === "number" ? xlDate(g.get(r,c)) : t); } D.cover.du = v[0] || ""; D.cover.au = v[1] || ""; }
+      else if (/^PERSONNE/.test(B)){ mode = "p"; r++; }
+      else if (/^CONTROLEUR|^CONTRÔLEUR/.test(B)){ mode = "c"; r++; }
+      else if (mode){ const f = b, n = right(r, 6) || g.txt(r, 6); if (f || n) (mode === "p" ? D.personnes : D.controleurs).push({ fonction:f, nom:n }); }
+    }
+  }
+  // ---- fiche signalétique
+  const fName = findSheet(wb, /^fiche/i);
+  if (fName){
+    const g = sheetGrid(wb.Sheets[fName]); let inFil = false;
+    for (let r = 1; r <= g.maxR; r++){
+      const b = g.txt(r, 2), c = g.txt(r, 3);
+      if (/^Filiales et participations/i.test(b)){ inFil = true; continue; }
+      if (inFil){
+        if (g.txt(r,2) && !/^Filiales/.test(g.txt(r,2))) inFil = false;
+        else { if (c && !/^Raison sociale$/i.test(c)) D.filiales.push({ nom:c, pct:g.get(r,4), objet:g.txt(r,5) }); continue; }
+      }
+      if (b && c && !/^SANS OBJET/i.test(b)) D.fiche.push({ label:one(b), value:c });
+    }
+  }
+  // ---- onglets de critères
+  for (const name of wb.SheetNames){
+    const g = sheetGrid(wb.Sheets[name]);
+    if (/^CTRL/i.test(name)){ // contrôles par sondage
+      const rows = [];
+      for (let r = 4; r <= g.maxR; r++){ const v = [1,2,3,4,5,6].map(c => g.txt(r, c)); if (v.some(Boolean)) rows.push(v); }
+      const head = [1,2,3,4,5,6].map(c => one(g.txt(3, c)));
+      D.sondages.push({ titre: one(g.txt(1, 1)) || name, head, rows });
+      continue;
+    }
+    if (/^4\.1/.test(name)){
+      for (let r = 8; r <= g.maxR; r++){ const a = g.txt(r,1); if (a && !/^Le cas|^Ex\./i.test(a)) D.capital.push({ adherent:a, activite:g.txt(r,2), membres:g.txt(r,3), parts:g.get(r,4), voix:g.get(r,5) }); }
+      continue;
+    }
+    if (!/^\d/.test(name)) continue;
+    const og = parseOnglet(name, g, D);
+    if (og) D.onglets.push(og);
+  }
+  return D;
+}
+function xlDate(n){ const d = new Date(Math.round((n - 25569) * 864e5)); return d.toLocaleDateString("fr-FR", { timeZone:"UTC" }); }
+
+function parseOnglet(name, g, D){
+  const og = { sheet:name, code:(name.match(/^[\d.]+/) || [""])[0].replace(/\.$/,""), titre:"", items:[], observations:[] };
+  for (let r = 1; r <= 3 && !og.titre; r++) for (let c = 1; c <= 4; c++){ const t = clean(g.txt(r, c)).split("\n")[0].trim(); if (/^ONGLET/i.test(t)){ og.titre = t.replace(/\s+(voir fiche|Le point \d).*$/i,"").replace(/\s+\(.*$/,"").trim(); break; } }
+  if (/^13\./.test(name)){ og.titre = "Contrôle en exploitation – " + (g.txt(1,3) || name.replace(/^13\.\s*/, "")); D.producteurs.push({ nom:g.txt(1,3), produits:g.txt(2,3), sheet:name }); }
+  if (!og.titre) og.titre = name;
+  let hdr = null, section = "", obsNext = false;
+  for (let r = 1; r <= g.maxR; r++){
+    const vals = {}; for (let c = 1; c <= g.maxC; c++){ const t = g.txt(r, c); if (t) vals[c] = t; }
+    const U = Object.fromEntries(Object.entries(vals).map(([c, v]) => [c, one(v).toUpperCase()]));
+    const uv = Object.values(U);
+    if (uv.some(v => ["OUI","C","01/01/N-1"].includes(v)) && uv.some(v => ["NON","NC","01/01/N"].includes(v))){
+      hdr = { crit:2 };
+      for (const [c, v] of Object.entries(U)){
+        if (/^CRIT|^LES MEMBRES/.test(v)) hdr.crit = +c; else if (/^AVEC QUOI/.test(v)) hdr.avec = +c; else if (/^DESCRIPTION/.test(v)) hdr.desc = +c;
+        else if (["OUI","C","01/01/N-1"].includes(v)){ hdr.yes = +c; hdr.mode = { "OUI":"yn", "C":"cnc", "01/01/N-1":"num" }[v]; }
+        else if (["NON","NC","01/01/N"].includes(v)) hdr.no = +c; else if (/^OBSERVATION|^SI N/.test(v)) hdr.obs = +c;
+      }
+      continue;
+    }
+    // tableau des rendements (onglet 7)
+    if (one(g.txt(r, 2)) === "Produits" && /Rendement AGRESTE/i.test(g.txt(r, 5))){
+      for (let k = r + 1; k <= g.maxR && g.txt(k, 2); k++){
+        const a = +g.get(k, 5), o = +g.get(k, 6);
+        D.rendements.push({ produit:g.txt(k,2), annee:g.txt(k,3), dept:g.txt(k,4), agreste:a, op:o, variation: a ? (o - a) / a : null, justif:g.txt(k,8) });
+      }
+      while (r + 1 <= g.maxR && g.txt(r + 1, 2) && (g.get(r + 1, 5) != null || g.get(r + 1, 6) != null || /^=/.test(String(g.get(r + 1, 7) || "")) || g.txt(r + 1, 7))) r++; // lignes du tableau déjà lues
+      continue;
+    }
+    // stades de mise en marché (onglet 12)
+    if (/^(Vrac|Brut de cueille|Conditionné|Destiné à la transformation|Transformé|Autres)$/.test(g.txt(r, 3)) && (g.txt(r,4) || g.get(r,5))){
+      D.stades.push({ stade:g.txt(r,3), produits:g.txt(r,4), pct:+g.get(r,5) || 0 }); continue;
+    }
+    if (!hdr) continue;
+    const crit = g.txt(r, hdr.crit), low = one(crit).toLowerCase();
+    const num = one(g.txt(r, 1) || (hdr.crit > 2 ? g.txt(r, hdr.crit - 1) : ""));
+    if (obsNext){ const m = g.mergeAt(r, hdr.crit);
+      if (!crit || (m && m.c2 >= (hdr.obs || 7) - 1)){ const t = m ? g.txt(r, hdr.crit) : ""; if (t) og.observations.push(t); obsNext = false; continue; }
+      obsNext = false; }
+    if (!crit) continue;
+    if (/observations complémentaires|^observations du contr/.test(low)){ obsNext = true; continue; }
+    if (/^(i|ii|iii|iv|v|vi)\s*[-–.]/.test(low) || /^(secteur |op sans|op avec|a- |b- |a\) |b\) |c\) |achats extérieurs|respect de l.apport|cas des op)/.test(low)){ section = one(crit); continue; }
+    if (/^(point de vigilance|précision|observation :|→|etablir la vpc|contrôle du respect des dispositions|remarque|>)/.test(low)) continue;
+    if (/^nom du prestataire/.test(low)){ const v = one(crit).split(":").slice(1).join(":").replace(/[.…]+/g,"").trim(); if (v) D.conventions.push({ sheet:name, nom:v }); }
+    const item = { num, critere:crit, section, type:"text", avec:"", desc:"", res:null, obs:"", v1:null, v2:null, texte:"" };
+    const right = g.mergeAt(r, hdr.crit + 1) || g.mergeAt(r, hdr.crit + 2);
+    if (right && right.c2 >= (hdr.obs || 7) - 1){ item.texte = g.txt(r, right.c1); og.items.push(item); continue; }
+    item.type = hdr.mode;
+    if (hdr.avec) item.avec = g.txt(r, hdr.avec);
+    if (hdr.desc) item.desc = g.txt(r, hdr.desc);
+    if (hdr.obs) item.obs = g.txt(r, hdr.obs);
+    if (hdr.mode === "num"){ item.v1 = g.get(r, hdr.yes); item.v2 = g.get(r, hdr.no); }
+    else {
+      const y = g.txt(r, hdr.yes), n = g.txt(r, hdr.no);
+      if (n) item.res = hdr.mode === "cnc" ? "NC" : "NON"; else if (y) item.res = hdr.mode === "cnc" ? "C" : "OUI";
+    }
+    og.items.push(item);
+  }
+  return og;
+}
+
+/* ---- indicateurs */
+function isAnomalie(it){ return it.res === "NC" || (it.res === "NON" && !!it.obs); }
+function isAnswered(it){ return !!(it.res || it.texte || it.desc || it.v1 != null || it.v2 != null); }
+function stats(D){
+  const s = { points:0, repondus:0, anomalies:0, parOnglet:[] };
+  for (const og of D.onglets){
+    const pts = og.items.filter(i => i.type !== "text" || i.texte);
+    const rep = og.items.filter(isAnswered), an = og.items.filter(isAnomalie);
+    if (!og.items.length && !og.observations.length) continue;
+    s.points += og.items.length; s.repondus += rep.length; s.anomalies += an.length;
+    s.parOnglet.push({ og, points:og.items.length, repondus:rep.length, anomalies:an.length });
+    void pts;
+  }
+  s.conformes = s.repondus - s.anomalies; s.nonRenseignes = s.points - s.repondus;
+  return s;
+}
+
+/* ---- données du schéma fonctionnel */
+function schemaData(D){
+  const f = l => (D.fiche.find(x => new RegExp(l, "i").test(x.label)) || {}).value || "";
+  const nbAdh = (f("Nombre d'adhérents").match(/\d[\d\s]*/) || [""])[0].trim();
+  const etp = {};
+  const o2 = D.onglets.find(o => o.code === "2");
+  if (o2) for (const it of o2.items){
+    const l = one(it.critere).toLowerCase();
+    if (/secteur administratif/.test(l)) etp.adm = it.texte; else if (/secteur technique/.test(l)) etp.tech = it.texte; else if (/secteur commercial/.test(l)) etp.com = it.texte;
+    else if (/nombre de saisonniers/.test(l)) etp.saison = it.texte; else if (/préciser par qui/.test(l)) etp.mad = it.texte;
+  }
+  const fonctions = [["9","Appui technique"],["10","Tri, stockage, conditionnement"],["11","Agréage"],["12","Mise en marché"]].map(([code, label]) => {
+    const og = D.onglets.find(o => o.code === code); const who = new Set();
+    if (og) for (const it of og.items){ if (it.res !== "OUI") continue; const l = one(it.critere).toLowerCase();
+      if (/personnel qualifié|propre service commercial|assuré par l'op \?/.test(l)) who.add("OP"); if (/\baop\b/.test(l)) who.add("AOP");
+      if (/filiale/.test(l)) who.add("Filiale"); if (/adhérents de l'op|via ses membres/.test(l)) who.add("Adhérents"); if (/prestataire/.test(l)) who.add("Prestataire"); }
+    const presta = D.conventions.filter(c => c.sheet.startsWith(code + ".")).map(c => c.nom);
+    presta.forEach(() => who.add("Prestataire"));
+    return { label, who:[...who], presta };
+  }).filter(x => x.who.length);
+  const aop = f("Raison\\(s\\) sociale\\(s\\) AOP");
+  return {
+    op: D.cover.rs || f("Raison sociale"), filiere: D.cover.secteur || f("Secteur concerné"), statut: f("Statut juridique"),
+    adherents: nbAdh, etp, filiales: D.filiales, aop: /sans objet/i.test(aop) ? "" : aop,
+    stades: D.stades.filter(s => s.pct || s.produits), fonctions,
+    producteurs: D.producteurs.filter(p => p.nom).map(p => p.nom)
+  };
+}
+
+/* =====================================================================
+   2. SCHÉMAS (3 VISUELS, SVG)
+   ===================================================================== */
+const C = { bf:"#000091", bfSoft:"#E3E3FD", bfMid:"#6A6AF4", rouge:"#E1000F", gris:"#3A3A3A", grisClair:"#F6F6F6", vert:"#18753C", vertSoft:"#B8FEC9", ocre:"#B34000", ocreSoft:"#FEECC2", trait:"#929292" };
+const wrap = (s, n) => { const out = []; let line = ""; for (const w of String(s).split(/\s+/)){ if ((line + " " + w).trim().length > n){ if (line) out.push(line); line = w; } else line = (line + " " + w).trim(); } if (line) out.push(line); return out; };
+function tspan(x, y, lines, lh, attrs = ""){ return `<text x="${x}" y="${y}" ${attrs}>${lines.map((l, i) => `<tspan x="${x}" dy="${i ? lh : 0}">${esc(l)}</tspan>`).join("")}</text>`; }
+function box(x, y, w, h, fill, stroke, title, lines, opts = {}){
+  const tc = opts.tc || C.gris, tt = opts.ttc || stroke;
+  let s = `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="4" fill="${fill}" stroke="${stroke}" stroke-width="${opts.sw || 1.5}"/>`;
+  if (opts.band) s += `<rect x="${x}" y="${y}" width="5" height="${h}" fill="${stroke}"/>`;
+  s += tspan(x + 14, y + 22, wrap(title, opts.wt || 26), 16, `font-size="${opts.fs || 14}" font-weight="700" fill="${tt}"`);
+  const tl = wrap(title, opts.wt || 26).length;
+  if (lines && lines.length) s += tspan(x + 14, y + 24 + tl * 16, lines.flatMap(l => wrap(l, opts.wl || 34)), 14, `font-size="11.5" fill="${tc}"`);
+  return s;
+}
+const arrow = (x1, y1, x2, y2, dash) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${C.trait}" stroke-width="1.6" ${dash ? 'stroke-dasharray="5 4"' : ""} marker-end="url(#ar)"/>`;
+const defs = `<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${C.trait}"/></marker></defs>`;
+function opLines(S){ const l = []; if (S.statut) l.push(S.statut); if (S.filiere) l.push("Filière : " + S.filiere);
+  const e = [S.etp.adm && "adm. " + S.etp.adm, S.etp.tech && "tech. " + S.etp.tech, S.etp.com && "com. " + S.etp.com].filter(Boolean);
+  if (e.length) l.push("Salariés : " + e.join(" · ")); return l; }
+function pct(v){ return v == null || v === "" || isNaN(v) ? "" : (v <= 1 ? Math.round(v * 100) : Math.round(v)) + " %"; }
+function svgWrap(w, h, inner, fontCss){ return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" font-family="Marianne, Arial, sans-serif">${fontCss ? `<style>${fontCss}</style>` : ""}${defs}<rect width="${w}" height="${h}" fill="#fff"/>${inner}</svg>`; }
+
+/* Option A — flux de l'amont vers l'aval */
+function schemaFlux(S, fontCss){
+  const W = 1000, side = [];
+  S.filiales.forEach(f => side.push({ t:f.nom, l:[(pct(f.pct) ? pct(f.pct) + " détenus" : "Filiale"), f.objet].filter(Boolean), k:"fil" }));
+  if (S.aop) side.push({ t:S.aop, l:["Association d'OP (adhésion)"], k:"aop" });
+  if (S.etp.mad && !/sans objet/i.test(S.etp.mad)) side.push({ t:"Personnel mis à disposition", l:[S.etp.mad], k:"mad" });
+  const fonc = S.fonctions;
+  const outs = S.stades.length ? S.stades : [{ stade:"Clients de l'OP", produits:"", pct:null }];
+  const H = Math.max(470, 140 + Math.max(outs.length * 86, side.length * 92 + 200));
+  let s = `<text x="30" y="34" font-size="13" font-weight="700" fill="${C.bf}">AMONT</text><text x="${W/2}" y="34" text-anchor="middle" font-size="13" font-weight="700" fill="${C.bf}">ORGANISATION DE PRODUCTEURS</text><text x="${W-30}" y="34" text-anchor="end" font-size="13" font-weight="700" fill="${C.bf}">AVAL – MISE EN MARCHÉ</text>`;
+  s += `<line x1="30" y1="44" x2="${W-30}" y2="44" stroke="${C.bfSoft}" stroke-width="2"/>`;
+  const ay = 80;
+  s += box(30, ay, 230, 120, C.grisClair, C.gris, `${S.adherents || "?"} producteurs adhérents`, ["Apport total de la production", ...(S.producteurs.length ? ["Contrôlés : " + S.producteurs.length + " exploitation(s)"] : [])], { band:true, wt:22 });
+  const ox = 360, oy = 70, ow = 280, oh = 150;
+  s += box(ox, oy, ow, oh, C.bfSoft, C.bf, S.op || "OP", opLines(S), { band:true, wt:28, wl:40, fs:15 });
+  s += arrow(260, ay + 60, ox - 4, oy + 75);
+  // fonctions
+  let fy = oy + oh + 18;
+  if (fonc.length){
+    s += `<text x="${ox}" y="${fy + 12}" font-size="11" font-weight="700" fill="${C.gris}">FONCTIONS</text>`;
+    fonc.forEach((f, i) => { const y = fy + 20 + i * 30; const ext = !f.who.includes("OP");
+      s += `<rect x="${ox}" y="${y}" width="${ow}" height="24" rx="3" fill="${ext ? C.ocreSoft : C.vertSoft}"/><text x="${ox + 10}" y="${y + 16}" font-size="11.5" fill="${C.gris}"><tspan font-weight="700">${esc(f.label)}</tspan> – ${esc(f.who.join(", "))}${f.presta.length ? " (" + esc(f.presta.join(", ")) + ")" : ""}</text>`; });
+    fy += 30 + fonc.length * 30;
+  }
+  // structures liées
+  side.forEach((b, i) => { const y = fy + 10 + i * 92, x = ox + 20; const col = b.k === "aop" ? C.vert : b.k === "mad" ? C.ocre : C.bfMid;
+    s += box(x, y, ow - 40, 78, "#fff", col, b.t, b.l, { wt:30, wl:38, fs:12.5 }); s += arrow(ox + ow / 2, i ? y - 14 : oy + oh, ox + ow / 2, y - 2, true); });
+  // débouchés
+  const tot = outs.length, gap = 86, sy = Math.max(70, oy + oh / 2 - (tot * gap) / 2);
+  let yy = sy;
+  outs.forEach(o => { const x = W - 30 - 250, title = o.stade + (pct(o.pct) ? " – " + pct(o.pct) : "");
+    const tl = wrap(title, 30).length, sl = o.produits ? wrap(o.produits, 36).length : 0, h = 30 + tl * 16 + sl * 14 + (o.pct ? 8 : 0);
+    s += box(x, yy, 250, h, "#fff", C.bf, title, o.produits ? [o.produits] : [], { wt:30, wl:36, fs:13 });
+    if (o.pct) s += `<rect x="${x + 14}" y="${yy + h - 10}" width="${Math.max(4, 220 * (o.pct <= 1 ? o.pct : o.pct / 100))}" height="4" fill="${C.bf}"/>`;
+    s += arrow(ox + ow, oy + 75, x - 4, yy + h / 2); yy += h + 14; });
+  return svgWrap(W, H, s, fontCss);
+}
+
+/* Option B — organigramme */
+function schemaOrga(S, fontCss){
+  const W = 1000;
+  const lvl2 = [{ t:`${S.adherents || "?"} producteurs adhérents`, l:["Apport total de la production"], c:C.gris, f:C.grisClair }];
+  S.filiales.forEach(f => lvl2.push({ t:f.nom, l:[pct(f.pct) ? "Filiale – " + pct(f.pct) + " du capital" : "Filiale", f.objet].filter(Boolean), c:C.bfMid, f:"#fff" }));
+  if (S.aop) lvl2.push({ t:S.aop, l:["Association d'OP"], c:C.vert, f:"#fff" });
+  if (S.etp.mad && !/sans objet/i.test(S.etp.mad)) lvl2.push({ t:"Personnel mis à disposition", l:[S.etp.mad], c:C.ocre, f:"#fff" });
+  S.fonctions.forEach(f => lvl2.push({ t:f.label, l:[f.who.join(", "), ...f.presta], c:f.who.includes("OP") ? C.vert : C.ocre, f:"#fff" }));
+  const outs = S.stades;
+  const n2 = lvl2.length, bw2 = Math.min(220, (W - 60 - (n2 - 1) * 16) / n2);
+  const H = outs.length ? 560 : 400;
+  let s = box(W/2 - 170, 30, 340, 120, C.bf, C.bf, S.op || "OP", opLines(S), { tc:"#fff", ttc:"#fff", wt:34, wl:44, fs:16 });
+  const y2 = 210, x0 = (W - (n2 * bw2 + (n2 - 1) * 16)) / 2;
+  s += `<line x1="${W/2}" y1="150" x2="${W/2}" y2="${y2 - 26}" stroke="${C.trait}" stroke-width="1.6"/>`;
+  if (n2 > 1) s += `<line x1="${x0 + bw2/2}" y1="${y2 - 26}" x2="${x0 + (n2-1)*(bw2+16) + bw2/2}" y2="${y2 - 26}" stroke="${C.trait}" stroke-width="1.6"/>`;
+  lvl2.forEach((b, i) => { const x = x0 + i * (bw2 + 16); s += arrow(x + bw2/2, y2 - 26, x + bw2/2, y2 - 2); s += box(x, y2, bw2, 120, b.f, b.c, b.t, b.l, { wt:Math.floor(bw2/8.6), wl:Math.floor(bw2/6.6), fs:12.5, band:true }); });
+  if (outs.length){
+    const y3 = 420, bw3 = Math.min(220, (W - 60 - (outs.length - 1) * 16) / outs.length), x3 = (W - (outs.length * bw3 + (outs.length - 1) * 16)) / 2;
+    s += `<text x="${W/2}" y="${y3 - 30}" text-anchor="middle" font-size="12" font-weight="700" fill="${C.bf}">DÉBOUCHÉS (part du chiffre d'affaires)</text>`;
+    outs.forEach((o, i) => { const x = x3 + i * (bw3 + 16);
+      s += `<rect x="${x}" y="${y3}" width="${bw3}" height="96" rx="4" fill="${C.grisClair}"/>`;
+      s += `<text x="${x + bw3/2}" y="${y3 + 36}" text-anchor="middle" font-size="24" font-weight="700" fill="${C.bf}">${esc(pct(o.pct) || "–")}</text>`;
+      s += tspan(x + bw3/2, y3 + 58, wrap(o.stade, Math.floor(bw3/7.5)), 14, `text-anchor="middle" font-size="12" font-weight="700" fill="${C.gris}"`);
+      s += tspan(x + bw3/2, y3 + 88, wrap(o.produits, Math.floor(bw3/6.5)).slice(0, 1), 13, `text-anchor="middle" font-size="10.5" fill="#666"`); });
+  }
+  return svgWrap(W, H, s, fontCss);
+}
+
+/* Option C — vue radiale */
+function schemaRadial(S, fontCss){
+  const W = 1000, H = 600, cx = W / 2, cy = H / 2 + 6;
+  const sat = [{ t:`${S.adherents || "?"} adhérents`, l:["Producteurs"], c:C.gris }];
+  S.filiales.forEach(f => sat.push({ t:f.nom.replace(/\s*\(fictive?\)/i, ""), l:[pct(f.pct) ? pct(f.pct) + " du capital" : "Filiale"], c:C.bfMid }));
+  if (S.aop) sat.push({ t:S.aop.replace(/\s*\(fictive?\)/i, ""), l:["AOP"], c:C.vert });
+  if (S.etp.mad && !/sans objet/i.test(S.etp.mad)) sat.push({ t:"Mise à disposition", l:[S.etp.mad.split(":")[0]], c:C.ocre });
+  S.fonctions.forEach(f => sat.push({ t:f.label, l:[f.who.join(", ")], c:f.who.includes("OP") ? C.vert : C.ocre }));
+  S.stades.forEach(o => sat.push({ t:o.stade, l:[pct(o.pct) + " du CA"], c:C.bf, out:true }));
+  const n = sat.length, rx = 360, ry = 220;
+  let s = "";
+  sat.forEach((b, i) => { const a = -Math.PI / 2 + (2 * Math.PI * i) / n; const x = cx + rx * Math.cos(a), y = cy + ry * Math.sin(a);
+    s += `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="${b.c}" stroke-opacity=".45" stroke-width="${b.out ? 3 : 1.6}" ${b.out ? "" : 'stroke-dasharray="4 4"'}/>`; });
+  sat.forEach((b, i) => { const a = -Math.PI / 2 + (2 * Math.PI * i) / n; const x = cx + rx * Math.cos(a), y = cy + ry * Math.sin(a);
+    const lines = wrap(b.t, 18).slice(0, 2), sub = b.l.filter(Boolean).flatMap(l => wrap(l, 22)).slice(0, 2);
+    const h = 26 + lines.length * 15 + sub.length * 13, w = 170;
+    s += `<rect x="${x - w/2}" y="${y - h/2}" width="${w}" height="${h}" rx="${b.out ? 18 : 4}" fill="#fff" stroke="${b.c}" stroke-width="2"/>`;
+    s += tspan(x, y - h/2 + 20, lines, 15, `text-anchor="middle" font-size="12.5" font-weight="700" fill="${b.c}"`);
+    s += tspan(x, y - h/2 + 22 + lines.length * 15, sub, 13, `text-anchor="middle" font-size="11" fill="${C.gris}"`); });
+  s += `<circle cx="${cx}" cy="${cy}" r="92" fill="${C.bf}"/>`;
+  s += tspan(cx, cy - 18, wrap((S.op || "OP").replace(/\s*\(fictive?\)/i, ""), 18).slice(0, 3), 17, `text-anchor="middle" font-size="14" font-weight="700" fill="#fff"`);
+  s += `<text x="${cx}" y="${cy + 46}" text-anchor="middle" font-size="11.5" fill="#fff">${esc(S.filiere || "")}</text>`;
+  s += `<g font-size="11" fill="${C.gris}"><rect x="24" y="${H-30}" width="12" height="12" fill="${C.bf}"/><text x="42" y="${H-20}">Débouchés</text><rect x="130" y="${H-30}" width="12" height="12" fill="${C.bfMid}"/><text x="148" y="${H-20}">Filiales</text><rect x="220" y="${H-30}" width="12" height="12" fill="${C.vert}"/><text x="238" y="${H-20}">Interne / AOP</text><rect x="345" y="${H-30}" width="12" height="12" fill="${C.ocre}"/><text x="363" y="${H-20}">Externalisé</text></g>`;
+  return svgWrap(W, H, s, fontCss);
+}
+const SCHEMAS = { flux:{ label:"Flux amont → aval", fn:schemaFlux }, orga:{ label:"Organigramme", fn:schemaOrga }, radial:{ label:"Vue radiale", fn:schemaRadial } };
+
+/* police Marianne intégrée aux SVG (pour les images du Word) */
+let fontCssCache = null;
+async function marianneCss(){
+  if (fontCssCache !== null) return fontCssCache;
+  try {
+    const b64 = async w => { const buf = await (await fetch(FONT_URL(w))).arrayBuffer(); let s = ""; const u = new Uint8Array(buf); for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
+    const [r, b] = await Promise.all([b64("Regular"), b64("Bold")]);
+    fontCssCache = `@font-face{font-family:Marianne;font-weight:400;src:url(data:font/woff2;base64,${r}) format("woff2")}@font-face{font-family:Marianne;font-weight:700;src:url(data:font/woff2;base64,${b}) format("woff2")}`;
+  } catch(e){ fontCssCache = ""; }
+  return fontCssCache;
+}
+async function svgToPng(svg, scale = 2){
+  const m = svg.match(/viewBox="0 0 (\d+) (\d+)"/); const w = +m[1], h = +m[2];
+  const img = new Image(); const url = URL.createObjectURL(new Blob([svg], { type:"image/svg+xml" }));
+  await new Promise((ok, ko) => { img.onload = ok; img.onerror = ko; img.src = url; });
+  await new Promise(r => setTimeout(r, 60));
+  const cv = document.createElement("canvas"); cv.width = w * scale; cv.height = h * scale;
+  const ctx = cv.getContext("2d"); ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height); ctx.drawImage(img, 0, 0, cv.width, cv.height);
+  URL.revokeObjectURL(url);
+  const blob = await new Promise(r => cv.toBlob(r, "image/png"));
+  return { data:new Uint8Array(await blob.arrayBuffer()), w, h };
+}
+
+/* =====================================================================
+   3. RAPPORT HTML (aperçu et PDF)
+   ===================================================================== */
+function resLabel(it){
+  if (it.type === "num") return `${it.v1 ?? "–"} → ${it.v2 ?? "–"}`;
+  if (it.texte) return "Renseigné";
+  return it.res ? ({ OUI:"Oui", NON:"Non", C:"Conforme", NC:"Non conforme", NCL:"Non conclusif", SO:"Sans objet" })[it.res] : "–";
+}
+function resClass(it){ return isAnomalie(it) ? "ko" : it.res ? "okk" : ""; }
+function ficheVal(D, re){ return (D.fiche.find(x => re.test(x.label)) || {}).value || ""; }
+
+function reportHtml(D, opts){
+  const S = stats(D), sch = opts.schemaSvg;
+  const anomalies = D.onglets.flatMap(og => og.items.filter(isAnomalie).map(it => ({ og, it })));
+  const today = opts.date || new Date().toLocaleDateString("fr-FR");
+  const ident = [["Raison sociale", D.cover.rs], ["N° de reconnaissance", D.cover.reco], ["Filière", D.cover.secteur],
+    ["Statut juridique", ficheVal(D, /^Statut juridique/i)], ["N° SIRET", ficheVal(D, /^Numéro Siret/i)], ["Siège social", ficheVal(D, /^Adresse du Siège Social/i)],
+    ["Responsable légal", ficheVal(D, /^Responsable légal/i)], ["Nombre d'adhérents", ficheVal(D, /^Nombre d'adhérents/i)], ["Date de l'arrêté de reconnaissance", ficheVal(D, /^Date de l.arrêté/i)],
+    ["Zone de reconnaissance", ficheVal(D, /^Zone de reconnaissance/i)], ["Dernier contrôle FAM", ficheVal(D, /^Date du dernier contrôle/i)]].filter(x => x[1]);
+  const avis = S.anomalies ? `<p>Le contrôle a porté sur <b>${S.points}</b> points répartis sur <b>${S.parOnglet.length}</b> thèmes. <b>${S.anomalies} anomalie${S.anomalies > 1 ? "s ont été relevées" : " a été relevée"}</b> ; ${S.anomalies > 1 ? "elles sont détaillées" : "elle est détaillée"} en partie 5. Elles appellent des actions correctives de la part de l'OP, dont la mise en œuvre sera vérifiée.</p>`
+                         : `<p>Le contrôle a porté sur <b>${S.points}</b> points répartis sur <b>${S.parOnglet.length}</b> thèmes. <b>Aucune anomalie n'a été relevée.</b></p>`;
+  let n = 0; const H2 = t => `<h2><span>${++n}</span>${t}</h2>`;
+  const rows = (arr, cols) => arr.map(r => `<tr>${cols.map(c => `<td>${c(r)}</td>`).join("")}</tr>`).join("");
+  let h = `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Rapport de contrôle – ${esc(D.cover.rs || "")}</title><style>${REPORT_CSS}</style></head><body>
+<header class="entete">
+  <div class="marque">République<br>Française<i>Liberté<br>Égalité<br>Fraternité</i></div>
+  <div class="emetteur"><img src="${FAM_LOGO}" alt="FranceAgriMer" style="height:17mm;display:block;margin:0 0 2mm auto">${esc(D.cover.service || "Service territorial")}<br><span>Contrôle de reconnaissance des organisations de producteurs</span></div>
+</header>
+<div class="titre">
+  <p class="sur">Rapport de contrôle de reconnaissance</p>
+  <h1>${esc(D.cover.rs || "Organisation de producteurs")}</h1>
+  <p class="tags"><span class="tag">Filière ${esc(D.cover.secteur || "–")}</span>${D.cover.reco ? `<span class="tag">N° ${esc(D.cover.reco)}</span>` : ""}${D.cover.du ? `<span class="tag">Contrôle du ${esc(D.cover.du)}${D.cover.au ? " au " + esc(D.cover.au) : ""}</span>` : ""}${D.cover.demande ? `<span class="tag">Demande ${esc(D.cover.demande)}</span>` : ""}</p>
+</div>
+
+${H2("Synthèse")}
+<div class="kpis"><div class="kpi"><b>${S.points}</b><span>points contrôlés</span></div><div class="kpi ok"><b>${S.conformes}</b><span>sans anomalie</span></div><div class="kpi ko"><b>${S.anomalies}</b><span>anomalie${S.anomalies > 1 ? "s" : ""} relevée${S.anomalies > 1 ? "s" : ""}</span></div><div class="kpi nr"><b>${S.nonRenseignes}</b><span>non renseigné${S.nonRenseignes > 1 ? "s" : ""}</span></div></div>
+<div class="avis ${S.anomalies ? "avis-ko" : "avis-ok"}">${avis}</div>
+<p class="note">Une anomalie correspond à une réponse « Non » ou « Non conforme » assortie d'une observation du contrôleur.</p>
+
+${H2("Identification de l'organisation de producteurs")}
+<table class="kv">${rows(ident, [r => esc(r[0]), r => esc(r[1])])}</table>
+${D.filiales.length ? `<h3>Filiales et participations</h3><table><thead><tr><th>Raison sociale</th><th>Participation</th><th>Objet</th></tr></thead><tbody>${rows(D.filiales, [r => esc(r.nom), r => esc(pct(r.pct)), r => esc(r.objet)])}</tbody></table>` : ""}
+
+${H2("Déroulement du contrôle")}
+<table class="kv"><tr><td>Période</td><td>${esc(D.cover.du ? "Du " + D.cover.du + (D.cover.au ? " au " + D.cover.au : "") : "–")}</td></tr><tr><td>Service</td><td>${esc(D.cover.service || "–")}</td></tr></table>
+<div class="deux"><div><h3>Personnes rencontrées</h3><table><thead><tr><th>Fonction</th><th>Nom</th></tr></thead><tbody>${rows(D.personnes, [r => esc(r.fonction), r => esc(r.nom)]) || '<tr><td colspan="2">–</td></tr>'}</tbody></table></div>
+<div><h3>Contrôleur(s)</h3><table><thead><tr><th>Service</th><th>Nom</th></tr></thead><tbody>${rows(D.controleurs, [r => esc(r.fonction), r => esc(r.nom)]) || '<tr><td colspan="2">–</td></tr>'}</tbody></table></div></div>
+
+${sch ? H2("Schéma fonctionnel de l'OP") + `<figure class="schema">${sch}<figcaption>Schéma établi à partir des éléments relevés lors du contrôle.</figcaption></figure>` : ""}
+
+${H2("Résultats par thème")}
+<table class="res"><thead><tr><th>Thème contrôlé</th><th class="n">Points</th><th class="n">Anomalies</th><th>Taux sans anomalie</th></tr></thead><tbody>
+${S.parOnglet.map(p => { const t = p.repondus ? (p.repondus - p.anomalies) / p.repondus : null;
+  return `<tr><td>${esc(p.og.titre.replace(/^ONGLET\s*/i, ""))}</td><td class="n">${p.points}</td><td class="n ${p.anomalies ? "rouge" : ""}">${p.anomalies}</td><td>${t == null ? "–" : `<span class="bar"><i style="width:${Math.round(t * 100)}%"></i></span> ${Math.round(t * 100)} %`}</td></tr>`; }).join("")}
+</tbody></table>
+
+${H2("Anomalies relevées")}
+${anomalies.length ? anomalies.map(({ og, it }, i) => `<div class="anom"><p class="ref">Anomalie ${i + 1} · ${esc(og.titre.replace(/^ONGLET\s*/i, "").split(" - ")[0])}${it.num ? " · point " + esc(it.num) : ""}</p><p class="crit">${esc(one(it.critere))}</p><p class="obs"><b>Constat :</b> ${esc(it.obs)}</p>${it.avec ? `<p class="src">Contrôle réalisé à partir de : ${esc(it.avec)}</p>` : ""}</div>`).join("") : `<p>Aucune anomalie relevée.</p>`}
+
+${D.rendements.length || D.sondages.some(s => s.rows.length) || D.stades.length ? H2("Contrôles complémentaires") : ""}
+${D.rendements.length ? `<h3>Rendements déclarés et références AGRESTE</h3><table><thead><tr><th>Produit</th><th>Année</th><th>Département</th><th class="n">AGRESTE</th><th class="n">OP</th><th class="n">Écart</th><th>Justification de l'OP</th></tr></thead><tbody>${rows(D.rendements, [r => esc(r.produit), r => esc(r.annee), r => esc(r.dept), r => fmtN(r.agreste), r => fmtN(r.op), r => `<span class="${Math.abs(r.variation || 0) > .2 ? "rouge" : ""}">${r.variation == null ? "–" : (r.variation > 0 ? "+" : "") + Math.round(r.variation * 100) + " %"}</span>`, r => esc(r.justif)])}</tbody></table>` : ""}
+${D.sondages.filter(s => s.rows.length).map(s => `<h3>${esc(s.titre)}</h3><table><thead><tr>${s.head.map(x => `<th>${esc(x)}</th>`).join("")}</tr></thead><tbody>${s.rows.map(r => `<tr>${r.map((v, i) => `<td class="${i === 5 && /^NC$/i.test(v) ? "rouge" : ""}">${esc(v)}</td>`).join("")}</tr>`).join("")}</tbody></table>`).join("")}
+${D.stades.length ? `<h3>Mise en marché par stade</h3><table><thead><tr><th>Stade du produit</th><th>Produits</th><th class="n">Part du CA</th></tr></thead><tbody>${rows(D.stades, [r => esc(r.stade), r => esc(r.produits), r => esc(pct(r.pct))])}</tbody></table>` : ""}
+
+${D.onglets.some(o => o.observations.length) ? H2("Observations complémentaires du contrôleur") + D.onglets.filter(o => o.observations.length).map(o => `<p><b>${esc(o.titre.replace(/^ONGLET\s*/i, ""))} :</b> ${o.observations.map(esc).join(" ")}</p>`).join("") : ""}
+
+<div class="signature"><p>Fait à ${esc(opts.lieu || "……………")}, le ${esc(today)}</p>${D.controleurs.map(c => `<p class="sig">${esc(c.nom)}<br><span>${esc(c.fonction)}</span></p>`).join("")}</div>
+
+${opts.annexe ? `<section class="annexe"><h2 class="ann">Annexe – Détail des points contrôlés</h2>${D.onglets.filter(o => o.items.length).map(og => `<h3>${esc(og.titre.replace(/^ONGLET\s*/i, ""))}</h3><table class="det"><thead><tr><th>N°</th><th>Critère</th><th>Résultat</th><th>Observation</th></tr></thead><tbody>${og.items.map(it => `<tr><td>${esc(it.num)}</td><td>${esc(one(it.critere)).slice(0, 260)}${it.texte ? `<br><span class="rep">${esc(it.texte)}</span>` : ""}</td><td class="${resClass(it)}">${esc(resLabel(it))}</td><td>${esc(it.obs)}</td></tr>`).join("")}</tbody></table>`).join("")}</section>` : ""}
+<script>${opts.print ? "document.fonts.ready.then(()=>setTimeout(()=>window.print(),300));" : ""}<\/script>
+</body></html>`;
+  return h;
+}
+function fmtN(v){ return v == null || isNaN(v) ? "–" : Number(v).toLocaleString("fr-FR", { maximumFractionDigits:1 }); }
+
+const REPORT_CSS = `
+@font-face{font-family:Marianne;src:url(${FONT_URL("Regular")}) format("woff2");font-weight:400}
+@font-face{font-family:Marianne;src:url(${FONT_URL("Medium")}) format("woff2");font-weight:500}
+@font-face{font-family:Marianne;src:url(${FONT_URL("Bold")}) format("woff2");font-weight:700}
+@page{size:A4;margin:16mm 16mm 18mm;@bottom-right{content:"Page " counter(page) " / " counter(pages);font:9pt Marianne,Arial;color:#666}@bottom-left{content:"Rapport de contrôle de reconnaissance";font:9pt Marianne,Arial;color:#666}}
+*{box-sizing:border-box}
+body{font:10pt/1.5 Marianne,Arial,sans-serif;color:#161616;margin:0 auto;max-width:180mm;background:#fff;padding:8mm 0}
+@media print{body{padding:0}}
+.entete{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12mm}
+.marque{font-weight:700;font-size:10.5pt;line-height:1.05;text-transform:uppercase;padding-top:14px;position:relative}
+.marque:before{content:"";position:absolute;top:0;left:0;width:34px;height:7px;background:linear-gradient(90deg,#000091 33%,#fff 33% 66%,#E1000F 66%);outline:1px solid #ddd}
+.marque i{display:block;font-weight:400;font-style:italic;text-transform:none;font-size:8pt;margin-top:4px;line-height:1.15}
+.emetteur{text-align:right;font-weight:700;font-size:10pt}.emetteur span{font-weight:400;color:#666;font-size:8.5pt}
+.titre{border-left:6px solid #000091;padding:2mm 0 2mm 5mm;margin-bottom:8mm}
+.sur{margin:0;color:#000091;font-weight:700;text-transform:uppercase;font-size:9pt;letter-spacing:.04em}
+h1{font-size:22pt;line-height:1.15;margin:2mm 0 3mm}
+.tags{margin:0;display:flex;flex-wrap:wrap;gap:2mm}.tag{background:#E3E3FD;color:#000091;font-weight:500;font-size:8.5pt;padding:1mm 3mm;border-radius:10mm}
+h2{font-size:13pt;color:#000091;margin:8mm 0 3mm;display:flex;align-items:center;gap:3mm;break-after:avoid;border-bottom:1px solid #DDD;padding-bottom:1.5mm}
+h2 span{display:inline-grid;place-items:center;width:7mm;height:7mm;background:#000091;color:#fff;font-size:10pt;flex:none}
+h3{font-size:10.5pt;margin:5mm 0 2mm;break-after:avoid}
+table{width:100%;border-collapse:collapse;margin:0 0 3mm;font-size:9pt;break-inside:auto}
+th{background:#F6F6F6;text-align:left;font-weight:700;border-bottom:2px solid #000091;padding:1.6mm 2mm}
+td{border-bottom:1px solid #E5E5E5;padding:1.6mm 2mm;vertical-align:top}
+tr{break-inside:avoid}
+table.kv td:first-child{width:36%;color:#3A3A3A;font-weight:500;background:#F6F6F6}
+.n{text-align:right;font-variant-numeric:tabular-nums}
+.rouge{color:#CE0500;font-weight:700}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:3mm;margin-bottom:4mm}
+.kpi{border-left:4px solid #000091;background:#F6F6F6;padding:2.5mm 3mm}.kpi b{display:block;font-size:18pt;line-height:1.1}.kpi span{font-size:8.5pt;color:#3A3A3A}
+.kpi.ok{border-color:#18753C}.kpi.ko{border-color:#CE0500}.kpi.ko b{color:#CE0500}.kpi.nr{border-color:#929292}
+.avis{padding:3mm 4mm;border-left:4px solid}.avis p{margin:0}.avis-ok{background:#B8FEC9;border-color:#18753C}.avis-ko{background:#FFE9E9;border-color:#CE0500}
+.note{font-size:8pt;color:#666;margin:2mm 0 0}
+.deux{display:grid;grid-template-columns:1fr 1fr;gap:5mm}
+.schema{margin:0;break-inside:avoid}.schema svg{width:100%;height:auto;border:1px solid #E5E5E5}.schema figcaption{font-size:8pt;color:#666;margin-top:1.5mm}
+.bar{display:inline-block;width:28mm;height:2.2mm;background:#E5E5E5;vertical-align:middle;margin-right:2mm}.bar i{display:block;height:100%;background:#000091}
+.anom{border:1px solid #E5E5E5;border-left:4px solid #CE0500;padding:2.5mm 4mm;margin-bottom:3mm;break-inside:avoid}
+.anom p{margin:0 0 1mm}.anom .ref{font-size:8pt;color:#CE0500;font-weight:700;text-transform:uppercase;letter-spacing:.03em}.anom .crit{font-weight:500}.anom .src{font-size:8pt;color:#666}
+.signature{margin-top:10mm;break-inside:avoid;display:flex;flex-wrap:wrap;gap:6mm 14mm}.signature p:first-child{width:100%;margin:0}
+.sig{margin:0;font-weight:700;padding-top:16mm;min-width:55mm;border-bottom:1px solid #DDD}.sig span{font-weight:400;font-size:8.5pt;color:#666}
+.annexe{break-before:page}.ann{display:block}
+table.det td:nth-child(1){width:8mm}table.det td:nth-child(3){width:22mm;font-weight:700}table.det td:nth-child(4){width:48mm}
+td.okk{color:#18753C}td.ko{color:#CE0500}.rep{color:#000091;font-size:8.5pt}
+`;
+
+/* =====================================================================
+   4. RAPPORT WORD (.docx)
+   ===================================================================== */
+async function buildDocx(D, opts){
+  const d = window.docx;
+  const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, ShadingType, BorderStyle, AlignmentType, ImageRun, Footer, Header, PageNumber, HeadingLevel, PageBreak } = d;
+  const S = stats(D), F = "Marianne", BF = "000091";
+  const anomalies = D.onglets.flatMap(og => og.items.filter(isAnomalie).map(it => ({ og, it })));
+  const T = (t, o = {}) => new TextRun({ text:String(t ?? ""), font:F, size:o.size || 19, bold:o.bold, italics:o.italics, color:o.color, allCaps:o.caps,
+    shading:o.bg ? { type:ShadingType.CLEAR, fill:o.bg, color:"auto" } : undefined });
+  const P = (runs, o = {}) => new Paragraph({ children:Array.isArray(runs) ? runs : [T(runs, o)], spacing:{ after:o.after ?? 100, before:o.before ?? 0 }, alignment:o.align, keepNext:o.keepNext, border:o.border, shading:o.shading, indent:o.indent });
+  let n = 0;
+  const H2b = t => new Paragraph({ children:[T(` ${++n} `, { bold:true, color:"FFFFFF", size:22, bg:BF }), T("  " + t, { bold:true, color:BF, size:26 })], spacing:{ before:300, after:120 }, keepNext:true,
+    border:{ bottom:{ style:BorderStyle.SINGLE, size:6, color:"DDDDDD", space:4 } } });
+  const H3 = t => P([T(t, { bold:true, size:21 })], { before:180, after:80, keepNext:true });
+  const cell = (content, o = {}) => new TableCell({ children:(Array.isArray(content) ? content : String(content ?? "").split("\n").map((line, i) => P([T(line, { bold:o.bold || (o.big && i === 0), color:o.color, size:o.big && i === 0 ? 32 : (o.size || 17) })], { after:0 }))),
+    shading:o.fill ? { type:ShadingType.CLEAR, fill:o.fill, color:"auto" } : undefined, width:o.w ? { size:o.w, type:WidthType.PERCENTAGE } : undefined,
+    margins:{ top:60, bottom:60, left:90, right:90 }, borders:{ top:{ style:BorderStyle.NONE, size:0, color:"FFFFFF" }, left:{ style:BorderStyle.NONE, size:0, color:"FFFFFF" }, right:{ style:BorderStyle.NONE, size:0, color:"FFFFFF" },
+      bottom:{ style:BorderStyle.SINGLE, size:o.head ? 12 : 4, color:o.head ? BF : "E5E5E5" } } });
+  const table = (head, data, widths) => new Table({ width:{ size:100, type:WidthType.PERCENTAGE },
+    columnWidths: widths ? widths.map(w => Math.round(w * 101)) : undefined, layout: widths ? d.TableLayoutType.FIXED : undefined, rows:[
+    ...(head ? [new TableRow({ tableHeader:true, children:head.map((h, i) => cell(h, { bold:true, fill:"F6F6F6", head:true, w:widths && widths[i] })) })] : []),
+    ...data.map(r => new TableRow({ cantSplit:true, children:r.map((v, i) => typeof v === "object" && v && v.t !== undefined ? cell(v.t, { ...v, w:widths && widths[i] }) : cell(v, { w:widths && widths[i] })) })) ] });
+  const kv = arr => table(null, arr.map(([k, v]) => [{ t:k, fill:"F6F6F6", bold:true }, v]), [36, 64]);
+
+  const ident = [["Raison sociale", D.cover.rs], ["N° de reconnaissance", D.cover.reco], ["Filière", D.cover.secteur], ["Statut juridique", ficheVal(D, /^Statut juridique/i)],
+    ["N° SIRET", ficheVal(D, /^Numéro Siret/i)], ["Siège social", ficheVal(D, /^Adresse du Siège Social/i)], ["Responsable légal", ficheVal(D, /^Responsable légal/i)],
+    ["Nombre d'adhérents", ficheVal(D, /^Nombre d'adhérents/i)], ["Date de l'arrêté de reconnaissance", ficheVal(D, /^Date de l.arrêté/i)],
+    ["Zone de reconnaissance", ficheVal(D, /^Zone de reconnaissance/i)], ["Dernier contrôle FAM", ficheVal(D, /^Date du dernier contrôle/i)]].filter(x => x[1]);
+
+  const children = [];
+  // bloc-marque + émetteur
+  children.push(new Table({ width:{ size:100, type:WidthType.PERCENTAGE }, borders:d.TableBorders ? d.TableBorders.NONE : undefined, rows:[new TableRow({ children:[
+    new TableCell({ borders:noB(d), children:[P([T("▬", { color:BF, size:20 }), T("▬", { color:"FFFFFF", size:20 }), T("▬", { color:"E1000F", size:20 })], { after:20 }), P([T("RÉPUBLIQUE", { bold:true, size:21 })], { after:0 }), P([T("FRANÇAISE", { bold:true, size:21 })], { after:40 }), P([T("Liberté", { italics:true, size:15 })], { after:0 }), P([T("Égalité", { italics:true, size:15 })], { after:0 }), P([T("Fraternité", { italics:true, size:15 })], { after:0 })] }),
+    new TableCell({ borders:noB(d), children:[new Paragraph({ alignment:AlignmentType.RIGHT, children:[new ImageRun({ type:"png", data:b64ToBytes(FAM_LOGO), transformation:{ width:120, height:66 } })] }), P([T(D.cover.service || "Service territorial", { bold:true })], { align:AlignmentType.RIGHT, after:0 }), P([T("Contrôle de reconnaissance des organisations de producteurs", { color:"666666", size:16 })], { align:AlignmentType.RIGHT })] }) ] })] }));
+  children.push(P("", { after:300 }));
+  children.push(P([T("RAPPORT DE CONTRÔLE DE RECONNAISSANCE", { bold:true, color:BF, size:18 })], { after:60, border:{ left:{ style:BorderStyle.SINGLE, size:36, color:BF, space:10 } } }));
+  children.push(P([T(D.cover.rs || "Organisation de producteurs", { bold:true, size:44 })], { after:100, border:{ left:{ style:BorderStyle.SINGLE, size:36, color:BF, space:10 } } }));
+  children.push(P([T(["Filière " + (D.cover.secteur || "–"), D.cover.reco && "N° " + D.cover.reco, D.cover.du && "Contrôle du " + D.cover.du + (D.cover.au ? " au " + D.cover.au : ""), D.cover.demande && "Demande " + D.cover.demande].filter(Boolean).join("   ·   "), { color:BF, size:17, bold:true })], { after:200, border:{ left:{ style:BorderStyle.SINGLE, size:36, color:BF, space:10 } } }));
+
+  children.push(H2b("Synthèse"));
+  children.push(table(null, [[
+    { t:`${S.points}\npoints contrôlés`, fill:"F6F6F6", big:true }, { t:`${S.conformes}\nsans anomalie`, fill:"F6F6F6", big:true, color:"18753C" },
+    { t:`${S.anomalies}\nanomalie(s) relevée(s)`, fill:"F6F6F6", big:true, color:"CE0500" }, { t:`${S.nonRenseignes}\nnon renseigné(s)`, fill:"F6F6F6", big:true, color:"666666" } ]], [25, 25, 25, 25]));
+  children.push(P([T(S.anomalies ? `Le contrôle a porté sur ${S.points} points répartis sur ${S.parOnglet.length} thèmes. ${S.anomalies} anomalie(s) ont été relevée(s) ; elles sont détaillées en partie 5 et appellent des actions correctives de la part de l'OP, dont la mise en œuvre sera vérifiée.` : `Le contrôle a porté sur ${S.points} points répartis sur ${S.parOnglet.length} thèmes. Aucune anomalie n'a été relevée.`)],
+    { before:120, shading:{ type:ShadingType.CLEAR, fill:S.anomalies ? "FFE9E9" : "B8FEC9", color:"auto" }, border:{ left:{ style:BorderStyle.SINGLE, size:30, color:S.anomalies ? "CE0500" : "18753C", space:8 } } }));
+  children.push(P([T("Une anomalie correspond à une réponse « Non » ou « Non conforme » assortie d'une observation du contrôleur.", { size:15, color:"666666", italics:true })]));
+
+  children.push(H2b("Identification de l'organisation de producteurs"));
+  children.push(kv(ident));
+  if (D.filiales.length){ children.push(H3("Filiales et participations")); children.push(table(["Raison sociale", "Participation", "Objet"], D.filiales.map(f => [f.nom, pct(f.pct), f.objet]), [45, 15, 40])); }
+
+  children.push(H2b("Déroulement du contrôle"));
+  children.push(kv([["Période", D.cover.du ? "Du " + D.cover.du + (D.cover.au ? " au " + D.cover.au : "") : "–"], ["Service", D.cover.service || "–"]]));
+  children.push(H3("Personnes rencontrées")); children.push(table(["Fonction", "Nom"], D.personnes.map(p => [p.fonction, p.nom]), [50, 50]));
+  children.push(H3("Contrôleur(s)")); children.push(table(["Service", "Nom"], D.controleurs.map(p => [p.fonction, p.nom]), [60, 40]));
+
+  if (opts.schemaPng){
+    children.push(H2b("Schéma fonctionnel de l'OP"));
+    const wpx = 620, hpx = Math.round(wpx * opts.schemaPng.h / opts.schemaPng.w);
+    children.push(new Paragraph({ children:[new ImageRun({ type:"png", data:opts.schemaPng.data, transformation:{ width:wpx, height:hpx } })], alignment:AlignmentType.CENTER, spacing:{ after:60 } }));
+    children.push(P([T("Schéma établi à partir des éléments relevés lors du contrôle.", { size:15, color:"666666", italics:true })]));
+  }
+
+  children.push(H2b("Résultats par thème"));
+  children.push(table(["Thème contrôlé", "Points", "Anomalies", "Taux sans anomalie"], S.parOnglet.map(p => { const t = p.repondus ? Math.round((p.repondus - p.anomalies) / p.repondus * 100) + " %" : "–";
+    return [p.og.titre.replace(/^ONGLET\s*/i, ""), String(p.points), { t:String(p.anomalies), color:p.anomalies ? "CE0500" : undefined, bold:!!p.anomalies }, t]; }), [58, 12, 14, 16]));
+
+  children.push(H2b("Anomalies relevées"));
+  if (!anomalies.length) children.push(P("Aucune anomalie relevée."));
+  anomalies.forEach(({ og, it }, i) => {
+    const bl = { left:{ style:BorderStyle.SINGLE, size:30, color:"CE0500", space:8 } };
+    children.push(P([T(`ANOMALIE ${i + 1} · ${og.titre.replace(/^ONGLET\s*/i, "").split(" - ")[0]}${it.num ? " · POINT " + it.num : ""}`, { bold:true, color:"CE0500", size:15 })], { after:20, border:bl, keepNext:true, before:120 }));
+    children.push(P([T(one(it.critere), { bold:true, size:18 })], { after:20, border:bl, keepNext:true }));
+    children.push(P([T("Constat : ", { bold:true, size:18 }), T(it.obs, { size:18 })], { after:it.avec ? 20 : 80, border:bl, keepNext:!!it.avec }));
+    if (it.avec) children.push(P([T("Contrôle réalisé à partir de : " + it.avec, { size:15, color:"666666" })], { after:80, border:bl }));
+  });
+
+  const comp = D.rendements.length || D.sondages.some(s => s.rows.length) || D.stades.length;
+  if (comp) children.push(H2b("Contrôles complémentaires"));
+  if (D.rendements.length){ children.push(H3("Rendements déclarés et références AGRESTE"));
+    children.push(table(["Produit", "Année", "Département", "AGRESTE", "OP", "Écart", "Justification"], D.rendements.map(r => [r.produit, r.annee, r.dept, fmtN(r.agreste), fmtN(r.op),
+      { t:r.variation == null ? "–" : (r.variation > 0 ? "+" : "") + Math.round(r.variation * 100) + " %", color:Math.abs(r.variation || 0) > .2 ? "CE0500" : undefined, bold:Math.abs(r.variation || 0) > .2 }, r.justif]), [14, 8, 16, 10, 8, 9, 35])); }
+  for (const s of D.sondages.filter(s => s.rows.length)){ children.push(H3(s.titre)); children.push(table(s.head, s.rows.map(r => r.map((v, i) => i === 5 && /^NC$/i.test(v) ? { t:v, color:"CE0500", bold:true } : v)))); }
+  if (D.stades.length){ children.push(H3("Mise en marché par stade")); children.push(table(["Stade du produit", "Produits", "Part du CA"], D.stades.map(s => [s.stade, s.produits, pct(s.pct)]), [30, 55, 15])); }
+
+  if (D.onglets.some(o => o.observations.length)){
+    children.push(H2b("Observations complémentaires du contrôleur"));
+    D.onglets.filter(o => o.observations.length).forEach(o => children.push(P([T(o.titre.replace(/^ONGLET\s*/i, "") + " : ", { bold:true }), T(o.observations.join(" "))])));
+  }
+  children.push(P([T(`Fait à ${opts.lieu || "……………"}, le ${opts.date || new Date().toLocaleDateString("fr-FR")}`)], { before:400, after:600 }));
+  D.controleurs.forEach(c => { children.push(P([T(c.nom, { bold:true })], { after:0 })); children.push(P([T(c.fonction, { size:16, color:"666666" })], { after:300 })); });
+
+  if (opts.annexe){
+    children.push(new Paragraph({ children:[new PageBreak()] }));
+    children.push(P([T("Annexe – Détail des points contrôlés", { bold:true, color:BF, size:26 })], { after:160 }));
+    for (const og of D.onglets.filter(o => o.items.length)){
+      children.push(H3(og.titre.replace(/^ONGLET\s*/i, "")));
+      children.push(table(["N°", "Critère", "Résultat", "Observation"], og.items.map(it => [it.num || "", one(it.critere).slice(0, 260) + (it.texte ? "\n→ " + it.texte : ""),
+        { t:resLabel(it), bold:true, color:isAnomalie(it) ? "CE0500" : it.res ? "18753C" : undefined }, it.obs || ""]), [6, 56, 14, 24]));
+    }
+  }
+
+  const doc = new Document({
+    creator:"Grist – rapport de contrôle", title:"Rapport de contrôle – " + (D.cover.rs || ""),
+    styles:{ default:{ document:{ run:{ font:F, size:19 } } } },
+    sections:[{ properties:{ page:{ margin:{ top:900, bottom:900, left:900, right:900 } } },
+      footers:{ default:new Footer({ children:[new Paragraph({ alignment:AlignmentType.RIGHT, children:[T("Rapport de contrôle de reconnaissance – " + (D.cover.rs || "") + "   ·   Page ", { size:15, color:"666666" }), new TextRun({ children:[PageNumber.CURRENT], font:F, size:15, color:"666666" }), T(" / ", { size:15, color:"666666" }), new TextRun({ children:[PageNumber.TOTAL_PAGES], font:F, size:15, color:"666666" })] })] }) },
+      children }]
+  });
+  void Header; void HeadingLevel;
+  return Packer.toBlob(doc);
+}
+function noB(d){ const n = { style:d.BorderStyle.NONE, size:0, color:"FFFFFF" }; return { top:n, bottom:n, left:n, right:n }; }
+
+
+
+/* ---------------- Onglet rapport */
+function renderRapport(){
+  const c = ctrl(); if (!c){ $("schemas").innerHTML = '<p>Choisissez un contrôle.</p>'; return; }
+  const Sd = schemaData(dataRapport(c.id));
+  const opts = [["none", "Sans schéma"], ...Object.entries(SCHEMAS).map(([k, v]) => [k, v.label])];
+  $("schemas").innerHTML = opts.map(([k, label]) => `<div class="opt ${S.schema === k ? "sel" : ""}" data-k="${k}" role="radio" aria-checked="${S.schema === k}" tabindex="0"><div class="th">${k === "none" ? '<span class="fr-text--xs">Le rapport ne contiendra pas de schéma</span>' : SCHEMAS[k].fn(Sd, "").replace(/width="\d+" height="\d+"/, "")}</div>${label}</div>`).join("");
+  if (!$("rDate").value) $("rDate").value = new Date().toLocaleDateString("fr-FR");
+}
+$("schemas").addEventListener("click", e => { const o = e.target.closest(".opt"); if (!o) return; S.schema = o.dataset.k; renderRapport(); if (!$("apercu").classList.contains("hidden")) apercu(); });
+function optsRapport(print){ const D = dataRapport(S.ctrlId); return { D, o:{ lieu:$("rLieu").value.trim(), date:$("rDate").value.trim(), annexe:$("rAnnexe").checked, print,
+  schemaSvg:S.schema !== "none" ? SCHEMAS[S.schema].fn(schemaData(D), "") : "" } }; }
+function nomRapport(){ const c = ctrl(); return "Rapport de controle - " + ctrlLabel(c).replace(/\//g, "-"); }
+function apercu(){ const { D, o } = optsRapport(false); const f = $("apercu"); f.classList.remove("hidden"); f.srcdoc = reportHtml(D, o); }
+$("bApercu").onclick = () => ctrl() && apercu();
+$("bPdf").onclick = () => { if (!ctrl()) return; const { D, o } = optsRapport(true); const html = reportHtml(D, o); const w = window.open("", "_blank");
+  if (w){ w.document.open(); w.document.write(html); w.document.close(); toast("info", "Le rapport s'ouvre dans un nouvel onglet : choisissez « Enregistrer au format PDF »."); }
+  else { download(new Blob([html], { type:"text/html" }), nomRapport() + ".html"); toast("info", "Fenêtre bloquée : rapport téléchargé en HTML, à imprimer en PDF (Ctrl+P)."); } };
+$("bDocx").onclick = async () => { if (!ctrl()) return; try { const { D, o } = optsRapport(false); let png = null;
+  if (S.schema !== "none") png = await svgToPng(SCHEMAS[S.schema].fn(schemaData(D), await marianneCss()));
+  download(await buildDocx(D, { ...o, schemaPng:png }), nomRapport() + ".docx"); toast("success", "Rapport Word téléchargé."); } catch(e){ console.error(e); toast("error", esc(e.message)); } };
+
+/* =====================================================================
+   8. GRILLES EXCEL (version d'origine par filière)
+   ===================================================================== */
+/* ================================================== transformation du classeur */
+async function buildWorkbook(buf, plan){
+  const zip = await JSZip.loadAsync(buf);
+  const parser = new DOMParser(), ser = new XMLSerializer();
+  const readXml = async p => parser.parseFromString(await zip.file(p).async("string"), "application/xml");
+  const writeXml = (p, doc) => zip.file(p, ser.serializeToString(doc));
+  const relsPath = p => p.replace(/([^/]+)$/, "_rels/$1.rels");
+  const resolve = (base, target) => { // chemin relatif -> chemin du zip
+    if (target.startsWith("/")) return target.slice(1);
+    const parts = base.split("/"); parts.pop();
+    for (const seg of target.split("/")){ if (seg === "..") parts.pop(); else if (seg !== ".") parts.push(seg); }
+    return parts.join("/");
+  };
+
+  const wb = await readXml("xl/workbook.xml");
+  const wbRels = await readXml("xl/_rels/workbook.xml.rels");
+  const relTarget = {};
+  for (const r of el(wbRels, NS_PKG, "Relationship")) relTarget[r.getAttribute("Id")] = r;
+  const sheetEls = el(wb, NS, "sheet");
+  const sheets = sheetEls.map((s, i) => ({
+    el: s, index: i, name: s.getAttribute("name"),
+    rid: s.getAttributeNS(NS_R, "id"),
+    path: resolve("xl/workbook.xml", relTarget[s.getAttributeNS(NS_R, "id")].getAttribute("Target"))
+  }));
+
+  // 1) suppression des lignes, feuille par feuille
+  const sst = zip.file("xl/sharedStrings.xml") ? await readXml("xl/sharedStrings.xml") : null;
+  const sstText = sst ? el(sst, NS, "si").map(si => el(si, NS, "t").map(t => t.textContent).join("")) : [];
+  const defNameShifts = {};
+  const yellowXf = zip.file("xl/styles.xml") ? identificationStyles(await readXml("xl/styles.xml")) : new Set();
+  for (const sh of sheets){
+    if (plan.dropSheets.has(sh.name)) continue;
+    const del = plan.delBySheet[sh.name] || new Set();
+    const txt = plan.newText[sh.name] || {};
+    const shift = makeShift(del);
+    if (del.size) defNameShifts[sh.index] = shift;
+    const doc = await readXml(sh.path);
+    stripIdentification(doc, yellowXf);
+    if (plan.filiereName) writeFiliereOnCover(doc, plan.filiereName, sstText);
+    updateTexts(doc, txt, sstText);
+    if (del.size){
+      await transformSheet(doc, del, shift);
+      // dessins (cases à cocher, images) et contrôles de formulaire
+      const rp = relsPath(sh.path);
+      if (zip.file(rp)){
+        const rels = await readXml(rp);
+        for (const r of el(rels, NS_PKG, "Relationship")){
+          const type = r.getAttribute("Type") || "", target = resolve(sh.path, r.getAttribute("Target"));
+          if (!zip.file(target)) continue;
+          if (/\/drawing$/.test(type)){
+            const d = await readXml(target); transformDrawing(d, del, shift); writeXml(target, d);
+          } else if (/\/vmlDrawing$/.test(type)){
+            zip.file(target, transformVml(await zip.file(target).async("string"), del, shift));
+          }
+        }
+      }
+    }
+    writeXml(sh.path, doc);
+  }
+
+  // 2) noms définis (zones d'impression, titres) : décalage des lignes
+  for (const dn of el(wb, NS, "definedName")){
+    const lsid = dn.getAttribute("localSheetId");
+    const sheetIdx = lsid != null ? +lsid : null;
+    const txt = dn.textContent;
+    for (const sh of sheets){
+      const shift = defNameShifts[sh.index]; if (!shift) continue;
+      const q = sh.name.replace(/'/g, "''");
+      const prefixes = ["'" + q + "'!", sh.name + "!"];
+      if (!prefixes.some(p => txt.includes(p))) continue;
+      dn.textContent = txt.replace(/!([^,]+)/g, (all, tail) => "!" + tail
+        .replace(/(\$?)(\d+):(\$?)(\d+)(?![\d])/g, (m, a, r1, b, r2) => {
+          const n1 = shiftRangeRows(+r1, +r2, shift); return n1 ? `${a}${n1[0]}:${b}${n1[1]}` : m; })
+        .replace(/(\$?[A-Z]{1,3})(\$?)(\d+)(?!\d)/g, (m, c, d, r) => { const n = shift(+r); return n ? c + d + n : m; }));
+      void sheetIdx;
+    }
+  }
+
+  // 3) suppression des feuilles entières
+  const dropIdx = sheets.filter(s => plan.dropSheets.has(s.name)).map(s => s.index).sort((a, b) => b - a);
+  if (dropIdx.length){
+    const ct = await readXml("[Content_Types].xml");
+    for (const i of dropIdx){
+      const sh = sheets[i];
+      sh.el.parentNode.removeChild(sh.el);
+      const rel = relTarget[sh.rid]; rel.parentNode.removeChild(rel);
+      for (const o of el(ct, NS_CT, "Override")) if (o.getAttribute("PartName") === "/" + sh.path) o.parentNode.removeChild(o);
+      zip.remove(sh.path); if (zip.file(relsPath(sh.path))) zip.remove(relsPath(sh.path));
+      for (const dn of el(wb, NS, "definedName")){
+        const l = dn.getAttribute("localSheetId");
+        if (l == null) continue;
+        if (+l === i) dn.parentNode.removeChild(dn);
+        else if (+l > i) dn.setAttribute("localSheetId", String(+l - 1));
+      }
+    }
+    writeXml("[Content_Types].xml", ct);
+    // propriétés du document (liste des feuilles)
+    if (zip.file("docProps/app.xml")){
+      let app = await zip.file("docProps/app.xml").async("string");
+      const names = dropIdx.map(i => sheets[i].name);
+      const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      let removed = 0;
+      for (const n of names){ const tag = "<vt:lpstr>" + esc(n) + "</vt:lpstr>"; if (app.includes(tag)){ app = app.replace(tag, ""); removed++; } }
+      app = app.replace(/(<vt:lpstr>Feuilles de calcul<\/vt:lpstr><\/vt:variant><vt:variant><vt:i4>)(\d+)/, (m, a, n) => a + (+n - removed))
+               .replace(/(<vt:lpstr>Worksheets<\/vt:lpstr><\/vt:variant><vt:variant><vt:i4>)(\d+)/, (m, a, n) => a + (+n - removed))
+               .replace(/(<TitlesOfParts><vt:vector size=")(\d+)/, (m, a, n) => a + (+n - removed));
+      zip.file("docProps/app.xml", app);
+    }
+  }
+  // onglet actif = première feuille
+  for (const v of el(wb, NS, "workbookView")){ v.setAttribute("activeTab", "0"); v.removeAttribute("firstSheet"); }
+  const remaining = el(wb, NS, "sheet");
+  for (const s of sheets){ if (!plan.dropSheets.has(s.name) && zip.file(s.path)){
+    const d = await readXml(s.path); let changed = false;
+    for (const v of el(d, NS, "sheetView")){ if (v.getAttribute("tabSelected")){ v.removeAttribute("tabSelected"); changed = true; } }
+    if (s.el === remaining[0]){ const v = el(d, NS, "sheetView")[0]; if (v){ v.setAttribute("tabSelected", "1"); changed = true; } }
+    if (changed) writeXml(s.path, d);
+  }}
+
+  // 4) chaîne de calcul : supprimée, Excel la reconstruit à l'ouverture
+  if (zip.file("xl/calcChain.xml")){
+    zip.remove("xl/calcChain.xml");
+    for (const r of el(wbRels, NS_PKG, "Relationship")) if (/calcChain$/.test(r.getAttribute("Type"))) r.parentNode.removeChild(r);
+    const ct = await readXml("[Content_Types].xml");
+    for (const o of el(ct, NS_CT, "Override")) if (o.getAttribute("PartName") === "/xl/calcChain.xml") o.parentNode.removeChild(o);
+    writeXml("[Content_Types].xml", ct);
+  }
+  for (const c of el(wb, NS, "calcPr")) c.setAttribute("fullCalcOnLoad", "1");
+  writeXml("xl/workbook.xml", wb);
+  writeXml("xl/_rels/workbook.xml.rels", wbRels);
+  return zip.generateAsync({ type: "blob", compression: "DEFLATE", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+
+
+/* ------------------------------------------------------------------------
+   Repères d'identification des filières (cellules surlignées en jaune :
+   colonnes fl / veau / horti / lait / lapin, « SCA / pas SCA »…) :
+   ils servent à préparer le référentiel et ne doivent pas figurer dans l'export.
+   ------------------------------------------------------------------------ */
+function identificationStyles(styles){
+  const fills = el(styles, NS, "fills")[0];
+  const yellowFills = new Set();
+  if (fills) el(fills, NS, "fill").forEach((f, i) => {
+    const p = el(f, NS, "patternFill")[0]; if (!p || p.getAttribute("patternType") !== "solid") return;
+    const fg = el(p, NS, "fgColor")[0]; const rgb = fg && (fg.getAttribute("rgb") || "");
+    if (/FFFF00$/i.test(rgb)) yellowFills.add(i);
+  });
+  const xfs = new Set(), cellXfs = el(styles, NS, "cellXfs")[0];
+  if (cellXfs) Array.from(cellXfs.children).forEach((x, i) => { if (yellowFills.has(+x.getAttribute("fillId"))) xfs.add(String(i)); });
+  return xfs;
+}
+function stripIdentification(doc, yellowXf){
+  if (!yellowXf.size) return;
+  const removed = new Set();
+  for (const c of el(doc, NS, "c")){
+    if (yellowXf.has(c.getAttribute("s"))){ removed.add(c.getAttribute("r")); c.parentNode.removeChild(c); }
+  }
+  for (const col of el(doc, NS, "col")) if (yellowXf.has(col.getAttribute("style"))) col.removeAttribute("style");
+  for (const r of el(doc, NS, "row")) if (yellowXf.has(r.getAttribute("s"))){ r.removeAttribute("s"); r.removeAttribute("customFormat"); }
+  for (const m of el(doc, NS, "mergeCell")) if (removed.has(m.getAttribute("ref").split(":")[0])) m.parentNode.removeChild(m);
+  for (const mc of el(doc, NS, "mergeCells")){ const n = el(mc, NS, "mergeCell").length; if (n) mc.setAttribute("count", n); else mc.parentNode.removeChild(mc); }
+}
+/* Page de garde : la filière choisie est écrite dans la case « Secteur concerné » */
+function writeFiliereOnCover(doc, name, sstText){
+  const textOf = c => { if (!c) return ""; const t = c.getAttribute("t");
+    if (t === "s"){ const v = el(c, NS, "v")[0]; return v ? sstText[+v.textContent] || "" : ""; }
+    if (t === "inlineStr") return el(c, NS, "t").map(x => x.textContent).join(""); return ""; };
+  const rows = el(doc, NS, "row");
+  const find = re => rows.find(r => el(r, NS, "c").some(c => parseCell(c.getAttribute("r"))?.col === "B" && re.test(cleanText(textOf(c)))));
+  const rowSect = find(/^Secteur concern/i);
+  if (!rowSect) return;
+  // case de saisie à droite du libellé (colonne C), on garde son cadre
+  const rn = rowSect.getAttribute("r");
+  let cell = el(rowSect, NS, "c").find(c => parseCell(c.getAttribute("r"))?.col === "C");
+  if (!cell){
+    cell = doc.createElementNS(NS, "c"); cell.setAttribute("r", "C" + rn);
+    const next = el(rowSect, NS, "c").find(c => colToNum(parseCell(c.getAttribute("r")).col) > 3);
+    rowSect.insertBefore(cell, next || null);
+  }
+  while (cell.firstChild) cell.removeChild(cell.firstChild);
+  cell.setAttribute("t", "inlineStr");
+  const is = doc.createElementNS(NS, "is"), t = doc.createElementNS(NS, "t"); t.textContent = name; is.appendChild(t); cell.appendChild(is);
+}
+
+/* ligne d'origine -> nouvelle ligne (null si supprimée) */
+function makeShift(del){
+  const sorted = [...del].sort((a, b) => a - b);
+  return r => {
+    if (del.has(r)) return null;
+    let lo = 0, hi = sorted.length; while (lo < hi){ const m = (lo + hi) >> 1; if (sorted[m] < r) lo = m + 1; else hi = m; }
+    return r - lo;
+  };
+}
+function shiftRangeRows(r1, r2, shift){
+  let a = null, b = null;
+  for (let r = r1; r <= r2; r++){ const n = shift(r); if (n != null){ if (a == null) a = n; b = n; } }
+  return a == null ? null : [a, b];
+}
+function shiftRange(ref, shift){ // "A1:B5" ou "C3"
+  const [p1, p2] = ref.split(":");
+  const c1 = parseCell(p1), c2 = p2 ? parseCell(p2) : c1;
+  if (!c1 || !c2) return ref;
+  const rr = shiftRangeRows(c1.row, c2.row, shift);
+  if (!rr) return null;
+  return p2 ? `${c1.col}${rr[0]}:${c2.col}${rr[1]}` : `${c1.col}${rr[0]}`;
+}
+function shiftSqref(sqref, shift){
+  const out = sqref.split(/\s+/).filter(Boolean).map(r => shiftRange(r, shift)).filter(Boolean);
+  return out.length ? out.join(" ") : null;
+}
+function shiftFormula(f, shift){
+  return f.replace(/(^|[^A-Za-z0-9_.!'"])(\$?)([A-Z]{1,3})(\$?)(\d+)(?![\d(A-Za-z_])/g, (m, pre, d1, col, d2, row) => {
+    const n = shift(+row); return pre + d1 + col + d2 + (n == null ? row : n);
+  });
+}
+
+/* remplace le libellé d'un critère s'il a été modifié dans Grist */
+function updateTexts(doc, txt, sstText){
+  const lines = Object.keys(txt); if (!lines.length) return;
+  const rowEls = {};
+  for (const r of el(doc, NS, "row")) rowEls[r.getAttribute("r")] = r;
+  for (const line of lines){
+    const row = rowEls[line]; if (!row) continue;
+    const wanted = cleanText(txt[line]);
+    // cellule du critère = première cellule texte à partir de la colonne B
+    for (const c of el(row, NS, "c")){
+      const pc = parseCell(c.getAttribute("r")); if (!pc || pc.col === "A") continue;
+      const t = c.getAttribute("t"); let cur = null;
+      if (t === "s"){ const v = el(c, NS, "v")[0]; cur = v ? sstText[+v.textContent] : null; }
+      else if (t === "inlineStr"){ cur = el(c, NS, "t").map(x => x.textContent).join(""); }
+      if (cur == null || !cleanText(cur)) continue;
+      if (cleanText(cur) !== wanted){
+        while (c.firstChild) c.removeChild(c.firstChild);
+        c.setAttribute("t", "inlineStr");
+        const is = doc.createElementNS(NS, "is"), tt = doc.createElementNS(NS, "t");
+        tt.setAttributeNS("http://www.w3.org/XML/1998/namespace", "xml:space", "preserve");
+        tt.textContent = txt[line]; is.appendChild(tt); c.appendChild(is);
+      }
+      break;
+    }
+  }
+}
+
+/* suppression des lignes dans une feuille */
+async function transformSheet(doc, del, shift){
+  const sheetData = el(doc, NS, "sheetData")[0];
+  const rowEls = {};
+  for (const r of el(sheetData, NS, "row")) rowEls[+r.getAttribute("r")] = r;
+  const findCell = (row, col) => {
+    const r = rowEls[row]; if (!r) return null;
+    return el(r, NS, "c").find(c => parseCell(c.getAttribute("r"))?.col === col) || null;
+  };
+  const putCell = (row, col, src) => { // copie src (cellule d'origine) dans (row, col)
+    let r = rowEls[row];
+    if (!r){ r = doc.createElementNS(NS, "row"); r.setAttribute("r", row);
+      const after = Object.keys(rowEls).map(Number).filter(n => n > row).sort((a, b) => a - b)[0];
+      sheetData.insertBefore(r, after ? rowEls[after] : null); rowEls[row] = r; }
+    const clone = src.cloneNode(true); clone.setAttribute("r", col + row);
+    const old = findCell(row, col);
+    if (old) r.replaceChild(clone, old);
+    else { const next = el(r, NS, "c").find(c => colToNum(parseCell(c.getAttribute("r")).col) > colToNum(col)); r.insertBefore(clone, next || null); }
+  };
+
+  // fusions : réduites ; si la 1re ligne d'une fusion disparaît, son contenu descend
+  const mc = el(doc, NS, "mergeCells")[0];
+  if (mc){
+    for (const m of el(mc, NS, "mergeCell")){
+      const ref = m.getAttribute("ref"), [p1, p2] = ref.split(":");
+      const c1 = parseCell(p1), c2 = parseCell(p2 || p1);
+      if (del.has(c1.row)){
+        const first = [...Array(c2.row - c1.row + 1).keys()].map(k => c1.row + k).find(r => !del.has(r));
+        const src = findCell(c1.row, c1.col);
+        if (first && src) putCell(first, c1.col, src);
+      }
+      const nr = shiftRange(ref, shift);
+      if (!nr || !nr.includes(":") || nr.split(":")[0] === nr.split(":")[1]) m.parentNode.removeChild(m);
+      else m.setAttribute("ref", nr);
+    }
+    const n = el(mc, NS, "mergeCell").length;
+    if (n) mc.setAttribute("count", n); else mc.parentNode.removeChild(mc);
+  }
+
+  // lignes
+  for (const [rn, r] of Object.entries(rowEls)){
+    const n = +rn;
+    if (del.has(n)){ r.parentNode.removeChild(r); continue; }
+    const nn = shift(n);
+    r.setAttribute("r", nn);
+    for (const c of el(r, NS, "c")){
+      const pc = parseCell(c.getAttribute("r")); if (pc) c.setAttribute("r", pc.col + nn);
+      for (const f of el(c, NS, "f")){
+        if (f.textContent) f.textContent = shiftFormula(f.textContent, shift);
+        if (f.getAttribute("ref")){ const s = shiftRange(f.getAttribute("ref"), shift); if (s) f.setAttribute("ref", s); }
+      }
+    }
+  }
+
+  // dimension, validations, mises en forme conditionnelles, filtres
+  for (const d of el(doc, NS, "dimension")){ const s = shiftRange(d.getAttribute("ref"), shift); if (s) d.setAttribute("ref", s); }
+  for (const dv of el(doc, NS, "dataValidation")){
+    const s = shiftSqref(dv.getAttribute("sqref") || "", shift);
+    if (s) dv.setAttribute("sqref", s); else dv.parentNode.removeChild(dv);
+  }
+  for (const dvs of el(doc, NS, "dataValidations")){
+    const n = el(dvs, NS, "dataValidation").length;
+    if (n) dvs.setAttribute("count", n); else dvs.parentNode.removeChild(dvs);
+  }
+  for (const cf of el(doc, NS, "conditionalFormatting")){
+    const s = shiftSqref(cf.getAttribute("sqref") || "", shift);
+    if (s) cf.setAttribute("sqref", s); else cf.parentNode.removeChild(cf);
+  }
+  for (const af of el(doc, NS, "autoFilter")){ const s = shiftRange(af.getAttribute("ref"), shift); if (s) af.setAttribute("ref", s); }
+  for (const sel of el(doc, NS, "selection")){
+    const ac = sel.getAttribute("activeCell"); if (ac){ const p = parseCell(ac); if (p){ const n = shift(p.row); sel.setAttribute("activeCell", p.col + (n || 1)); } }
+    const sq = sel.getAttribute("sqref"); if (sq){ sel.setAttribute("sqref", shiftSqref(sq, shift) || "A1"); }
+  }
+  // sauts de page
+  for (const rb of el(doc, NS, "rowBreaks")){
+    const seen = new Set();
+    for (const b of el(rb, NS, "brk")){
+      let id = +b.getAttribute("id"), n = null;
+      while (id > 0 && (n = shift(id)) == null) id--;
+      if (!n || seen.has(n)) { b.parentNode.removeChild(b); continue; }
+      seen.add(n); b.setAttribute("id", n);
+    }
+    const n = el(rb, NS, "brk").length;
+    if (n){ rb.setAttribute("count", n); rb.setAttribute("manualBreakCount", n); } else rb.parentNode.removeChild(rb);
+  }
+  // contrôles de formulaire (cases à cocher) ancrés sur une ligne supprimée
+  for (const ctrl of el(doc, NS, "control")){
+    const from = el(ctrl, NS, "from")[0], to = el(ctrl, NS, "to")[0];
+    const fr = from && el(from, NS_XDR, "row")[0];
+    if (!fr) continue;
+    if (del.has(+fr.textContent + 1)){
+      let node = ctrl; while (node.parentNode && node.parentNode.localName !== "controls") node = node.parentNode;
+      node.parentNode.removeChild(node);
+    } else {
+      fr.textContent = shift(+fr.textContent + 1) - 1;
+      const tr = to && el(to, NS_XDR, "row")[0];
+      if (tr){ const r = +tr.textContent + 1; let n = shift(r); let k = r; while (n == null && k > 0) n = shift(--k); tr.textContent = (n || 1) - 1; }
+    }
+  }
+  for (const cs of el(doc, NS, "controls")) if (!el(cs, NS, "control").length) cs.parentNode.removeChild(cs);
+}
+
+/* dessins DrawingML (positions en lignes, base 0) */
+function transformDrawing(doc, del, shift){
+  const anchors = [...el(doc, NS_XDR, "twoCellAnchor"), ...el(doc, NS_XDR, "oneCellAnchor")];
+  for (const a of anchors){
+    const from = el(a, NS_XDR, "from")[0], to = el(a, NS_XDR, "to")[0];
+    const fr = el(from, NS_XDR, "row")[0];
+    if (del.has(+fr.textContent + 1)){ a.parentNode.removeChild(a); continue; }
+    const tr = to ? el(to, NS_XDR, "row")[0] : null;
+    const toRow = tr ? +tr.textContent + 1 : null;
+    fr.textContent = shift(+fr.textContent + 1) - 1;
+    if (tr){ let k = toRow, n = shift(k); while (n == null && k > 0) n = shift(--k); tr.textContent = (n || 1) - 1; }
+  }
+}
+/* dessins VML hérités (cases à cocher) : <x:Anchor> col, dx, ligne, dy, col, dx, ligne, dy */
+function transformVml(text, del, shift){
+  return text.replace(/<v:shape\b[\s\S]*?<\/v:shape>/g, shape => {
+    const m = /<x:Anchor>\s*([^<]+)<\/x:Anchor>/.exec(shape); if (!m) return shape;
+    const a = m[1].split(",").map(s => +s.trim());
+    if (a.length < 8) return shape;
+    if (del.has(a[2] + 1)) return "";
+    a[2] = shift(a[2] + 1) - 1;
+    let k = a[6] + 1, n = shift(k); while (n == null && k > 0) n = shift(--k); a[6] = (n || 1) - 1;
+    return shape.replace(m[0], "<x:Anchor>\n    " + a.join(", ") + "</x:Anchor>");
+  });
+}
+
+
+let MODELE = null, MODELE_NOM = "Grille CRC Reco OP.xlsx";
+async function chargerModele(){
+  if (MODELE) return MODELE;
+  const row = rows(T.MOD).find(r => refList(r.Fichier).length);
+  if (row){ try { const attId = refList(row.Fichier)[0]; const tok = await grist.docApi.getAccessToken({ readOnly:true });
+    const resp = await fetch(`${tok.baseUrl}/attachments/${attId}/download?auth=${tok.token}`); if (!resp.ok) throw new Error(resp.status);
+    MODELE = await resp.arrayBuffer(); const att = await fetchSafe("_grist_Attachments"); const meta = att && att.find(a => a.id === attId); if (meta && meta.fileName) MODELE_NOM = meta.fileName; return MODELE; } catch(e){ console.warn(e); } }
+  return null;
+}
+function planOrigine(fid, fname){
+  const delBySheet = {}, newText = {};
+  for (const p of REF){ if (!p.Feuille || !p.Ligne) continue; const keep = !p.Retire && p.fils.includes(fid);
+    if (keep) (newText[p.Feuille] = newText[p.Feuille] || {})[Math.round(p.Ligne)] = String(p.Libelle || "");
+    else (delBySheet[p.Feuille] = delBySheet[p.Feuille] || new Set()).add(Math.round(p.Ligne)); }
+  return { delBySheet, newText, dropSheets:dropSheets(fid), filiereName:fname };
+}
+async function renderExcel(){
+  $("xFil").innerHTML = rows(T.FIL).map(f => `<option value="${f.id}" ${ctrl() && ctrl().Filiere === f.id ? "selected" : ""}>${esc(f.Nom)}</option>`).join("");
+  $("bXCtrl").disabled = !ctrl();
+  const m = await chargerModele();
+  $("xModeleStatus").innerHTML = m ? `Classeur de référence : <b>${esc(MODELE_NOM)}</b> (table Modele).` : "";
+  $("xFileWrap").classList.toggle("hidden", !!m);
+}
+$("xFile").addEventListener("change", async e => { const f = e.target.files[0]; if (!f) return; MODELE = await f.arrayBuffer(); MODELE_NOM = f.name; renderExcel(); });
+$("bXOrig").onclick = async () => { const fid = +$("xFil").value, fname = filNom(fid); const m = await chargerModele();
+  if (!m){ toast("warning", "Classeur de référence introuvable : ajoutez-le dans la table Modele ou choisissez-le ci-dessous."); $("xFileWrap").classList.remove("hidden"); return; }
+  try { await reload([T.REF, T.ONG]); const blob = await buildWorkbook(m.slice(0), planOrigine(fid, fname)); download(blob, `${MODELE_NOM.replace(/\.xlsx$/i, "")} - ${fname}.xlsx`); toast("success", `Grille d'origine ${esc(fname)} téléchargée.`); }
+  catch(e){ console.error(e); toast("error", esc(e.message)); } };
+$("bXMod").onclick = async () => { const fid = +$("xFil").value; try { await reload([T.REF, T.ONG]); download(await buildModerne(fid, null), `Grille de controle modernisee - ${filNom(fid)}.xlsx`); toast("success", "Grille modernisée téléchargée."); } catch(e){ console.error(e); toast("error", esc(e.message)); } };
+$("bXCtrl").onclick = async () => { const c = ctrl(); if (!c) return; try { download(await buildModerne(c.Filiere, c.id), `Controle - ${ctrlLabel(c)}.xlsx`); toast("success", "Contrôle exporté."); } catch(e){ console.error(e); toast("error", esc(e.message)); } };
+
+/* =====================================================================
+   9. DÉMARRAGE
+   ===================================================================== */
+document.querySelectorAll("#tabs [data-tab]").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
+(async () => {
+  grist.ready({ requiredAccess:"full" });
+  await reload();
+  setTab("controles");
+})();
+</script>
+</body>
+</html>
