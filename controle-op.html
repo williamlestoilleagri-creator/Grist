@@ -47,7 +47,20 @@
   .crit__head{display:flex;justify-content:space-between;gap:1rem;align-items:center;margin-bottom:.25rem}
   .crit__num{font-weight:700;color:var(--text-title-blue-france,#000091);font-size:.875rem}
   .crit__lib{font-weight:500;margin:0 0 .75rem;white-space:pre-line}
-  .crit .fr-segmented{margin-bottom:.75rem}
+  .choix{display:inline-flex;flex-wrap:wrap;border:1px solid #000091;margin-bottom:.25rem}
+  .choix__btn{background:#fff;color:#000091;border:0;border-right:1px solid #000091;padding:.45rem 1rem;font:inherit;font-size:.875rem;font-weight:500;cursor:pointer;min-height:2.25rem}
+  .choix__btn:last-child{border-right:0}
+  .choix__btn:hover:not(:disabled):not([aria-checked="true"]){background:#E3E3FD}
+  .choix__btn:focus-visible{outline:2px solid #0a76f6;outline-offset:2px}
+  .choix__btn[aria-checked="true"]{background:#000091;color:#fff}
+  .choix__btn--neg[aria-checked="true"]{background:#CE0500;color:#fff}
+  .choix__btn:disabled{cursor:not-allowed;color:#929292}
+  .crit__res{font-size:.8rem;margin:1rem 0 .4rem}
+  .crit--off{background:#F6F6F6;border-left-color:#CECECE}
+  .crit--off .crit__lib,.crit--off .fr-label{color:#929292}
+  .crit--off .choix{border-color:#CECECE}.crit--off .choix__btn{border-color:#CECECE}
+  .crit__cond{font-size:.8rem;font-style:italic;color:#666;margin:-.25rem 0 .75rem}
+  .crit__cond--on{color:#18753C}
   .champs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}
   .champs .plein{grid-column:1/-1}
   @media (max-width:700px){.champs{grid-template-columns:1fr}}
@@ -293,10 +306,23 @@ const filNom = id => (byId(T.FIL, id) || {}).Nom || "";
 function ctrlLabel(c){ const op = byId(T.OP, c.OP); return `${(op && op.Raison_sociale) || "OP ?"} – ${filNom(c.Filiere) || "?"} – ${secToFr(c.Date_debut) || "date ?"}`; }
 function dropSheets(fid){ const s = new Set(); for (const o of rows(T.ONG)) if (o.Feuille && !refList(o.Filieres_applicables).includes(fid)) s.add(o.Feuille); return s; }
 function repsOf(cid){ return rows(T.REP).filter(r => r.Controle === cid); }
-function statutRep(r){ const p = REF_BY_ID.get(r.Point); if (p && p.Type_reponse === "Aucune") return "Aucun";
-  if (!(r.Resultat || r.Reponse_texte || r.Description || r.Montant || r.Valeur_n || r.Valeur_n_1)) return "À renseigner";
+const vide = v => v == null || v === "" || v === 0; // une cellule numérique vide vaut 0 dans Grist
+function condition(p){ const l = one(p && p.Libelle).toLowerCase(); return /^si oui\b/.test(l) ? "oui" : /^si non\b/.test(l) ? "non" : null; }
+function parentRep(r){ // question Oui/Non dont dépend un critère « Si OUI… » / « Si NON… »
+  const p = REF_BY_ID.get(r.Point); if (!p || !condition(p)) return null;
+  let best = null, bo = -1;
+  for (const x of rows(T.REP)){
+    if (x.Controle !== r.Controle || (x.Convention || 0) !== (r.Convention || 0) || (x.Producteur || 0) !== (r.Producteur || 0)) continue;
+    const q = REF_BY_ID.get(x.Point); if (!q || q.Feuille !== p.Feuille || q.ordre >= p.ordre || condition(q) || !/Oui\/Non|Conforme/.test(q.Type_reponse || "")) continue;
+    if (q.ordre > bo){ bo = q.ordre; best = x; } }
+  return best;
+}
+function actif(r){ const p = REF_BY_ID.get(r.Point), c = condition(p); if (!c) return true; const par = parentRep(r); if (!par) return true;
+  return c === "oui" ? ["Oui", "Conforme"].includes(par.Resultat) : ["Non", "Non conforme"].includes(par.Resultat); }
+function statutRep(r){ const p = REF_BY_ID.get(r.Point); if (p && p.Type_reponse === "Aucune") return "Aucun"; if (!actif(r)) return "Aucun";
+  if (!(r.Resultat || r.Reponse_texte || r.Description || r.Avec_quoi || !vide(r.Montant) || !vide(r.Valeur_n) || !vide(r.Valeur_n_1))) return "À renseigner";
   if (["Non conforme", "Non conclusif"].includes(r.Resultat) && !r.Observation) return "Observation obligatoire"; return "OK"; }
-const anomalieRep = r => r.Resultat === "Non conforme" || (r.Resultat === "Non" && !!r.Observation);
+const anomalieRep = r => actif(r) && (r.Resultat === "Non conforme" || (r.Resultat === "Non" && !!r.Observation));
 function statsCtrl(cid){ const rs = repsOf(cid).filter(r => statutRep(r) !== "Aucun");
   const ok = rs.filter(r => statutRep(r) === "OK").length; return { points:rs.length, ok, obs:rs.filter(r => statutRep(r) === "Observation obligatoire").length,
     ano:rs.filter(anomalieRep).length, av: rs.length ? ok / rs.length : 0 }; }
@@ -422,35 +448,48 @@ function renderSaisie(){
 }
 $("navGroupes").addEventListener("click", e => { const a = e.target.closest("[data-g]"); if (!a) return; e.preventDefault(); S.groupe = a.dataset.g; renderSaisie(); window.scrollTo({ top:0 }); });
 
-const OPTIONS = { "Oui/Non":["Oui", "Non", "Non conclusif", "Sans objet"], "Conforme/Non conforme":["Conforme", "Non conforme", "Non conclusif", "Sans objet"], "Montant + C/NC":["Conforme", "Non conforme", "Sans objet"] };
+const CHOIX = { "Oui/Non":["Oui", "Non", "Non conclusif", "Sans objet"], "Conforme/Non conforme":["Conforme", "Non conforme", "Non conclusif", "Sans objet"], "Montant + C/NC":["Conforme", "Non conforme", "Sans objet"] };
+const SANS_AVEC_QUOI = new Set(["3-STATUTS ET RI"]); // feuilles Excel sans colonne « Avec quoi »
+function choixHtml(r, opts, off){
+  return `<div class="choix" role="radiogroup" aria-label="Résultat">${opts.map(o => `<button type="button" class="choix__btn ${/^Non( conforme)?$/.test(o) ? "choix__btn--neg" : ""}" role="radio" aria-checked="${r.Resultat === o}" data-choix="${r.id}" data-v="${esc(o)}" ${off ? "disabled" : ""}>${esc(o)}</button>`).join("")}</div>`;
+}
+function datesDe(txt, n){ const m = String(txt || "").match(/\d{2}\/\d{2}\/\d{4}/g) || []; return Array.from({ length:n }, (_, i) => m[i] ? m[i].split("/").reverse().join("-") : ""); }
 function critHtml(r){
-  const p = REF_BY_ID.get(r.Point), t = p.Type_reponse || "Oui/Non", st = statutRep(r), id = r.id;
-  const cls = anomalieRep(r) ? "st-ano" : st === "Observation obligatoire" ? "st-obs" : st === "OK" ? "st-ok" : "";
-  const badge = { "OK":'<span class="fr-badge fr-badge--sm fr-badge--success">Renseigné</span>', "À renseigner":'<span class="fr-badge fr-badge--sm fr-badge--info fr-badge--no-icon">À renseigner</span>',
-    "Observation obligatoire":'<span class="fr-badge fr-badge--sm fr-badge--warning">Observation obligatoire</span>' }[st] || "";
-  const field = (f, label, type = "text", cls2 = "") => { const v = r[f]; const val = v == null ? "" : v;
-    return `<div class="fr-input-group ${cls2}"><label class="fr-label" for="f${f}${id}">${label}</label>${type === "area" ? `<textarea class="fr-input" id="f${f}${id}" data-id="${id}" data-f="${f}" rows="2">${esc(val)}</textarea>` : `<input class="fr-input" id="f${f}${id}" data-id="${id}" data-f="${f}" type="${type === "num" ? "text" : type}" inputmode="${type === "num" ? "decimal" : "text"}" value="${esc(type === "num" && val !== "" ? String(val).replace(".", ",") : val)}">`}</div>`; };
-  let corps = "";
+  const p = REF_BY_ID.get(r.Point), t = p.Type_reponse || "Oui/Non", id = r.id, on = actif(r), st = statutRep(r), cond = condition(p);
+  const dis = on ? "" : "disabled";
+  const cls = !on ? "crit--off" : anomalieRep(r) ? "st-ano" : st === "Observation obligatoire" ? "st-obs" : st === "OK" ? "st-ok" : "";
+  const badge = !on ? '<span class="fr-badge fr-badge--sm fr-badge--no-icon">Sans objet</span>' : { "OK":'<span class="fr-badge fr-badge--sm fr-badge--success">Renseigné</span>',
+    "À renseigner":'<span class="fr-badge fr-badge--sm fr-badge--info fr-badge--no-icon">À renseigner</span>', "Observation obligatoire":'<span class="fr-badge fr-badge--sm fr-badge--warning">Observation obligatoire</span>' }[st] || "";
+  const field = (f, label, type = "text", cls2 = "") => { const v = r[f]; const val = type === "num" ? (vide(v) ? "" : String(v).replace(".", ",")) : (v == null ? "" : v);
+    return `<div class="fr-input-group ${cls2}"><label class="fr-label" for="f${f}${id}">${label}</label>${type === "area" ? `<textarea class="fr-input" id="f${f}${id}" data-id="${id}" data-f="${f}" rows="2" ${dis}>${esc(val)}</textarea>` : `<input class="fr-input" id="f${f}${id}" data-id="${id}" data-f="${f}" type="text" inputmode="${type === "num" ? "decimal" : "text"}" value="${esc(val)}" ${dis}>`}</div>`; };
+  const tete = `<div class="crit__head"><span class="crit__num">${p.Num ? "N° " + esc(fmtNum(p.Num)) : (p.Niveau === "Sous-question" ? "Précision" : "")}</span><span>${badge}${anomalieRep(r) ? ' <span class="fr-badge fr-badge--sm fr-badge--error">Anomalie</span>' : ""}</span></div>`;
+  let note = "";
+  if (cond){ const par = parentRep(r), q = par && REF_BY_ID.get(par.Point), ref = q ? (q.Num ? "N° " + fmtNum(q.Num) : "précédente") : "précédente", att = cond === "oui" ? "Oui" : "Non";
+    note = on ? `<p class="crit__cond crit__cond--on">S'applique car la réponse à la question ${esc(ref)} est « ${att} ».</p>` : `<p class="crit__cond">À renseigner seulement si la réponse à la question ${esc(ref)} est « ${att} ».</p>`; }
   if (t === "Montant (calculé)"){
-    const c = ctrl(), bloc = p.Bloc_VPC; const tot = repsOf(c.id).reduce((s, x) => { const q = REF_BY_ID.get(x.Point); return s + (q && q.Bloc_VPC === bloc && q.Signe_VPC ? (+x.Montant || 0) * q.Signe_VPC : 0); }, 0);
-    return `<div class="crit st-ok"><div class="crit__head"><span class="crit__num">N° ${esc(fmtNum(p.Num))}</span><span class="fr-badge fr-badge--sm fr-badge--info fr-badge--no-icon">Calcul automatique</span></div><p class="crit__lib">${esc(r.Libelle || p.Libelle)}</p><p class="fr-h5 fr-mb-0">${tot.toLocaleString("fr-FR")} €</p></div>`;
+    const bloc = p.Bloc_VPC; const tot = repsOf(r.Controle).reduce((s, x) => { const q = REF_BY_ID.get(x.Point); return s + (q && q.Bloc_VPC === bloc && q.Signe_VPC ? (+x.Montant || 0) * q.Signe_VPC : 0); }, 0);
+    return `<div class="crit st-ok" id="crit${id}">${tete.replace(badge, '<span class="fr-badge fr-badge--sm fr-badge--info fr-badge--no-icon">Calcul automatique</span>')}<p class="crit__lib">${esc(r.Libelle || p.Libelle)}</p><p class="fr-h5 fr-mb-0">${tot.toLocaleString("fr-FR")} €</p></div>`;
   }
-  if (OPTIONS[t] || !["Texte", "Nombre", "Pourcentage", "Valeur n-1 / n"].includes(t)){
-    const opts = OPTIONS[t] || OPTIONS["Oui/Non"];
-    corps += `<fieldset class="fr-segmented fr-segmented--sm"><legend class="fr-segmented__legend fr-sr-only">Résultat</legend><div class="fr-segmented__elements">${opts.map((o, i) =>
-      `<div class="fr-segmented__element"><input type="radio" id="r${id}_${i}" name="r${id}" value="${esc(o)}" data-id="${id}" data-f="Resultat" ${r.Resultat === o ? "checked" : ""}><label class="fr-label" for="r${id}_${i}">${esc(o)}</label></div>`).join("")}</div></fieldset>
-      ${r.Resultat ? `<button class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-ml-1w" data-clear="${id}">Effacer</button>` : ""}`;
+  let corps = "";
+  if (t === "Texte") corps = `<div class="champs">${field("Reponse_texte", "Réponse", "area", "plein")}</div>`;
+  else if (t === "Nombre" || t === "Pourcentage") corps = `<div class="champs">${field("Reponse_texte", t === "Nombre" ? "Nombre" : "Pourcentage")}</div>`;
+  else if (t === "Date"){
+    const labels = /statuts/i.test(p.Libelle) && /règlement intérieur/i.test(p.Libelle) ? ["Date de validation des statuts en vigueur", "Date de validation du règlement intérieur"] : ["Date"];
+    const vals = datesDe(r.Reponse_texte, labels.length);
+    corps = `<div class="champs">${labels.map((l, i) => `<div class="fr-input-group"><label class="fr-label" for="d${id}_${i}">${l}</label><input class="fr-input" type="date" id="d${id}_${i}" data-date="${id}" data-i="${i}" data-n="${labels.length}" value="${vals[i]}" ${dis}></div>`).join("")}</div>`;
+  } else {
+    const avec = !SANS_AVEC_QUOI.has(p.Feuille);
+    corps += '<div class="champs">';
+    if (avec) corps += field("Avec_quoi", "Avec quoi le contrôle a-t-il été fait ?");
+    corps += t === "Montant + C/NC" ? field("Montant", "Montant (€)", "num") : field("Description", "Description du contrôle effectué", "area", avec ? "" : "plein");
+    if (t === "Valeur n-1 / n") corps += field("Valeur_n_1", "Valeur au 01/01/n-1", "num") + field("Valeur_n", "Valeur au 01/01/n", "num");
+    if (r.Reponse_texte) corps += field("Reponse_texte", "Réponse rédigée", "area", "plein");
+    corps += "</div>";
+    const opts = CHOIX[t] || (t === "Valeur n-1 / n" ? null : CHOIX["Oui/Non"]);
+    if (opts) corps += `<p class="crit__res">Résultat</p>${choixHtml(r, opts, !on)}`;
+    corps += `<div class="champs fr-mt-2w">${field("Observation", "Observation du contrôleur" + (st === "Observation obligatoire" ? " (obligatoire)" : " (obligatoire si non conclusif ou en cas d'anomalie)"), "area", "plein" + (st === "Observation obligatoire" ? " obs-oblig" : ""))}</div>`;
   }
-  corps += '<div class="champs">';
-  const rempli = f => r[f] != null && r[f] !== "";
-  if (t === "Valeur n-1 / n" || rempli("Valeur_n_1") || rempli("Valeur_n")) corps += field("Valeur_n_1", "Valeur au 01/01/n-1", "num") + field("Valeur_n", "Valeur au 01/01/n", "num");
-  if (["Texte", "Nombre", "Pourcentage"].includes(t) || rempli("Reponse_texte")) corps += field("Reponse_texte", t === "Nombre" ? "Nombre" : t === "Pourcentage" ? "Pourcentage" : "Réponse rédigée", ["Nombre", "Pourcentage"].includes(t) ? "text" : "area", "plein");
-  if (t === "Montant + C/NC" || rempli("Montant")) corps += field("Montant", "Montant (€)", "num");
-  corps += field("Avec_quoi", "Avec quoi le contrôle a-t-il été fait ?") + field("Description", "Description du contrôle effectué", "area");
-  corps += field("Observation", "Observation du contrôleur" + (st === "Observation obligatoire" ? " (obligatoire)" : ""), "area", "plein" + (st === "Observation obligatoire" ? " obs-oblig" : ""));
-  corps += "</div>";
-  return `<div class="crit ${cls}" id="crit${id}"><div class="crit__head"><span class="crit__num">${p.Num ? "N° " + esc(fmtNum(p.Num)) : (p.Niveau === "Sous-question" ? "Précision" : "")}</span>${badge}${anomalieRep(r) ? ' <span class="fr-badge fr-badge--sm fr-badge--error">Anomalie</span>' : ""}</div>
-    <p class="crit__lib">${esc(r.Libelle || p.Libelle)}</p>${corps}</div>`;
+  return `<div class="crit ${cls}" id="crit${id}">${tete}<p class="crit__lib">${esc(r.Libelle || p.Libelle)}</p>${note}${corps}</div>`;
 }
 function fmtNum(v){ return v == null || v === "" ? "" : String(+v === Math.round(+v) ? Math.round(+v) : v); }
 async function saveRep(id, f, v){
@@ -459,13 +498,22 @@ async function saveRep(id, f, v){
   if (r[f] === v) return;
   r[f] = v;
   try { await act([["UpdateRecord", T.REP, id, { [f]:v }]]); } catch(e){ toast("error", "Enregistrement impossible : " + esc(e.message)); return; }
-  const box = $("crit" + id); if (box){ const tmp = document.createElement("div"); tmp.innerHTML = critHtml(r); const nb = tmp.firstElementChild; box.replaceWith(nb); }
+  if (f === "Resultat"){ const y = window.scrollY; renderSaisie(); window.scrollTo({ top:y }); return; } // les questions « Si OUI » peuvent changer d'état
+  const box = $("crit" + id); if (box){ const tmp = document.createElement("div"); tmp.innerHTML = critHtml(r); box.replaceWith(tmp.firstElementChild); }
   renderKpis(S.ctrlId);
   const a = document.querySelector(`#navGroupes [data-g="${CSS.escape(S.groupe)}"] .nav-cpt`);
   if (a){ const G = groupesCtrl(S.ctrlId).find(x => x.key === S.groupe); const done = G.reps.filter(x => ["OK", "Aucun"].includes(statutRep(x))).length, ano = G.reps.filter(anomalieRep).length; a.innerHTML = `${done}/${G.reps.length}${ano ? ` · <b style="color:#CE0500">${ano}</b>` : ""}`; }
 }
-$("zoneSaisie").addEventListener("change", e => { const t = e.target; if (t.dataset && t.dataset.id) saveRep(+t.dataset.id, t.dataset.f, t.type === "radio" ? t.value : t.value.trim() || null); });
-$("zoneSaisie").addEventListener("click", e => { const b = e.target.closest("[data-clear]"); if (b){ e.preventDefault(); saveRep(+b.dataset.clear, "Resultat", null); } });
+$("zoneSaisie").addEventListener("change", e => {
+  const t = e.target;
+  if (t.dataset && t.dataset.date){ const id = t.dataset.date, n = +t.dataset.n; const ins = [...document.querySelectorAll(`[data-date="${id}"]`)].sort((a, b) => a.dataset.i - b.dataset.i);
+    const fr = ins.map(x => x.value ? x.value.split("-").reverse().join("/") : "");
+    const txt = n === 2 ? [fr[0] && "Statuts : " + fr[0], fr[1] && "Règlement intérieur : " + fr[1]].filter(Boolean).join(" ; ") : fr[0];
+    saveRep(+id, "Reponse_texte", txt || null); return; }
+  if (t.dataset && t.dataset.id) saveRep(+t.dataset.id, t.dataset.f, t.value.trim() || null);
+});
+$("zoneSaisie").addEventListener("click", e => { const b = e.target.closest("[data-choix]"); if (!b || b.disabled) return; e.preventDefault();
+  const r = byId(T.REP, +b.dataset.choix); saveRep(r.id, "Resultat", r.Resultat === b.dataset.v ? null : b.dataset.v); });
 
 /* ---------------- Fiche et annexes (éditeurs génériques) */
 function inputFor(table, rec, col, label, type, opts, inTable){
@@ -907,7 +955,7 @@ function dataRapport(cid){
     const og = { sheet:G.key[0] === "C" ? DOMAINE_FEUILLE[(byId(T.CONV, +G.key.slice(1)) || {}).Domaine] || G.feuille : G.feuille, code:G.key[0] === "S" ? String(p0.Onglet) : (G.key[0] === "C" ? String(p0.Onglet) : "13"),
       titre:"ONGLET " + G.label + (G.sub ? " – " + G.sub : ""), items:[], observations:[] };
     for (const r of G.reps){
-      const p = REF_BY_ID.get(r.Point), t = p.Type_reponse; if (t === "Aucune" || t === "Montant (calculé)") continue;
+      const p = REF_BY_ID.get(r.Point), t = p.Type_reponse; if (t === "Aucune" || t === "Montant (calculé)" || !actif(r)) continue;
       const it = { num:fmtNum(p.Num), critere:r.Libelle || p.Libelle, section:p.Section || "", type:t === "Valeur n-1 / n" ? "num" : ["Texte", "Nombre", "Pourcentage"].includes(t) ? "text" : "yn",
         avec:r.Avec_quoi || "", desc:[r.Description, r.Montant != null && r.Montant !== "" ? Number(r.Montant).toLocaleString("fr-FR") + " €" : ""].filter(Boolean).join(" – "),
         res:RES_CODE[r.Resultat] || null, obs:r.Observation || "", v1:r.Valeur_n_1, v2:r.Valeur_n, texte:r.Reponse_texte || "" };
