@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Campagne Reliquats 2026</title>
+<style>
+  :root{
+    --bleu:#000091; --bleu-t:#1b2a8c; --bleu-b:#4d5bd6; --bleu-f:#eef0fb;
+    --vert:#18753c; --vert-b:#5aa37c; --vert-f:#e6f4ec;
+    --rouge:#c9191e; --rouge-b:#e3797c; --rouge-f:#fdeeee;
+    --texte:#1e1e3c; --gris:#5b5f73;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:#fff}
+  body{font-family:"Marianne","Inter",Arial,sans-serif;color:var(--texte)}
+  .canvas{width:2000px;height:1125px;position:relative;background:#fff;overflow:hidden}
+  header{position:absolute;left:22px;right:70px;top:20px;display:flex;align-items:flex-start}
+  .bloc{width:330px;padding-top:4px}
+  .tricolore{display:flex;width:56px;height:12px;margin-bottom:8px}
+  .tricolore i{flex:1}.tricolore i:nth-child(1){background:#000091}.tricolore i:nth-child(2){background:#fff;border-top:1px solid #ddd;border-bottom:1px solid #ddd}.tricolore i:nth-child(3){background:#e1000f}
+  .bloc b{display:block;font-size:21px;line-height:1.05;font-weight:800;letter-spacing:.3px;color:#161616}
+  .bloc small{display:block;margin-top:8px;font-size:13px;font-style:italic;color:#333;line-height:1.2}
+  .titres{flex:1;text-align:right}
+  h1{font-size:48px;font-weight:800;color:var(--bleu-t);letter-spacing:-.5px;line-height:1.1}
+  .sous{font-size:27px;color:var(--bleu-t);margin-top:6px;font-weight:500}
+  .legende{display:flex;gap:22px;justify-content:flex-end;margin-top:10px;font-size:16px;color:var(--gris)}
+  .legende span{display:flex;align-items:center;gap:7px}
+  .legende i{width:16px;height:16px;border-radius:4px;display:inline-block}
+  p,li{font-size:18px;line-height:1.24}
+  .ic{stroke:var(--bleu-t);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .ic.v{stroke:var(--vert)} .ic.r{stroke:var(--rouge)} .ic.w{stroke:#fff}
+  .items{list-style:none;display:flex;flex-direction:column;gap:12px}
+  .items li{display:flex;gap:11px;align-items:flex-start}
+  .items svg{flex:0 0 32px;width:32px;height:32px}
+  ul.puces{list-style:none}
+  ul.puces li{position:relative;padding-left:20px;margin-bottom:9px}
+  ul.puces li::before{content:"";position:absolute;left:3px;top:9px;width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.75}
+  .thumb{border:1px solid #cfd3e6;border-radius:6px;overflow:hidden;background:#fff}
+  .thumb img{width:100%;height:100%;object-fit:cover;object-position:top left;display:block}
+  .tag{display:inline-block;font-size:13px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;border-radius:20px;padding:3px 10px}
+  .tag.b{background:#e3e6fb;color:var(--bleu)} .tag.v{background:#d3ecdd;color:var(--vert)} .tag.r{background:#fbd9da;color:var(--rouge)}
+  /* mini calendrier */
+  .cal{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;background:#fff;border:1px solid #e3c4c5;border-radius:6px;padding:6px}
+  .cal div{height:22px;border-radius:3px;background:#f3f3f6;position:relative}
+  .cal .e{background:#d3ecdd;border-left:4px solid var(--vert)}
+  .cal .p{background:#fde6c8;border-left:4px solid #d97706}
+  .cal .a{background:#fbd9da;border-left:4px solid var(--rouge)}
+  .cal .h{background:none;height:14px;font-size:11px;color:var(--gris);text-align:center}
+  .etats{display:flex;gap:10px;font-size:13px;color:var(--gris);justify-content:center;margin-top:6px}
+  .etats span{display:flex;align-items:center;gap:4px;white-space:nowrap}
+  .etats i{width:10px;height:10px;border-radius:50%}
+  .kp b{display:block;font-weight:900;color:var(--bleu-t);letter-spacing:-1px;line-height:1}
+  .kp span{display:block;color:var(--bleu-t);line-height:1.2}
+
+
+  .bx{position:absolute;border-radius:16px;padding:16px}
+  .bx.v{background:var(--vert-f);border:3px solid var(--vert-b)}
+  .bx.b{background:var(--bleu-f);border:3px solid var(--bleu-b)}
+  .bx.r{background:var(--rouge-f);border:3px solid var(--rouge-b)}
+  .bx h2{font-size:24px;font-weight:700;line-height:1.12}
+  .bx.v h2{color:var(--vert)} .bx.b h2{color:var(--bleu)} .bx.r h2{color:var(--rouge)}
+  .wh{background:#fff;border-radius:12px;padding:14px}
+  .v ul.puces li::before{background:var(--vert)}
+  .grist{position:absolute;left:820px;top:330px;width:600px;height:500px;border-radius:20px;background:var(--bleu);padding:16px;color:#fff}
+  .grist .t{display:flex;align-items:center;gap:12px;font-size:28px;font-weight:800;margin:2px 4px 12px}
+  .grist .t small{font-size:16px;font-weight:500;opacity:.85}
+  .tiles{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:1fr 1fr;gap:12px;height:400px}
+  .tile{background:#fff;border-radius:12px;padding:12px;color:var(--texte);display:flex;flex-direction:column;gap:6px;border-top:6px solid var(--bleu-b)}
+  .tile.r{border-top-color:var(--rouge)}
+  .tile b{font-size:17px;line-height:1.15;color:var(--bleu)} .tile.r b{color:var(--rouge)}
+  .tile p{font-size:14.5px;line-height:1.22;color:var(--gris)}
+  .tile svg{width:30px;height:30px}
+  .tile .thumb{height:62px;margin-top:auto}
+  .dn{position:absolute;left:470px;top:430px;width:260px;height:300px;border-radius:16px;background:#fff;border:3px solid #8e94b5;padding:16px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+  .dn b{font-size:24px;color:var(--bleu-t);line-height:1.1}
+  .dn p{font-size:16px;color:var(--gris)}
+  #fils{position:absolute;left:0;top:0;pointer-events:none}
+  .lbl{position:absolute;display:flex;align-items:center;gap:8px;background:#fff;padding:2px 8px;border-radius:20px;font-size:15.5px;font-weight:600;white-space:nowrap}
+  .lbl i{font-style:normal;width:26px;height:26px;border-radius:50%;color:#fff;display:grid;place-items:center;font-size:14px;flex:0 0 26px}
+  .lbl.b{color:var(--bleu-t)} .lbl.b i{background:var(--bleu)}
+  .lbl.v{color:var(--vert)} .lbl.v i{background:var(--vert)}
+  .lbl.r{color:var(--rouge)} .lbl.r i{background:var(--rouge)}
+  .bas{position:absolute;left:30px;right:34px;top:925px;height:180px;display:grid;grid-template-columns:1.15fr 1fr;gap:22px}
+  .phases{display:grid;grid-template-columns:1.5fr 1fr;gap:0;border-radius:16px;overflow:hidden;border:3px solid #c9cde3}
+  .phases div{padding:16px 22px}
+  .phases h4{font-size:15px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+  .phases p{font-size:19px;line-height:1.35}
+  .phases div{display:flex;flex-direction:column;justify-content:center}
+  .kpis{border:3px solid var(--bleu-b);background:var(--bleu-f);border-radius:16px;padding:12px}
+  .kpis .inner{background:#fff;border-radius:12px;height:100%;display:grid;grid-template-columns:repeat(3,1fr);align-items:center;text-align:center;position:relative}
+  .kpis b{font-size:50px} .kpis span{font-size:17px;margin-top:6px}
+  .kpis em{position:absolute;right:12px;bottom:4px;font-size:12px;color:var(--gris);font-style:normal}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></symbol>
+    <symbol id="i-courrier" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></symbol>
+    <symbol id="i-cle" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3L20 3M16 7l3 3M14 9l2 2"/></symbol>
+    <symbol id="i-form" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h4"/></symbol>
+    <symbol id="i-auto" viewBox="0 0 24 24"><path d="M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8z"/><path d="M18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9z"/></symbol>
+    <symbol id="i-pac" viewBox="0 0 24 24"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></symbol>
+    <symbol id="i-tracteur" viewBox="0 0 24 24"><circle cx="7" cy="16" r="4"/><circle cx="18" cy="18" r="2"/><path d="M5 12V6h6l2 6h6v4M11 6v6"/></symbol>
+    <symbol id="i-sync" viewBox="0 0 24 24"><path d="M21 12a9 9 0 01-15.5 6.2M3 12a9 9 0 0115.5-6.2"/><path d="M18.5 2v4h-4M5.5 22v-4h4"/></symbol>
+    <symbol id="i-loupe" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.8-4.8"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 16v-4M12 16V8M16 16v-6"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 01-2.2 2A19.8 19.8 0 012 4.2 2 2 0 014 2h3a2 2 0 012 1.7c.1 1 .4 1.9.7 2.8a2 2 0 01-.5 2.1L8 9.8a16 16 0 006 6l1.3-1.3a2 2 0 012.1-.4c.9.3 1.8.6 2.8.7a2 2 0 011.7 2z"/></symbol>
+    <symbol id="i-agenda" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M8 15l2.5 2.5L16 13"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 10-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+    <symbol id="i-fiole" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6L4.5 19a2 2 0 001.8 3h11.4a2 2 0 001.8-3L14 9V3"/><path d="M7 15h10"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 12l3 3 5-6"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-3.9 3.1-7 7-7s7 3.1 7 7"/><path d="M16 4.1a4 4 0 010 7.8M22 21c0-3-1.8-5.6-4.5-6.6"/></symbol>
+    <symbol id="i-alerte" viewBox="0 0 24 24"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18v.1"/></symbol>
+    <symbol id="i-labo" viewBox="0 0 24 24"><path d="M6 3h12M8 3v18h8V3"/><path d="M8 10h8M8 15h8"/></symbol>
+  </defs>
+</svg>
+
+<div class="canvas">
+
+  <header>
+    <div class="bloc">
+      <div class="tricolore"><i></i><i></i><i></i></div>
+      <b>DRAAF<br>BRETAGNE</b>
+      <small>Direction régionale de l'alimentation,<br>de l'agriculture et de la forêt</small>
+    </div>
+    <div class="titres">
+      <h1>Campagne de mesure des reliquats azotés en Bretagne</h1>
+      <div class="sous">S'appuyer sur Grist et Démarche Numérique, de l'identification des exploitants aux prélèvements</div>
+      <div class="legende">
+        <span><i style="background:var(--bleu)"></i>DRAAF · instruction</span>
+        <span><i style="background:var(--vert)"></i>Agriculteurs</span>
+        <span><i style="background:var(--rouge)"></i>Préleveurs · laboratoires</span>
+      </div>
+    </div>
+  </header>
+
+
+  <!-- Agriculteurs -->
+  <div class="bx v" style="left:30px;top:262px;width:360px;height:568px">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">
+      <svg width="64" height="64" viewBox="0 0 24 24" class="ic v" style="stroke-width:1.5"><use href="#i-tracteur"/></svg>
+      <h2>Agriculteurs</h2>
+    </div>
+    <div class="wh">
+      <ul class="puces">
+        <li>Reçoit un <b>courrier avec son code unique</b></li>
+        <li>Ouvre une démarche <b>déjà pré-remplie</b> (données administratives et PAC)</li>
+        <li>Vérifie et complète uniquement les <b>champs manquants</b></li>
+        <li>Appelle le <b>numéro vert</b> en cas de difficulté</li>
+        <li>Phase 2 : accueille le <b>préleveur</b> sur sa parcelle</li>
+      </ul>
+    </div>
+    <div class="wh" style="margin-top:14px;text-align:center">
+      <svg width="34" height="34" class="ic v"><use href="#i-courrier"/></svg>
+      <p style="font-size:16px;color:var(--gris)">Code unique reçu par courrier</p>
+      <div style="margin:6px auto 0;border:2px dashed var(--vert-b);border-radius:8px;padding:5px 10px;font-family:'DejaVu Sans Mono',monospace;font-size:20px;color:var(--vert);letter-spacing:2px;width:200px">XXXX-XXXX</div>
+    </div>
+  </div>
+
+  <!-- Démarche Numérique -->
+  <div class="dn">
+    <svg width="58" height="58" class="ic"><use href="#i-form"/></svg>
+    <b>Démarche<br>Numérique</b>
+    <p>Démarche régionale pré-remplie grâce au code unique</p>
+  </div>
+
+  <!-- DRAAF -->
+  <div class="bx b" style="left:820px;top:156px;width:600px;height:118px;display:flex;align-items:center;gap:16px;padding:12px 18px">
+    <svg width="54" height="54" class="ic" style="flex:0 0 54px"><use href="#i-users"/></svg>
+    <div>
+      <h2 style="font-size:22px">DRAAF · instruction et cellule numéro vert</h2>
+      <p style="font-size:16px;margin-top:4px">Accède aux dossiers et aux données agricoles et administratives pour aider les agriculteurs et piloter la campagne</p>
+    </div>
+  </div>
+
+  <!-- Grist -->
+  <div class="grist">
+    <div class="t"><svg width="40" height="40" class="ic w"><use href="#i-db"/></svg>Grist <small>au cœur du dispositif</small></div>
+    <div class="tiles">
+      <div class="tile"><svg class="ic"><use href="#i-db"/></svg><b>Base des exploitants</b><p>Exploitants identifiés, parcelles, PAC, code unique</p></div>
+      <div class="tile"><svg class="ic"><use href="#i-auto"/></svg><b>Widget pré-remplissage DN</b><p>Auto-remplissage des données administratives et cultures</p></div>
+      <div class="tile"><svg class="ic"><use href="#i-sync"/></svg><b>Dossiers DN</b><p>Les réponses reviennent automatiquement dans Grist</p></div>
+      <div class="tile"><b style="display:flex;gap:6px;align-items:center"><svg class="ic" style="width:22px;height:22px"><use href="#i-loupe"/></svg>Recherche rapide</b><p>PACAGE, raison sociale, SIRET…</p><div class="thumb"><img src="recherche-rapide.png" alt=""></div></div>
+      <div class="tile"><b style="display:flex;gap:6px;align-items:center"><svg class="ic" style="width:22px;height:22px"><use href="#i-chart"/></svg>Tableau de bord</b><p>Saisis / attendus, par département</p><div class="thumb"><img src="tableau-de-bord.png" alt=""></div></div>
+      <div class="tile r"><svg class="ic r"><use href="#i-agenda"/></svg><b>Calendrier et carte des prélèvements</b><p>Développements spécifiques : effectué, programmé, à faire</p></div>
+    </div>
+  </div>
+
+  <!-- Labos -->
+  <div class="bx r" style="left:1560px;top:262px;width:405px;height:568px">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">
+      <svg width="56" height="56" class="ic r"><use href="#i-fiole"/></svg>
+      <h2>Préleveurs et<br>laboratoires</h2>
+    </div>
+    <div class="wh">
+      <p style="margin-bottom:10px">Phase 2 : visibilité sur les prélèvements <b>effectués, programmés et à faire</b></p>
+      <div class="cal">
+  <div class="h">lun</div><div class="h">mar</div><div class="h">mer</div><div class="h">jeu</div><div class="h">ven</div>
+  <div class="e"></div><div class="e"></div><div></div><div class="e"></div><div class="e"></div>
+  <div class="e"></div><div class="p"></div><div class="e"></div><div class="p"></div><div></div>
+  <div class="p"></div><div class="p"></div><div class="a"></div><div class="p"></div><div class="a"></div>
+  <div class="a"></div><div></div><div class="a"></div><div class="a"></div><div class="a"></div>
+</div>
+      <div style="height:10px"></div>
+      <svg viewBox="0 0 300 150" style="width:100%;display:block;border:1px solid #e3c4c5;border-radius:6px;background:#f4f7fb">
+  <path d="M18 70 Q30 40 70 45 Q95 30 130 42 Q170 30 205 45 Q240 40 262 62 Q285 80 270 100 Q250 118 215 112 Q185 130 150 118 Q120 132 92 116 Q60 122 42 104 Q14 96 18 70z" fill="#e6ece4" stroke="#b9c7b5" stroke-width="2"/>
+  <path d="M95 45 Q100 80 92 116 M150 38 Q145 80 150 118 M205 45 Q200 80 215 112" stroke="#c9d3c6" stroke-width="1.5" fill="none" stroke-dasharray="4 4"/>
+  <g>
+   <circle cx="55" cy="72" r="6" fill="#18753c"/><circle cx="78" cy="92" r="6" fill="#18753c"/><circle cx="118" cy="62" r="6" fill="#d97706"/>
+   <circle cx="132" cy="96" r="6" fill="#18753c"/><circle cx="168" cy="70" r="6" fill="#c9191e"/><circle cx="185" cy="98" r="6" fill="#d97706"/>
+   <circle cx="222" cy="66" r="6" fill="#c9191e"/><circle cx="240" cy="90" r="6" fill="#18753c"/><circle cx="104" cy="104" r="6" fill="#c9191e"/>
+   <circle cx="200" cy="58" r="6" fill="#18753c"/><circle cx="160" cy="108" r="6" fill="#d97706"/>
+  </g>
+</svg><div class="etats"><span><i style="background:var(--vert)"></i>Effectué</span><span><i style="background:#d97706"></i>Programmé</span><span><i style="background:var(--rouge)"></i>À faire</span></div>
+    </div>
+  </div>
+
+  <svg id="fils" width="2000" height="1125">
+    <defs>
+      <marker id="mb" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#1b2a8c"/></marker>
+      <marker id="mv" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#18753c"/></marker>
+      <marker id="mr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#c9191e"/></marker>
+    </defs>
+    <!-- 1 publipostage : Grist -> agriculteur (par le bas) -->
+    <path d="M900 830 V 880 H 210 V 838" fill="none" stroke="#1b2a8c" stroke-width="3" marker-end="url(#mb)"/>
+    <!-- 2 pré-remplissage : Grist -> DN -->
+    <path d="M820 470 H 738" fill="none" stroke="#1b2a8c" stroke-width="3" marker-end="url(#mb)"/>
+    <!-- 3 saisie : agriculteur -> DN -->
+    <path d="M390 580 H 462" fill="none" stroke="#18753c" stroke-width="3" marker-end="url(#mv)"/>
+    <!-- 4 retour dossiers : DN -> Grist -->
+    <path d="M730 690 H 812" fill="none" stroke="#1b2a8c" stroke-width="3" marker-end="url(#mb)"/>
+    <!-- 5 numéro vert : agriculteur <-> DRAAF -->
+    <path d="M210 262 V 228 H 812" fill="none" stroke="#18753c" stroke-width="3" stroke-dasharray="9 6" marker-end="url(#mb)" marker-start="url(#mv)"/>
+    <!-- 6 DRAAF <-> Grist -->
+    <path d="M1120 284 V 322" fill="none" stroke="#1b2a8c" stroke-width="3" marker-end="url(#mb)" marker-start="url(#mb)"/>
+    <!-- 7 labos <-> Grist -->
+    <path d="M1428 600 H 1552" fill="none" stroke="#c9191e" stroke-width="3" marker-end="url(#mr)" marker-start="url(#mr)"/>
+  </svg>
+
+  <div class="lbl b" style="left:410px;top:866px"><i>1</i>Courrier avec code unique (publipostage)</div>
+  <div class="lbl b" style="left:736px;top:420px;padding:2px 4px"><i>2</i></div>
+  <div class="lbl v" style="left:398px;top:532px;padding:2px 4px"><i>3</i></div>
+  <div class="lbl b" style="left:744px;top:700px;padding:2px 4px"><i>4</i></div>
+  <div class="lbl v" style="left:330px;top:214px"><i>5</i>Numéro vert : aide aux agriculteurs, dossier à l'écran</div>
+  <div class="lbl b" style="left:1140px;top:290px;padding:0 8px"><i>6</i>Recherche rapide · tableau de bord</div>
+  <div class="lbl r" style="left:1440px;top:560px;padding:2px 4px"><i>7</i></div>
+
+  <div class="bas">
+    <div class="phases">
+      <div style="background:var(--bleu-f)">
+        <h4 style="color:var(--bleu)">Phase 1 · Campagne Démarche Numérique</h4>
+        <p><b>1</b> courrier → <b>2</b> pré-remplissage → <b>3</b> saisie par l'agriculteur → <b>4</b> retour dans Grist, avec <b>5</b> le numéro vert en parallèle et <b>6</b> le pilotage DRAAF</p>
+      </div>
+      <div style="background:var(--rouge-f)">
+        <h4 style="color:var(--rouge)">Phase 2 · Prélèvements</h4>
+        <p><b>7</b> Calendrier et carte partagés entre laboratoires et DRAAF</p>
+      </div>
+    </div>
+    <div class="kpis">
+      <div class="inner kp">
+        <div><b>1 317</b><span>exploitants<br>identifiés</span></div>
+        <div><b>1 365</b><span>dossiers déposés<br>sur DN</span></div>
+        <div><b>479</b><span>appels au<br>numéro vert</span></div>
+        <em>Données au 19/11/2026</em>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

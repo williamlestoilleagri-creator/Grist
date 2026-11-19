@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Campagne Reliquats 2026</title>
+<style>
+  :root{
+    --bleu:#000091; --bleu-t:#1b2a8c; --bleu-b:#4d5bd6; --bleu-f:#eef0fb;
+    --vert:#18753c; --vert-b:#5aa37c; --vert-f:#e6f4ec;
+    --rouge:#c9191e; --rouge-b:#e3797c; --rouge-f:#fdeeee;
+    --texte:#1e1e3c; --gris:#5b5f73;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:#fff}
+  body{font-family:"Marianne","Inter",Arial,sans-serif;color:var(--texte)}
+  .canvas{width:2000px;height:1125px;position:relative;background:#fff;overflow:hidden}
+  header{position:absolute;left:22px;right:70px;top:20px;display:flex;align-items:flex-start}
+  .bloc{width:330px;padding-top:4px}
+  .tricolore{display:flex;width:56px;height:12px;margin-bottom:8px}
+  .tricolore i{flex:1}.tricolore i:nth-child(1){background:#000091}.tricolore i:nth-child(2){background:#fff;border-top:1px solid #ddd;border-bottom:1px solid #ddd}.tricolore i:nth-child(3){background:#e1000f}
+  .bloc b{display:block;font-size:21px;line-height:1.05;font-weight:800;letter-spacing:.3px;color:#161616}
+  .bloc small{display:block;margin-top:8px;font-size:13px;font-style:italic;color:#333;line-height:1.2}
+  .titres{flex:1;text-align:right}
+  h1{font-size:48px;font-weight:800;color:var(--bleu-t);letter-spacing:-.5px;line-height:1.1}
+  .sous{font-size:27px;color:var(--bleu-t);margin-top:6px;font-weight:500}
+  .legende{display:flex;gap:22px;justify-content:flex-end;margin-top:10px;font-size:16px;color:var(--gris)}
+  .legende span{display:flex;align-items:center;gap:7px}
+  .legende i{width:16px;height:16px;border-radius:4px;display:inline-block}
+  p,li{font-size:18px;line-height:1.24}
+  .ic{stroke:var(--bleu-t);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .ic.v{stroke:var(--vert)} .ic.r{stroke:var(--rouge)} .ic.w{stroke:#fff}
+  .items{list-style:none;display:flex;flex-direction:column;gap:12px}
+  .items li{display:flex;gap:11px;align-items:flex-start}
+  .items svg{flex:0 0 32px;width:32px;height:32px}
+  ul.puces{list-style:none}
+  ul.puces li{position:relative;padding-left:20px;margin-bottom:9px}
+  ul.puces li::before{content:"";position:absolute;left:3px;top:9px;width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.75}
+  .thumb{border:1px solid #cfd3e6;border-radius:6px;overflow:hidden;background:#fff}
+  .thumb img{width:100%;height:100%;object-fit:cover;object-position:top left;display:block}
+  .tag{display:inline-block;font-size:13px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;border-radius:20px;padding:3px 10px}
+  .tag.b{background:#e3e6fb;color:var(--bleu)} .tag.v{background:#d3ecdd;color:var(--vert)} .tag.r{background:#fbd9da;color:var(--rouge)}
+  /* mini calendrier */
+  .cal{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;background:#fff;border:1px solid #e3c4c5;border-radius:6px;padding:6px}
+  .cal div{height:22px;border-radius:3px;background:#f3f3f6;position:relative}
+  .cal .e{background:#d3ecdd;border-left:4px solid var(--vert)}
+  .cal .p{background:#fde6c8;border-left:4px solid #d97706}
+  .cal .a{background:#fbd9da;border-left:4px solid var(--rouge)}
+  .cal .h{background:none;height:14px;font-size:11px;color:var(--gris);text-align:center}
+  .etats{display:flex;gap:10px;font-size:13px;color:var(--gris);justify-content:center;margin-top:6px}
+  .etats span{display:flex;align-items:center;gap:4px;white-space:nowrap}
+  .etats i{width:10px;height:10px;border-radius:50%}
+  .kp b{display:block;font-weight:900;color:var(--bleu-t);letter-spacing:-1px;line-height:1}
+  .kp span{display:block;color:var(--bleu-t);line-height:1.2}
+
+
+  .phase{position:absolute;top:174px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
+  .lane{position:absolute;left:22px;right:24px;border-radius:14px}
+  .lane .lab{position:absolute;left:0;top:0;bottom:0;width:164px;border-radius:14px 0 0 14px;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:8px;font-size:20px;font-weight:700;line-height:1.15;padding:8px}
+  .lane.v{background:var(--vert-f);border:2px solid var(--vert-b)} .lane.v .lab{background:var(--vert)}
+  .lane.b{background:var(--bleu-f);border:2px solid var(--bleu-b)} .lane.b .lab{background:var(--bleu)}
+  .lane.r{background:var(--rouge-f);border:2px solid var(--rouge-b)} .lane.r .lab{background:var(--rouge)}
+  .sepph{position:absolute;left:1480px;top:174px;bottom:136px;border-left:3px dashed #9aa0b8}
+  .c{position:absolute;background:#fff;border-radius:12px;padding:12px 14px 12px;box-shadow:0 1px 0 rgba(0,0,0,.04);border:2px solid transparent}
+  .c.v{border-color:var(--vert-b)} .c.b{border-color:var(--bleu-b)} .c.r{border-color:var(--rouge-b)}
+  .c h3{font-size:19px;line-height:1.15;font-weight:700;display:flex;gap:9px;align-items:flex-start;margin-bottom:7px}
+  .c.v h3{color:var(--vert)} .c.b h3{color:var(--bleu)} .c.r h3{color:var(--rouge)}
+  .n{flex:0 0 30px;height:30px;border-radius:50%;color:#fff;font-size:16px;display:grid;place-items:center;margin-top:-3px}
+  .v .n{background:var(--vert)} .b .n{background:var(--bleu)} .r .n{background:var(--rouge)}
+  .c p,.c li{font-size:16px;line-height:1.24}
+  .c ul.puces li{margin-bottom:5px}
+  .note{position:absolute;display:flex;align-items:center;gap:12px;font-size:18px;color:var(--rouge);font-style:italic}
+  #r9 .etats{gap:5px;font-size:11.5px;flex-wrap:nowrap} #r9 .etats i{width:8px;height:8px}
+  #fils{position:absolute;left:0;top:0;pointer-events:none}
+  .kpis{position:absolute;left:22px;right:24px;top:1000px;height:104px;border-radius:14px;background:var(--bleu-f);border:2px solid var(--bleu-b);display:grid;grid-template-columns:repeat(4,1fr);align-items:center;text-align:center}
+  .kpis > div{display:flex;align-items:baseline;justify-content:center;gap:12px}
+  .kpis b{font-size:46px} .kpis span{font-size:17px;text-align:left}
+  .kpis em{position:absolute;right:12px;bottom:4px;font-size:12px;color:var(--gris);font-style:normal}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></symbol>
+    <symbol id="i-courrier" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></symbol>
+    <symbol id="i-cle" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3L20 3M16 7l3 3M14 9l2 2"/></symbol>
+    <symbol id="i-form" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h4"/></symbol>
+    <symbol id="i-auto" viewBox="0 0 24 24"><path d="M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8z"/><path d="M18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9z"/></symbol>
+    <symbol id="i-pac" viewBox="0 0 24 24"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></symbol>
+    <symbol id="i-tracteur" viewBox="0 0 24 24"><circle cx="7" cy="16" r="4"/><circle cx="18" cy="18" r="2"/><path d="M5 12V6h6l2 6h6v4M11 6v6"/></symbol>
+    <symbol id="i-sync" viewBox="0 0 24 24"><path d="M21 12a9 9 0 01-15.5 6.2M3 12a9 9 0 0115.5-6.2"/><path d="M18.5 2v4h-4M5.5 22v-4h4"/></symbol>
+    <symbol id="i-loupe" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.8-4.8"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 16v-4M12 16V8M16 16v-6"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 01-2.2 2A19.8 19.8 0 012 4.2 2 2 0 014 2h3a2 2 0 012 1.7c.1 1 .4 1.9.7 2.8a2 2 0 01-.5 2.1L8 9.8a16 16 0 006 6l1.3-1.3a2 2 0 012.1-.4c.9.3 1.8.6 2.8.7a2 2 0 011.7 2z"/></symbol>
+    <symbol id="i-agenda" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M8 15l2.5 2.5L16 13"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 10-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+    <symbol id="i-fiole" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6L4.5 19a2 2 0 001.8 3h11.4a2 2 0 001.8-3L14 9V3"/><path d="M7 15h10"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 12l3 3 5-6"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21c0-3.9 3.1-7 7-7s7 3.1 7 7"/><path d="M16 4.1a4 4 0 010 7.8M22 21c0-3-1.8-5.6-4.5-6.6"/></symbol>
+    <symbol id="i-alerte" viewBox="0 0 24 24"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18v.1"/></symbol>
+    <symbol id="i-labo" viewBox="0 0 24 24"><path d="M6 3h12M8 3v18h8V3"/><path d="M8 10h8M8 15h8"/></symbol>
+  </defs>
+</svg>
+
+<div class="canvas">
+
+  <header>
+    <div class="bloc">
+      <div class="tricolore"><i></i><i></i><i></i></div>
+      <b>DRAAF<br>BRETAGNE</b>
+      <small>Direction régionale de l'alimentation,<br>de l'agriculture et de la forêt</small>
+    </div>
+    <div class="titres">
+      <h1>Campagne de mesure des reliquats azotés en Bretagne</h1>
+      <div class="sous">S'appuyer sur Grist et Démarche Numérique, de l'identification des exploitants aux prélèvements</div>
+      <div class="legende">
+        <span><i style="background:var(--bleu)"></i>DRAAF · instruction</span>
+        <span><i style="background:var(--vert)"></i>Agriculteurs</span>
+        <span><i style="background:var(--rouge)"></i>Préleveurs · laboratoires</span>
+      </div>
+    </div>
+  </header>
+
+
+  <div class="phase" style="left:196px;width:1272px;background:linear-gradient(90deg,#eef0fb,#e6f4ec 50%,#eef0fb);color:var(--bleu-t)">Phase 1 · Campagne Démarche Numérique</div>
+  <div class="phase" style="left:1492px;width:484px;background:var(--rouge-f);color:var(--rouge)">Phase 2 · Prélèvements</div>
+
+  <div class="lane v" style="top:214px;height:192px"><div class="lab"><svg width="50" height="50" class="ic w" style="stroke-width:1.6"><use href="#i-tracteur"/></svg>Agriculteurs</div></div>
+  <div class="lane b" style="top:418px;height:306px"><div class="lab"><svg width="46" height="46" class="ic w"><use href="#i-users"/></svg>DRAAF<br><span style="font-size:15px;font-weight:500">instruction &amp; cellule numéro vert</span></div></div>
+  <div class="lane r" style="top:736px;height:250px"><div class="lab"><svg width="46" height="46" class="ic w"><use href="#i-fiole"/></svg>Préleveurs<br>laboratoires</div></div>
+  <div class="sepph"></div>
+
+  <!-- Agriculteurs -->
+  <div class="c v" id="g2" style="left:205px;top:226px;width:250px;height:168px">
+    <h3><span class="n">2</span>Reçoit un courrier avec son code unique</h3>
+    <p>Envoyé par <b>publipostage</b> depuis Grist, avec mail et SMS de rappel</p>
+  </div>
+  <div class="c v" id="g4" style="left:600px;top:226px;width:260px;height:168px">
+    <h3><span class="n">4</span>Complète sa démarche</h3>
+    <p>La démarche s'ouvre <b>pré-remplie</b> ; il vérifie et saisit seulement les champs manquants</p>
+  </div>
+  <div class="c v" id="g6" style="left:1060px;top:226px;width:320px;height:168px">
+    <h3><span class="n">6</span>Appelle le numéro vert en cas de difficulté</h3>
+    <p>Un agent l'aide avec son dossier et ses données à l'écran</p>
+  </div>
+  <div class="c v" id="g10" style="left:1500px;top:226px;width:466px;height:168px">
+    <h3><span class="n">11</span>Accueille le préleveur sur sa parcelle</h3>
+    <p>Rendez-vous fixé par téléphone, sur le mobile indiqué dans la démarche</p>
+  </div>
+
+  <!-- DRAAF -->
+  <div class="c b" id="b1" style="left:205px;top:430px;width:250px;height:282px">
+    <h3><span class="n">1</span>Base des exploitants dans Grist</h3>
+    <ul class="puces" style="color:var(--bleu)">
+      <li style="color:var(--texte)">Liste des <b>exploitants identifiés</b> déposée dans Grist</li>
+      <li style="color:var(--texte)">PACAGE, SIRET, coordonnées, parcelles et cultures PAC</li>
+      <li style="color:var(--texte)">Un <b>code unique</b> par exploitant</li>
+    </ul>
+  </div>
+  <div class="c b" id="b3" style="left:475px;top:430px;width:226px;height:282px">
+    <h3><span class="n">3</span>Widget de pré-remplissage</h3>
+    <p style="margin-bottom:8px">Grist alimente la démarche par <b>auto-remplissage</b>, à partir du code unique :</p>
+    <ul class="puces" style="color:var(--bleu)">
+      <li style="color:var(--texte)">données administratives</li>
+      <li style="color:var(--texte)">données PAC (îlots, cultures)</li>
+    </ul>
+  </div>
+  <div class="c b" id="b5" style="left:820px;top:430px;width:322px;height:282px">
+    <h3><span class="n">5</span>Dossiers dans Grist et recherche rapide</h3>
+    <div class="thumb" style="height:112px;margin-bottom:8px"><img src="recherche-rapide.png" alt=""></div>
+    <p>Retour <b>automatique</b> des dossiers DN. Recherche par PACAGE, raison sociale, SIRET… (widget HTML/JS)</p>
+  </div>
+  <div class="c b" id="b7" style="left:1162px;top:430px;width:300px;height:282px">
+    <h3><span class="n">7</span>Tableau de bord de la campagne</h3>
+    <div class="thumb" style="height:120px;margin-bottom:8px"><img src="tableau-de-bord.png" alt=""></div>
+    <p>Dossiers saisis / attendus, par département, anomalies, appels</p>
+  </div>
+  <div class="c b" id="b11" style="left:1500px;top:430px;width:466px;height:282px">
+    <h3><span class="n">10</span>Suivi des prélèvements par la DRAAF</h3>
+    <p style="margin-bottom:10px">Mêmes outils que les laboratoires : on voit en temps réel où en est chaque parcelle</p>
+    <div style="display:flex;gap:10px">
+      <div style="flex:1;background:var(--vert-f);border-radius:8px;padding:8px;text-align:center"><b style="font-size:22px;color:var(--vert)">Effectué</b></div>
+      <div style="flex:1;background:#fdf1e1;border-radius:8px;padding:8px;text-align:center"><b style="font-size:22px;color:#b45309">Programmé</b></div>
+      <div style="flex:1;background:var(--rouge-f);border-radius:8px;padding:8px;text-align:center"><b style="font-size:22px;color:var(--rouge)">À faire</b></div>
+    </div>
+    <p style="margin-top:10px;color:var(--gris)">Contrôle qualité des préleveurs et des lieux de stockage par les inspecteurs</p>
+  </div>
+
+  <!-- Préleveurs / labos -->
+  <div class="note" style="left:240px;top:830px;width:1040px">
+    <svg width="34" height="34" class="ic r"><use href="#i-check"/></svg>
+    <span>Une fois la campagne Démarche Numérique terminée, les parcelles retenues ouvrent la campagne de prélèvements</span>
+  </div>
+  <div class="c r" id="r8" style="left:1500px;top:746px;width:226px;height:230px">
+    <h3><span class="n">8</span>Calendrier</h3>
+    <div class="cal">
+  <div class="h">lun</div><div class="h">mar</div><div class="h">mer</div><div class="h">jeu</div><div class="h">ven</div>
+  <div class="e"></div><div class="e"></div><div></div><div class="e"></div><div class="e"></div>
+  <div class="e"></div><div class="p"></div><div class="e"></div><div class="p"></div><div></div>
+  <div class="p"></div><div class="p"></div><div class="a"></div><div class="p"></div><div class="a"></div>
+  <div class="a"></div><div></div><div class="a"></div><div class="a"></div><div class="a"></div>
+</div>
+    <p style="font-size:13px;color:var(--gris);margin-top:6px">Développement spécifique</p>
+  </div>
+  <div class="c r" id="r9" style="left:1740px;top:746px;width:226px;height:230px">
+    <h3><span class="n">9</span>Carte</h3>
+    <svg viewBox="0 0 300 150" style="width:100%;display:block;border:1px solid #e3c4c5;border-radius:6px;background:#f4f7fb">
+  <path d="M18 70 Q30 40 70 45 Q95 30 130 42 Q170 30 205 45 Q240 40 262 62 Q285 80 270 100 Q250 118 215 112 Q185 130 150 118 Q120 132 92 116 Q60 122 42 104 Q14 96 18 70z" fill="#e6ece4" stroke="#b9c7b5" stroke-width="2"/>
+  <path d="M95 45 Q100 80 92 116 M150 38 Q145 80 150 118 M205 45 Q200 80 215 112" stroke="#c9d3c6" stroke-width="1.5" fill="none" stroke-dasharray="4 4"/>
+  <g>
+   <circle cx="55" cy="72" r="6" fill="#18753c"/><circle cx="78" cy="92" r="6" fill="#18753c"/><circle cx="118" cy="62" r="6" fill="#d97706"/>
+   <circle cx="132" cy="96" r="6" fill="#18753c"/><circle cx="168" cy="70" r="6" fill="#c9191e"/><circle cx="185" cy="98" r="6" fill="#d97706"/>
+   <circle cx="222" cy="66" r="6" fill="#c9191e"/><circle cx="240" cy="90" r="6" fill="#18753c"/><circle cx="104" cy="104" r="6" fill="#c9191e"/>
+   <circle cx="200" cy="58" r="6" fill="#18753c"/><circle cx="160" cy="108" r="6" fill="#d97706"/>
+  </g>
+</svg><div class="etats"><span><i style="background:var(--vert)"></i>Effectué</span><span><i style="background:#d97706"></i>Programmé</span><span><i style="background:var(--rouge)"></i>À faire</span></div>
+  </div>
+
+  <svg id="fils" width="2000" height="1125"></svg>
+
+  <div class="kpis kp">
+    <div><b>1 317</b><span>exploitants<br>identifiés</span></div>
+    <div><b>1 365</b><span>dossiers déposés<br>sur Démarche Numérique</span></div>
+    <div><b>479</b><span>appels au<br>numéro vert</span></div>
+    <div><b>4</b><span>départements<br>22 · 29 · 35 · 56</span></div>
+    <em>Données au 19/11/2026</em>
+  </div>
+
+<script>
+(function(){
+  const svg=document.getElementById('fils'), NS='http://www.w3.org/2000/svg';
+  const col={b:'#1b2a8c',v:'#18753c',r:'#c9191e'};
+  const defs=document.createElementNS(NS,'defs');
+  for(const k in col){defs.innerHTML+=`<marker id="m${k}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="${col[k]}"/></marker>`;}
+  svg.appendChild(defs);
+  function pt(id,side,off){const e=document.getElementById(id);const x=e.offsetLeft,y=e.offsetTop,w=e.offsetWidth,h=e.offsetHeight;off=off||0;
+    return {top:[x+w/2+off,y],bottom:[x+w/2+off,y+h],left:[x,y+h/2+off],right:[x+w,y+h/2+off]}[side];}
+  function fil(a,sa,b,sb,c,o){o=o||{};const p=pt(a,sa,o.oa),q=pt(b,sb,o.ob);let d;
+    const va=(sa=='top'||sa=='bottom'),vb=(sb=='top'||sb=='bottom');
+    if(va&&vb){const m=o.mid||(p[1]+q[1])/2;d=`M${p[0]} ${p[1]} V${m} H${q[0]} V${q[1]}`;}
+    else if(!va&&!vb){const m=o.mid||(p[0]+q[0])/2;d=`M${p[0]} ${p[1]} H${m} V${q[1]} H${q[0]}`;}
+    else if(!va&&vb){d=`M${p[0]} ${p[1]} H${q[0]} V${q[1]}`;}
+    else{d=`M${p[0]} ${p[1]} V${q[1]} H${q[0]}`;}
+    const pa=document.createElementNS(NS,'path');pa.setAttribute('d',d);pa.setAttribute('fill','none');pa.setAttribute('stroke',col[c]);pa.setAttribute('stroke-width','3');
+    if(o.dash)pa.setAttribute('stroke-dasharray','8 6');
+    pa.setAttribute('marker-end',`url(#m${c})`);if(o.both)pa.setAttribute('marker-start',`url(#m${c})`);svg.appendChild(pa);}
+  fil('b1','top','g2','bottom','b');
+  fil('b1','right','b3','left','b');
+  fil('b3','top','g4','bottom','b');
+  fil('g4','right','b5','top','v',{ob:-81});
+  fil('g6','bottom','b5','top','v',{oa:-60,ob:60,both:true,dash:true,mid:412});
+  fil('b5','right','b7','left','b');
+  fil('b7','bottom','r8','left','b',{dash:true,ob:20});
+  fil('r8','right','r9','left','r');
+  fil('r8','top','b11','bottom','r');
+  fil('b11','top','g10','bottom','r');
+})();
+</script>
+
+</div>
+</body>
+</html>
