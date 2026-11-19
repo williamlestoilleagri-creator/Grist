@@ -14,8 +14,11 @@ window.GREN_CONFIG = {
   CONTACT: "",
   // Déconnexion automatique du backoffice après inactivité (minutes)
   INACTIVITE_MINUTES: 30,
-  // Accès TEMPORAIRE à l'espace administrateur de l'application (référentiel…).
-  // ⚠ Visible par toute personne qui lit le code de la page : il masque les réglages
-  // mais ne protège rien. Le backoffice sécurisé (admin/) a sa propre connexion.
-  ADMIN_TEMPORAIRE: { identifiant: "admin", motDePasse: "nimda" }
+  // Comptes de l'espace administrateur de l'application (bouton « Espace administrateur »).
+  // Pour ajouter un compte : se connecter, Administration → « Créer un compte », puis coller ici
+  // la ligne proposée. Le mot de passe n'apparaît jamais : seulement son empreinte chiffrée (PBKDF2).
+  // Compte de départ : identifiant « admin » (mot de passe communiqué séparément) — à remplacer dès que possible.
+  COMPTES_ADMIN: [
+    {"identifiant": "admin", "nom": "Administrateur (compte de départ)", "role": "superadmin", "iterations": 210000, "sel": "dd7898d0cf7a09eec8987b04557f8bf7", "empreinte": "ec49737da872881c240a73c149df7c22936e7e8adea4752ddfc4b969f2e54885"},
+  ]
 };
