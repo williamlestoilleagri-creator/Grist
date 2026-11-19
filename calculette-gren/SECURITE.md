@@ -55,7 +55,7 @@ Il n'existe **aucun code exécuté sur un serveur** en dehors des fonctions SQL 
 | Mesure d'audience | anonyme, vers Supabase uniquement, désactivée tant que le serveur n'est pas configuré |
 | Cookies | aucun |
 | Secrets dans l'historique git | aucun trouvé |
-| Mot de passe écrit en dur | **oui, un seul, volontaire** : l'accès temporaire `admin` / `nimda` (voir faille M1) |
+| Mot de passe écrit en dur | **non** : les comptes de l'espace administrateur sont stockés sous forme d'empreinte chiffrée (voir M1) |
 
 **Adresses citées par les bibliothèques mais jamais contactées** : jsPDF contient l'adresse d'un script `cdnjs.cloudflare.com`, utilisée seulement par un mode d'affichage du PDF (« pdfobjectnewwindow ») que la Calculette n'utilise pas. Le DSFR peut charger des images SVG **du site lui-même**. Les autres adresses sont des liens de documentation dans les commentaires (github.com, opensource.org…).
 
@@ -115,13 +115,20 @@ Le code de la Calculette n'y peut rien : c'est une question d'adresse web.
 2. À défaut, retirer du même compte les pages qui stockent des clés ou chargent des scripts externes.
 3. Ajouter un contrôle d'intégrité (`integrity="sha384-…" crossorigin="anonymous"`) aux scripts externes des autres pages, quand le serveur le permet (pas possible pour `grist-plugin-api.js`, qui change sans prévenir).
 
-### M1 — Moyen — Accès « administrateur » temporaire écrit dans le code (`admin` / `nimda`)
+### M1 — Moyen — Comptes de l'espace administrateur vérifiés dans le navigateur
 
-**Constat.** L'identifiant et le mot de passe sont dans `config.js`, lisibles par **tout visiteur** qui affiche le code de la page. Le mot de passe `nimda` (« admin » à l'envers) figure aussi dans toutes les listes de mots de passe testés par les robots.
+**Constat.** Les comptes de l'espace administrateur de l'application sont listés dans `config.js`, un fichier public. Depuis le 19/11/2026, ils n'y figurent plus en clair : chaque mot de passe n'apparaît que sous forme d'**empreinte PBKDF2-SHA-256** (210 000 itérations, sel aléatoire propre à chaque compte). Le mot de passe de 12 caractères minimum (majuscule, minuscule, chiffre, caractère spécial) est imposé à la création.
 
-**Conséquence, limitée** : cet espace ne donne accès qu'au référentiel **local** (les modifications ne valent que sur l'appareil de la personne) et au lien vers le backoffice, qui a sa propre authentification. Personne ne peut modifier les résultats des autres. Le risque : une personne qui modifie le référentiel sur son propre appareil obtient des doses fausses, ou croit à tort qu'il existe un vrai contrôle d'accès.
+**Limites.**
+- La vérification se fait dans le navigateur : une personne compétente peut afficher cet espace sans mot de passe, en modifiant la page chez elle.
+- L'empreinte étant publique, un mot de passe faible pourrait être retrouvé par essais successifs. C'est le cas du compte de départ `admin` (mot de passe court et connu).
 
-**Correction** : supprimer cet accès dès que le backoffice sécurisé est activé et faire publier le référentiel par ce backoffice. En attendant, au moins changer le mot de passe dans `config.js`.
+**Conséquence, limitée** : cet espace ne donne accès qu'au référentiel **local** (les modifications ne valent que sur l'appareil de la personne) et au lien vers le backoffice, qui a sa propre authentification. Personne ne peut modifier les résultats des autres.
+
+**À faire** :
+- créer des comptes nominatifs ;
+- **supprimer le compte de départ `admin`** de `config.js` ;
+- pour une vraie protection (comptes sur serveur, double authentification, journal des connexions), utiliser le backoffice sécurisé, rubrique « Administrateurs ».
 
 ### M2 — Moyen (à vérifier) — Adresse IP potentiellement falsifiable dans le backoffice
 
@@ -229,7 +236,7 @@ La vraie « clé maîtresse » de l'application, ce sont **trois comptes** :
 |---|---|---|
 | 1 | Activer la **double authentification** sur GitHub, Supabase et la messagerie de l'administrateur ; **protéger la branche `main`** | toi |
 | 2 | Publier la Calculette sur une **adresse dédiée** (domaine de l'administration ou compte GitHub dédié) — faille E1 | toi + DSI |
-| 3 | Activer le backoffice, puis **supprimer l'accès `admin` / `nimda`** — faille M1 | toi (je peux faire la modification) |
+| 3 | Créer des comptes nominatifs puis **supprimer le compte de départ `admin`** ; à terme, utiliser le backoffice — faille M1 | toi (je peux faire la modification) |
 | 4 | Faire le **test d'IP** de la faille M2 après activation de Supabase | toi (ou moi, avec l'adresse du projet) |
 | 5 | Faire valider l'hébergement et inscrire le traitement au **registre** (DSI, RSSI, DPD) — F5 | administration |
 | 6 | Revoir les autres pages du dépôt (`duo.html`, `grist-assistant-claude.html`…) : clés stockées, scripts externes | toi (je peux les auditer) |

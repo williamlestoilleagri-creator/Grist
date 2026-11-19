@@ -48,6 +48,7 @@ function migrate(s){
   s.sel = s.sel && /^[A-Za-z0-9_-]{1,40}$/.test(s.sel) ? s.sel : null;
   s.refSel = s.refSel && /^[A-Za-z0-9_-]{1,40}$/.test(s.refSel) ? s.refSel : null;
   s.tab = typeof s.tab === "string" ? s.tab : "accueil";
+  s.comptesPrepares = Array.isArray(s.comptesPrepares) ? s.comptesPrepares.filter(c => estObjet(c) && typeof c.identifiant === "string") : [];
   s.annee = Number.isInteger(s.annee) && s.annee > 2000 && s.annee < 2100 ? s.annee : harvestYear();
   return s;
 }
@@ -542,8 +543,15 @@ VIEWS.parcelles = () => {
         <li>${btn("Ajouter une parcelle", 'data-act="addParcelle"', {icon:"add-line"})}</li>
         <li>${btn("Modèle Excel", 'data-act="modele"', {kind:"secondary", icon:"download-line"})}</li>
         <li>${boutonFichier("Importer le fichier Excel", "importModele", {kind:"secondary"})}</li></ul></div>
-    ${ps.length ? table(`<thead><tr><th scope="col">Îlot</th><th scope="col">Parcelle</th><th scope="col">Nom (pour vous repérer)</th><th scope="col">Surface (ha)</th><th scope="col">Type de sol</th><th scope="col">Zonage</th><th scope="col">Dépt</th><th scope="col"><span class="fr-sr-only">Actions</span></th></tr></thead>
-      <tbody>${ps.map(p => `<tr data-pid="${esc(p.id)}">
+    ${ps.length ? `${SEL.size ? `<div class="gren-selbar gren-selbar--action" role="group" aria-label="Actions sur les parcelles cochées">
+        <strong>${selection().length} parcelle${SEL.size > 1 ? "s" : ""} cochée${SEL.size > 1 ? "s" : ""} :</strong>
+        <select class="fr-select gren-selbar__select" id="lotSol" aria-label="Type de sol pour les parcelles cochées"><option value="">Type de sol…</option>${opts(R().sols, "")}</select>
+        <select class="fr-select gren-selbar__select" id="lotZone" aria-label="Zonage pour les parcelles cochées"><option value="">Zonage…</option>${opts(ZONES, "")}</select>
+        <select class="fr-select gren-selbar__select" id="lotDept" aria-label="Département pour les parcelles cochées"><option value="">Département…</option>${Object.keys(DEPTS).map(k => `<option>${k}</option>`).join("")}</select>
+        ${btn("Appliquer", 'data-act="lotAppliquer"', {sm:true, icon:"check-line"})}${btn("Supprimer", 'data-act="lotSupprimer"', {kind:"tertiary", sm:true, icon:"delete-line"})}${btn("Tout décocher", 'data-act="selAucune"', {kind:"tertiary-no-outline", sm:true})}
+      </div>` : `<p class="gren-mention">Astuce : cochez plusieurs parcelles pour leur donner d'un coup le même type de sol ou le même zonage.</p>`}` + table(`<thead><tr><th scope="col">${caseCocher("cocheToutP", "Tout cocher", SEL.size && selection().length === ps.length, 'data-act="cocheTout"')}</th><th scope="col">Îlot</th><th scope="col">Parcelle</th><th scope="col">Nom (pour vous repérer)</th><th scope="col">Surface (ha)</th><th scope="col">Type de sol</th><th scope="col">Zonage</th><th scope="col">Dépt</th><th scope="col"><span class="fr-sr-only">Actions</span></th></tr></thead>
+      <tbody>${ps.map(p => `<tr data-pid="${esc(p.id)}" class="${SEL.has(p.id) ? "gren-sel" : ""}">
+        <td>${caseCocher("chp-" + esc(p.id), "Cocher " + esc(parcelLabel(p)), SEL.has(p.id), `data-coche="${esc(p.id)}"`)}</td>
         <td><input class="fr-input" aria-label="Numéro d'îlot" data-p="ilot" value="${esc(p.ilot)}" style="width:4.5rem"></td>
         <td><input class="fr-input" aria-label="Numéro de parcelle" data-p="num" value="${esc(p.num)}" style="width:4.5rem"></td>
         <td><input class="fr-input" aria-label="Nom de la parcelle" data-p="nom" value="${esc(p.nom)}" placeholder="ex. Grand champ"></td>
@@ -563,6 +571,102 @@ VIEWS.parcelles = () => {
   ${suite("parcelles")}`;
 };
 
+/* ---------- Sélection de plusieurs parcelles (saisie groupée) ---------- */
+let SEL = new Set();
+const selection = () => { SEL = new Set([...SEL].filter(id => byId(S.parcelles, id))); return [...SEL]; };
+const caseCocher = (id, label, coche, attrs) => `<div class="fr-checkbox-group fr-checkbox-group--sm gren-case"><input type="checkbox" id="${id}" ${attrs} ${coche ? "checked" : ""}><label class="fr-label" for="${id}"><span class="fr-sr-only">${label}</span></label></div>`;
+function modeSaisie(){
+  const m = S.modeSaisie === "groupe" ? "groupe" : "unite";
+  const el = (v, l, ic) => { const id = nid(); return `<div class="fr-segmented__element"><input value="${v}" ${m === v ? "checked" : ""} type="radio" id="${id}" name="modeSaisie" data-act="modeSaisie"><label class="fr-icon-${ic} fr-label" for="${id}">${l}</label></div>`; };
+  return `<fieldset class="fr-segmented fr-mb-3w"><legend class="fr-segmented__legend fr-segmented__legend--inline">Je remplis :</legend>
+    <div class="fr-segmented__elements">${el("unite", "une parcelle à la fois", "file-text-line")}${el("groupe", "plusieurs parcelles en même temps", "list-unordered")}</div></fieldset>`;
+}
+function barreSelection(y){
+  const ids = selection(); const groupes = camp(y).groupes || [];
+  const cultures = [...new Set(S.parcelles.map(p => entry(p.id, y).culture).filter(Boolean))];
+  return `<div class="gren-selbar">
+    <span><strong>${ids.length}</strong> parcelle${ids.length > 1 ? "s" : ""} cochée${ids.length > 1 ? "s" : ""}</span>
+    ${btn("Tout cocher", 'data-act="selTout"', {kind:"tertiary", sm:true})}${btn("Tout décocher", 'data-act="selAucune"', {kind:"tertiary", sm:true})}
+    ${cultures.length ? `<select class="fr-select gren-selbar__select" aria-label="Cocher toutes les parcelles d'une culture" data-act="selCulture"><option value="">Cocher par culture…</option>${cultures.map(c => `<option value="${esc(c)}">${esc(cultureById(c)?.nom || c)}</option>`).join("")}</select>` : ""}
+    ${groupes.length ? `<select class="fr-select gren-selbar__select" aria-label="Cocher les parcelles d'un groupe validé" data-act="selGroupe"><option value="">Cocher un groupe…</option>${groupes.map((g, i) => `<option value="${i}">${esc(g.nom)}</option>`).join("")}</select>` : ""}
+  </div>`;
+}
+// Valeur commune à plusieurs parcelles, ou MIXTE si elles diffèrent
+const MIXTE = "__mixte__";
+function valeurCommune(ids, y, f){
+  const v = ids.map(id => { const c = entry(id, y); return f === "irrigation" ? (c.irrigation ? "oui" : "non") : f === "pature.jours" ? (c.pature?.jours ?? "") : (c[f] ?? ""); });
+  return v.every(x => String(x) === String(v[0])) ? v[0] : MIXTE;
+}
+function selectGroupe(label, f, options, ids, y, hint){
+  const cur = valeurCommune(ids, y, f);
+  return fSelect(label, `data-g="${f}"`, (cur === MIXTE ? `<option value="${MIXTE}" selected>— Différent selon les parcelles —</option>` : "") + options.map(([v, l]) => `<option value="${esc(v)}" ${String(v) === String(cur) ? "selected" : ""}>${esc(l)}</option>`).join(""), {hint});
+}
+function inputGroupe(label, f, ids, y, {type = "text", hint = "", attrs = ""} = {}){
+  const cur = valeurCommune(ids, y, f);
+  return fInput(label, `data-g="${f}" ${attrs} ${cur === MIXTE ? 'placeholder="Différent selon les parcelles"' : ""}`, cur === MIXTE ? "" : cur, {type, hint});
+}
+function detailGroupe(y){
+  const ids = selection();
+  if (!ids.length) return `<section class="gren-panel" id="detail"><h2 class="fr-h4">Saisie groupée</h2>
+    <p>Cochez à gauche les parcelles à remplir ensemble : par exemple toutes celles en blé, ou toutes celles qui reçoivent le même lisier.</p>
+    <p class="gren-mention fr-mb-0">Ce que vous saisirez ici s'appliquera à <strong>toutes les parcelles cochées</strong>. Les autres ne changent pas.</p></section>`;
+  const ps = ids.map(id => byId(S.parcelles, id));
+  const surf = ps.reduce((a, p) => a + num(p.surface), 0);
+  const cultCommune = valeurCommune(ids, y, "culture"); const cult = cultCommune !== MIXTE ? cultureById(cultCommune) : null;
+  const sols = new Set(ps.map(p => p.sol)), zones = new Set(ps.map(p => p.zone || "standard"));
+  const rdtMode = valeurCommune(ids, y, "rdtMode"), rshMode = valeurCommune(ids, y, "rshMode");
+  const res = ps.map(p => ({p, r:calc(p, y)}));
+  return `<section class="gren-panel" id="detail">
+    <h2 class="fr-h4">Saisie groupée : ${ids.length} parcelle${ids.length > 1 ? "s" : ""} (${fmt(surf, 2)} ha)</h2>
+    <p class="gren-mention">${ps.map(p => esc(parcelLabel(p))).join(" · ")}</p>
+    ${alerte("info", "", "Chaque choix fait ici est appliqué <strong>tout de suite à toutes les parcelles cochées</strong>. Quand les parcelles ont des valeurs différentes, le champ indique « Différent selon les parcelles » : laissez-le ainsi pour ne rien changer.")}
+    ${sols.size > 1 || zones.size > 1 ? alerte("warning", "", `Ces parcelles n'ont pas toutes le même ${sols.size > 1 ? "type de sol" : ""}${sols.size > 1 && zones.size > 1 ? " ni le même " : ""}${zones.size > 1 ? "zonage" : ""} : la dose sera calculée pour chacune et peut donc être différente.`) : ""}
+
+    <h3 class="gren-section">1. Culture et rendement</h3>
+    <div class="fr-grid-row fr-grid-row--gutters">
+      <div class="fr-col-12 fr-col-md-6">${selectGroupe(`Culture récoltée en ${y}`, "culture", [["", "— Choisir —"], ...R().cultures.map(c => [c.id, c.nom])], ids, y)}</div>
+      <div class="fr-col-12 fr-col-md-6">${selectGroupe("Culture précédente", "precedent", [["", "— Choisir —"], ...R().precedents.map(c => [c.id, c.nom])], ids, y)}</div>
+      <div class="fr-col-12 fr-col-md-6">${selectGroupe("Rendement visé", "rdtMode", [["ref", "Valeur de référence GREN"], ["hist", "Moyenne de mes 5 dernières années"], ["libre", "Je saisis mon objectif"]], ids, y, "Plus le rendement visé est élevé, plus la culture a besoin d'azote")}</div>
+      ${rdtMode === "libre" ? `<div class="fr-col-12 fr-col-md-6">${inputGroupe(`Mon objectif de rendement${cult ? ` (${esc(cult.unite)})` : ""}`, "rdtLibre", ids, y, {attrs:'inputmode="decimal"'})}</div>` : ""}
+    </div>
+
+    <h3 class="gren-section">2. Azote déjà disponible dans le sol</h3>
+    <div class="fr-grid-row fr-grid-row--gutters">
+      <div class="fr-col-12 fr-col-md-6">${selectGroupe("Reliquat sortie hiver", "rshMode", [["forfait", "Je n'ai pas d'analyse : valeur moyenne"], ["mesure", "J'ai une analyse de sol"]], ids, y)}</div>
+      ${rshMode === "mesure" ? `<div class="fr-col-12 fr-col-md-6">${inputGroupe("Résultat de l'analyse (kg N/ha)", "rshMesure", ids, y, {attrs:'inputmode="decimal"', hint:"Le même résultat sera mis sur toutes les parcelles cochées"})}</div>` : ""}
+      <div class="fr-col-12 fr-col-md-6">${selectGroupe("Couvert semé avant la culture", "cipan", R().cipan.map(c => [c.id, c.nom]), ids, y)}</div>
+      <div class="fr-col-12 fr-col-md-6">${inputGroupe("Date de destruction du couvert", "cipanDate", ids, y, {type:"date"})}</div>
+    </div>
+
+    <h3 class="gren-section">3. Vos pratiques</h3>
+    <div class="fr-grid-row fr-grid-row--gutters">
+      <div class="fr-col-12 fr-col-md-6">${selectGroupe("Pailles de la culture précédente", "paille", [["", "Pas de paille"], ["exportee", "Récoltées (exportées)"], ["enfouie", "Laissées au champ (enfouies)"]], ids, y)}</div>
+      <div class="fr-col-12 fr-col-md-6">${selectGroupe("Parcelles irriguées", "irrigation", [["non", "Non"], ["oui", "Oui"]], ids, y)}</div>
+    </div>
+
+    <h3 class="gren-section">4. Fumier, lisier et engrais</h3>
+    <p class="gren-mention">Ajoute le même épandage (même produit, même quantité par hectare, même date) sur chacune des parcelles cochées.</p>
+    ${btn(`Ajouter un épandage sur ces ${ids.length} parcelles`, 'data-act="addIntervSel"', {kind:"secondary", icon:"add-line", sm:true})}
+
+    <h3 class="gren-section">Résultat pour chaque parcelle</h3>
+    ${table(`<thead><tr><th scope="col">Parcelle</th><th scope="col" class="num">ha</th><th scope="col">Culture</th><th scope="col" class="num">Dose (kg N/ha)</th><th scope="col" class="num">Total (kg N)</th><th scope="col"></th></tr></thead>
+      <tbody>${res.map(({p, r}) => `<tr><td><strong>${esc(parcelLabel(p))}</strong><br><span class="gren-mention">${esc(solById(p.sol).nom)}</span></td><td class="num">${fmt(num(p.surface), 2)}</td>
+        <td>${r ? esc(r.cult.nom) : `<span class="gren-mention">à choisir</span>`}</td><td class="num"><strong>${r ? fmt(r.doseFinale) : "—"}</strong></td><td class="num">${r ? fmt(r.doseFinale * num(p.surface)) : "—"}</td>
+        <td>${btn("Détail", `data-act="voirParcelle" data-pid="${esc(p.id)}"`, {kind:"tertiary-no-outline", sm:true})}</td></tr>`).join("")}
+        <tr><th scope="row">Total</th><td class="num">${fmt(surf, 2)}</td><td></td><td></td><td class="num"><strong>${fmt(res.reduce((a, x) => a + (x.r ? x.r.doseFinale * num(x.p.surface) : 0), 0))}</strong></td><td></td></tr></tbody>`)}
+    <p class="gren-mention fr-mb-0">Pour une particularité propre à une seule parcelle (rendement, analyse, animaux au pâturage, notes), cliquez sur « Détail » : vous passez en saisie parcelle par parcelle.</p>
+  </section>`;
+}
+function appliquerGroupe(f, v){
+  const ids = selection(); if (!ids.length || v === MIXTE) return;
+  for (const id of ids) { const c = entry(id, S.annee);
+    if (f === "irrigation") c.irrigation = v === "oui";
+    else c[f] = v;
+    if (f === "rdtLibre") c.rdtMode = "libre";
+    if (f === "rshMesure") c.rshMode = "mesure"; }
+  if (f === "culture" && v) suivre("calcul", v);
+}
+
 /* ---------- Calcul ---------- */
 VIEWS.campagne = () => {
   if (!S.parcelles.length) return `${bar("Calcul des doses")}${etape("campagne")}${alerte("info", "Il faut d'abord vos parcelles", `Ajoutez vos parcelles dans <a href="#parcelles" data-tab="parcelles">Mes parcelles</a>, ou importez le modèle Excel depuis l'<a href="#accueil" data-tab="accueil">accueil</a>.`)}`;
@@ -571,6 +675,7 @@ VIEWS.campagne = () => {
   if (isNew) { save(); suivre("nouvelle_campagne"); }
   if (!S.sel || !byId(S.parcelles, S.sel)) S.sel = S.parcelles[0].id;
   const sel = rows.find(x => x.p.id === S.sel);
+  const groupe = S.modeSaisie === "groupe"; const sel_ = selection();
   const done = rows.filter(x => x.r);
   const totN = done.reduce((a, x) => a + x.r.doseFinale * num(x.p.surface), 0);
   const b = bilanOrga();
@@ -578,17 +683,24 @@ VIEWS.campagne = () => {
   ${aQuoiSert(`Pour chaque parcelle, choisissez la culture qui sera récoltée en ${y} et répondez aux questions. L'outil calcule alors la <strong>dose d'azote à apporter en engrais</strong> : ce dont la culture a besoin, moins ce que le sol, la culture précédente et vos effluents lui fournissent déjà. Les champs déjà remplis l'an dernier sont repris.`)}
   ${globalBanners()}
   <div class="gren-kpis">${kpi(`${done.length}/${rows.length}`, "parcelles calculées")}${kpi(fmt(totN) + " kg", "d'azote en engrais à prévoir sur l'exploitation")}${kpi(fmt(b.parHa) + " kg", `d'azote organique par hectare (limite ${b.plafond})`, b.parHa > b.plafond)}</div>
+  ${modeSaisie()}
   <div class="gren-layout">
     <section class="gren-panel"><h2 class="fr-h4">Parcelles — récolte ${y}</h2>
-      ${table(`<thead><tr><th scope="col">Parcelle</th><th scope="col" class="num">ha</th><th scope="col">Culture</th><th scope="col" class="num">Dose</th></tr></thead>
-        <tbody>${rows.map(({p, c, r}) => `<tr class="gren-click ${p.id === S.sel ? "gren-sel" : ""}" data-selp="${esc(p.id)}" tabindex="0" aria-selected="${p.id === S.sel}">
+      ${groupe ? barreSelection(y) : ""}
+      ${table(`<thead><tr>${groupe ? `<th scope="col">${caseCocher("cocheTout", "Tout cocher", sel_.length === rows.length, 'data-act="cocheTout"')}</th>` : ""}<th scope="col">Parcelle</th><th scope="col" class="num">ha</th><th scope="col">Culture</th><th scope="col" class="num">Dose</th></tr></thead>
+        <tbody>${rows.map(({p, c, r}) => groupe ? `<tr class="gren-click ${SEL.has(p.id) ? "gren-sel" : ""}" data-cochep="${esc(p.id)}">
+          <td>${caseCocher("ch-" + esc(p.id), "Cocher " + esc(parcelLabel(p)), SEL.has(p.id), `data-coche="${esc(p.id)}"`)}</td>
+          <td><strong>${esc(parcelLabel(p))}</strong><br><span class="gren-mention">${esc(solById(p.sol).nom)}</span> ${p.zone && p.zone !== "standard" ? zonePill(p.zone) : ""}</td>
+          <td class="num">${fmt(num(p.surface), 2)}</td>
+          <td>${c.culture ? esc(cultureById(c.culture)?.nom) : `<span class="gren-mention">à choisir</span>`}</td>
+          <td class="num">${r ? `<strong>${fmt(r.doseFinale)}</strong>` : "—"}</td></tr>` : `<tr class="gren-click ${p.id === S.sel ? "gren-sel" : ""}" data-selp="${esc(p.id)}" tabindex="0" aria-selected="${p.id === S.sel}">
           <td><strong>${esc(parcelLabel(p))}</strong><br><span class="gren-mention">${esc(solById(p.sol).nom)}</span> ${p.zone && p.zone !== "standard" ? zonePill(p.zone) : ""}</td>
           <td class="num">${fmt(num(p.surface), 2)}</td>
           <td>${c.culture ? esc(cultureById(c.culture)?.nom) : `<span class="gren-mention">à choisir</span>`}</td>
           <td class="num">${r ? `<strong>${fmt(r.doseFinale)}</strong>` : "—"}</td></tr>`).join("")}</tbody>`)}
-      <p class="gren-mention fr-mb-0">Doses en kilos d'azote par hectare (kg N/ha). <strong>Cliquez sur une parcelle</strong> pour la remplir.</p>
+      <p class="gren-mention fr-mb-0">Doses en kilos d'azote par hectare (kg N/ha). ${groupe ? "<strong>Cochez les parcelles</strong> à remplir ensemble." : "<strong>Cliquez sur une parcelle</strong> pour la remplir."}</p>
     </section>
-    <div>${sel ? detail(sel.p, y) : ""}</div>
+    <div>${groupe ? detailGroupe(y) : sel ? detail(sel.p, y) : ""}</div>
   </div>
   ${suite("campagne")}`;
 };
@@ -742,13 +854,13 @@ VIEWS.interventions = () => {
   </section>
   ${suite("interventions")}`;
 };
-async function interventionForm(pidPreset){
+async function interventionForm(pidPreset, surSelection){
   const y = S.annee; const today = new Date().toISOString().slice(0, 10);
   const groups = camp(y).groupes || [];
   const d = $("#dlg"); d.className = "gren-modal";
   $("#dlgH").textContent = "Nouvel apport d'azote";
   $("#dlgB").innerHTML = `
-    ${fSelect("Appliquer à", 'id="fCible"', S.parcelles.map(p => `<option value="p:${p.id}" ${p.id === pidPreset ? "selected" : ""}>Parcelle — ${esc(parcelLabel(p))}</option>`).join("") + groups.map((g, i) => `<option value="g:${i}">Groupe — ${esc(g.nom)} (${g.ids.length} parcelles)</option>`).join(""))}
+    ${fSelect("Appliquer à", 'id="fCible"', (surSelection && SEL.size ? `<option value="sel" selected>Les ${selection().length} parcelles cochées</option>` : "") + S.parcelles.map(p => `<option value="p:${p.id}" ${p.id === pidPreset ? "selected" : ""}>Parcelle — ${esc(parcelLabel(p))}</option>`).join("") + groups.map((g, i) => `<option value="g:${i}">Groupe — ${esc(g.nom)} (${g.ids.length} parcelles)</option>`).join(""))}
     ${fRadios("Type de fertilisant", "fType", "", [["organique", "Organique"], ["mineral", "Minéral"]], "organique")}
     ${fSelect("Produit", 'id="fProd"', "")}
     <div class="fr-grid-row fr-grid-row--gutters"><div class="fr-col-12 fr-col-sm-6">${fInput("Date", 'id="fDate"', today, {type:"date"})}</div>
@@ -776,7 +888,7 @@ async function interventionForm(pidPreset){
     const produit = $("#fProd").value; const date = $("#fDate").value; const qte = num($("#fQte").value);
     const teneur = type === "organique" ? $("#fTen").value.trim() : ""; const statut = $("#fStat").value;
     if (!date || qte <= 0) { $("#fMsg").innerHTML = alerte("warning", "", "Renseignez une date et une quantité."); return; }
-    const pids = cible.startsWith("g:") ? groups[+cible.slice(2)].ids : [cible.slice(2)];
+    const pids = cible === "sel" ? selection() : cible.startsWith("g:") ? groups[+cible.slice(2)].ids : [cible.slice(2)];
     const typeProd = type === "organique" ? effById(produit).type : "III";
     for (const pid of pids) {
       const p = byId(S.parcelles, pid); const c = entry(pid, y);
@@ -1208,9 +1320,21 @@ function comparatif(ref, y){
       <li>${btn("Télécharger la comparaison (Excel)", 'data-act="xlsxComparatif"', {kind:"tertiary", sm:true, icon:"download-line"})}</li></ul>`;
 }
 
-/* ---------- Administration (accès temporaire) ---------- */
-const ADMIN = () => CFG.ADMIN_TEMPORAIRE || {identifiant:"admin", motDePasse:"nimda"};
-const adminConnecte = () => { try { return sessionStorage.getItem("gren-admin-local") === "1"; } catch(e){ return false; } };
+/* ---------- Administration : comptes de l'espace administrateur ----------
+   Les comptes sont listés dans config.js (COMPTES_ADMIN) avec une empreinte PBKDF2-SHA-256
+   du mot de passe (jamais le mot de passe lui-même). Vérification dans le navigateur :
+   cela masque les réglages aux agriculteurs mais ne remplace pas le backoffice sécurisé. */
+const ROLES_ADMIN = {superadmin:"Super-administrateur", admin:"Administrateur"};
+const comptesAdmin = () => (Array.isArray(CFG.COMPTES_ADMIN) ? CFG.COMPTES_ADMIN : []).filter(c => c && c.identifiant && c.sel && c.empreinte);
+const hex = buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+const deHex = h => new Uint8Array((h.match(/../g) || []).map(x => parseInt(x, 16)));
+async function empreinteMdp(mdp, sel, iterations = 210000){
+  if (!window.crypto || !crypto.subtle) throw new Error("Connexion impossible : ouvrez la Calculette par son adresse https.");
+  const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(mdp), "PBKDF2", false, ["deriveBits"]);
+  return hex(await crypto.subtle.deriveBits({name:"PBKDF2", hash:"SHA-256", salt:deHex(sel), iterations}, k, 256));
+}
+function adminSession(){ try { return JSON.parse(sessionStorage.getItem("gren-admin-local") || "null"); } catch(e){ return null; } }
+const adminConnecte = () => { const a = adminSession(); return !!(a && a.identifiant && comptesAdmin().some(c => c.identifiant === a.identifiant)); };
 async function adminConnexion(){
   if (adminConnecte()) { aller("admin"); return; }
   let bloque = 0; try { bloque = +localStorage.getItem("gren-admin-bloque") || 0; } catch(e){}
@@ -1219,17 +1343,61 @@ async function adminConnexion(){
       ${fInput("Identifiant", 'data-adm="id" autocomplete="username"')}${fInput("Mot de passe", 'data-adm="mdp" autocomplete="current-password"', "", {type:"password"})}`,
     buttons:[{label:"Annuler", cls:"ghost", value:0}, {label:"Se connecter", value:1}]});
   if (r !== 1) return;
-  const id = ($('[data-adm="id"]') || {}).value || "", mdp = ($('[data-adm="mdp"]') || {}).value || "";
-  if (id.trim() === ADMIN().identifiant && mdp === ADMIN().motDePasse) {
-    try { sessionStorage.setItem("gren-admin-local", "1"); localStorage.removeItem("gren-admin-echecs"); } catch(e){}
-    toast("Connecté à l'espace administrateur."); aller("admin"); return;
+  const id = (($('[data-adm="id"]') || {}).value || "").trim().toLowerCase(), mdp = ($('[data-adm="mdp"]') || {}).value || "";
+  const compte = comptesAdmin().find(c => c.identifiant.toLowerCase() === id);
+  let ok = false;
+  try { ok = !!compte && await empreinteMdp(mdp, compte.sel, compte.iterations || 210000) === compte.empreinte; } catch(e){ toast(e.message, true); return; }
+  if (ok) {
+    try { sessionStorage.setItem("gren-admin-local", JSON.stringify({identifiant:compte.identifiant, nom:compte.nom || compte.identifiant, role:compte.role === "superadmin" ? "superadmin" : "admin"})); localStorage.removeItem("gren-admin-echecs"); } catch(e){}
+    toast(`Bonjour ${compte.nom || compte.identifiant} : vous êtes connecté à l'espace administrateur.`); aller("admin"); return;
   }
   let n = 0; try { n = (+localStorage.getItem("gren-admin-echecs") || 0) + 1; localStorage.setItem("gren-admin-echecs", n); if (n >= 5) { localStorage.setItem("gren-admin-bloque", Date.now() + 15 * 60000); localStorage.removeItem("gren-admin-echecs"); } } catch(e){}
-  if (SRV) rpc("echec_connexion", {p_email:"appli:" + id.trim().slice(0, 60), p_motif:"mot_de_passe"}).catch(() => {});
+  if (SRV) rpc("echec_connexion", {p_email:"appli:" + id.slice(0, 60), p_motif:"mot_de_passe"}).catch(() => {});
   toast("Identifiant ou mot de passe incorrect.", true);
 }
-VIEWS.admin = () => `${bar("Administration", false)}
-  ${alerte("warning", "Connexion temporaire", "Cet accès (identifiant et mot de passe communs) sert le temps de la mise en place. Il masque les réglages aux agriculteurs mais ne protège pas réellement : à remplacer par le backoffice sécurisé dès qu'il est activé.")}
+async function creerCompteAdmin(){
+  const moi = adminSession(); if (!moi || moi.role !== "superadmin") { toast("Seul un super-administrateur peut créer des comptes.", true); return; }
+  const r = await dialog({title:"Créer un compte administrateur", body:`
+    ${fInput("Nom et prénom", 'data-nc="nom" autocomplete="off"')}
+    ${fInput("Identifiant de connexion", 'data-nc="id" autocomplete="off"', "", {hint:"Par exemple prenom.nom — lettres, chiffres, point, tiret"})}
+    ${fInput("Mot de passe", 'data-nc="mdp" autocomplete="new-password"', "", {type:"password", hint:"12 caractères minimum, avec majuscule, minuscule, chiffre et caractère spécial"})}
+    ${fInput("Confirmation du mot de passe", 'data-nc="mdp2" autocomplete="new-password"', "", {type:"password"})}
+    ${fSelect("Rôle", 'data-nc="role"', `<option value="admin">Administrateur : référentiel</option><option value="superadmin">Super-administrateur : référentiel et création de comptes</option>`)}`,
+    buttons:[{label:"Annuler", cls:"ghost", value:0}, {label:"Préparer le compte", value:1}]});
+  if (r !== 1) return;
+  const v = k => (($(`[data-nc="${k}"]`) || {}).value || "");
+  const nom = v("nom").trim(), id = v("id").trim().toLowerCase(), mdp = v("mdp"), role = v("role") === "superadmin" ? "superadmin" : "admin";
+  const err = !nom ? "Indiquez le nom." : !/^[a-z0-9._-]{3,40}$/.test(id) ? "Identifiant : 3 à 40 caractères parmi lettres minuscules, chiffres, point, tiret." :
+    comptesAdmin().some(c => c.identifiant.toLowerCase() === id) ? "Cet identifiant existe déjà : choisissez-en un autre (pour changer un mot de passe, voir l'aide en bas de la page)." :
+    !(mdp.length >= 12 && /[a-z]/.test(mdp) && /[A-Z]/.test(mdp) && /\d/.test(mdp) && /[^A-Za-z0-9]/.test(mdp)) ? "Mot de passe trop faible : 12 caractères minimum, avec majuscule, minuscule, chiffre et caractère spécial." :
+    mdp !== v("mdp2") ? "Les deux mots de passe ne correspondent pas." : "";
+  if (err) { await dialog({title:"Compte non créé", body:alerte("error", "", esc(err))}); return; }
+  const sel = hex(crypto.getRandomValues(new Uint8Array(16)));
+  const compte = {identifiant:id, nom, role, iterations:210000, sel, empreinte:await empreinteMdp(mdp, sel)};
+  const ligne = "    " + JSON.stringify(compte) + ",";
+  S.comptesPrepares = [...(S.comptesPrepares || []).filter(c => c.identifiant !== id), compte]; save(); render();
+  await dialog({title:"Compte prêt : dernière étape", body:`
+    <p>Le compte <strong>${esc(id)}</strong> (${esc(ROLES_ADMIN[role])}) est prêt. Pour l'activer sur tous les appareils, ajoutez cette ligne dans le fichier <strong>config.js</strong>, dans la liste <code>COMPTES_ADMIN</code> :</p>
+    <pre class="gren-trace" id="ligneCompte">${esc(ligne)}</pre>
+    ${btn("Copier la ligne", 'data-act="copierLigne"', {kind:"secondary", sm:true, icon:"file-text-line"})}
+    <ol class="fr-mt-2w"><li>Sur GitHub, ouvrez <a href="https://github.com/williamlestoilleagri-creator/Grist/edit/main/calculette-gren/config.js" target="_blank" rel="noopener">calculette-gren/config.js</a> (bouton crayon « Edit »).</li>
+      <li>Collez la ligne sous <code>COMPTES_ADMIN: [</code>.</li><li>Cliquez sur « Commit changes… » puis « Commit changes ». Le compte fonctionne environ 2 minutes après.</li></ol>
+    <p class="gren-mention">Cette ligne ne contient pas le mot de passe, seulement son empreinte chiffrée : vous pouvez la transmettre sans risque. Communiquez le mot de passe à la personne par un autre moyen (de vive voix, par téléphone).</p>`});
+}
+VIEWS.admin = () => { const moi = adminSession() || {}; const comptes = comptesAdmin(); const prepares = (S.comptesPrepares || []).filter(c => !comptes.some(k => k.identifiant === c.identifiant));
+  return `${bar("Administration", false)}
+  <p>Connecté en tant que <strong>${esc(moi.nom || moi.identifiant || "")}</strong> (${esc(ROLES_ADMIN[moi.role] || "")}). ${btn("Se déconnecter", 'data-act="adminDeconnexion"', {kind:"tertiary", sm:true, icon:"logout-box-r-line"})}</p>
+  <section class="gren-panel"><div class="gren-bar"><h2 class="fr-h4 fr-mb-0">Comptes administrateurs</h2>${moi.role === "superadmin" ? btn("Créer un compte", 'data-act="creerCompte"', {icon:"add-line"}) : ""}</div>
+    ${table(`<thead><tr><th scope="col">Nom</th><th scope="col">Identifiant</th><th scope="col">Rôle</th><th scope="col">État</th></tr></thead><tbody>
+      ${comptes.map(c => `<tr><td>${esc(c.nom || "—")}${c.identifiant === moi.identifiant ? " " + badge("Vous", "info") : ""}</td><td>${esc(c.identifiant)}</td><td>${esc(ROLES_ADMIN[c.role] || ROLES_ADMIN.admin)}</td><td>${badge("Actif", "success")}</td></tr>`).join("")}
+      ${prepares.map(c => `<tr><td>${esc(c.nom)}</td><td>${esc(c.identifiant)}</td><td>${esc(ROLES_ADMIN[c.role])}</td><td>${badge("À ajouter dans config.js", "warning")}</td></tr>`).join("")}</tbody>`)}
+    <section class="fr-accordion"><h3 class="fr-accordion__title"><button type="button" class="fr-accordion__btn" aria-expanded="false" aria-controls="acc-comptes">Supprimer un compte, changer un mot de passe, limites</button></h3>
+      <div class="fr-collapse" id="acc-comptes">
+        <p><strong>Supprimer un compte</strong> : dans config.js, supprimez la ligne qui contient son identifiant, puis enregistrez (« Commit changes »).</p>
+        <p><strong>Changer un mot de passe</strong> : supprimez la ligne du compte dans config.js, puis recréez le compte ici avec le même identifiant et le nouveau mot de passe.</p>
+        <p class="fr-mb-0"><strong>Limites</strong> : ces comptes protègent l'accès à cet espace dans l'application, qui ne contient que des réglages valables sur l'appareil utilisé. La vérification se fait dans le navigateur et la liste des comptes est publique (les mots de passe y sont chiffrés, mais un mot de passe faible pourrait être deviné). Pour des comptes réellement sécurisés (stockés sur un serveur, avec double authentification et journal des connexions), utilisez le <strong>backoffice en ligne</strong> ci-dessous, rubrique « Administrateurs ».</p>
+      </div></section>
+  </section>
   <section class="gren-panel"><h2 class="fr-h4">Backoffice en ligne</h2>
     <p>Statistiques d'utilisation, connexions, suivi des attaques, gestion des accès administrateurs et <strong>publication du référentiel pour tous les utilisateurs</strong>.</p>
     ${SRV ? `<a class="fr-btn fr-btn--icon-left fr-icon-lock-line" href="admin/">Ouvrir le backoffice sécurisé</a>`
@@ -1255,7 +1423,7 @@ VIEWS.admin = () => `${bar("Administration", false)}
       }).join("")}<td>${btn("Supprimer", `data-act="refDel" data-k="${T.k}" data-i="${i}"`, {kind:"tertiary-no-outline", icon:"delete-line", sm:true})}</td></tr>`).join("")}
       </tbody>`)}`).join("")}
   </section>
-  ${btn("Se déconnecter de l'espace administrateur", 'data-act="adminDeconnexion"', {kind:"secondary", icon:"logout-box-r-line"})}`;
+  ${btn("Se déconnecter de l'espace administrateur", 'data-act="adminDeconnexion"', {kind:"secondary", icon:"logout-box-r-line"})}`; };
 
 /* ---------- Guide et aide ---------- */
 const OU_TROUVER = [
@@ -1524,8 +1692,9 @@ function aller(tab, ancre){
    ========================================================================= */
 document.addEventListener("click", async ev => {
   const al = ev.target.closest("[data-ancre-local]"); if (al) { ev.preventDefault(); document.getElementById(al.dataset.ancreLocal)?.scrollIntoView({behavior:"smooth"}); return; }
-  const t = ev.target.closest("[data-tab],[data-act],[data-selp]"); if (!t) return;
+  const t = ev.target.closest("[data-tab],[data-act],[data-selp],[data-cochep]"); if (!t) return;
   if (t.dataset.tab) { ev.preventDefault(); aller(t.dataset.tab, t.dataset.ancre); return; }
+  if (t.dataset.cochep !== undefined) { if (!ev.target.closest("input,label,button,select")) { const id = t.dataset.cochep; SEL.has(id) ? SEL.delete(id) : SEL.add(id); const sy = scrollY; render(); scrollTo(0, sy); } return; }
   if (t.dataset.selp) { S.sel = t.dataset.selp; save(); render(); if (innerWidth < 992) $("#detail")?.scrollIntoView({behavior:"smooth"}); return; }
   if (t.tagName === "INPUT" || t.tagName === "SELECT") return;
   const a = t.dataset.act; ev.preventDefault(); const y = S.annee;
@@ -1538,6 +1707,8 @@ document.addEventListener("click", async ev => {
       effacerTout(); render(); toast("Toutes vos informations ont été effacées de cet appareil."); break;
     case "export": download(`Calculette-GREN_${(normTxt(S.exploitation.raison) || S.exploitation.pacage || "mes-donnees").replace(/ /g, "-")}_${new Date().toLocaleDateString("fr-FR").replace(/\//g, "-")}.gren`, JSON.stringify(S), "application/octet-stream"); toast("Copie enregistrée dans vos téléchargements."); suivre("export_sauvegarde"); break;
     case "adminOuvrir": adminConnexion(); break;
+    case "creerCompte": creerCompteAdmin(); break;
+    case "copierLigne": { const t_ = $("#ligneCompte")?.textContent || ""; try { await navigator.clipboard.writeText(t_.trim()); toast("Ligne copiée : collez-la dans config.js."); } catch(e){ toast("Copie impossible : sélectionnez la ligne à la main.", true); } break; }
     case "adminDeconnexion": try { sessionStorage.removeItem("gren-admin-local"); } catch(e){} toast("Déconnecté de l'espace administrateur."); aller("exploitation"); break;
     case "addParcelle": S.parcelles.push({id:uid(), ilot:String(S.parcelles.length + 1), num:"1", nom:"", surface:"", sol:S.exploitation.sol || "limsain", zone:"standard", dept:S.exploitation.departement}); save(); render(); break;
     case "delParcelle": { const pid = t.closest("tr").dataset.pid; const p = byId(S.parcelles, pid);
@@ -1547,6 +1718,19 @@ document.addEventListener("click", async ev => {
       save(); render(); break; }
     case "modele": telechargerModele(); break;
     case "addInterv": interventionForm(t.dataset.pid || S.sel); break;
+    case "addIntervSel": interventionForm(null, true); break;
+    case "selTout": S.parcelles.forEach(p => SEL.add(p.id)); render(); break;
+    case "selAucune": SEL.clear(); render(); break;
+    case "voirParcelle": S.modeSaisie = "unite"; S.sel = t.dataset.pid; save(); render(); $("#detail")?.scrollIntoView({behavior:"smooth"}); break;
+    case "lotAppliquer": { const ids = selection(); const so = $("#lotSol").value, zo = $("#lotZone").value, de = $("#lotDept").value;
+      if (!so && !zo && !de) { toast("Choisissez d'abord un type de sol, un zonage ou un département.", true); break; }
+      for (const id of ids) { const p = byId(S.parcelles, id); if (so) p.sol = so; if (zo) p.zone = zo; if (de) p.dept = de; }
+      save(); render(); toast(`${ids.length} parcelle(s) modifiée(s).`); break; }
+    case "lotSupprimer": { const ids = selection();
+      if (!await confirmer(`Supprimer ${ids.length} parcelle(s) ?`, `${ids.map(id => esc(parcelLabel(byId(S.parcelles, id)))).join(", ")} et leurs données (cultures, apports) seront supprimées.`, "Supprimer")) return;
+      S.parcelles = S.parcelles.filter(p => !SEL.has(p.id));
+      for (const c of Object.values(S.campagnes)) { ids.forEach(id => delete c.cultures[id]); c.interventions = c.interventions.filter(i => !SEL.has(i.pid)); c.groupes = (c.groupes || []).map(g => ({...g, ids:g.ids.filter(i => !SEL.has(i))})).filter(g => g.ids.length > 1); }
+      SEL.clear(); save(); render(); toast(`${ids.length} parcelle(s) supprimée(s).`); break; }
     case "delInterv": { const id = t.closest("tr").dataset.iid; camp(y).interventions = camp(y).interventions.filter(i => i.id !== id); save(); render(); break; }
     case "addAnimal": { const c = entry(S.sel, y); c.pature = c.pature || {jours:"", animaux:[]}; c.pature.animaux.push({cat:"vl", n:""}); save(); render(); break; }
     case "delAnimal": { const c = entry(S.sel, y); c.pature.animaux.splice(+t.dataset.i, 1); save(); render(); break; }
@@ -1600,6 +1784,12 @@ document.addEventListener("change", ev => {
       if (S.parcelles.length && !await confirmer("Reprendre cette copie ?", `Les informations actuelles de cet appareil seront remplacées par celles de la copie (${esc(String(s.exploitation?.raison || "exploitation"))}, ${Array.isArray(s.parcelles) ? s.parcelles.length : 0} parcelle(s)).`, "Remplacer")) return;
       S = migrate(s); save(); render(); toast("Vos données ont été reprises."); });
   if (a === "importRef") readFile(t, txt => { try { const r = JSON.parse(txt); if (!r.cultures) throw 0; S.ref = migrateRef(r); S.refSource = "perso"; save(); render(); toast("Référentiel importé."); } catch(e){ toast("Fichier invalide.", true); } });
+  if (t.dataset.coche) { t.checked ? SEL.add(t.dataset.coche) : SEL.delete(t.dataset.coche); const sy = scrollY; render(); scrollTo(0, sy); return; }
+  if (a === "cocheTout") { t.checked ? S.parcelles.forEach(p => SEL.add(p.id)) : SEL.clear(); render(); return; }
+  if (a === "modeSaisie") { S.modeSaisie = t.value; save(); render(); return; }
+  if (a === "selCulture" && t.value) { S.parcelles.forEach(p => { if (entry(p.id, y).culture === t.value) SEL.add(p.id); }); render(); return; }
+  if (a === "selGroupe" && t.value !== "") { (camp(y).groupes[+t.value]?.ids || []).forEach(id => SEL.add(id)); render(); return; }
+  if (t.dataset.g) { appliquerGroupe(t.dataset.g, t.value); save(); const sy = scrollY; render(); scrollTo(0, sy); return; }
   if (a === "conserver") { choisirConservation(t.checked); render(); toast(t.checked ? "Vos informations seront gardées sur cet appareil." : "Vos informations seront effacées à la fermeture de l'onglet."); return; }
   if (a === "importModele") { const f = t.files[0]; t.value = ""; if (f) importerModele(f); return; }
   if (a === "importResultats") { const f = t.files[0]; t.value = ""; if (!f) return; lireResultats(f).then(r => {
