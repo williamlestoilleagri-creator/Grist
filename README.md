@@ -8,6 +8,7 @@
 | `prise-rdv-calendrier.html` | Prise de rendez-vous (calendrier) |
 | `rdv/index.html` | Formulaire public de prise de rendez-vous |
 | `duo.html` | **Duo** — interprète à deux écouteurs (ex. japonais ⇄ allemand) |
+| `compte-rendu/` | **Compte rendu de réunion** — transcription, identification des interlocuteurs, détection des incohérences par IA (Mistral, Albert, Claude…) et corrections (DSFR) |
 | `calculette-gren/` | **Calculette GREN** — dose prévisionnelle d'azote (méthode du bilan, Bretagne) et Plan Prévisionnel de Fumure |
 
 ## ERP « façon SAP » (`erp-sap.html`)
