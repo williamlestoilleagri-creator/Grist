@@ -44,7 +44,7 @@ python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Essai sans modèle ni clé (données fictives) :
+Essai sans modèle ni clé (données fictives) — sous Windows, double-cliquez simplement sur `lancer-demo.bat` ; sinon :
 
 ```bash
 CR_DEMO=1 uvicorn app.main:app --port 8000
