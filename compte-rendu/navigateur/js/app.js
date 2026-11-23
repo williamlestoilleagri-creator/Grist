@@ -226,30 +226,39 @@ import { api as apiLocale, demarrer } from "./api-locale.js";
   // ------------------------------------------------------------ sélection de l'IA
   function panneauIa(r, enCours) {
     const c = etat.config;
-    const lien = etat.lienIa || (r.analyse && r.analyse.code) || c.lien_ia_defaut;
+    const lien = etat.lienIa || (r.analyse && r.analyse.ia && r.analyse.code) || c.lien_ia_defaut;
+    const an = r.analyse || {};
     return `
       <section class="cr-panneau cr-noprint" aria-labelledby="titre-ia">
-        <h2 class="fr-h5" id="titre-ia">Analyse de cohérence par IA</h2>
-        <div class="cr-ia">
-          <div class="fr-input-group fr-mb-0">
-            <label class="fr-label" for="lien-ia">Lien du modèle d'IA
-              <span class="fr-hint-text">Collez l'adresse du fournisseur, par exemple https://mistral.ai/fr/ ou https://claude.ai : le modèle référencé correspondant est sélectionné.</span></label>
-            <input class="fr-input" id="lien-ia" type="url" inputmode="url" value="${esc(lien)}" autocomplete="off" spellcheck="false">
-            <div class="cr-tags" aria-label="Modèles référencés">
-              ${c.fournisseurs.map((f) => `<button type="button" class="fr-tag fr-tag--sm" data-ia="${esc(f.code === "demo" ? "demo" : f.site)}">${esc(f.nom)}</button>`).join("")}
+        <h2 class="fr-h5" id="titre-ia">Analyse de cohérence</h2>
+        <p class="fr-mb-1w"><span class="fr-badge fr-badge--sm fr-badge--success fr-badge--no-icon">Sans IA · aucune donnée envoyée</span></p>
+        <p>L'<strong>analyse locale</strong> est faite automatiquement sur ce poste : calculs et montants, dates contradictoires,
+          mots inconnus (erreurs de transcription probables), voix faibles ou à peine audibles, personnes parlant en même temps.</p>
+        <button class="fr-btn fr-btn--secondary fr-icon-refresh-line fr-btn--icon-left" data-action="analyse-locale" ${enCours ? "disabled" : ""}>Relancer l'analyse locale</button>
+        <p class="cr-mention fr-mt-1w">${an.locale ? "Analyse locale effectuée." : "Analyse locale non encore effectuée."} À relancer après vos corrections de texte.${an.ia ? ` Analyse par IA effectuée : ${esc(an.fournisseur)} (${esc(an.modele)}).` : ""}</p>
+        <details class="cr-option-ia fr-mt-3w" ${etat.iaOuverte ? "open" : ""}>
+          <summary><strong>Aller plus loin avec une IA (optionnel)</strong> — analyse du sens des propos et rédaction du compte rendu</summary>
+          <div class="fr-mt-2w">
+            <div class="cr-ia">
+              <div class="fr-input-group fr-mb-0">
+                <label class="fr-label" for="lien-ia">Lien du modèle d'IA
+                  <span class="fr-hint-text">Collez l'adresse du fournisseur, par exemple https://mistral.ai/fr/ ou https://claude.ai : le modèle référencé correspondant est sélectionné.</span></label>
+                <input class="fr-input" id="lien-ia" type="url" inputmode="url" value="${esc(lien)}" autocomplete="off" spellcheck="false">
+                <div class="cr-tags" aria-label="Modèles référencés">
+                  ${c.fournisseurs.map((f) => `<button type="button" class="fr-tag fr-tag--sm" data-ia="${esc(f.code === "demo" ? "demo" : f.site)}">${esc(f.nom)}</button>`).join("")}
+                </div>
+              </div>
+              <div class="fr-input-group fr-mb-0">
+                <label class="fr-label" for="modele-ia">Modèle <span class="fr-hint-text">Facultatif : modèle par défaut du fournisseur</span></label>
+                <input class="fr-input" id="modele-ia" autocomplete="off" spellcheck="false" placeholder="par défaut">
+              </div>
             </div>
+            <div id="ia-resolu" class="fr-mt-2w" aria-live="polite"></div>
+            <button class="fr-btn fr-icon-refresh-line fr-btn--icon-left fr-mt-1w" data-action="analyser" ${enCours ? "disabled" : ""}>Lancer l'analyse par IA</button>
+            <p class="cr-mention fr-mt-1w">Seul le texte est envoyé. Les remarques de l'IA s'ajoutent à celles de l'analyse locale ; le compte rendu rédigé par l'IA remplace le compte rendu de base.</p>
           </div>
-          <div class="fr-input-group fr-mb-0">
-            <label class="fr-label" for="modele-ia">Modèle <span class="fr-hint-text">Facultatif : modèle par défaut du fournisseur</span></label>
-            <input class="fr-input" id="modele-ia" autocomplete="off" spellcheck="false" placeholder="par défaut">
-          </div>
-        </div>
-        <div id="ia-resolu" class="fr-mt-2w" aria-live="polite"></div>
-        <div class="fr-mt-2w">
-          <button class="fr-btn fr-icon-refresh-line fr-btn--icon-left" data-action="analyser" ${enCours ? "disabled" : ""}>${r.analyse ? "Relancer l'analyse" : "Analyser la cohérence et rédiger le compte rendu"}</button>
-          ${r.analyse ? `<p class="cr-mention fr-mt-1w">Dernière analyse : ${esc(r.analyse.fournisseur)} (${esc(r.analyse.modele)}). Relancer remplace les scores et le compte rendu, mais conserve vos corrections de texte.</p>` : ""}
-        </div>
-        <div class="cr-legende" aria-hidden="true">
+        </details>
+        <div class="cr-legende fr-mt-3w" aria-hidden="true">
           <div class="cr-legende__barre"></div>
           <div class="cr-legende__graduations"><span>0 % incohérent</span><span>35 % douteux</span><span>60 % à vérifier</span><span>85 % cohérent</span><span>100 %</span></div>
         </div>
@@ -368,7 +377,7 @@ import { api as apiLocale, demarrer } from "./api-locale.js";
     const etiquettes = { corrigee: "Corrigée", ignoree: "Ignorée", resolue: "Résolue" };
     return `
       <div class="cr-incoherence ${ouverte ? "" : "cr-incoherence--fermee"}">
-        <p><strong>Incohérence rapportée — ${esc(types[inc.type] || inc.type)}</strong>${ouverte ? "" : ` <span class="fr-badge fr-badge--sm">${etiquettes[inc.statut] || esc(inc.statut)}</span>`}</p>
+        <p><strong>Incohérence rapportée — ${esc(types[inc.type] || inc.type)}</strong> <span class="fr-badge fr-badge--sm fr-badge--no-icon ${inc.origine === "ia" ? "fr-badge--purple-glycine" : "fr-badge--green-emeraude"}">${inc.origine === "ia" ? "IA" : "Analyse locale"}</span>${ouverte ? "" : ` <span class="fr-badge fr-badge--sm">${etiquettes[inc.statut] || esc(inc.statut)}</span>`}</p>
         <p>${esc(inc.description)}</p>
         ${inc.suggestion && ouverte ? `<p class="cr-mention fr-mb-0">Correction proposée :</p><div class="cr-suggestion">${esc(inc.suggestion)}</div>` : ""}
         <div class="cr-segment__actions cr-noprint">
@@ -457,10 +466,12 @@ import { api as apiLocale, demarrer } from "./api-locale.js";
 
   function ongletCompteRendu(r) {
     const cr = r.compte_rendu;
-    if (!cr) return `<p>Le compte rendu sera rédigé lors de l'analyse par l'IA.</p>`;
+    if (!cr) return `<p>Le compte rendu de base sera établi après l'analyse locale.</p>`;
     return `
       <form class="cr-cr" id="form-cr">
-        <div class="fr-alert fr-alert--info fr-alert--sm fr-mb-3w"><p>Texte rédigé par une IA : relisez-le et modifiez-le avant diffusion. Les incohérences non résolues sont listées dans l'export.</p></div>
+        <div class="fr-alert fr-alert--info fr-alert--sm fr-mb-3w"><p>${cr.automatique
+          ? "Compte rendu de base établi sans IA (extraits, décisions et actions repérés automatiquement) : complétez-le avant diffusion, ou utilisez l'option IA pour une rédaction complète."
+          : "Texte rédigé par une IA : relisez-le et modifiez-le avant diffusion."} Les incohérences non résolues sont listées dans l'export.</p></div>
         <div class="fr-input-group"><label class="fr-label" for="cr-resume">Synthèse</label>
           <textarea class="fr-input" id="cr-resume" rows="5">${esc(cr.resume)}</textarea></div>
         <h2 class="fr-h5">Points abordés</h2>
@@ -501,7 +512,7 @@ import { api as apiLocale, demarrer } from "./api-locale.js";
   function ongletJournal(r) {
     const libelles = { creation: "Dépôt de l'audio", transcription: "Transcription", analyse: "Analyse IA", correction: "Correction",
       renommage_locuteur: "Nom d'interlocuteur", ajout_locuteur: "Ajout d'interlocuteur", edition_compte_rendu: "Modification du compte rendu",
-      export: "Export", suppression_audio: "Suppression de l'audio", purge_audio: "Purge automatique de l'audio" };
+      export: "Export", analyse_locale: "Analyse locale (sans IA)", suppression_audio: "Suppression de l'audio", purge_audio: "Purge automatique de l'audio" };
     return `
       <p class="cr-mention">Traçabilité des actions réalisées sur cette réunion.</p>
       <div class="fr-table"><div class="fr-table__wrapper"><div class="fr-table__container"><div class="fr-table__content">
@@ -598,6 +609,9 @@ import { api as apiLocale, demarrer } from "./api-locale.js";
       resoudreIa(document.getElementById("lien-ia").value);
       return;
     }
+    if (d.action === "analyse-locale") {
+      return action(() => api("POST", `${base()}/analyse`, { lien: "locale" }), "Analyse locale effectuée.");
+    }
     if (d.action === "analyser") {
       const lien = document.getElementById("lien-ia").value.trim();
       const modele = document.getElementById("modele-ia").value.trim() || null;
@@ -620,6 +634,8 @@ import { api as apiLocale, demarrer } from "./api-locale.js";
     if (t.id === "filtre") { etat.filtre = t.value; afficherReunion(); document.getElementById("filtre").focus(); }
     if (t.dataset.locuteur) action(() => api("PATCH", `${base()}/segments/${t.dataset.locuteur}`, { locuteur: t.value }), "Interlocuteur modifié.");
   });
+
+  $app.addEventListener("toggle", (e) => { if (e.target.classList?.contains("cr-option-ia")) etat.iaOuverte = e.target.open; }, true);
 
   $app.addEventListener("input", (e) => { if (e.target.id === "lien-ia") { etat.lienIa = e.target.value; resoudreIa(e.target.value); } });
 
@@ -709,7 +725,8 @@ import { api as apiLocale, demarrer } from "./api-locale.js";
       <ol>
         <li><strong>Dépôt</strong> : l'enregistrement est transcrit (Whisper) et les voix sont séparées (pyannote) <strong>dans votre navigateur</strong>. L'audio ne quitte pas l'ordinateur.</li>
         <li><strong>Interlocuteurs</strong> : écoutez un extrait de chaque voix et saisissez le nom correspondant.</li>
-        <li><strong>Analyse</strong> : choisissez l'IA en collant le lien du fournisseur (ex. https://mistral.ai/fr/) et saisissez votre clé d'API. Seul le <em>texte</em> de la transcription lui est envoyé. Elle note chaque intervention de 0 à 100 % et rapporte les incohérences.</li>
+        <li><strong>Analyse locale, sans IA</strong> (automatique) : chaque intervention est notée de 0 à 100 % selon des contrôles faits sur le poste — calculs et montants, dates contradictoires, mots inconnus du dictionnaire, voix faibles, personnes parlant en même temps, répétitions anormales. Un compte rendu de base est établi.</li>
+        <li><strong>IA (optionnelle)</strong> : pour analyser le sens des propos et rédiger le compte rendu, choisissez l'IA en collant le lien du fournisseur (ex. https://mistral.ai/fr/) et saisissez votre clé d'API. Seul le <em>texte</em> lui est envoyé.</li>
         <li><strong>Corrections</strong> : appliquez ou ignorez les corrections proposées, corrigez le texte et les attributions, puis exportez le compte rendu.</li>
       </ol>
       <h2>Code couleur</h2>

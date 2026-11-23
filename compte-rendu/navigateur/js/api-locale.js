@@ -5,6 +5,7 @@
 import * as stockage from "./stockage.js";
 import * as ia from "./ia.js";
 import * as exporter from "./export.js";
+import { analyserLocalement } from "./analyse-locale.js";
 import { MODELES_TRANSCRIPTION, TAUX } from "./moteur-audio.js";
 
 export class ErreurApi extends Error {}
@@ -15,6 +16,26 @@ const TAILLE_MAX_MO = 1000;
 const enCours = new Map(); // traitements actifs dans cet onglet
 
 export const demo = new URLSearchParams(location.search).has("demo");
+
+const ANALYSE_LOCALE = { code: "locale", nom: "Analyse locale (sans IA)", modele: "règles", horsUE: false };
+let dictionnaire = null;
+async function chargerDictionnaire() {
+  if (dictionnaire) return dictionnaire;
+  try {
+    const r = await fetch(new URL("../vendor/mots-fr.txt", import.meta.url));
+    dictionnaire = new Set((await r.text()).split("\n"));
+  } catch { dictionnaire = null; } // sans dictionnaire, les autres contrôles restent actifs
+  return dictionnaire;
+}
+
+async function analyseLocale(id) {
+  const dico = await chargerDictionnaire();
+  await maj(id, (r) => {
+    ia.appliquer(r, analyserLocalement(r, dico), ANALYSE_LOCALE, null);
+    Object.assign(r, { statut: "analyse_terminee", progression: "Analyse locale terminée", erreur: null });
+  });
+  await stockage.journaliser(id, "analyse_locale");
+}
 
 // ------------------------------------------------------------------ décodage audio
 async function decoder(blob) {
@@ -82,8 +103,9 @@ async function lancerTranscription(id) {
           nombre: r0.nb_locuteurs, hoteModeles: reglages.hoteModeles || undefined }, [audio.buffer]);
       });
     }
-    await maj(id, (r) => Object.assign(r, resultat, { statut: "transcrit", progression: "Transcription terminée", erreur: null }));
+    await maj(id, (r) => Object.assign(r, resultat, { statut: "transcrit", progression: "Analyse de cohérence locale…", erreur: null }));
     await stockage.journaliser(id, "transcription", `${resultat.segments.length} interventions`);
+    await analyseLocale(id); // contrôle de cohérence sans IA, immédiat
   } catch (e) {
     console.error(e);
     await maj(id, (r) => Object.assign(r, { statut: "erreur", erreur: `Échec de la transcription : ${e.message}`.slice(0, 500) }));
@@ -249,6 +271,7 @@ export async function api(methode, url, corps) {
   if (action === "analyse" && methode === "POST") {
     if (enCours.has(id) || ["en_attente", "transcription", "analyse"].includes(r.statut)) erreur("Un traitement est déjà en cours.");
     if (!r.segments?.length) erreur("La transcription n'est pas disponible.");
+    if (corps.lien === "locale") { await analyseLocale(id); return { fournisseur: { nom: ANALYSE_LOCALE.nom } }; }
     let f;
     try { f = ia.resoudre(corps.lien); } catch (e) { erreur(e.message); }
     if (f.horsUE && !corps.accepte_hors_ue) erreur(`${f.nom} est hébergé hors de l'Union européenne : confirmation explicite requise.`);

@@ -6,7 +6,15 @@ aucun Python, aucun serveur à installer. Il suffit d'ouvrir la page.
 - **Transcription** : Whisper (versions horodatées mot à mot), exécuté sur le poste (carte graphique via WebGPU si disponible, sinon processeur).
 - **Interlocuteurs** : segmentation pyannote 3.0 + empreinte vocale WeSpeaker + regroupement, même principe que pyannote 3.1.
   Les empreintes ne servent qu'au calcul et ne sont jamais enregistrées.
-- **Cohérence et compte rendu** : IA choisie par lien. Seul le **texte** lui est envoyé.
+- **Contrôle de cohérence SANS IA** (automatique, aucune donnée envoyée) : règles exécutées sur le poste
+  - calculs : un montant annoncé avec « donc », « reste », « total »… est recalculé à partir des montants cités avant
+    (ex. « il reste 1,9 M€ » alors que 2,4 M€ − 800 000 € = 1,6 M€), avec la phrase corrigée proposée ;
+  - dates : un même sujet associé à deux mois différents (ex. point budgétaire en mars puis en février) ;
+  - mots absents du dictionnaire français (erreur de transcription probable), répétitions anormales ;
+  - voix faible ou à peine audible (niveau sonore mesuré), personnes parlant en même temps.
+  Un compte rendu de base (participants, sujets, extraits, décisions, actions) est établi sans IA.
+- **IA en option** : pour analyser le sens des propos et rédiger le compte rendu, choisie par lien. Seul le **texte** lui est envoyé ;
+  ses remarques s'ajoutent à celles de l'analyse locale.
 - **Stockage** : réunions, audio et comptes rendus dans le navigateur (IndexedDB), avec purge automatique.
 
 ## Utilisation
@@ -14,7 +22,8 @@ aucun Python, aucun serveur à installer. Il suffit d'ouvrir la page.
 1. Ouvrir `index.html` via un serveur web (GitHub Pages, serveur interne…). Ouvrir le fichier directement depuis le disque (`file://`) ne fonctionne pas.
 2. Déposer l'enregistrement, cocher l'information des participants, cliquer sur « Transcrire sur ce poste ».
    Au premier usage, les modèles sont téléchargés une fois (≈ 140 Mo en mode rapide, ≈ 350 Mo en équilibré), puis conservés par le navigateur.
-3. Nommer les interlocuteurs, choisir l'IA par son lien, saisir la clé d'API, analyser, corriger, exporter (.docx ou Markdown).
+3. L'analyse locale s'affiche aussitôt (couleurs, incohérences). Nommer les interlocuteurs, corriger, relancer l'analyse locale, exporter (.docx ou Markdown).
+4. Facultatif : ouvrir « Aller plus loin avec une IA », choisir l'IA par son lien et saisir la clé d'API.
 
 Mode démonstration (sans modèle ni clé) : ajouter `?demo` à l'adresse.
 
@@ -33,7 +42,7 @@ Mode démonstration (sans modèle ni clé) : ajouter `?demo` à l'adresse.
 | Poste | 1 h de réunion |
 |---|---|
 | Carte graphique récente (WebGPU, Chrome/Edge) | ≈ 5 à 15 min |
-| Processeur seul | ≈ 30 à 60 min (modèle « rapide » conseillé) |
+| Processeur seul | ≈ 30 min à 2 h selon le processeur (modèle « rapide » conseillé) |
 
 L'onglet doit rester ouvert pendant le traitement.
 
@@ -42,6 +51,9 @@ L'onglet doit rester ouvert pendant le traitement.
 - Séparation des voix sur un enregistrement de test à 3 voix (5 prises de parole) : 3 voix trouvées, 97,8 % du temps de parole correctement attribué.
 - Transcription française exacte sur un extrait de référence.
 - Parcours complet dans Chromium (téléchargement des modèles, transcription, analyse, corrections, export Word) sans erreur.
+- Réunion de test `../exemples/reunion-test.mp3` (2 min, 4 voix, passages faibles et bruités), **sans clé ni IA** :
+  4 interlocuteurs trouvés ; 2 calculs faux et la contradiction de dates détectés avec la bonne correction ;
+  voix faibles, chevauchement et mots mal transcrits signalés. La 4ᵉ erreur volontaire, couverte par un bruit, n'a pas été transcrite.
 - À valider sur de vraies réunions en français de longue durée.
 
 ## Contenu
@@ -54,11 +66,12 @@ navigateur/
 │   ├── api-locale.js     Fonctions de l'application (équivalent local de l'API serveur)
 │   ├── worker-audio.js   Calcul audio en arrière-plan
 │   ├── moteur-audio.js   Séparation des voix + transcription
-│   ├── ia.js             Choix de l'IA par lien, consignes, analyse de cohérence
+│   ├── analyse-locale.js Contrôle de cohérence sans IA (calculs, dates, dictionnaire, audibilité) et compte rendu de base
+│   ├── ia.js             IA optionnelle : choix par lien, consignes, fusion avec l'analyse locale
 │   ├── export.js         Export Word / Markdown
 │   ├── stockage.js       IndexedDB, réglages, clés, purge
 │   └── demo.js           Données fictives
-├── vendor/               transformers.js 4.3.2, onnxruntime-web, SDK Anthropic, docx (embarqués, aucun CDN)
+├── vendor/               transformers.js 4.3.2, onnxruntime-web, SDK Anthropic, docx, dictionnaire français (embarqués, aucun CDN)
 └── dsfr/                 Système de design de l'État 1.15
 ```
 
