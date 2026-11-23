@@ -53,9 +53,11 @@ if (window.top !== window.self) {
   }
 
   const api = (methode, url, corps) => apiLocale(methode, url, corps);
+  const pret = demarrer().catch(() => {});
 
   // ------------------------------------------------------------ routage
   async function router() {
+    await pret; // le nettoyage du mode éphémère doit être terminé avant tout affichage
     clearTimeout(etat.minuteur);
     const h = location.hash || "#/";
     try {
@@ -817,5 +819,5 @@ if (window.top !== window.self) {
     if (etat.config?.ephemere && etat.reunion) { e.preventDefault(); e.returnValue = ""; }
   });
 
-  demarrer().catch(() => {}).finally(router);
+  router();
 })();

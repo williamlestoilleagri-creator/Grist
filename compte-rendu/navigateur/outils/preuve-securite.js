@@ -34,9 +34,9 @@ const { chromium } = require("playwright");
   const etape = (t) => console.log(`- ${t}`);
   etape("ouverture de l'application");
   await page.goto(url);
-  await page.evaluate(() => localStorage.setItem("cr-reglages", JSON.stringify({ modeleTranscription: "rapide", materiel: "wasm" })));
-  await page.goto(url + "#/");
   await page.waitForSelector("#form-nouvelle");
+  // réglage de test : modèle « rapide » (le plus léger), calcul sur processeur
+  await page.evaluate(() => localStorage.setItem("cr-reglages", JSON.stringify({ modeleTranscription: "rapide", materiel: "wasm" })));
 
   etape("dépôt et transcription de la réunion");
   await page.setInputFiles("#fichier", audio);
