@@ -110,3 +110,37 @@ export async function docx(r) {
   });
   return Packer.toBlob(doc);
 }
+
+// ------------------------------------------------------------------ PDF (mise en page imprimable)
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const lignes = (t) => esc(t).replace(/\n/g, "<br>");
+
+/** Compte rendu au format HTML imprimable : le navigateur l'enregistre en PDF via « Imprimer → Enregistrer au format PDF ». */
+export function html(r) {
+  const cr = r.compte_rendu || {}, an = r.analyse;
+  const sg = an ? an.score_global : null;
+  const badge = (sc) => `<span class="imp-score" style="background:#${couleurHex(sc, true)};border-color:#${couleurHex(sc)}">${sc ?? "–"} % · ${libelleScore(sc)}</span>`;
+  return `
+    <div class="imp-entete">
+      <p class="imp-marque">RÉPUBLIQUE<br>FRANÇAISE</p>
+      <p class="imp-devise">Liberté<br>Égalité<br>Fraternité</p>
+    </div>
+    <h1>Compte rendu — ${esc(r.titre || "Réunion")}</h1>
+    ${r.date_reunion ? `<p><strong>Date :</strong> ${esc(r.date_reunion)}</p>` : ""}
+    <p><strong>Participants :</strong> ${esc(participants(r))}</p>
+    ${an ? `<p><strong>Fiabilité globale :</strong> ${badge(sg)} <span class="imp-mention">(${esc(an.fournisseur)})</span></p>` : ""}
+    <h2>Synthèse</h2>
+    <p>${lignes(cr.resume)}</p>
+    ${(cr.points || []).map((p) => `<h3>${esc(p.titre)}</h3><p>${lignes(p.contenu)}</p>`).join("")}
+    ${(cr.decisions || []).length ? `<h2>Décisions</h2><ul>${cr.decisions.map((d) => `<li>${esc(d)}</li>`).join("")}</ul>` : ""}
+    ${(cr.actions || []).length ? `<h2>Actions</h2><table><thead><tr><th>Action</th><th>Responsable</th><th>Échéance</th></tr></thead><tbody>
+      ${cr.actions.map((a) => `<tr><td>${esc(a.action)}</td><td>${esc(a.responsable)}</td><td>${esc(a.echeance)}</td></tr>`).join("")}</tbody></table>` : ""}
+    ${ouvertes(r).length || globales(r).length ? `<h2>Incohérences rapportées (non résolues)</h2><ul>
+      ${globales(r).map((g) => `<li><strong>Entre les interventions ${esc(g.segments.join(", "))}</strong> (gravité ${g.gravite} %) : ${esc(g.description)}</li>`).join("")}
+      ${ouvertes(r).map(([s, i]) => `<li><strong>${hms(s.debut)} — ${esc(nom(r, s.locuteur))}</strong> (${esc(TYPES_INCOHERENCE[i.type] || i.type)}) : ${esc(i.description)}</li>`).join("")}</ul>` : ""}
+    <h2 class="imp-saut">Annexe — transcription</h2>
+    <table class="imp-transcription"><thead><tr><th>Heure</th><th>Interlocuteur</th><th>Propos</th><th>Fiabilité</th></tr></thead><tbody>
+      ${(r.segments || []).map((s) => `<tr><td>${hms(s.debut)}</td><td>${esc(nom(r, s.locuteur))}</td><td>${esc(s.texte)}</td><td>${badge(scoreSegment(s))}</td></tr>`).join("")}
+    </tbody></table>
+    <p class="imp-mention">Document généré le ${maintenant()} avec l'assistance d'outils automatiques ; relu et corrigé par un agent.</p>`;
+}

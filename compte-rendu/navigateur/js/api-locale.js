@@ -5,7 +5,7 @@
 import * as stockage from "./stockage.js";
 import * as ia from "./ia.js";
 import * as exporter from "./export.js";
-import { analyserLocalement } from "./analyse-locale.js";
+import { analyserLocalement, compteRenduDeBase } from "./analyse-locale.js";
 import { MODELES_TRANSCRIPTION, TAUX } from "./moteur-audio.js";
 
 export class ErreurApi extends Error {}
@@ -224,7 +224,9 @@ export async function api(methode, url, corps) {
     if (!nom) erreur("Le nom est obligatoire.");
     if (methode === "PUT") {
       if (!r.locuteurs[p[3]]) erreur("Interlocuteur introuvable.");
-      r.locuteurs[p[3]] = { nom, fonction }; await stockage.enregistrer(r);
+      r.locuteurs[p[3]] = { nom, fonction };
+      if (r.compte_rendu?.automatique) r.compte_rendu = compteRenduDeBase(r); // le compte rendu de base reprend les noms
+      await stockage.enregistrer(r);
       await stockage.journaliser(id, "renommage_locuteur", `${p[3]} → ${nom}`); return { ok: true };
     }
     if (methode === "POST") {
@@ -294,9 +296,11 @@ export async function api(methode, url, corps) {
     await stockage.enregistrer(r); await stockage.journaliser(id, "edition_compte_rendu"); return { ok: true };
   }
   if (action === "export" && methode === "GET") {
-    const format = new URLSearchParams(requete).get("format") === "md" ? "md" : "docx";
+    const demande = new URLSearchParams(requete).get("format");
+    const format = ["md", "pdf"].includes(demande) ? demande : "docx";
     await stockage.journaliser(id, "export", format);
     const nom = (r.titre || "compte-rendu").replace(/[^\p{L}\p{N}_-]+/gu, "-").replace(/^-|-$/g, "").slice(0, 80) || "compte-rendu";
+    if (format === "pdf") return { html: exporter.html(r), nom };
     const blob = format === "md" ? new Blob([exporter.markdown(r)], { type: "text/markdown;charset=utf-8" }) : await exporter.docx(r);
     return { blob, nom: `${nom}.${format}` };
   }

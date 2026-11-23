@@ -486,6 +486,7 @@ import { api as apiLocale, demarrer } from "./api-locale.js";
         <ul class="fr-btns-group fr-btns-group--inline-md">
           <li><button class="fr-btn fr-icon-check-line fr-btn--icon-left" type="submit">Enregistrer le compte rendu</button></li>
           <li><button class="fr-btn fr-btn--secondary fr-icon-download-line fr-btn--icon-left" type="button" data-export="docx">Exporter en Word (.docx)</button></li>
+          <li><button class="fr-btn fr-btn--secondary fr-icon-printer-line fr-btn--icon-left" type="button" data-export="pdf">Exporter en PDF</button></li>
           <li><button class="fr-btn fr-btn--tertiary fr-icon-download-line fr-btn--icon-left" type="button" data-export="md">Exporter en Markdown</button></li>
         </ul>
       </form>`;
@@ -594,6 +595,20 @@ import { api as apiLocale, demarrer } from "./api-locale.js";
       try {
         // enregistre d'abord les modifications en cours
         await api("PUT", `${base()}/compte-rendu`, lireCompteRendu());
+        if (d.export === "pdf") {
+          const { html, nom } = await api("GET", `${base()}/export?format=pdf`);
+          const zone = document.getElementById("impression");
+          zone.innerHTML = html;
+          const titre = document.title;
+          document.title = nom; // nom proposé pour le fichier PDF
+          const fin = () => { document.title = titre; zone.innerHTML = ""; window.removeEventListener("afterprint", fin); };
+          window.addEventListener("afterprint", fin);
+          document.body.classList.add("cr-imprime");
+          window.addEventListener("afterprint", () => document.body.classList.remove("cr-imprime"), { once: true });
+          notifier("Dans la fenêtre d'impression, choisissez « Enregistrer au format PDF » comme destination.", "info");
+          window.print();
+          return;
+        }
         const { blob, nom } = await api("GET", `${base()}/export?format=${d.export}`);
         const lien = document.createElement("a");
         lien.href = URL.createObjectURL(blob);
