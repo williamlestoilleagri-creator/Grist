@@ -81,9 +81,11 @@ async function lancerTranscription(id) {
       resultat = await new Promise((ok, ko) => {
         const worker = new Worker(new URL("./worker-audio.js", import.meta.url), { type: "module" });
         let materiel = "", derniere = 0;
-        const signaler = (texte) => {
+        let derniereEtape = "";
+        const signaler = (texte, etape = "") => {
           const t = Date.now();
-          if (t - derniere < 700) return; // limite les écritures
+          if (t - derniere < 700 && etape === derniereEtape) return; // limite les écritures, sauf changement d'étape
+          derniereEtape = etape;
           derniere = t;
           maj(id, (r) => { r.progression = texte; });
         };
@@ -95,7 +97,7 @@ async function lancerTranscription(id) {
           if (data.type === "progression") {
             signaler(data.etape === "voix"
               ? `Identification des interlocuteurs (${materiel}) : ${Math.round(100 * data.fait / data.total)} %`
-              : `Transcription de la parole (${materiel}) : ${Math.round(100 * data.fait / data.total)} %`);
+              : `Transcription de la parole (${materiel}) : ${Math.round(100 * data.fait / data.total)} %`, data.etape);
           }
           if (data.type === "termine") { worker.terminate(); ok(data.resultat); }
           if (data.type === "erreur") { worker.terminate(); ko(new Error(data.message)); }

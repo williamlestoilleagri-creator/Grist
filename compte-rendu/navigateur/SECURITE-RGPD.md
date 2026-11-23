@@ -1,7 +1,7 @@
 # Diagnostic de sécurité et de conformité RGPD
 
-**Application :** Compte rendu de réunion — version navigateur (`compte-rendu/navigateur/`)
-**Date du diagnostic :** 24 novembre 2026
+**Application :** Compte rendu de réunion — version navigateur (`compte-rendu/navigateur/`)  
+**Date du diagnostic :** 23 novembre 2026  
 **Objet :** fournir au responsable de traitement, au délégué à la protection des données (DPO) et au responsable de la sécurité des systèmes d'information (RSSI) les éléments pour valider l'usage interne de l'application.
 
 > Ce document est un **diagnostic technique**. Il ne vaut pas validation : la décision appartient au **responsable de traitement** (après avis du **DPO**) pour le RGPD, et à l'**autorité d'homologation** (après avis du **RSSI**) pour la sécurité. Il leur fournit les éléments vérifiés et les preuves pour décider.
@@ -89,11 +89,31 @@ Scénario : ouverture de l'application, dépôt de `exemples/reunion-test.mp3` (
 
 ### 3.1 Capture réseau — configuration « tout interne » (navigateur sans accès à Internet)
 
-<!-- RESULTATS_LOCAL -->
+Navigateur Chromium lancé **sans accès à Internet**, modèles hébergés avec l'application (`sourceModeles: "local"`), test du 23 novembre 2026 :
+
+| Mesure | Résultat |
+|---|---|
+| Requêtes réseau émises (page + calcul en arrière-plan) | 92 |
+| Serveurs contactés | **uniquement** le serveur de l'application (`127.0.0.1:8099` pendant le test) |
+| Requêtes vers l'extérieur | **0** |
+| Envois de données (requêtes autres que des téléchargements GET) | **0** |
+| Tentative d'utiliser l'IA hors UE (claude.ai) | Refusée : « Claude (Anthropic) est désactivé par l'administrateur sur ce déploiement. » |
+| Documents téléchargés (3 documents × 5 formats) | 15, générés sur le poste |
+| Erreurs JavaScript | 0 |
+
+**Configuration actuelle** (modèles téléchargés depuis huggingface.co, `sourceModeles: "huggingface"`) : 113 requêtes, dont 42 vers `huggingface.co` et son réseau de diffusion (`us.aws.cdn.hf.co`). **Toutes sont des téléchargements de modèles** (méthode GET). **Aucun envoi de données.** Seule l'adresse IP du poste est visible par Hugging Face, ce que supprime le mode `local`.
 
 ### 3.2 Stockage et effacement
 
-<!-- RESULTATS_STOCKAGE -->
+| Contrôle | Pendant la session | Après fermeture de l'onglet et réouverture |
+|---|---|---|
+| Réunions | 1 | **0** |
+| Enregistrements audio | 1 | **0** |
+| Entrées du journal | 19 | **0** |
+| Clés d'API conservées durablement (localStorage) | 0 | 0 |
+| Cookies | 0 | 0 |
+
+Le mode éphémère efface bien toutes les données à la nouvelle session. Si un autre onglet de l'application est encore ouvert, l'effacement attend sa fermeture, pour ne pas détruire un travail en cours.
 
 ### 3.3 Résistance à l'injection de code
 
@@ -203,6 +223,8 @@ L'application hérite de la sécurité du poste :
 | IA hors UE (Claude) disponible par défaut | **Désactivée par défaut** ; liste des IA autorisées fixée par l'administrateur |
 | Clés d'API mémorisables durablement sur le poste | Mémorisation **interdite par défaut** (session uniquement) |
 | Réglages de sécurité modifiables par l'utilisateur | Fichier de **configuration de déploiement** `config.js`, réservé à l'administrateur |
+| Mode « modèles locaux » inopérant : la transcription échouait (défaut de la bibliothèque transformers.js avec un chemin donné sous forme d'adresse complète) | Chemin corrigé ; fonctionnement **vérifié sans Internet** (§ 3.1) |
+| Démarrage : une réunion déposée pendant le contrôle des onglets (0,4 s) pouvait être effacée par le mode éphémère | L'interface attend la fin du nettoyage avant de s'afficher ; vérifié |
 | Page intégrable dans un cadre d'un autre site | Affichage dans un cadre **refusé** ; en-têtes serveur fournis (`deploiement/nginx.conf`) |
 | Hébergement sur GitHub Pages, à une adresse partagée avec d'autres applications | Configuration d'**hébergement interne sur une adresse dédiée** fournie. **Non corrigeable dans le code** : c'est une décision d'hébergement. **Ne pas utiliser l'adresse github.io pour de vraies réunions** |
 
