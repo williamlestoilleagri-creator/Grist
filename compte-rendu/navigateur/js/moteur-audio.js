@@ -194,9 +194,36 @@ function voixDominante(debut, fin, tours) {
   return proche ?? 0;
 }
 
+/**
+ * Lissage : une suite de mots attribuée à une autre voix pendant moins de 0,8 s (souvent à la frontière
+ * entre deux prises de parole) est rattachée à la voix qui l'entoure, ou à la précédente.
+ */
+function lisser(mots) {
+  for (let passe = 0; passe < 3; passe++) {
+    const suites = [];
+    for (let i = 0; i < mots.length; i++) {
+      const der = suites.at(-1);
+      if (der && der.voix === mots[i].voix) der.fin = i;
+      else suites.push({ voix: mots[i].voix, debut: i, fin: i });
+    }
+    let modifie = false;
+    suites.forEach((s, k) => {
+      const duree = mots[s.fin].fin - mots[s.debut].debut;
+      if (duree >= 0.8 || s.fin - s.debut > 2 || suites.length < 2) return;
+      const avant = suites[k - 1], apres = suites[k + 1];
+      const cible = avant && apres && avant.voix === apres.voix ? avant.voix
+        : avant ? avant.voix : apres.voix;
+      for (let i = s.debut; i <= s.fin; i++) mots[i].voix = cible;
+      modifie = true;
+    });
+    if (!modifie) break;
+  }
+}
+
 export function assembler(morceaux, tours) {
   // 1. voix de chaque morceau de texte
   const attribues = morceaux.map((m) => ({ ...m, voix: voixDominante(m.debut, m.fin, tours) }));
+  lisser(attribues);
   // 2. numérotation des voix dans l'ordre de première prise de parole : L1, L2…
   const codes = new Map();
   for (const m of attribues) if (!codes.has(m.voix)) codes.set(m.voix, `L${codes.size + 1}`);
