@@ -174,6 +174,7 @@ import { api as apiLocale, demarrer } from "./api-locale.js";
       ["interlocuteurs", "Interlocuteurs", Object.keys(r.locuteurs || {}).length],
       ["incoherences", "Incohérences", ouvertes],
       ["compte-rendu", "Compte rendu", null],
+      ["telecharger", "Télécharger", null],
       ["journal", "Journal", null],
     ];
 
@@ -315,6 +316,7 @@ import { api as apiLocale, demarrer } from "./api-locale.js";
       case "interlocuteurs": return ongletLocuteurs(r);
       case "incoherences": return ongletIncoherences(r);
       case "compte-rendu": return ongletCompteRendu(r);
+      case "telecharger": return ongletTelecharger(r);
       case "journal": return ongletJournal(r);
       default: return ongletTranscription(r);
     }
@@ -485,9 +487,7 @@ import { api as apiLocale, demarrer } from "./api-locale.js";
         <button type="button" class="fr-btn fr-btn--sm fr-btn--secondary fr-icon-add-line fr-btn--icon-left fr-mb-3w" data-ajout="action">Ajouter une action</button>
         <ul class="fr-btns-group fr-btns-group--inline-md">
           <li><button class="fr-btn fr-icon-check-line fr-btn--icon-left" type="submit">Enregistrer le compte rendu</button></li>
-          <li><button class="fr-btn fr-btn--secondary fr-icon-download-line fr-btn--icon-left" type="button" data-export="docx">Exporter en Word (.docx)</button></li>
-          <li><button class="fr-btn fr-btn--secondary fr-icon-printer-line fr-btn--icon-left" type="button" data-export="pdf">Exporter en PDF</button></li>
-          <li><button class="fr-btn fr-btn--tertiary fr-icon-download-line fr-btn--icon-left" type="button" data-export="md">Exporter en Markdown</button></li>
+          <li><button class="fr-btn fr-btn--secondary fr-icon-download-line fr-btn--icon-left" type="button" data-onglet="telecharger">Télécharger</button></li>
         </ul>
       </form>`;
   }
@@ -509,6 +509,28 @@ import { api as apiLocale, demarrer } from "./api-locale.js";
       <div class="fr-col-4 fr-col-md-2"><label class="fr-label" for="ac-e-${i}">Échéance</label><input class="fr-input" id="ac-e-${i}" data-champ="echeance" value="${esc(a.echeance)}"></div>
       <div class="fr-col-2 fr-col-md-1"><button type="button" class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline fr-icon-delete-line" title="Retirer l'action ${i + 1}" data-retirer>Retirer</button></div>
     </div>`;
+
+  function ongletTelecharger(r) {
+    const docs = { "compte-rendu": ["Compte rendu", "Le texte du compte rendu uniquement : participants, synthèse, points abordés, décisions et actions. Rien d'autre."],
+      verification: ["Compte rendu avec vérification de cohérence", "Le compte rendu, la fiabilité, les incohérences non résolues et la transcription annotée avec le code couleur."],
+      transcription: ["Transcription", "Le texte intégral de la réunion : heure, interlocuteur et propos."] };
+    const formats = [["docx", "Word", ".docx"], ["pdf", "PDF", ".pdf"], ["odt", "OpenDocument", ".odt"], ["txt", "Texte", ".txt"], ["md", "Markdown", ".md"]];
+    const choisi = etat.docExport || "compte-rendu";
+    return `
+      <fieldset class="fr-fieldset" aria-labelledby="titre-doc">
+        <legend class="fr-fieldset__legend" id="titre-doc"><h2 class="fr-h5 fr-mb-0">1. Choisissez le document</h2></legend>
+        ${Object.entries(docs).map(([code, [titre, desc]]) => `
+          <div class="fr-fieldset__element"><div class="fr-radio-group fr-radio-rich">
+            <input type="radio" id="doc-${code}" name="doc-export" value="${code}" ${choisi === code ? "checked" : ""}>
+            <label class="fr-label" for="doc-${code}">${titre}<span class="fr-hint-text">${desc}</span></label>
+          </div></div>`).join("")}
+      </fieldset>
+      <h2 class="fr-h5 fr-mt-3w">2. Téléchargez-le dans le format voulu</h2>
+      <ul class="fr-btns-group fr-btns-group--inline-md fr-btns-group--icon-left">
+        ${formats.map(([f, n, ext], i) => `<li><button class="fr-btn ${i ? "fr-btn--secondary" : ""} fr-icon-download-line" type="button" data-telecharger="${f}">${n} <span class="cr-mention-ext">(${ext})</span></button></li>`).join("")}
+      </ul>
+      <p class="cr-mention">Le fichier est créé sur ce poste et enregistré dans votre dossier Téléchargements. OpenDocument (.odt) s'ouvre avec LibreOffice et Word.</p>`;
+  }
 
   function ongletJournal(r) {
     const libelles = { creation: "Dépôt de l'audio", transcription: "Transcription", analyse: "Analyse IA", correction: "Correction",
@@ -561,7 +583,12 @@ import { api as apiLocale, demarrer } from "./api-locale.js";
     const b = e.target.closest("button, a[data-voir]");
     if (!b) return;
     const d = b.dataset;
-    if (d.onglet) { etat.onglet = d.onglet; afficherReunion(); document.getElementById(`onglet-${d.onglet}`).focus(); return; }
+    if (d.onglet) {
+      if (etat.onglet === "compte-rendu" && document.getElementById("form-cr")) {
+        try { await api("PUT", `${base()}/compte-rendu`, lireCompteRendu()); etat.reunion = await api("GET", base()); } catch (err) { notifier(err.message, "error"); }
+      }
+      etat.onglet = d.onglet; afficherReunion(); document.getElementById(`onglet-${d.onglet}`)?.focus(); return;
+    }
     if (d.ia) { const champ = document.getElementById("lien-ia"); champ.value = d.ia; etat.lienIa = d.ia; resoudreIa(d.ia); return; }
     if (d.lire !== undefined) { lireA(d.lire); return; }
     if (d.voir) {
@@ -591,31 +618,18 @@ import { api as apiLocale, demarrer } from "./api-locale.js";
       document.getElementById(zone).lastElementChild.querySelector("input,textarea").focus();
       return;
     }
-    if (d.export) {
+    if (d.telecharger) {
+      const doc = etat.docExport || "compte-rendu";
+      b.disabled = true;
       try {
-        // enregistre d'abord les modifications en cours
-        await api("PUT", `${base()}/compte-rendu`, lireCompteRendu());
-        if (d.export === "pdf") {
-          const { html, nom } = await api("GET", `${base()}/export?format=pdf`);
-          const zone = document.getElementById("impression");
-          zone.innerHTML = html;
-          const titre = document.title;
-          document.title = nom; // nom proposé pour le fichier PDF
-          const fin = () => { document.title = titre; zone.innerHTML = ""; window.removeEventListener("afterprint", fin); };
-          window.addEventListener("afterprint", fin);
-          document.body.classList.add("cr-imprime");
-          window.addEventListener("afterprint", () => document.body.classList.remove("cr-imprime"), { once: true });
-          notifier("Dans la fenêtre d'impression, choisissez « Enregistrer au format PDF » comme destination.", "info");
-          window.print();
-          return;
-        }
-        const { blob, nom } = await api("GET", `${base()}/export?format=${d.export}`);
+        const { blob, nom } = await api("GET", `${base()}/export?doc=${doc}&format=${d.telecharger}`);
         const lien = document.createElement("a");
         lien.href = URL.createObjectURL(blob);
         lien.download = nom;
         document.body.appendChild(lien); lien.click(); lien.remove();
         setTimeout(() => URL.revokeObjectURL(lien.href), 10000);
-      } catch (err) { notifier(err.message, "error"); }
+        notifier(`Fichier téléchargé : ${nom}`);
+      } catch (err) { notifier(err.message, "error"); } finally { b.disabled = false; }
       return;
     }
     if (d.oublierCle) {
@@ -646,6 +660,7 @@ import { api as apiLocale, demarrer } from "./api-locale.js";
 
   $app.addEventListener("change", (e) => {
     const t = e.target;
+    if (t.name === "doc-export") { etat.docExport = t.value; return; }
     if (t.id === "filtre") { etat.filtre = t.value; afficherReunion(); document.getElementById("filtre").focus(); }
     if (t.dataset.locuteur) action(() => api("PATCH", `${base()}/segments/${t.dataset.locuteur}`, { locuteur: t.value }), "Interlocuteur modifié.");
   });
