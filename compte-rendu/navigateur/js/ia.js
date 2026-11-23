@@ -236,16 +236,32 @@ export async function analyser(reunion, f, cle, modele, progression = () => {}) 
   };
 }
 
+/**
+ * Intègre une analyse dans la réunion.
+ * - analyse locale (sans IA) : remplace les remarques locales précédentes ;
+ * - analyse par IA : ses remarques s'AJOUTENT à celles de l'analyse locale, et le score retenu est le plus prudent des deux.
+ */
 export function appliquer(reunion, resultat, f, modele) {
+  const locale = f.code === "locale";
   for (const s of reunion.segments) {
     const r = resultat.parSegment[s.id];
-    s.score = r ? r.score : null;
-    s.incoherences = r ? r.incoherences.map((i) => ({ ...i, statut: "ouverte" })) : [];
+    const conservees = (s.incoherences || []).filter((i) => (locale ? i.origine === "ia" : i.origine === "locale"));
+    const nouvelles = r ? r.incoherences.map((i) => ({ ...i, statut: "ouverte", origine: locale ? "locale" : "ia" })) : [];
+    s.incoherences = locale ? [...nouvelles, ...conservees] : [...conservees, ...nouvelles];
+    if (locale) s.score_local = r ? r.score : null;
+    else s.score_ia = r ? r.score : null;
+    const scores = [s.score_local, s.score_ia].filter((x) => x != null);
+    s.score = scores.length ? Math.min(...scores) : null;
     s.valide = false;
   }
-  reunion.compte_rendu = resultat.compteRendu;
-  reunion.incoherences_globales = resultat.incoherencesGlobales.map((g) => ({ ...g, statut: "ouverte" }));
-  reunion.analyse = { fournisseur: f.nom, code: f.code, modele: modele || f.modele, hors_ue: f.horsUE };
+  // le compte rendu de l'IA remplace celui de base ; l'analyse locale ne remplace pas un compte rendu rédigé par l'IA
+  if (!locale || !reunion.compte_rendu || reunion.compte_rendu.automatique) reunion.compte_rendu = resultat.compteRendu;
+  const globalesConservees = (reunion.incoherences_globales || []).filter((g) => (locale ? g.origine === "ia" : g.origine === "locale"));
+  reunion.incoherences_globales = [...globalesConservees, ...resultat.incoherencesGlobales.map((g) => ({ ...g, statut: "ouverte", origine: locale ? "locale" : "ia" }))];
+  const precedente = reunion.analyse || {};
+  reunion.analyse = locale
+    ? { ...precedente, locale: true, fournisseur: precedente.ia ? precedente.fournisseur : "Analyse locale (sans IA)", code: precedente.ia ? precedente.code : "locale", modele: precedente.ia ? precedente.modele : "règles" }
+    : { ...precedente, locale: !!precedente.locale, ia: true, fournisseur: f.nom, code: f.code, modele: modele || f.modele, hors_ue: f.horsUE };
   recalculerScore(reunion);
 }
 
