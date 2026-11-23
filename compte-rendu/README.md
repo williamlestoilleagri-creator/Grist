@@ -1,5 +1,8 @@
 # Compte rendu de réunion
 
+> **Deux versions** : `navigateur/` — **sans aucune installation**, tout s'exécute dans le navigateur (voir `navigateur/README.md`) ;
+> `backend/` + `frontend/` — version serveur (meilleure qualité, traitement centralisé, compatible Albert).
+
 Application web (DSFR) qui, à partir de l'enregistrement d'une réunion prise avec **un micro unique** :
 
 1. **transcrit** la parole (Whisper, exécuté sur le serveur) ;
