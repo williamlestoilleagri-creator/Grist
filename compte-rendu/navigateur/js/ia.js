@@ -39,7 +39,20 @@ const NON_DISPONIBLES = {
   "chatgpt.com": "OpenAI n'est pas référencé dans cette application.",
 };
 
+/** Fournisseurs autorisés par la configuration de déploiement (config.js). */
+export function autorise(code) {
+  if (code === "demo") return true;
+  const liste = (self.CR_CONFIG || {}).iaAutorisees;
+  return Array.isArray(liste) ? liste.includes(code) : code !== "claude";
+}
+
 export function resoudre(lien) {
+  const f = resoudreSansControle(lien);
+  if (!autorise(f.code)) throw new ErreurIA(`${f.nom} est désactivé par l'administrateur sur ce déploiement.`);
+  return f;
+}
+
+function resoudreSansControle(lien) {
   lien = String(lien || "").trim();
   if (!lien) throw new ErreurIA("Saisissez le lien du modèle d'IA (ex. https://mistral.ai/fr/).");
   if (lien.length > 300) throw new ErreurIA("Lien trop long.");

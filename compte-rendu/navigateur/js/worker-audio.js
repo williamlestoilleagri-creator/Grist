@@ -18,7 +18,14 @@ async function choisirMateriel(prefere) {
 self.onmessage = async ({ data }) => {
   if (data.type !== "traiter") return;
   try {
-    if (data.hoteModeles) T.env.remoteHost = data.hoteModeles; // miroir interne éventuel des modèles
+    if (data.sourceModeles === "local") {
+      // modèles hébergés avec l'application (dossier modeles/) : aucune connexion externe
+      T.env.allowRemoteModels = false;
+      T.env.allowLocalModels = true;
+      // chemin sans le nom du serveur : avec une adresse complète, transformers.js ne vérifie pas
+      // la présence des fichiers du tokenizer et la transcription échoue
+      T.env.localModelPath = new URL("../modeles/", import.meta.url).pathname;
+    }
     const device = await choisirMateriel(data.materiel);
     self.postMessage({ type: "info", device });
 

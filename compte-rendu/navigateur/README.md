@@ -18,6 +18,11 @@ aucun Python, aucun serveur à installer. Il suffit d'ouvrir la page.
 - **Stockage** : réunions, audio et comptes rendus dans le navigateur (IndexedDB), avec purge automatique.
 - **Onglet « Télécharger »** : trois documents — le **compte rendu** (texte seul), le **compte rendu avec vérification de cohérence**, la **transcription** — en Word (.docx), PDF (.pdf, police Marianne), OpenDocument (.odt), texte (.txt) ou Markdown (.md), générés sur le poste.
 
+## Sécurité et RGPD
+
+Diagnostic complet, preuves et check-list de mise en service : **[SECURITE-RGPD.md](SECURITE-RGPD.md)** (version PDF : `SECURITE-RGPD.pdf`).
+Réglages de déploiement (conservation, IA autorisées, source des modèles) : **`config.js`**, réservé à l'administrateur.
+
 ## Utilisation
 
 1. Ouvrir `index.html` via un serveur web (GitHub Pages, serveur interne…). Ouvrir le fichier directement depuis le disque (`file://`) ne fonctionne pas.
