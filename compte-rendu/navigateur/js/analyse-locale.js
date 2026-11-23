@@ -273,7 +273,7 @@ const RE_DECISION = /\b(décision|décidé|décide|décidons|valid(?:é|ée|er|o
 const RE_ACTION = /\b(je (?:vais|vérifie|vérifierai|envoie|enverrai|prépare|préparerai|m'occupe|transmets|transmettrai|contacte|rédige)|(?:prépare|préparera|vérifiera|enverra|transmettra|organisera|contactera|rédigera)\b|il faudrait|il faut|à prévoir|pouvez-vous|pourriez-vous|merci de)/i;
 const RE_ECHEANCE = new RegExp(`\\b(d'ici (?:la fin du mois|la fin de l'année|[^,.;]{1,25})|avant (?:la |le )?[^,.;]{1,30}|(?:en|pour|fin|début|mi-)\\s?(?:${MOIS.join("|")})|(?:lundi|mardi|mercredi|jeudi|vendredi)(?: prochain)?|la semaine prochaine|le mois prochain|\\d{1,2}/\\d{1,2}(?:/\\d{2,4})?)`, "i");
 
-function compteRenduDeBase(reunion) {
+export function compteRenduDeBase(reunion) {
   const locs = reunion.locuteurs || {};
   const segments = reunion.segments || [];
   const nom = (c) => (locs[c] || {}).nom || c;
