@@ -294,9 +294,10 @@ export function compteRenduDeBase(reunion) {
 
   const temps = new Map();
   for (const s of segments) temps.set(s.locuteur, (temps.get(s.locuteur) || 0) + (s.fin - s.debut));
-  const participants = Object.keys(locs).map((c) => `${nom(c)} (${Math.round((temps.get(c) || 0) / 60 * 10) / 10} min de parole)`);
+  const participants = Object.keys(locs).map((c) => nom(c) + ((locs[c] || {}).fonction ? ` (${locs[c].fonction})` : ""));
 
-  const points = sujets.slice(0, 4).map((sujet) => {
+  const dejaCites = new Set();
+  const points = sujets.map((sujet) => {
     const r = radical(sujet);
     const extraits = [], ids = [];
     for (const s of segments) {
@@ -305,8 +306,11 @@ export function compteRenduDeBase(reunion) {
         if (motsUtiles(p).some((m) => radical(m) === r)) { extraits.push(`${nom(s.locuteur)} : « ${p} »`); if (!ids.includes(s.id)) ids.push(s.id); }
       }
     }
+    // un sujet dont les extraits sont déjà tous cités (ex. « appels » / « offres ») n'est pas répété
+    if (!extraits.length || extraits.every((e) => dejaCites.has(e))) return null;
+    extraits.forEach((e) => dejaCites.add(e));
     return { titre: sujet.charAt(0).toUpperCase() + sujet.slice(1), contenu: extraits.join("\n"), segments: ids };
-  });
+  }).filter(Boolean).slice(0, 4);
 
   const decisions = [], actions = [];
   const prenoms = Object.entries(locs).flatMap(([code, l]) => String(l.nom || "").split(/\s+/).filter((x) => x.length >= 3 && !/^interlocuteur$|^\d+$/i.test(x)).map((x) => [x.toLowerCase(), l.nom]));
@@ -315,12 +319,13 @@ export function compteRenduDeBase(reunion) {
     for (let k = 0; k < liste.length; k++) {
       let p = liste[k];
       // « Décision : » suivi de la phrase qui la précise
-      if (/^d[ée]cision\s*[.:]?$/i.test(p) && liste[k + 1]) { decisions.push(`${liste[k + 1]} (${nom(s.locuteur)})`); continue; }
-      if (RE_DECISION.test(p) && motsDe(p).length >= 4) decisions.push(`${p} (${nom(s.locuteur)})`);
+      if (/^d[ée]cision\s*[.:]?$/i.test(p) && liste[k + 1]) { decisions.push(liste[k + 1]); continue; }
+      if (RE_DECISION.test(p) && motsDe(p).length >= 4) decisions.push(p);
       if (RE_ACTION.test(p)) {
         const cite = prenoms.find(([pr]) => new RegExp(`\\b${pr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(p));
-        const responsable = cite ? cite[1] : /\bje\b/i.test(p) ? nom(s.locuteur) : "À désigner";
-        const echeance = (RE_ECHEANCE.exec(p) || [])[0] || "Non précisée";
+        const civilite = /\b(Madame|Monsieur|Mme|M\.)\s+\p{Lu}[\p{L}-]+/u.exec(p);
+        const responsable = cite ? cite[1] : civilite ? civilite[0] : /\bje\b/i.test(p) ? nom(s.locuteur) : "À désigner";
+        const echeance = ((RE_ECHEANCE.exec(p) || [])[0] || "Non précisée").replace(/^(pour|en)\s+/i, "");
         actions.push({ action: p, responsable, echeance });
       }
     }
@@ -328,9 +333,7 @@ export function compteRenduDeBase(reunion) {
 
   const minutes = Math.max(1, Math.round(duree / 60));
   return {
-    resume: `Compte rendu établi automatiquement sans IA, à relire et compléter.\n`
-      + `Réunion « ${reunion.titre || "sans titre"} »${reunion.date_reunion ? ` du ${reunion.date_reunion}` : ""}, d'une durée d'environ ${minutes} min, `
-      + `avec ${Object.keys(locs).length} participant(s) : ${participants.join(", ")}.`
+    resume: `La réunion « ${reunion.titre || "sans titre"} » a duré environ ${minutes} min et a réuni ${Object.keys(locs).length} participant${Object.keys(locs).length > 1 ? "s" : ""} : ${participants.join(", ")}.`
       + (sujets.length ? `\nPrincipaux sujets abordés : ${sujets.join(", ")}.` : ""),
     points,
     decisions: [...new Set(decisions)].slice(0, 30),

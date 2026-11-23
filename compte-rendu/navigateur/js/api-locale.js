@@ -296,13 +296,13 @@ export async function api(methode, url, corps) {
     await stockage.enregistrer(r); await stockage.journaliser(id, "edition_compte_rendu"); return { ok: true };
   }
   if (action === "export" && methode === "GET") {
-    const demande = new URLSearchParams(requete).get("format");
-    const format = ["md", "pdf"].includes(demande) ? demande : "docx";
-    await stockage.journaliser(id, "export", format);
-    const nom = (r.titre || "compte-rendu").replace(/[^\p{L}\p{N}_-]+/gu, "-").replace(/^-|-$/g, "").slice(0, 80) || "compte-rendu";
-    if (format === "pdf") return { html: exporter.html(r), nom };
-    const blob = format === "md" ? new Blob([exporter.markdown(r)], { type: "text/markdown;charset=utf-8" }) : await exporter.docx(r);
-    return { blob, nom: `${nom}.${format}` };
+    const q = new URLSearchParams(requete);
+    const doc = exporter.DOCUMENTS[q.get("doc")] ? q.get("doc") : "compte-rendu";
+    const format = exporter.FORMATS[q.get("format")] ? q.get("format") : "docx";
+    await stockage.journaliser(id, "export", `${exporter.DOCUMENTS[doc].nom} (${format})`);
+    const base = (r.titre || "reunion").replace(/[^\p{L}\p{N}_-]+/gu, "-").replace(/^-|-$/g, "").slice(0, 70) || "reunion";
+    const suffixe = { "compte-rendu": "compte-rendu", verification: "compte-rendu-verification", transcription: "transcription" }[doc];
+    return { blob: await exporter.generer(r, doc, format), nom: `${base}_${suffixe}.${exporter.FORMATS[format].extension}` };
   }
   erreur("Action inconnue.");
 }

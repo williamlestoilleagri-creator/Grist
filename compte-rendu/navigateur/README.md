@@ -16,6 +16,7 @@ aucun Python, aucun serveur à installer. Il suffit d'ouvrir la page.
 - **IA en option** : pour analyser le sens des propos et rédiger le compte rendu, choisie par lien. Seul le **texte** lui est envoyé ;
   ses remarques s'ajoutent à celles de l'analyse locale.
 - **Stockage** : réunions, audio et comptes rendus dans le navigateur (IndexedDB), avec purge automatique.
+- **Onglet « Télécharger »** : trois documents — le **compte rendu** (texte seul), le **compte rendu avec vérification de cohérence**, la **transcription** — en Word (.docx), PDF (.pdf, police Marianne), OpenDocument (.odt), texte (.txt) ou Markdown (.md), générés sur le poste.
 
 ## Utilisation
 
@@ -71,7 +72,7 @@ navigateur/
 │   ├── export.js         Export Word / Markdown
 │   ├── stockage.js       IndexedDB, réglages, clés, purge
 │   └── demo.js           Données fictives
-├── vendor/               transformers.js 4.3.2, onnxruntime-web, SDK Anthropic, docx, dictionnaire français (embarqués, aucun CDN)
+├── vendor/               transformers.js 4.3.2, onnxruntime-web, SDK Anthropic, docx, jsPDF, polices Marianne (TTF), dictionnaire français (embarqués, aucun CDN)
 └── dsfr/                 Système de design de l'État 1.15
 ```
 
