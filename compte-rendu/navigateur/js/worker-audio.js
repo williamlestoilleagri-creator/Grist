@@ -18,7 +18,12 @@ async function choisirMateriel(prefere) {
 self.onmessage = async ({ data }) => {
   if (data.type !== "traiter") return;
   try {
-    if (data.hoteModeles) T.env.remoteHost = data.hoteModeles; // miroir interne éventuel des modèles
+    if (data.sourceModeles === "local") {
+      // modèles hébergés avec l'application (dossier modeles/) : aucune connexion externe
+      T.env.allowRemoteModels = false;
+      T.env.allowLocalModels = true;
+      T.env.localModelPath = new URL("../modeles/", import.meta.url).href;
+    }
     const device = await choisirMateriel(data.materiel);
     self.postMessage({ type: "info", device });
 

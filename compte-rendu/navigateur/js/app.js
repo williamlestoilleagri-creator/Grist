@@ -1,6 +1,12 @@
 /* Compte rendu de réunion — version navigateur : tout le traitement s'effectue sur ce poste. */
 import { api as apiLocale, demarrer } from "./api-locale.js";
 
+// Protection contre l'intégration dans un cadre d'un autre site (détournement de clic)
+if (window.top !== window.self) {
+  document.body.innerHTML = "<p>Pour votre sécurité, cette application ne peut pas être affichée dans un cadre.</p>";
+  throw new Error("Affichage dans un cadre refusé");
+}
+
 (() => {
   const $app = document.getElementById("app");
   const etat = { config: null, reunion: null, onglet: "transcription", filtre: "tous", edition: null, minuteur: null,
@@ -75,11 +81,16 @@ import { api as apiLocale, demarrer } from "./api-locale.js";
     $app.innerHTML = `
       <h1>Compte rendu de réunion</h1>
       ${c.demo ? `<div class="fr-notice fr-notice--info fr-mb-3w"><div class="fr-container"><div class="fr-notice__body"><p class="fr-notice__title">Mode démonstration : la transcription et l'analyse sont fictives. Choisissez l'IA « Démonstration » pour tester.</p></div></div></div>` : ""}
+      ${/\.github\.io$/i.test(location.hostname) ? `<div class="fr-alert fr-alert--warning fr-mb-3w"><h2 class="fr-alert__title">Adresse de démonstration</h2>
+        <p>Cette adresse publique est partagée avec d'autres applications : utilisez-la pour essayer l'outil, pas pour de vraies réunions.
+          Pour un usage en service, l'application doit être installée sur un serveur interne (voir le diagnostic de sécurité).</p></div>` : ""}
       <div class="fr-callout fr-icon-lock-line fr-mb-4w">
         <h2 class="fr-callout__title fr-h5">Tout se passe sur votre ordinateur</h2>
         <p class="fr-callout__text fr-text--md">L'enregistrement est transcrit et les voix sont séparées <strong>dans ce navigateur</strong> : l'audio n'est envoyé nulle part.
           Seul le texte est transmis à l'IA que vous choisissez pour l'analyse de cohérence. Les réunions sont conservées sur ce poste uniquement.</p>
-        <p class="cr-mention fr-mb-0">Première utilisation : les modèles (quelques centaines de Mo) sont téléchargés une fois puis gardés par le navigateur.
+        ${c.ephemere ? `<p class="fr-callout__text fr-text--md"><strong>Mode éphémère</strong> : rien n'est conservé. Tout est effacé à la fermeture du navigateur —
+          <strong>téléchargez vos documents avant de fermer</strong>.</p>` : ""}
+        <p class="cr-mention fr-mb-0">Première utilisation : les modèles (quelques centaines de Mo) sont ${c.deploiement.sourceModeles === "local" ? "chargés depuis le serveur de l'application" : "téléchargés une fois"} puis gardés par le navigateur.
           Navigateur conseillé : Chrome ou Edge récent. <a href="#/reglages">Réglages</a></p>
       </div>
       <div class="fr-grid-row fr-grid-row--gutters">
@@ -103,7 +114,7 @@ import { api as apiLocale, demarrer } from "./api-locale.js";
             <div class="fr-checkbox-group fr-mb-3w">
               <input type="checkbox" id="info" name="information_participants" value="true" required>
               <label class="fr-label" for="info">J'atteste que les participants ont été informés de l'enregistrement et de son traitement automatisé
-                <span class="fr-hint-text">Obligation d'information (RGPD, art. 13). Audio conservé ${c.retention_audio_jours} jours, réunion ${c.retention_reunion_jours} jours.</span></label>
+                <span class="fr-hint-text">Obligation d'information (RGPD, art. 13). ${c.ephemere ? "Données effacées à la fermeture du navigateur." : `Audio conservé ${c.retention_audio_jours} jours, réunion ${c.retention_reunion_jours} jours.`}</span></label>
             </div>
             <button class="fr-btn fr-icon-upload-line fr-btn--icon-left" type="submit" id="btn-envoyer">Transcrire sur ce poste</button>
             <p class="fr-mention cr-mention fr-mt-2w" id="envoi-etat" aria-live="polite"></p>
@@ -276,8 +287,9 @@ import { api as apiLocale, demarrer } from "./api-locale.js";
               <span class="fr-hint-text">${f.configure ? "Une clé est enregistrée. Saisissez-en une autre pour la remplacer." : `À obtenir sur <a href="${esc(f.obtenir_cle)}" target="_blank" rel="noopener" title="${esc(f.obtenir_cle)} — nouvelle fenêtre">la console du fournisseur</a>.`}</span></label>
             <input class="fr-input" type="password" id="cle-${esc(f.code)}" name="cle" autocomplete="off" spellcheck="false" ${f.configure ? 'placeholder="••••••••"' : "required"}></div></div>
           <div class="fr-col-12 fr-col-md-6">
-            <div class="fr-checkbox-group fr-checkbox-group--sm fr-mb-1w"><input type="checkbox" id="memo-${esc(f.code)}" name="memoriser" ${f.cle_memorisee ? "checked" : ""}>
-              <label class="fr-label" for="memo-${esc(f.code)}">Mémoriser sur ce poste <span class="fr-hint-text">Sinon, effacée à la fermeture du navigateur</span></label></div>
+            ${f.memorisation_autorisee ? `<div class="fr-checkbox-group fr-checkbox-group--sm fr-mb-1w"><input type="checkbox" id="memo-${esc(f.code)}" name="memoriser" ${f.cle_memorisee ? "checked" : ""}>
+              <label class="fr-label" for="memo-${esc(f.code)}">Mémoriser sur ce poste <span class="fr-hint-text">Sinon, effacée à la fermeture du navigateur</span></label></div>`
+              : `<p class="cr-mention fr-mb-1w">La clé est effacée à la fermeture du navigateur.</p>`}
             <button class="fr-btn fr-btn--sm fr-btn--secondary" type="submit">Enregistrer la clé</button>
             ${f.configure ? `<button class="fr-btn fr-btn--sm fr-btn--tertiary-no-outline" type="button" data-oublier-cle="${esc(f.code)}">Oublier la clé</button>` : ""}
           </div>
@@ -648,6 +660,11 @@ import { api as apiLocale, demarrer } from "./api-locale.js";
       etat.lienIa = lien;
       return action(() => api("POST", `${base()}/analyse`, { lien, modele, accepte_hors_ue: !!(accepte && accepte.checked) }), "Analyse lancée.");
     }
+    if (d.action === "tout-effacer") {
+      if (!confirm("Effacer définitivement TOUTES les données de l'application sur ce poste ?")) return;
+      try { await api("DELETE", "/api/tout"); etat.reunion = null; etat.config = await api("GET", "/api/config"); notifier("Toutes les données de ce poste ont été effacées."); location.hash = "#/"; } catch (err) { notifier(err.message, "error"); }
+      return;
+    }
     if (d.action === "suppr-audio") {
       if (!confirm("Supprimer définitivement l'enregistrement audio ? La transcription est conservée.")) return;
       return action(() => api("DELETE", `${base()}/audio`), "Audio supprimé.");
@@ -694,7 +711,7 @@ import { api as apiLocale, demarrer } from "./api-locale.js";
       e.preventDefault();
       const cle = f.cle.value.trim();
       if (!cle) return;
-      api("PUT", `/api/cles/${f.dataset.formCle}`, { cle, memoriser: f.memoriser.checked }).then(() => {
+      api("PUT", `/api/cles/${f.dataset.formCle}`, { cle, memoriser: !!f.memoriser?.checked }).then(() => {
         notifier("Clé enregistrée.");
         resoudreIa(document.getElementById("lien-ia").value);
       });
@@ -705,8 +722,7 @@ import { api as apiLocale, demarrer } from "./api-locale.js";
       const v = (n) => f.elements[n].value;
       api("PUT", "/api/reglages", {
         modeleTranscription: v("modele"), materiel: v("materiel"), lienIa: v("lien").trim() || "https://mistral.ai/fr/",
-        retentionAudio: Math.max(1, parseInt(v("retention_audio"), 10) || 30), retentionReunion: Math.max(1, parseInt(v("retention_reunion"), 10) || 365),
-        hoteModeles: v("hote").trim(),
+        ...(f.elements.retention_audio ? { retentionAudio: Math.max(1, parseInt(v("retention_audio"), 10) || 30), retentionReunion: Math.max(1, parseInt(v("retention_reunion"), 10) || 365) } : {}),
       }).then(async () => { etat.config = await api("GET", "/api/config"); notifier("Réglages enregistrés."); });
       return;
     }
@@ -729,21 +745,25 @@ import { api as apiLocale, demarrer } from "./api-locale.js";
             <option value="auto" ${g.materiel === "auto" ? "selected" : ""}>Automatique (carte graphique si disponible, conseillé)</option>
             <option value="wasm" ${g.materiel === "wasm" ? "selected" : ""}>Processeur uniquement (plus lent, plus compatible)</option>
           </select></div>
-        <div class="fr-input-group"><label class="fr-label" for="hote">Miroir interne des modèles (facultatif)
-          <span class="fr-hint-text">Adresse d'un serveur de votre administration hébergeant une copie des modèles. Vide : téléchargement depuis Hugging Face.</span></label>
-          <input class="fr-input" id="hote" name="hote" value="${esc(g.hoteModeles)}" placeholder="https://modeles.exemple.gouv.fr/"></div>
+        <p class="cr-mention">Source des modèles (fixée par l'administrateur) : ${c.deploiement.sourceModeles === "local" ? "serveur de l'application, aucune connexion externe" : "huggingface.co (téléchargement des modèles uniquement, aucune donnée de réunion envoyée)"}.</p>
         <h2 class="fr-h5 fr-mt-4w">Intelligence artificielle</h2>
         <div class="fr-input-group"><label class="fr-label" for="lien">Lien de l'IA proposée par défaut</label>
           <input class="fr-input" id="lien" name="lien" value="${esc(g.lienIa)}"></div>
-        <h2 class="fr-h5 fr-mt-4w">Durées de conservation sur ce poste</h2>
+        <h2 class="fr-h5 fr-mt-4w">Conservation sur ce poste</h2>
+        ${c.ephemere ? `<p><strong>Mode éphémère</strong> (fixé par l'administrateur) : rien n'est conservé, tout est effacé à la fermeture du navigateur.</p>` : `
         <div class="fr-grid-row fr-grid-row--gutters">
           <div class="fr-col-12 fr-col-md-6"><div class="fr-input-group"><label class="fr-label" for="retention_audio">Audio (jours)</label>
             <input class="fr-input" type="number" min="1" max="3650" id="retention_audio" name="retention_audio" value="${g.retentionAudio}"></div></div>
           <div class="fr-col-12 fr-col-md-6"><div class="fr-input-group"><label class="fr-label" for="retention_reunion">Transcription et compte rendu (jours)</label>
             <input class="fr-input" type="number" min="1" max="3650" id="retention_reunion" name="retention_reunion" value="${g.retentionReunion}"></div></div>
-        </div>
+        </div>`}
         <button class="fr-btn" type="submit">Enregistrer les réglages</button>
-      </form>`;
+      </form>
+      <div class="cr-zone-danger">
+        <h2 class="fr-h5">Effacer toutes les données de ce poste</h2>
+        <p class="cr-mention">Supprime immédiatement toutes les réunions, enregistrements, transcriptions, comptes rendus, le journal, les réglages et les clés d'API conservés par l'application dans ce navigateur.</p>
+        <button class="fr-btn fr-btn--secondary fr-icon-delete-line fr-btn--icon-left" type="button" data-action="tout-effacer">Tout effacer maintenant</button>
+      </div>`;
   }
 
   function pageAide() {
@@ -778,17 +798,24 @@ import { api as apiLocale, demarrer } from "./api-locale.js";
       <p>Les enregistrements contiennent la voix et les propos des participants (données personnelles). Le responsable de traitement est l'administration qui utilise ce service ; contactez son délégué à la protection des données (DPO) pour exercer vos droits.</p>
       <ul>
         <li>Finalité : rédaction des comptes rendus de réunion. Les participants doivent être informés avant l'enregistrement.</li>
-        <li>Audio, transcription et compte rendu sont stockés <strong>uniquement dans ce navigateur</strong> (aucun serveur de l'application).</li>
+        <li>Aucun serveur ne reçoit l'audio, la transcription ni le compte rendu : tout est traité <strong>dans ce navigateur</strong>.</li>
+        <li>${c.ephemere ? "<strong>Mode éphémère</strong> : les données ne sont gardées que pendant la session et sont effacées à la fermeture du navigateur." : "Les données sont conservées dans ce navigateur pendant les durées indiquées ci-dessous."}</li>
         <li>Aucune empreinte vocale n'est conservée ; les interlocuteurs sont nommés manuellement pour chaque réunion.</li>
-        <li>Durées de conservation : audio ${c.retention_audio_jours} jours, transcription et compte rendu ${c.retention_reunion_jours} jours, puis suppression automatique. Suppression manuelle possible à tout moment.</li>
-        <li>Fournisseurs d'IA (texte uniquement) : ${c.fournisseurs.map((f) => `${esc(f.nom)} (${esc(f.hebergement)})`).join(", ")}.</li>
-        <li>Les modèles de transcription sont téléchargés depuis Hugging Face (ou le miroir défini dans les réglages) ; aucun son n'y est envoyé.</li>
+        ${c.ephemere ? "" : `<li>Durées de conservation : audio ${c.retention_audio_jours} jours, transcription et compte rendu ${c.retention_reunion_jours} jours, puis suppression automatique.</li>`}
+        <li>Suppression manuelle possible à tout moment (réunion, audio seul, ou « Tout effacer » dans les réglages).</li>
+        <li>IA optionnelle (texte uniquement, jamais l'audio) : ${c.fournisseurs.filter((f) => f.code !== "demo").map((f) => `${esc(f.nom)} (${esc(f.hebergement)})`).join(", ") || "aucune autorisée sur ce déploiement"}.</li>
+        <li>Les modèles de transcription sont ${c.deploiement.sourceModeles === "local" ? "fournis par le serveur de l'application" : "téléchargés depuis huggingface.co ; aucun son ni texte n'y est envoyé"}.</li>
       </ul>
       <h2 id="cookies">Cookies</h2>
       <p>Ce service ne dépose aucun cookie ni traceur. Les réglages et, si vous le demandez, vos clés d'API sont conservés dans le stockage local du navigateur.</p>
       <h2 id="accessibilite">Accessibilité</h2>
       <p>Ce service est conçu avec le Système de design de l'État (DSFR) selon le RGAA 4.1. Il n'a pas encore fait l'objet d'un audit de conformité.</p>`;
   }
+
+  // Mode éphémère : prévenir avant de fermer si des réunions sont encore ouvertes
+  window.addEventListener("beforeunload", (e) => {
+    if (etat.config?.ephemere && etat.reunion) { e.preventDefault(); e.returnValue = ""; }
+  });
 
   demarrer().catch(() => {}).finally(router);
 })();

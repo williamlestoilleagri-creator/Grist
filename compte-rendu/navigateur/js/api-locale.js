@@ -16,6 +16,8 @@ const TAILLE_MAX_MO = 1000;
 const enCours = new Map(); // traitements actifs dans cet onglet
 
 export const demo = new URLSearchParams(location.search).has("demo");
+export const CONFIG = { conservation: "ephemere", sourceModeles: "huggingface", iaAutorisees: ["mistral", "ollama"], memoriserClesAutorise: false, ...(self.CR_CONFIG || {}) };
+export const ephemere = CONFIG.conservation !== "duree";
 
 const ANALYSE_LOCALE = { code: "locale", nom: "Analyse locale (sans IA)", modele: "règles", horsUE: false };
 let dictionnaire = null;
@@ -100,7 +102,7 @@ async function lancerTranscription(id) {
         };
         worker.onerror = (e) => { worker.terminate(); ko(new Error(e.message || "Erreur du module audio.")); };
         worker.postMessage({ type: "traiter", audio, modele: reglages.modeleTranscription, materiel: reglages.materiel,
-          nombre: r0.nb_locuteurs, hoteModeles: reglages.hoteModeles || undefined }, [audio.buffer]);
+          nombre: r0.nb_locuteurs, sourceModeles: CONFIG.sourceModeles }, [audio.buffer]);
       });
     }
     await maj(id, (r) => Object.assign(r, resultat, { statut: "transcrit", progression: "Analyse de cohérence locale…", erreur: null }));
@@ -127,6 +129,7 @@ async function lancerAnalyse(id, f, modele) {
 
 /** Au chargement : un traitement interrompu (onglet fermé) est signalé, et la purge est appliquée. */
 export async function demarrer() {
+  if (ephemere) await stockage.nettoyerSiNouvelleSession();
   const reglages = stockage.lireReglages();
   for (const r of await stockage.lister()) {
     if (["en_attente", "transcription", "analyse"].includes(r.statut) && !enCours.has(r.id)) {
@@ -135,13 +138,14 @@ export async function demarrer() {
       await stockage.enregistrer(r);
     }
   }
-  return stockage.purger(reglages.retentionAudio, reglages.retentionReunion);
+  return ephemere ? null : stockage.purger(reglages.retentionAudio, reglages.retentionReunion);
 }
 
 // ------------------------------------------------------------------ routes
 function fournisseurPublic(f) {
   return { code: f.code, nom: f.nom, site: f.site, hebergement: f.hebergement, hors_ue: f.horsUE, modele: f.modele,
-    cle_requise: f.cle, configure: !f.cle || !!stockage.lireCle(f.code), cle_memorisee: stockage.cleMemorisee(f.code), obtenir_cle: f.obtenirCle };
+    cle_requise: f.cle, configure: !f.cle || !!stockage.lireCle(f.code), cle_memorisee: stockage.cleMemorisee(f.code), obtenir_cle: f.obtenirCle,
+    memorisation_autorisee: !!CONFIG.memoriserClesAutorise };
 }
 
 function segment(r, sid) {
@@ -163,11 +167,12 @@ export async function api(methode, url, corps) {
   const reglages = stockage.lireReglages();
 
   if (methode === "GET" && chemin === "/api/config") {
-    const fournisseurs = Object.values(ia.FOURNISSEURS).filter((f) => f.code !== "demo" || demo).map(fournisseurPublic);
+    const fournisseurs = Object.values(ia.FOURNISSEURS).filter((f) => (f.code !== "demo" || demo) && ia.autorise(f.code)).map(fournisseurPublic);
     return { demo, taille_max_mo: TAILLE_MAX_MO, retention_audio_jours: reglages.retentionAudio, retention_reunion_jours: reglages.retentionReunion,
       lien_ia_defaut: demo ? "demo" : reglages.lienIa, fournisseurs, types_incoherence: ia.TYPES_INCOHERENCE, utilisateur: "ce poste",
-      modeles_transcription: MODELES_TRANSCRIPTION, reglages };
+      modeles_transcription: MODELES_TRANSCRIPTION, reglages, deploiement: CONFIG, ephemere };
   }
+  if (methode === "DELETE" && chemin === "/api/tout") { await stockage.toutEffacer(); return null; }
   if (methode === "PUT" && chemin === "/api/reglages") { stockage.ecrireReglages({ ...reglages, ...corps }); return { ok: true }; }
   if (methode === "PUT" && p[0] === "cles") { stockage.ecrireCle(p[1], (corps.cle || "").trim(), !!corps.memoriser); return { ok: true }; }
   if (methode === "POST" && chemin === "/api/ia/resoudre") {

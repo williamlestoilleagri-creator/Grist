@@ -67,6 +67,41 @@ export async function lireJournal(reunionId) {
   return lignes.sort((a, b) => b.horodatage - a.horodatage).slice(0, 200);
 }
 
+/** Efface TOUT ce que l'application a conservé sur ce poste (réunions, audio, journal, réglages, clés). */
+export async function toutEffacer() {
+  await transaction(["reunions", "audio", "journal"], "readwrite", (tx) => {
+    tx.objectStore("reunions").clear(); tx.objectStore("audio").clear(); tx.objectStore("journal").clear();
+  });
+  try {
+    for (const k of Object.keys(localStorage)) if (k.startsWith("cr-")) localStorage.removeItem(k);
+    for (const k of Object.keys(sessionStorage)) if (k.startsWith("cr-cle-")) sessionStorage.removeItem(k);
+  } catch { /* stockage indisponible */ }
+}
+
+/**
+ * Mode éphémère : à l'ouverture d'une NOUVELLE session de navigation (onglet fermé puis rouvert,
+ * navigateur redémarré), tout ce qui reste d'une session précédente est effacé.
+ * Un simple rechargement de la page ne compte pas comme une nouvelle session ; un autre onglet
+ * de l'application encore ouvert empêche l'effacement.
+ */
+export async function nettoyerSiNouvelleSession() {
+  let nouvelle = false;
+  try { nouvelle = !sessionStorage.getItem("cr-session"); sessionStorage.setItem("cr-session", "1"); } catch { nouvelle = true; }
+  const canal = "BroadcastChannel" in self ? new BroadcastChannel("cr-onglets") : null;
+  canal?.addEventListener("message", (e) => { if (e.data === "present?") canal.postMessage("present"); });
+  if (!nouvelle) return false;
+  const autreOnglet = canal ? await new Promise((ok) => {
+    const ecoute = (e) => { if (e.data === "present") ok(true); };
+    canal.addEventListener("message", ecoute);
+    canal.postMessage("present?");
+    setTimeout(() => { canal.removeEventListener("message", ecoute); ok(false); }, 400);
+  }) : false;
+  if (autreOnglet) return false;
+  await toutEffacer();
+  try { sessionStorage.setItem("cr-session", "1"); } catch { /* */ }
+  return true;
+}
+
 export async function purger(joursAudio, joursReunion) {
   const maintenant = Date.now() / 1000;
   let audio = 0, reunions = 0;
@@ -95,6 +130,7 @@ export function lireCle(code) {
   try { return sessionStorage.getItem(`cr-cle-${code}`) || localStorage.getItem(`cr-cle-${code}`) || ""; } catch { return ""; }
 }
 export function ecrireCle(code, cle, memoriser) {
+  if (!(self.CR_CONFIG || {}).memoriserClesAutorise) memoriser = false; // interdit par la configuration de déploiement
   try {
     sessionStorage.removeItem(`cr-cle-${code}`); localStorage.removeItem(`cr-cle-${code}`);
     if (cle) (memoriser ? localStorage : sessionStorage).setItem(`cr-cle-${code}`, cle);
