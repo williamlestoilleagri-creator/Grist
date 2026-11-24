@@ -1,5 +1,6 @@
 /* Compte rendu de réunion — version navigateur : tout le traitement s'effectue sur ce poste. */
 import { api as apiLocale, demarrer } from "./api-locale.js";
+import { demanderNotifications, veilleBloquee } from "./veille.js";
 
 // Protection contre l'intégration dans un cadre d'un autre site (détournement de clic)
 if (window.top !== window.self) {
@@ -143,6 +144,7 @@ if (window.top !== window.self) {
       const form = e.currentTarget;
       const donnees = new FormData(form);
       if (!donnees.get("nb_locuteurs")) donnees.delete("nb_locuteurs");
+      demanderNotifications(); // pour prévenir à la fin du traitement, même en votre absence
       const bouton = document.getElementById("btn-envoyer");
       bouton.disabled = true;
       document.getElementById("envoi-etat").textContent = "Enregistrement du fichier…";
@@ -179,7 +181,8 @@ if (window.top !== window.self) {
 
   function afficherReunion() {
     const r = etat.reunion;
-    document.title = `${r.titre} — Compte rendu de réunion`;
+    const pctTitre = EN_COURS.has(r.statut) ? (/(\d+) %/.exec(r.progression || "") || [])[1] : null;
+    document.title = pctTitre ? `${pctTitre} % · ${r.titre} — Compte rendu de réunion` : `${r.titre} — Compte rendu de réunion`;
     const { ouvertes, aVerifier } = statistiques(r);
     const enCours = EN_COURS.has(r.statut);
     const sg = r.analyse ? r.analyse.score_global : null;
@@ -209,7 +212,9 @@ if (window.top !== window.self) {
         <div>${badgeStatut(r.statut)}</div>
       </div>
       ${enCours ? `<div class="fr-alert fr-alert--info fr-mb-3w"><h2 class="fr-alert__title">Traitement en cours</h2><p>${esc(r.progression || "")}</p>
-        <p class="cr-mention"><strong>Gardez cet onglet ouvert</strong> : le calcul s'effectue sur votre ordinateur. Le travail est sauvegardé au fur et à mesure : si la page est rechargée, il reprend là où il s'était arrêté. Vous pouvez utiliser d'autres applications en attendant.</p></div>` : ""}
+        <p class="cr-mention fr-mb-1w"><strong>Vous pouvez vous absenter</strong> : laissez l'ordinateur allumé, branché sur secteur, et cet onglet ouvert.
+          ${veilleBloquee() ? "La mise en veille de l'écran est bloquée pendant le calcul. " : ""}Une notification vous préviendra à la fin.</p>
+        <p class="cr-mention fr-mb-0">Le travail est sauvegardé minute par minute : si l'ordinateur se met en veille ou si la page est rechargée, il reprend là où il s'était arrêté.</p></div>` : ""}
       ${r.erreur ? `<div class="fr-alert fr-alert--error fr-mb-3w"><h2 class="fr-alert__title">Erreur</h2><p>${esc(r.erreur)}</p>
         ${!enCours && !(r.segments || []).length && r.audio_disponible ? `<button class="fr-btn fr-btn--sm fr-icon-refresh-line fr-btn--icon-left fr-mt-2w" data-action="reprendre">Reprendre la transcription</button>
           <p class="cr-mention fr-mt-1w">Le son déjà extrait est réutilisé ; le travail déjà fait est conservé.</p>` : ""}</div>` : ""}
@@ -665,6 +670,7 @@ if (window.top !== window.self) {
       etat.lienIa = lien;
       return action(() => api("POST", `${base()}/analyse`, { lien, modele, accepte_hors_ue: !!(accepte && accepte.checked) }), "Analyse lancée.");
     }
+    if (d.action === "reprendre") demanderNotifications();
     if (d.action === "reprendre") return action(() => api("POST", `${base()}/reprendre`), "Traitement relancé.");
     if (d.action === "tout-effacer") {
       if (!confirm("Effacer définitivement TOUTES les données de l'application sur ce poste ?")) return;
@@ -794,6 +800,14 @@ if (window.top !== window.self) {
         <li>${badgeScore(34)} à ${badgeScore(0)} : incohérent.</li>
       </ul>
       <p>Une intervention marquée « vérifiée » par un agent compte pour 100 %.</p>
+      <h2>Laisser tourner le traitement en votre absence</h2>
+      <ul>
+        <li>Laissez l'ordinateur <strong>allumé et branché sur secteur</strong>, et l'onglet de l'application ouvert. Vous pouvez verrouiller votre session.</li>
+        <li>Pendant le calcul, l'application empêche la mise en veille de l'écran tant que l'onglet est affiché, et vous envoie une notification à la fin (si vous l'avez autorisée).</li>
+        <li>Dans Chrome ou Edge, ajoutez l'adresse de l'application aux sites « toujours actifs » : Paramètres → Performances → Économiseur de mémoire → « Toujours garder ces sites actifs ».</li>
+        <li>Si l'ordinateur se met malgré tout en veille, le traitement reprend tout seul au réveil, là où il s'était arrêté.</li>
+        <li>Pour un traitement qui continue <strong>ordinateur éteint</strong>, il faut la version serveur de l'application, installée par votre service informatique.</li>
+      </ul>
       <h2>Configuration conseillée</h2>
       <ul>
         <li>Chrome ou Edge récent ; une carte graphique accélère fortement le calcul.</li>
