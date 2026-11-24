@@ -18,6 +18,15 @@ export const MODELES_TRANSCRIPTION = {
 export const MODELE_SEGMENTATION = "onnx-community/pyannote-segmentation-3.0";
 export const MODELE_EMPREINTE = "onnx-community/wespeaker-voxceleb-resnet34-LM";
 
+/**
+ * L'audio peut être fourni en Float32Array (valeurs -1..1) ou en Int16Array (16 bits, deux fois plus compact,
+ * utilisé pour les longues réunions). Seul le morceau en cours de calcul est converti en Float32.
+ */
+export function morceau(audio, a, b) {
+  const extrait = audio.subarray(a, b);
+  return extrait instanceof Float32Array ? extrait : Float32Array.from(extrait, (v) => v / 32768);
+}
+
 const FENETRE_S = 10; // le modèle de segmentation est entraîné sur des fenêtres de 10 s
 const DUREE_MIN_EMPREINTE_S = 0.6;
 
@@ -90,7 +99,7 @@ export async function separerVoix(T, audio, options = {}, progression = () => {}
 
   for (let f = 0; f < nbFenetres; f++) {
     const decalage = f * taille;
-    const fenetre = audio.subarray(decalage, Math.min(audio.length, decalage + taille));
+    const fenetre = morceau(audio, decalage, Math.min(audio.length, decalage + taille));
     if (fenetre.length < TAUX * 0.5) continue;
     const entrees = await segProc(fenetre);
     const { logits } = await segModele(entrees);
@@ -113,7 +122,7 @@ export async function separerVoix(T, audio, options = {}, progression = () => {}
     }
 
     for (const [local, segs] of parLocal) {
-      const morceaux = segs.map((s) => audio.subarray(Math.floor(s.debut * TAUX), Math.ceil(s.fin * TAUX)));
+      const morceaux = segs.map((s) => morceau(audio, Math.floor(s.debut * TAUX), Math.ceil(s.fin * TAUX)));
       const longueur = morceaux.reduce((n, m) => n + m.length, 0);
       if (longueur < DUREE_MIN_EMPREINTE_S * TAUX) continue;
       const voix = new Float32Array(longueur);
@@ -168,7 +177,7 @@ export async function transcrire(T, audio, options = {}, progression = () => {})
   const total = Math.ceil(audio.length / bloc);
   for (let b = 0; b < total; b++) {
     const debut = b * bloc;
-    const extrait = audio.subarray(debut, Math.min(audio.length, debut + bloc));
+    const extrait = morceau(audio, debut, Math.min(audio.length, debut + bloc));
     const res = await asr(extrait, { ...(langue ? { language: langue } : {}), task: "transcribe", return_timestamps: "word", chunk_length_s: 30, stride_length_s: 5 });
     for (const c of res.chunks ?? [{ text: res.text, timestamp: [0, extrait.length / TAUX] }]) {
       const [d, f] = c.timestamp;
@@ -229,7 +238,8 @@ function niveauDb(audio, debut, fin) {
   const a = Math.max(0, Math.floor(debut * TAUX)), b = Math.min(audio.length, Math.ceil(fin * TAUX));
   if (b - a < TAUX * 0.1) return null;
   let somme = 0;
-  for (let i = a; i < b; i++) somme += audio[i] * audio[i];
+  const echelle = audio instanceof Float32Array ? 1 : 1 / 32768;
+  for (let i = a; i < b; i++) { const v = audio[i] * echelle; somme += v * v; }
   return 10 * Math.log10(somme / (b - a) + 1e-12);
 }
 

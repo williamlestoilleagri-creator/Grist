@@ -57,7 +57,8 @@ L'application est un **ensemble de fichiers statiques** (HTML, JavaScript, modè
 
 | Donnée | Traitée où | Stockée où | Durée (mode éphémère) | Transmise à |
 |---|---|---|---|---|
-| Enregistrement audio | Navigateur (Web Worker) | IndexedDB du navigateur | Session | **Personne** |
+| Fichier déposé (audio ou vidéo, sans limite de taille) | Navigateur : seule la piste son est extraite, en lisant le fichier par morceaux | **Jamais copié** : lu sur le disque de l'utilisateur, puis abandonné | Durée de l'extraction | **Personne** |
+| Son de la réunion (copie légère 16 kHz mono, ≈ 115 Mo par heure) | Navigateur (Web Worker) | IndexedDB du navigateur | Session | **Personne** |
 | Empreintes vocales (séparation des voix) | Navigateur, en mémoire | **Jamais stockées** | Durée du calcul | **Personne** |
 | Transcription, interlocuteurs, corrections | Navigateur | IndexedDB | Session | Personne. Exception : IA optionnelle, **texte seul** |
 | Résultats de l'analyse de cohérence locale | Navigateur | IndexedDB | Session | Personne |
@@ -131,7 +132,7 @@ Résultat : **0 alerte exécutée, 0 balise injectée**. Le code s'affiche comme
 | Politique de sécurité du contenu (CSP) | `default-src 'self'` ; scripts du seul site (`'wasm-unsafe-eval'` requis pour le calcul) ; connexions limitées à la liste du § 2 ; `object-src 'none'`, `base-uri 'self'`, `form-action 'self'` | ✅ |
 | Styles en ligne (`'unsafe-inline'` pour les styles) | Nécessaire pour les couleurs dynamiques ; aucun script en ligne autorisé | ⚠️ Risque faible accepté |
 | Intégration dans un cadre (détournement de clic) | Refusée par l'application ; `frame-ancestors 'none'` dans la configuration serveur fournie | ✅ (corrigé) |
-| Bibliothèques tierces | **Toutes embarquées**, version figée, aucun CDN : transformers.js 4.3.2, onnxruntime-web, jsPDF 4.2.1, docx 9.16, SDK Anthropic 1.12, DSFR 1.15, dictionnaire français. Licences dans `vendor/` | ✅ |
+| Bibliothèques tierces | **Toutes embarquées**, version figée, aucun CDN : transformers.js 4.3.2, onnxruntime-web, FFmpeg WebAssembly 0.12 (licence GPL, extraction du son), jsPDF 4.2.1, docx 9.16, SDK Anthropic 1.12, DSFR 1.15, dictionnaire français. Licences dans `vendor/` | ✅ |
 | Mouchards, statistiques, cookies | Aucun cookie, aucun outil de mesure d'audience, aucune télémétrie (vérifié par analyse du code et capture réseau) | ✅ |
 | Injection de code (XSS) | Échappement systématique, test négatif (§ 3.3) | ✅ |
 | Injection de consignes à l'IA | Consigne explicite de traiter le texte comme une donnée ; réponses de l'IA affichées sans interprétation (échappées) ; l'IA ne peut déclencher aucune action | ✅ |
@@ -173,7 +174,7 @@ Ce fonctionnement vise à **ne pas constituer un traitement de données biométr
 
 | Principe | Mise en œuvre |
 |---|---|
-| Minimisation | Ni compte, ni identifiant, ni adresse électronique. Aucune donnée collectée par l'éditeur. Pas de conservation des empreintes vocales |
+| Minimisation | Ni compte, ni identifiant, ni adresse électronique. Aucune donnée collectée par l'éditeur. Pas de conservation des empreintes vocales. Les images des vidéos ne sont jamais traitées ni conservées : seule une copie légère du son l'est, pendant la session |
 | Limitation de la conservation | Mode éphémère par défaut. Sinon, purge automatique configurable (audio 30 jours, réunion 365 jours) |
 | Exactitude | Contrôle de cohérence, corrections, historique des modifications |
 | Sécurité | § 4 ; aucune donnée hors du poste |
