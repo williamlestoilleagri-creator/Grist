@@ -7,6 +7,7 @@ import * as ia from "./ia.js";
 import * as exporter from "./export.js";
 import { analyserLocalement, compteRenduDeBase } from "./analyse-locale.js";
 import { extraireAudio, enWav, DUREE_MAX_H } from "./extraction-audio.js";
+import { maintenirEveille, notifierFin } from "./veille.js";
 import { MODELES_TRANSCRIPTION, TAUX } from "./moteur-audio.js";
 
 export class ErreurApi extends Error {}
@@ -58,6 +59,8 @@ async function maj(id, fn) {
 async function lancerTranscription(id) {
   const reglages = stockage.lireReglages();
   enCours.set(id, "transcription");
+  maintenirEveille(true); // le calcul continue sans personne devant le poste
+  let reussi = false;
   try {
     await maj(id, (r) => Object.assign(r, { statut: "transcription", progression: "Lecture de l'audio" }));
     const r0 = await stockage.lire(id);
@@ -137,12 +140,17 @@ async function lancerTranscription(id) {
     }
     await maj(id, (r) => { Object.assign(r, resultat, { statut: "analyse", progression: "Analyse de cohérence locale…", erreur: null }); delete r.reprise; });
     await stockage.journaliser(id, "transcription", `${resultat.segments.length} interventions`);
+    reussi = true;
     try { await analyseLocale(id); } // contrôle de cohérence sans IA, immédiat
     catch (e) { console.error(e); await maj(id, (r) => Object.assign(r, { statut: "transcrit", erreur: `Analyse locale impossible : ${e.message}`, progression: "" })); }
   } catch (e) {
     console.error(e);
     await maj(id, (r) => Object.assign(r, { statut: "erreur", erreur: `Échec de la transcription : ${e.message}`.slice(0, 500) }));
-  } finally { enCours.delete(id); }
+  } finally {
+    enCours.delete(id);
+    if (!enCours.size) maintenirEveille(false);
+    if (!demo) notifierFin(reussi);
+  }
 }
 
 async function lancerAnalyse(id, f, modele) {
