@@ -35,6 +35,8 @@
   .formule{font-family:Marianne,arial,sans-serif;font-weight:700;background:var(--background-default-grey);border-left:4px solid var(--border-plain-blue-france);padding:.5rem .75rem;font-size:.9rem;margin:.5rem 0}
   .ok{color:var(--text-default-success,#18753c);font-weight:700}.ko{color:var(--text-default-error);font-weight:700}.part{color:var(--text-default-warning,#b34000);font-weight:700}
   .court{font-size:.875rem}
+  .dense table{font-size:.78rem!important}
+  .cdc h3{color:var(--text-title-grey)}
   .pied{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border-default-grey);font-size:.8rem;color:var(--text-mention-grey)}
   @media(max-width:48em){.lots,.methodes{grid-template-columns:1fr}.cdc-entete{flex-direction:column;align-items:flex-start}.cdc-entete .titre{text-align:left}.cdc-meta{justify-content:flex-start}}
   @media print{
@@ -63,7 +65,7 @@
     <p class="fr-text--sm fr-mb-1v">Calculette GREN — fertilisation azotée</p>
     <h1>Cahier des charges</h1>
     <div class="cdc-meta">
-      <p class="fr-badge fr-badge--info fr-badge--no-icon">Version 1.0</p>
+      <p class="fr-badge fr-badge--info fr-badge--no-icon">Version 2.0</p>
       <p class="fr-badge fr-badge--no-icon">24 novembre 2026</p>
       <p class="fr-badge fr-badge--new fr-badge--no-icon">Document de travail</p>
     </div>
@@ -72,199 +74,298 @@
 
 <div class="fr-callout fr-mb-4w">
   <h2 class="fr-callout__title fr-h5" style="border:0;padding:0;margin:0 0 .5rem;color:inherit">En une phrase</h2>
-  <p class="fr-callout__text fr-text--md">Un outil web gratuit, au Système de Design de l'État, qui calcule pour chaque parcelle la <strong>dose prévisionnelle d'azote</strong> selon le <strong>référentiel GREN Bretagne</strong> et produit le <strong>plan prévisionnel de fumure (PPF)</strong>, sans que les données de l'exploitation ne quittent l'appareil de l'agriculteur. Le <strong>lot 1</strong> décrit l'application réalisée ; le <strong>lot 2</strong> ajoute des comptes utilisateurs.</p>
+  <p class="fr-callout__text fr-text--md">Un outil web gratuit, au Système de Design de l'État, qui calcule pour chaque îlot la <strong>dose prévisionnelle d'azote</strong> selon le <strong>référentiel GREN Bretagne</strong> (arrêté du 29 mars 2023 et ses 13 annexes) et produit le <strong>plan prévisionnel de fumure (PPF)</strong> conforme à l'annexe 12. Le <strong>lot 1</strong> est l'application réalisée, à mettre en conformité avec les annexes ; le <strong>lot 2</strong> ajoute des comptes utilisateurs.</p>
 </div>
 
-<!-- =========================================================== 1 -->
-<h2><span class="num">1</span>Contexte et objectifs</h2>
-<p>Toute la Bretagne est classée en <strong>zone vulnérable</strong> aux nitrates (directive 91/676/CEE, programme d'actions régional). Avant le premier apport de printemps, chaque exploitation doit établir un PPF dont les doses respectent le référentiel du <strong>GREN</strong> (Groupe régional d'expertise nitrates). Ce référentiel (millésime 2026) comporte 13 annexes : méthodologie, répartition des cultures, rendements, grilles par culture, coefficients des produits organiques, modèle de PPF, glossaire.</p>
+<!-- ============================================ 1 -->
+<h2><span class="num">1</span>Contexte et cadre réglementaire</h2>
+<p>Toute la Bretagne est en <strong>zone vulnérable</strong>. L'arrêté préfectoral du <strong>29 mars 2023</strong> (applicable depuis le 1<sup>er</sup> septembre 2023) fixe le référentiel régional d'équilibre de la fertilisation azotée, établi par le <strong>GREN</strong>. Ses obligations s'imposent à l'outil :</p>
 <div class="fr-table fr-table--no-caption"><div class="fr-table__wrapper"><div class="fr-table__container"><div class="fr-table__content"><table>
-  <thead><tr><th scope="col">Objectif</th><th scope="col">Traduction dans l'outil</th></tr></thead>
+  <thead><tr><th scope="col">Arrêté</th><th scope="col">Obligation</th><th scope="col">Conséquence pour l'outil</th></tr></thead>
   <tbody>
-    <tr><td><strong>Juste dose</strong></td><td>Calcul conforme au GREN, parcelle par parcelle, détail du calcul visible.</td></tr>
-    <tr><td><strong>PPF prêt à présenter</strong></td><td>Export PDF et Excel, cahier des apports prévus et réalisés.</td></tr>
-    <tr><td><strong>Simplicité</strong></td><td>Langage courant, 3 façons de commencer, saisie groupée, mémoire d'une année sur l'autre.</td></tr>
-    <tr><td><strong>Conformité</strong></td><td>Contrôle du calendrier d'épandage et du plafond de 170 kg N organique/ha.</td></tr>
-    <tr><td><strong>Confidentialité</strong></td><td>Lot 1 : aucune donnée d'exploitation envoyée. Lot 2 : stockage serveur avec consentement.</td></tr>
+    <tr><td>Art. 2 et ann. 2</td><td>Méthode de calcul fixée par culture : bilan, dose pivot ou dose plafond.</td><td>Aiguillage automatique de chaque culture vers sa méthode.</td></tr>
+    <tr><td>Art. 3</td><td>Rendement = moyenne des 5 derniers rendements de l'exploitation moins les 2 extrêmes, modulée par parcelle ; à défaut référentiel local, puis annexe 3.</td><td>Calcul automatique du rendement ; tableau de potentiel par parcelle joint au PPF.</td></tr>
+    <tr><td>Art. 5</td><td>Valeurs des effluents par défaut (ann. 11), adaptables par analyse de l'année ou bilan réel simplifié.</td><td>Teneur et coefficient modifiables, avec justificatif.</td></tr>
+    <tr><td>Art. 6</td><td>Un outil doit être <strong>conforme à la méthode du bilan du COMIFER</strong> ; toute référence non fixée par défaut doit être justifiée ; mesures et analyses tenues à disposition.</td><td>Valeurs GREN par défaut, sources citées ; toute saisie différente est tracée et justifiée.</td></tr>
+    <tr><td>Art. 7</td><td><strong>Analyse RSH obligatoire</strong> au-delà de 3 ha (cultures au bilan) ; valeur du réseau régional admise ; correction prévisionnel → mesuré inscrite au cahier.</td><td>Champ RSH mesuré / réseau / défaut ; correction tracée dans le cahier.</td></tr>
+    <tr><td>Art. 8 et 9</td><td>Pilotage recommandé. Tout dépassement de la dose doit être justifié : outil de pilotage, exportation supérieure ou accident cultural daté et décrit.</td><td>Saisie d'un dépassement avec motif obligatoire.</td></tr>
+    <tr><td>Art. 10 et ann. 12</td><td><strong>PPF pour chaque îlot</strong> en zone vulnérable, fertilisé ou non, exigible chaque année <strong>au plus tard le 31 mars</strong>.</td><td>Toutes les cultures figurent au PPF, y compris non fertilisées ; rappel d'échéance.</td></tr>
+    <tr><td>Art. 11</td><td>Référentiel actualisé au moins une fois par an.</td><td>Référentiel versionné par millésime, modifiable sans code.</td></tr>
   </tbody></table></div></div></div></div>
-<p class="fr-text--sm"><strong>Statut :</strong> outil d'aide à la décision, <strong>non réglementaire</strong>. Il ne se substitue ni à l'arrêté GREN, ni au programme d'actions, ni au conseil technique.</p>
+<p class="fr-text--sm"><strong>Statut :</strong> outil d'aide à la décision. Il ne remplace ni l'arrêté, ni le programme d'actions, ni le conseil technique. <strong>Versions :</strong> le référentiel en vigueur combine des annexes de 2017 (8, 10, 11), 2023 et 2024-2026 (3, tables variétales). Les projets 2026 des annexes 2 et 9 transmis sont intégrés comme <strong>millésime « projet 2026 »</strong>, activable après validation.</p>
 
-<!-- =========================================================== 2 -->
+<!-- ============================================ 2 -->
 <h2><span class="num">2</span>Périmètre et lotissement</h2>
 <div class="lots">
   <div class="lot"><h3 class="fr-h5">Lot 1 — Application sans compte <span class="fr-badge fr-badge--success fr-badge--sm fr-badge--no-icon">réalisé</span></h3>
-    <ul class="court"><li>Calcul GREN et PPF, utilisable sans inscription.</li><li>Données stockées dans le navigateur, copie exportable.</li><li>Modèle Excel, comparaison de résultats, PDF.</li><li>Espace administrateur simple et backoffice prêt à activer.</li><li><strong>Reste à faire :</strong> référentiel officiel 2026 et méthode « dose pivot ».</li></ul></div>
+    <ul class="court"><li>Calcul et PPF sans inscription, données dans le navigateur.</li><li>Modèle Excel, comparaison de résultats, PDF.</li><li>Espace administrateur et backoffice prêt à activer.</li><li><strong>Reste à faire (lot 1 bis) :</strong> mise en conformité avec les grilles GREN (§ 7.2).</li></ul></div>
   <div class="lot lot--2"><h3 class="fr-h5">Lot 2 — Application avec connexion <span class="fr-badge fr-badge--warning fr-badge--sm fr-badge--no-icon">option</span></h3>
-    <ul class="court"><li>Compte personnel : données retrouvées sur tous les appareils.</li><li>Conseiller : plusieurs exploitations, sur mandat.</li><li>Historique et cahier d'enregistrement sur serveur.</li><li>Référentiel publié et administré en ligne.</li><li>Pistes : données PAC, zonage et sol automatiques.</li></ul></div>
+    <ul class="court"><li>Compte personnel, données sur tous les appareils.</li><li>Conseiller : plusieurs exploitations, sur mandat.</li><li>Cahier d'enregistrement et historique sur serveur.</li><li>Référentiel publié en ligne ; pistes PAC, zonage, sol, Sol-AID, MERCI.</li></ul></div>
 </div>
 
-<!-- =========================================================== 3 -->
+<!-- ============================================ 3 -->
 <h2><span class="num">3</span>Utilisateurs</h2>
 <div class="fr-table fr-table--no-caption"><div class="fr-table__wrapper"><div class="fr-table__container"><div class="fr-table__content"><table>
   <thead><tr><th scope="col">Profil</th><th scope="col">Besoin principal</th><th scope="col">Lot 1</th><th scope="col">Lot 2</th></tr></thead>
   <tbody>
-    <tr><td><strong>Agriculteur·rice</strong></td><td>Calculer ses doses, produire et garder son PPF</td><td class="ok">Oui, sans compte</td><td class="ok">Compte personnel</td></tr>
-    <tr><td><strong>Conseiller·ère</strong> (chambre, coopérative, centre de gestion)</td><td>Accompagner plusieurs exploitations</td><td>Via fichiers Excel / copies</td><td class="ok">Portefeuille d'exploitations, avec accord de l'agriculteur</td></tr>
-    <tr><td><strong>Administrateur·rice</strong> (DRAAF / DDTM)</td><td>Tenir le référentiel à jour, suivre l'usage</td><td>Référentiel local, backoffice à activer</td><td class="ok">Backoffice complet</td></tr>
+    <tr><td><strong>Agriculteur·rice</strong></td><td>Calculer ses doses, produire et garder son PPF</td><td class="ok">Sans compte</td><td class="ok">Compte personnel</td></tr>
+    <tr><td><strong>Conseiller·ère</strong></td><td>Accompagner plusieurs exploitations</td><td>Fichiers Excel</td><td class="ok">Portefeuille, avec accord</td></tr>
+    <tr><td><strong>Administrateur·rice</strong> (DRAAF, DDTM)</td><td>Tenir le référentiel, suivre l'usage</td><td>Référentiel local</td><td class="ok">Backoffice complet</td></tr>
   </tbody></table></div></div></div></div>
 
-<!-- =========================================================== 4 -->
-<h2><span class="num">4</span>Moteur de calcul GREN</h2>
-<p>L'<strong>annexe 2</strong> attribue à chaque culture une méthode et une famille de coefficients d'équivalence engrais. Le moteur doit appliquer les <strong>trois méthodes</strong> :</p>
+<!-- ============================================ 4 -->
+<h2><span class="num">4</span>Moteur de calcul</h2>
+<p>Toutes les doses sont exprimées en <strong>azote efficace</strong> (équivalent engrais minéral, kg N/ha). L'<strong>annexe 2</strong> attribue à chaque culture une méthode et une famille de coefficients d'équivalence engrais (Keq).</p>
 <div class="methodes">
-  <div class="methode"><h4>Bilan</h4><p>Céréales, orge (4, 4 bis), colza (5), maïs et fourrages (6), dérobée + maïs (7), prairies (8).</p>
-    <p class="formule">Dose = besoin − RSH − minéralisation − effet précédent − N organique efficace ± corrections</p></div>
-  <div class="methode"><h4>Dose pivot</h4><p>Légumes frais de plein champ (9), légumes d'industrie (10), certaines cultures de l'annexe 2 (lin graine, chanvre, vergers…).</p>
-    <p class="formule">Dose pivot (selon richesse du précédent) ± 4 correctifs</p></div>
-  <div class="methode"><h4>Dose plafond</h4><p>Cultures sans grille (annexe 2 : méteil, sarrasin, luzerne…), plantes à parfum (2 bis), maraîchage sur petite surface (9, tableau 3).</p>
-    <p class="formule">Dose = plafond de la culture, diminuée de l'azote organique efficace</p></div>
+  <div class="methode"><h4>Bilan</h4><p>Céréales (ann. 4), orge (4 bis), colza (5), maïs et fourrages (6), dérobée + maïs (7), prairies (8).</p>
+    <p class="formule">X + Xa = (Pf − Pi + Rf) − (Ri + Mhp + Mr + Mha + Mhs)</p></div>
+  <div class="methode"><h4>Dose pivot / référence</h4><p>Légumes frais de plein champ (ann. 9), légumes d'industrie (ann. 10).</p>
+    <p class="formule">Pivot selon le précédent ± 4 correctifs ; industrie : référence − Ri − Mr − Mha</p></div>
+  <div class="methode"><h4>Dose plafond</h4><p>Cultures de l'annexe 2 sans grille, plantes à parfum (2 bis), maraîchage sur petite surface (9).</p>
+    <p class="formule">Dose ≤ plafond ; « dose balai » 100 pour les cultures non listées</p></div>
 </div>
 
-<h3 class="fr-h5">4.1 Méthode du bilan — étapes</h3>
-<p class="formule">Culture → rendement → besoin → − RSH → − minéralisation → − N organique efficace → ± corrections → plafond → dose finale</p>
-<ul class="court">
-  <li><strong>Rendement</strong> (annexe 3) : moyenne départementale, historique de l'exploitation sur 5 ans hors extrêmes, ou objectif, dans la limite du plafond.</li>
-  <li><strong>Besoin</strong> = rendement × coefficient de la culture (annexes 4 à 8).</li>
-  <li><strong>Fournitures</strong> : RSH (analyse ou forfait) ; minéralisation selon le sol, la matière organique, le précédent, le couvert, la prairie retournée.</li>
-  <li><strong>Azote organique efficace</strong> (annexe 11) = quantité × teneur × coefficient selon la famille de culture et la période d'apport.</li>
-  <li><strong>Corrections</strong> : paille, irrigation, légumineuse, dérobée, prairie retournée.</li>
-</ul>
-
-<h3 class="fr-h5">4.2 Méthode de la dose pivot (annexe 9)</h3>
+<h3 class="fr-h5">4.1 Postes du bilan (annexe 1 et grilles 4 à 7)</h3>
 <div class="fr-table fr-table--no-caption"><div class="fr-table__wrapper"><div class="fr-table__container"><div class="fr-table__content"><table>
-  <thead><tr><th scope="col">Élément</th><th scope="col">Règle</th></tr></thead>
+  <thead><tr><th scope="col">Poste</th><th scope="col">Règle</th></tr></thead>
   <tbody>
-    <tr><td>Dose pivot</td><td>Par culture et créneau de production, selon un précédent <em>riche</em>, <em>moyennement riche</em> ou <em>pauvre</em> (tableaux 1, 1 bis, 2 ; la richesse dépend aussi de la période d'implantation).</td></tr>
-    <tr><td>Correctif pédologique</td><td><strong>+20 N</strong> si MO &lt; 2 %, système endivier ou sol sableux (&gt; 55 % de sables).</td></tr>
-    <tr><td>Correctif PRO</td><td><strong>−15 N</strong> si l'indice des 3 dernières années ≥ 2 (PRO type 1 = 1 point, type 2 = 0,5 point).</td></tr>
-    <tr><td>Correctif rotation</td><td><strong>−15 N</strong> si uniquement légumes et couverts les 3 dernières années.</td></tr>
-    <tr><td>Correctif RSH</td><td>Implantations de janvier à avril sans reliquat mesuré : <strong>±10 N</strong> si la pluie d'octobre à janvier s'écarte de plus de 30 % de la normale.</td></tr>
-    <tr><td>Avec reliquat mesuré</td><td>Dose pivot ± correctifs (rotation, PRO, pédologique) <strong>+ 20 − reliquat</strong>.</td></tr>
-    <tr><td>Cas particuliers</td><td>Apport en cours de culture : plafond indépendant, sans correctif. Dose &lt; 30 N : apport de PRO type 1 de 30 N possible si aucun apport l'année précédente. −30 % si fertilisation localisée (cultures signalées).</td></tr>
+    <tr><td><strong>Pf</strong> besoin</td><td>Rendement × besoin unitaire <em>b</em> (tableau 4.2). Blé : <em>b</em> selon la variété (table annuelle DRAAF).</td></tr>
+    <tr><td><strong>Pi</strong> déjà absorbé</td><td>Céréales : seulement si le calcul ou le RSH est postérieur au 20/02. Colza : pesée ou estimation visuelle × 65. Dérobée : 15 / 45 / 65 selon le couvert (50 par défaut). Maïs : 0.</td></tr>
+    <tr><td><strong>Rf</strong> non valorisable</td><td><strong>30</strong> quel que soit le sol (20 pour les légumes avec reliquat).</td></tr>
+    <tr><td><strong>Ri</strong> RSH</td><td>Mesure parcelle → valeur du réseau régional → valeur par défaut de la grille et du département. <strong>Correction obligatoire au cahier</strong> après publication du réseau.</td></tr>
+    <tr><td><strong>Mhp</strong> prairie retournée</td><td>Tableaux par âge (&lt; 18 mois à &gt; 10 ans), mode d'exploitation (100 % pâture, 1 ou 2 fauches + pâture, 100 % fauche) et rang de la culture ; maïs : destruction au printemps ou en été avant dérobée. Association RGA-trèfle blanc = 100 % pâture.</td></tr>
+    <tr><td><strong>Mr / Mrci</strong> précédent</td><td>Valeur par précédent et par grille, <strong>non cumulable</strong>. Ex. céréales : pailles enfouies −20, exportées 0, maïs grain −10, CIPAN 20 ou 30 (seuil 20 % de légumineuses). Mrci calculable avec l'outil <strong>MERCI</strong>.</td></tr>
+    <tr><td><strong>Mha</strong> arrière-effet organique</td><td>Tableau : type de produit (10 colonnes : fumier bovin et lisier bovin, fumier volaille, lisier volaille, lisier porc, fumier porc, boues, composts…) × nombre d'apports sur 10 ans (base 100 kg N total/ha).</td></tr>
+    <tr><td><strong>Mhs</strong> humus et système</td><td>Valeur selon le système de culture (rotation maïs-céréales avec dérobées ou CIPAN, part de prairie 3, 5 ou 8 ans sur 10, systèmes légumiers). <strong>Mha + Mhs remplaçables par Sol-AID</strong> (analyse de sol, historique 15 ans).</td></tr>
+    <tr><td><strong>Nirr</strong> irrigation</td><td><strong>0 en Bretagne</strong> : aucune majoration liée à l'irrigation.</td></tr>
   </tbody></table></div></div></div></div>
 
-<h3 class="fr-h5">4.3 Contrôles réglementaires</h3>
+<h3 class="fr-h5">4.2 Paramètres propres à chaque grille</h3>
+<div class="dense">
+<div class="fr-table fr-table--no-caption"><div class="fr-table__wrapper"><div class="fr-table__container"><div class="fr-table__content"><table>
+  <thead><tr><th scope="col">Grille</th><th scope="col">Besoin unitaire <em>b</em></th><th scope="col">RSH par défaut (29 / 22-56 / 35)</th><th scope="col">Mha (10 fumiers bovins)</th><th scope="col">Mhs</th><th scope="col">Particularités</th></tr></thead>
+  <tbody>
+    <tr><td>Céréales (4)</td><td>blé 3 (2,8 à 3,2 selon variété) ; triticale 2,6 ; seigle 2,3 ; avoine 2,2 ; méteil sans légumineuse 2,5 kg/q</td><td>30 / 40 / 50</td><td>30</td><td>50 à 80</td><td>Blé améliorant : <em>b</em> 3,7 à 4,1. Méteil avec légumineuses : plafond 50 (&lt; 30 %) ou 0.</td></tr>
+    <tr><td>Orge (4 bis)</td><td>2,5 kg/q</td><td>30 / 40 / 50</td><td>18</td><td>30 à 50</td><td>Orge de printemps : −10 kg N. Tableaux Mhp et Mha propres.</td></tr>
+    <tr><td>Colza (5)</td><td>6,5 kg/q</td><td>20 / 25 / 35</td><td>24</td><td>40 à 70</td><td><strong>2 périodes</strong> : semis plafonné à 65 ; complément ouvert fin janvier avec Pi mesuré.</td></tr>
+    <tr><td>Maïs (6)</td><td>ensilage 14 (≤ 14 t), 13 (&gt; 14 t), 12 (&gt; 18 t ou plastique) kg/t MS ; grain 2,3 ; semence 3 kg/q ; betterave 15 ; sorgho 13</td><td>10 (réseau si maïs sur maïs)</td><td>42</td><td>70 à 110</td><td>Pi = 0. Mr : légumineuses fourragères 60, chou-fleur d'hiver 60.</td></tr>
+    <tr><td>Dérobée + maïs (7)</td><td>dérobée : RGI 25, RGI + légumineuses &gt; 30 % 15, autre graminée 20, autre + légumineuse 12 kg/t MS ; maïs comme (6)</td><td>10 (réseau « cultures de printemps »)</td><td>42</td><td>70 à 110</td><td><strong>2 périodes</strong> (semis → 1<sup>er</sup> février → récolte). Mr = 0.</td></tr>
+  </tbody></table></div></div></div></div>
+</div>
+
+<h3 class="fr-h5">4.3 Rendement prévisionnel (arrêté art. 3, annexes 3 et 12)</h3>
 <ul class="court">
-  <li><strong>Plafond organique</strong> : somme de l'azote organique (épandu et pâturé) / SAU &gt; 170 kg N/ha → saisie bloquée, message d'infraction.</li>
-  <li><strong>Calendrier d'épandage</strong> : interdiction selon le type de fertilisant (I, II, III), la culture et le zonage → saisie bloquée.</li>
-  <li><strong>Zones ZAR / bassins versants</strong> : règles renforcées paramétrables ; alerte en cas de dépassement.</li>
+  <li><strong>Priorité 1</strong> : 5 derniers rendements de l'exploitation, sans les 2 extrêmes, moyenne des 3 restants (ex. 80, 72, 70, 65, 82 → 74 q), modulée par parcelle (type de sol sain / hydromorphe, profondeur &lt; 30, 30-60, &gt; 60 cm).</li>
+  <li><strong>Priorité 2</strong> : référentiel local. <strong>Priorité 3</strong> : annexe 3, moyennes <strong>régionales</strong> 2010-2024 (ex. blé tendre d'hiver 73 q, orge d'hiver 69, maïs grain 90, maïs ensilage 13 t MS, colza d'hiver 34 q ; prairies 8 / 8 / 6 / 4,5 t MS selon le type).</li>
+  <li>Le <strong>tableau « rendement moyen des parcelles »</strong> (annexe 12) est produit et joint au PPF.</li>
 </ul>
 
-<h3 class="fr-h5">4.4 Référentiel</h3>
-<p class="court">Toutes les valeurs (cultures, coefficients, rendements, sols, précédents, couverts, produits organiques, calendrier, plafonds) sont rangées dans un <strong>référentiel versionné par millésime</strong>, modifiable sans toucher au code et publié par l'administration. Chaque valeur doit citer son annexe source. <strong>Mise à jour annuelle</strong> à chaque nouveau millésime GREN.</p>
+<h3 class="fr-h5">4.4 Prairies (annexe 8)</h3>
+<p class="formule">Dose = (rendement × coefficient d'exportation − fournitures du sol) / 0,7</p>
+<ul class="court">
+  <li><strong>Rendement</strong> issu du bilan fourrager simplifié : 6,2 t MS par UGB herbivore, UGB par catégorie (vache laitière 0,95 / 1,05 / 1,15 selon la production…), écart toléré ± 5 % ; indicateur de contrôle en jours de présence au pâturage.</li>
+  <li><strong>Coefficient d'exportation</strong> (kg N/t MS) : pâturage rapide 30, lent ou mixte 25, fauche intensive 30, foin précoce 20, foin tardif 15.</li>
+  <li><strong>Fournitures</strong> selon l'entretien azoté antérieur (fort, moyen, faible, issu d'une note d'effluents et de pression de pâturage) et le niveau de rendement ; contribution des légumineuses déduite.</li>
+  <li><strong>Garde-fous</strong> : plus de 30 % de trèfle → 50 kg N maximum en début de saison ; association de première année → pas d'azote ; calcul &lt; 50 → 50 autorisés ; &gt; 200 seulement si ≥ 10 t MS ; <strong>250 maximum</strong>.</li>
+</ul>
 
-<!-- =========================================================== 5 -->
+<h3 class="fr-h5">4.5 Légumes frais de plein champ (annexe 9)</h3>
+<div class="fr-table fr-table--no-caption"><div class="fr-table__wrapper"><div class="fr-table__container"><div class="fr-table__content"><table>
+  <thead><tr><th scope="col">Élément</th><th scope="col">Version 2023 en vigueur</th><th scope="col">Projet 2026</th></tr></thead>
+  <tbody>
+    <tr><td>Dose pivot</td><td>Fourchette par culture et créneau, selon un précédent riche, moyen ou pauvre ; on retient la valeur haute.</td><td>Valeur unique ; tableau 1 bis pour les <strong>couverts</strong> (CINE, CIE ; « avec légumineuses » si ≥ 50 % de la biomasse) ; courgette d'été ajoutée.</td></tr>
+    <tr><td>Correctifs</td><td colspan="2">Pédologique <strong>+20</strong> (MO &lt; 2 %, système endivier, sol &gt; 55 % de sables) ; PRO <strong>−15</strong> si indice des 3 ans ≥ 2 (type 1 = 1, type 2 = 0,5) ; rotation <strong>−15</strong> si uniquement légumes et couverts sur 3 ans ; RSH <strong>±10</strong> si la pluie d'octobre à janvier s'écarte de 30 % de la normale (Dinard 321 mm, Pommerit-Jaudy 400, Sibiril 420).</td></tr>
+    <tr><td>Avec reliquat mesuré</td><td colspan="2">Pivot ± correctifs (sans RSH) + 20 − reliquat.</td></tr>
+    <tr><td>Règles 2026</td><td>—</td><td>Correctif RSH réservé aux plantations de janvier à avril (carte communale publiée en février). Pivot corrigé et apport en cours de culture : 2 plafonds indépendants. Dose &lt; 30 → PRO type 1 de 30 possible. +10 après maïs grain (échalote, oignon).</td></tr>
+    <tr><td>Divers</td><td colspan="2">−30 % si fertilisation localisée (pommes de terre). Légumes sous abri exemptés. Maraîchage sur petite surface et cultures non listées : <strong>plafond 210</strong>.</td></tr>
+  </tbody></table></div></div></div></div>
+
+<h3 class="fr-h5">4.6 Légumes d'industrie (annexe 10, grilles 2017)</h3>
+<p class="formule">X + Xa = dose de référence − reliquat pré-semis − effet du précédent − arrière-effet organique</p>
+<div class="dense">
+<div class="fr-table fr-table--no-caption"><div class="fr-table__wrapper"><div class="fr-table__container"><div class="fr-table__content"><table>
+  <thead><tr><th scope="col">Culture</th><th scope="col">Référence</th><th scope="col">Culture</th><th scope="col">Référence</th></tr></thead>
+  <tbody>
+    <tr><td>Grosses carottes (80 t)</td><td>150</td><td>Épinards de printemps et d'hiver</td><td>250</td></tr>
+    <tr><td>Jeunes carottes (45 t)</td><td>110</td><td>Brocolis de printemps</td><td>250</td></tr>
+    <tr><td>Flageolets et gros haricots</td><td>180</td><td>Brocolis d'automne</td><td>220</td></tr>
+    <tr><td>Haricots fins et très fins</td><td>160</td><td>Céleri-rave d'automne</td><td>200</td></tr>
+    <tr><td>Épinards d'automne</td><td>200</td><td>Chou-fleur d'automne</td><td>220</td></tr>
+  </tbody></table></div></div></div></div>
+</div>
+<p class="court">Reliquat <strong>mesuré avant semis</strong> (recommandé) ou valeur repère selon le précédent (pâture, épinard, sol nu, RGI-CIPAN) ; effet du précédent et arrière-effet (« pas de déjections » 0 à « système bovin fumier + hors-sol ») lus sur chaque grille. Ces grilles sont des images : leurs valeurs repères sont à <strong>saisir et faire valider</strong>.</p>
+
+<h3 class="fr-h5">4.7 Doses plafonds (annexes 2, 2 bis, 5, 7, 9)</h3>
+<p class="court">Méteil &lt; 30 % de légumineuses 50 (&gt; 30 % : 0) ; sarrasin 50 ; chanvre 120 (pivot 60) ; lin fibre 50 ; lin graine 80 (pivot 50) ; tournesol 50 ; soja 50 (variétés 000 : 100) ; luzerne 200 ; protéagineux et légumineuses fourragères 0 ; bette et carde 220 ; céleri branche d'industrie 300 ; petits pois d'industrie 50 (pivot 30) ; fraises et fruits rouges 80 ; vergers 150 (pivot 100) ; taillis 80 ; miscanthus 50 ; porte-graines 150 ; dérobées semées en juillet 50, en août 40, après le 31 août 0 ; semis de colza 65 ; plantes à parfum : 24 espèces (annexe 2 bis, à l'implantation et après coupe) ; <strong>autres cultures 100</strong>.</p>
+
+<h3 class="fr-h5">4.8 Azote organique (annexes 1 et 11)</h3>
+<ul class="court">
+  <li><strong>Azote efficace</strong> = quantité × teneur × <strong>Keq</strong>. Keq selon le produit (≈ 45 produits en 2 types : C/N &gt; 8 ou &lt; 8) × la culture (céréales, colza, maïs, prairies, épinard, haricot, chou-poireau, pomme de terre, légumes) × la période (fin d'été, automne, printemps, été). Ex. : lisier bovin sur maïs 0,5 ; lisier de porc 0,6 à 0,7.</li>
+  <li><strong>Volume à épandre</strong> = (dose − azote minéral prévu) / Keq / teneur (ex. annexe 11 : 85 − 18 = 67 ; 67 / 0,5 = 134 kg N ; 134 / 3,2 = 42 m³/ha).</li>
+  <li><strong>Azote à gérer</strong> (normes CORPEN) = produit − traité + reçu − cédé. Vaches laitières : azote au bâtiment et au pâturage selon la production (&lt; 6 000, 6 000-8 000, &gt; 8 000 kg) et le temps de pâturage (ex. 7 500 kg, 6 mois : 41,5 au bâtiment, 59,5 au pâturage). Fumiers stockés plus de 6 mois : <strong>−20 %</strong>.</li>
+  <li>Produits non listés : coefficient fourni par l'exploitant ou le fournisseur.</li>
+</ul>
+
+<h3 class="fr-h5">4.9 Contrôles</h3>
+<ul class="court">
+  <li><strong>Plafond de 170 kg N organique/ha de SAU</strong> (épandu et pâturé) : saisie bloquée.</li>
+  <li><strong>Calendrier d'épandage</strong> par type de fertilisant, culture et zonage : saisie bloquée. Règles ZAR et bassins versants paramétrables.</li>
+  <li><strong>Dépassement</strong> de la dose prévisionnelle : motif obligatoire (art. 9).</li>
+  <li><strong>Cohérence</strong> : apport sur culture à dose 0, plafond de semis du colza et des dérobées, prairie &gt; 250.</li>
+</ul>
+
+<h3 class="fr-h5">4.10 Référentiel</h3>
+<p class="court">Toutes les valeurs ci-dessus sont rangées <strong>par grille</strong> (un jeu Pf, Ri, Mhp, Mr, Mha, Mhs par annexe), dans un <strong>référentiel versionné par millésime</strong>, modifiable sans code, publié par l'administration. Chaque valeur cite son annexe et sa version. Tables annuelles : variétés de blé, rendements, réseau RSH, correctif pluviométrique légumes.</p>
+
+<!-- ============================================ 5 -->
 <h2><span class="num">5</span>Données à saisir</h2>
 <div class="fr-table fr-table--no-caption"><div class="fr-table__wrapper"><div class="fr-table__container"><div class="fr-table__content"><table>
   <thead><tr><th scope="col">Objet</th><th scope="col">Champs</th><th scope="col">Saisie</th></tr></thead>
   <tbody>
-    <tr><td><strong>Exploitation</strong></td><td>PACAGE / SIRET, raison sociale, exploitant·e, adresse, commune, département, sol dominant, SAU</td><td>Une seule fois</td></tr>
-    <tr><td><strong>Parcelle</strong></td><td>N° îlot et parcelle PAC, nom, surface, type de sol, zonage (standard, ZAR, bassin versant)</td><td>Une fois, reprise chaque année</td></tr>
-    <tr><td><strong>Culture</strong> (par campagne)</td><td>Culture, précédent (N-1, N-2 si prairie), rendement, RSH, couvert et date de destruction, paille, irrigation, pâturage, notes</td><td>Chaque année ; précédent et historique repris</td></tr>
-    <tr><td><strong>Apport</strong></td><td>Parcelle, date, type (organique / minéral), produit, quantité/ha, teneur (facultatif), statut prévu / réalisé</td><td>Chaque année ; sert de cahier d'enregistrement</td></tr>
+    <tr><td><strong>Exploitation</strong></td><td>PACAGE / SIRET, raison sociale, exploitant·e, adresse, commune, SAU, SPE, SPNE ; cheptel et effluents produits</td><td>Une fois</td></tr>
+    <tr><td><strong>Îlot / parcelle</strong></td><td>N° d'îlot PAC (regroupement possible des îlots &lt; 1 ha identiques), parcelle, surface, type de sol, profondeur, zonage, historique des rendements</td><td>Une fois, reprise chaque année</td></tr>
+    <tr><td><strong>Culture</strong> (campagne)</td><td>Culture (et variété pour le blé), précédent et interculture, précédent N-2 si prairie, rendement, RSH (mesuré / réseau / défaut), système de culture, apports organiques sur 10 ans, résidus</td><td>Chaque année ; historique repris</td></tr>
+    <tr><td><strong>Apport</strong></td><td>Date ou période, produit, teneur, Keq, quantité/ha, statut prévu / réalisé</td><td>Sert de cahier d'enregistrement</td></tr>
   </tbody></table></div></div></div></div>
-<p class="court"><strong>Champs propres à certaines familles</strong> (à intégrer avec les grilles) :</p>
+<div class="fr-table fr-table--no-caption"><div class="fr-table__wrapper"><div class="fr-table__container"><div class="fr-table__content"><table>
+  <thead><tr><th scope="col">Famille</th><th scope="col">Champs spécifiques</th></tr></thead>
+  <tbody>
+    <tr><td>Céréales, orge</td><td>Variété (blé), date du RSH (Pi après le 20/02), pailles enfouies / exportées, % de légumineuses du méteil.</td></tr>
+    <tr><td>Colza</td><td>Apport au semis (≤ 65), biomasse sortie d'hiver (pesée ou note visuelle).</td></tr>
+    <tr><td>Maïs, dérobée + maïs</td><td>Type (ensilage, grain, semence, sous plastique), destruction de prairie (printemps / été), rendement et développement de la dérobée.</td></tr>
+    <tr><td>Prairies</td><td>Type et âge, % de trèfle, mode d'exploitation, cheptel, temps de pâturage, entretien azoté antérieur, retournement.</td></tr>
+    <tr><td>Légumes</td><td>Filière (frais, industrie, maraîchage), créneau, précédent ou couvert, PRO sur 3 ans, rotation, MO, sable, reliquat pré-semis, fertilisation localisée.</td></tr>
+  </tbody></table></div></div></div></div>
+<p class="court"><strong>Supprimés</strong> par rapport aux documents de départ : irrigation (Nirr = 0) et rendements départementaux (l'annexe 3 est régionale).</p>
+
+<!-- ============================================ 6 -->
+<h2><span class="num">6</span>Sorties : PPF et cahier</h2>
 <ul class="court">
-  <li><strong>Colza</strong> : azote déjà absorbé à la sortie de l'hiver, apport maximal au semis.</li>
-  <li><strong>Prairies</strong> : type (pâture, fauche…), part de trèfle, mode de pilotage, retournement.</li>
-  <li><strong>Dérobée + maïs</strong> : rendement de la dérobée, fertilisation à l'implantation.</li>
-  <li><strong>Légumes (méthode pivot)</strong> : créneau de plantation, richesse du précédent, PRO des 3 dernières années, type de rotation, localisation de la fertilisation.</li>
+  <li><strong>PPF cultures hors prairies</strong> (annexe 12) : îlot, SAU / SPE / SPNE, précédent, interculture, culture, objectif, besoins, Rf, Pi, Ri, Mhp, Mha, Mr, Mhs, dose ; fumure organique prévue (période, surface, produit, teneur, Keq, quantité/ha et par parcelle, azote efficace) ; complément minéral et période ; culture ou CIPAN suivante.</li>
+  <li><strong>PPF prairies</strong> : type et âge, % de légumineuses, objectif, besoins, entretien antérieur, pousse estivale, fournitures, dose /0,7, fumure organique et minérale.</li>
+  <li><strong>Tableau des rendements moyens des parcelles</strong>.</li>
+  <li><strong>Cahier d'enregistrement</strong> : apports réalisés, correction RSH, motifs de dépassement, pilotage.</li>
+  <li>Formats : PDF, Excel (modèle de l'utilisateur), comparaison de résultats.</li>
 </ul>
 
-<!-- =========================================================== 6 -->
-<h2><span class="num">6</span>Lot 1 — fonctionnalités de l'application réalisée</h2>
+<!-- ============================================ 7 -->
+<h2 class="saut-impression"><span class="num">7</span>Lot 1 — état de l'application</h2>
+<h3 class="fr-h5">7.1 Fonctionnalités réalisées</h3>
 <div class="fr-table fr-table--no-caption"><div class="fr-table__wrapper"><div class="fr-table__container"><div class="fr-table__content"><table>
   <thead><tr><th scope="col">Fonction</th><th scope="col">Description</th><th scope="col">État</th></tr></thead>
   <tbody>
-    <tr><td>Accueil</td><td>3 entrées : saisie guidée, modèle Excel, guide « où trouver mes informations ». Infographie « Pourquoi calculer sa dose ? ».</td><td class="ok">Réalisé</td></tr>
-    <tr><td>Saisie guidée</td><td>5 étapes numérotées, aide sous chaque champ, lexique. Saisie parcelle par parcelle ou <strong>groupée</strong> (plusieurs parcelles cochées).</td><td class="ok">Réalisé</td></tr>
-    <tr><td>Modèle Excel</td><td>Classeur à remplir avec listes déroulantes, import avec résumé et contrôles. Même format pour les résultats (colonnes « Résultat »).</td><td class="ok">Réalisé</td></tr>
-    <tr><td>Calcul — bilan</td><td>Méthode du bilan complète, détail étape par étape.</td><td class="ok">Réalisé</td></tr>
-    <tr><td>Calcul — pivot</td><td>Doses pivots et 4 correctifs de l'annexe 9.</td><td class="ko">À réaliser</td></tr>
-    <tr><td>Calcul — plafond</td><td>Dose forfaitaire par culture.</td><td class="part">Partiel : à aligner sur les annexes 2, 2 bis et 9</td></tr>
-    <tr><td>Référentiel officiel 2026</td><td>Les valeurs actuelles sont <strong>indicatives</strong> ; elles doivent être remplacées par celles des annexes, sources citées.</td><td class="ko">À réaliser (priorité 1)</td></tr>
-    <tr><td>Coefficients organiques</td><td>Coefficient selon le produit et la période ; à étendre à la famille de culture (annexes 2 et 11).</td><td class="part">Partiel</td></tr>
-    <tr><td>Mémoire pluriannuelle</td><td>Précédent, effet des effluents de l'année N-1 et historique des rendements repris automatiquement.</td><td class="ok">Réalisé</td></tr>
-    <tr><td>Groupes de parcelles</td><td>Proposés seulement si 5 conditions réunies (sol, culture/précédent, apports, zonage, rendement).</td><td class="ok">Réalisé</td></tr>
-    <tr><td>Contrôles</td><td>Plafond 170, calendrier d'épandage bloquants ; alerte ZAR (règles à paramétrer).</td><td class="ok">Réalisé</td></tr>
-    <tr><td>Résultats</td><td>Dose mise en avant, barre « d'où vient l'azote », équivalent en ammonitrate, vue d'ensemble de l'exploitation.</td><td class="ok">Réalisé</td></tr>
-    <tr><td>Exports</td><td>PPF PDF (simple ou avec fiches par parcelle), Excel, comparaison avec d'autres résultats (PDF, Excel).</td><td class="ok">Réalisé</td></tr>
-    <tr><td>Données</td><td>Stockage dans le navigateur, choix « conserver ou non », effacement, copie pour changer d'appareil, fonctionnement hors connexion.</td><td class="ok">Réalisé</td></tr>
-    <tr><td>Administration</td><td>Espace administrateur (référentiel local, comptes gérés par fichier). Backoffice Supabase prêt : statistiques anonymes, suivi des attaques, référentiel publié.</td><td class="part">Réalisé, backoffice à activer</td></tr>
+    <tr><td>Accueil</td><td>3 entrées (saisie guidée, modèle Excel, guide) ; infographie « Pourquoi calculer sa dose ».</td><td class="ok">Réalisé</td></tr>
+    <tr><td>Saisie</td><td>5 étapes, aide sous chaque champ, lexique ; parcelle par parcelle ou groupée.</td><td class="ok">Réalisé</td></tr>
+    <tr><td>Excel</td><td>Modèle à remplir, import contrôlé ; résultats au même format.</td><td class="ok">Réalisé</td></tr>
+    <tr><td>Groupes</td><td>Proposés si sol, culture/précédent, apports, zonage et rendement identiques.</td><td class="ok">Réalisé</td></tr>
+    <tr><td>Résultats et exports</td><td>Dose, barre « d'où vient l'azote », vue d'ensemble ; PPF PDF, Excel, comparaison.</td><td class="ok">Réalisé</td></tr>
+    <tr><td>Données</td><td>Navigateur, choix de conservation, effacement, hors connexion.</td><td class="ok">Réalisé</td></tr>
+    <tr><td>Contrôles</td><td>Plafond 170 et calendrier bloquants, alerte ZAR.</td><td class="ok">Réalisé</td></tr>
+    <tr><td>Administration</td><td>Comptes par fichier, référentiel local ; backoffice Supabase prêt.</td><td class="part">À activer</td></tr>
   </tbody></table></div></div></div></div>
 
-<!-- =========================================================== 7 -->
-<h2><span class="num">7</span>Lot 2 — application avec connexion</h2>
-<h3 class="fr-h5">7.1 Fonctionnalités</h3>
+<h3 class="fr-h5">7.2 Écarts avec le référentiel GREN (lot 1 bis)</h3>
+<div class="fr-table fr-table--no-caption"><div class="fr-table__wrapper"><div class="fr-table__container"><div class="fr-table__content"><table>
+  <thead><tr><th scope="col">Sujet</th><th scope="col">Application actuelle</th><th scope="col">Attendu GREN</th><th scope="col">Priorité</th></tr></thead>
+  <tbody>
+    <tr><td>Valeurs</td><td>Référentiel indicatif unique</td><td>Valeurs des annexes, <strong>par grille</strong>, sources citées</td><td class="ko">1</td></tr>
+    <tr><td>Rf</td><td>20 pour les céréales</td><td>30 pour toutes les grilles au bilan</td><td class="ko">1</td></tr>
+    <tr><td><em>b</em></td><td>Maïs grain 2,2 ; orge de printemps 2,2</td><td>2,3 ; orge 2,5 et −10 au printemps ; blé selon variété ; maïs ensilage selon rendement</td><td class="ko">1</td></tr>
+    <tr><td>Irrigation</td><td>Majoration de 20</td><td>Supprimer (Nirr = 0)</td><td class="ko">1</td></tr>
+    <tr><td>Rendements</td><td>Par département</td><td>Historique exploitation, puis annexe 3 régionale ; tableau par parcelle</td><td class="ko">1</td></tr>
+    <tr><td>RSH</td><td>Forfait unique</td><td>Défaut par grille et département, réseau, mesure ; correction au cahier</td><td class="ko">1</td></tr>
+    <tr><td>Fournitures</td><td>Minéralisation selon le sol</td><td>Mhp, Mr, Mha (10 ans), Mhs (système) ; option Sol-AID et MERCI</td><td class="ko">1</td></tr>
+    <tr><td>Prairies</td><td>Bilan type céréales</td><td>Grille annexe 8 (exportation, fournitures, /0,7, garde-fous)</td><td class="ko">1</td></tr>
+    <tr><td>Légumes</td><td>Plafond</td><td>Pivot et correctifs (ann. 9), dose de référence (ann. 10)</td><td class="part">2</td></tr>
+    <tr><td>Plafonds</td><td>Valeurs à aligner</td><td>Annexes 2 et 2 bis, dose balai 100</td><td class="part">2</td></tr>
+    <tr><td>Colza, dérobée</td><td>Une période</td><td>2 périodes, plafonds de semis</td><td class="part">2</td></tr>
+    <tr><td>Keq</td><td>Produit × période</td><td>Produit × famille de culture × période</td><td class="part">2</td></tr>
+    <tr><td>PPF</td><td>Modèle de l'utilisateur</td><td>Rubriques de l'annexe 12, tous les îlots, SPE/SPNE</td><td class="part">2</td></tr>
+    <tr><td>Azote à gérer</td><td>Non traité</td><td>CORPEN, vaches laitières, stockage −20 %</td><td class="part">3</td></tr>
+  </tbody></table></div></div></div></div>
+
+<!-- ============================================ 8 -->
+<h2><span class="num">8</span>Lot 2 — application avec connexion</h2>
 <div class="fr-table fr-table--no-caption"><div class="fr-table__wrapper"><div class="fr-table__container"><div class="fr-table__content"><table>
   <thead><tr><th scope="col">Fonction</th><th scope="col">Description</th><th scope="col">Priorité</th></tr></thead>
   <tbody>
-    <tr><td>Compte agriculteur</td><td>Création, connexion, données sauvegardées sur serveur et retrouvées sur tout appareil. Le mode sans compte du lot 1 reste disponible.</td><td><p class="fr-badge fr-badge--error fr-badge--sm fr-badge--no-icon">Haute</p></td></tr>
-    <tr><td>Identité</td><td>Connexion par <strong>ProConnect</strong> (identité professionnelle rattachée au SIRET), à étudier ; à défaut, courriel et mot de passe avec double authentification possible.</td><td><p class="fr-badge fr-badge--error fr-badge--sm fr-badge--no-icon">Haute</p></td></tr>
-    <tr><td>Conseiller</td><td>Accès à plusieurs exploitations, accordé et révocable par l'agriculteur ; traçabilité des modifications.</td><td><p class="fr-badge fr-badge--warning fr-badge--sm fr-badge--no-icon">Moyenne</p></td></tr>
-    <tr><td>Historique</td><td>Campagnes successives et cahier d'enregistrement conservés sur serveur.</td><td><p class="fr-badge fr-badge--warning fr-badge--sm fr-badge--no-icon">Moyenne</p></td></tr>
-    <tr><td>Backoffice</td><td>Référentiel publié par millésime, comptes et rôles, statistiques d'usage anonymes, journal des connexions et de sécurité.</td><td><p class="fr-badge fr-badge--warning fr-badge--sm fr-badge--no-icon">Moyenne</p></td></tr>
-    <tr><td>Données PAC</td><td>Import des îlots, parcelles et cultures depuis la déclaration PAC (fichier ou service), à étudier.</td><td><p class="fr-badge fr-badge--sm fr-badge--no-icon">Piste</p></td></tr>
-    <tr><td>Zonage et sol automatiques</td><td>ZAR et bassins versants par croisement géographique (couches officielles), type de sol proposé par commune (carte des sols).</td><td><p class="fr-badge fr-badge--sm fr-badge--no-icon">Piste</p></td></tr>
+    <tr><td>Compte agriculteur</td><td>Données sur serveur, tout appareil ; le mode sans compte reste disponible.</td><td><p class="fr-badge fr-badge--error fr-badge--sm fr-badge--no-icon">Haute</p></td></tr>
+    <tr><td>Identité</td><td>ProConnect à étudier ; sinon courriel, mot de passe, double authentification.</td><td><p class="fr-badge fr-badge--error fr-badge--sm fr-badge--no-icon">Haute</p></td></tr>
+    <tr><td>Cahier et historique</td><td>Campagnes, apports réalisés, corrections RSH, dépassements conservés.</td><td><p class="fr-badge fr-badge--warning fr-badge--sm fr-badge--no-icon">Moyenne</p></td></tr>
+    <tr><td>Conseiller</td><td>Accès à plusieurs exploitations, accordé et révocable, modifications tracées.</td><td><p class="fr-badge fr-badge--warning fr-badge--sm fr-badge--no-icon">Moyenne</p></td></tr>
+    <tr><td>Backoffice</td><td>Référentiel par millésime, comptes, statistiques anonymes, journal de sécurité ; publication annuelle du réseau RSH et de la carte pluviométrique.</td><td><p class="fr-badge fr-badge--warning fr-badge--sm fr-badge--no-icon">Moyenne</p></td></tr>
+    <tr><td>Services externes</td><td>Déclaration PAC, zonage ZAR, sol par commune, Sol-AID, MERCI.</td><td><p class="fr-badge fr-badge--sm fr-badge--no-icon">Piste</p></td></tr>
   </tbody></table></div></div></div></div>
-<h3 class="fr-h5">7.2 Exigences propres au lot 2</h3>
-<ul class="court">
-  <li><strong>Données personnelles</strong> : traitement inscrit au registre, analyse d'impact à évaluer, durée de conservation définie, export et suppression du compte à la demande.</li>
-  <li><strong>Hébergement</strong> : validé par la DSI et le RSSI (localisation en France ou dans l'UE, offre souveraine à étudier).</li>
-  <li><strong>Sécurité</strong> : droits vérifiés côté serveur, chiffrement en transit et au repos, double authentification obligatoire pour les administrateurs, journalisation, test d'intrusion avant mise en service.</li>
-  <li><strong>Continuité</strong> : les fichiers Excel et les copies du lot 1 s'importent dans un compte.</li>
-</ul>
+<p class="court"><strong>Exigences</strong> : registre des traitements, durée de conservation, export et suppression du compte ; hébergement validé (France ou UE) ; droits vérifiés côté serveur, chiffrement, double authentification des administrateurs, journalisation, test d'intrusion ; import des fichiers du lot 1.</p>
 
-<!-- =========================================================== 8 -->
-<h2><span class="num">8</span>Exigences transverses</h2>
+<!-- ============================================ 9 -->
+<h2><span class="num">9</span>Exigences transverses</h2>
 <div class="fr-table fr-table--no-caption"><div class="fr-table__wrapper"><div class="fr-table__container"><div class="fr-table__content"><table>
   <thead><tr><th scope="col">Domaine</th><th scope="col">Exigence</th></tr></thead>
   <tbody>
-    <tr><td>Design</td><td>Système de Design de l'État (DSFR), police Marianne, bloc-marque de la préfecture.</td></tr>
-    <tr><td>Accessibilité</td><td>Objectif de conformité au RGAA ; audit à réaliser, déclaration d'accessibilité publiée.</td></tr>
-    <tr><td>Usage</td><td>Téléphone, tablette et ordinateur ; fonctionnement hors connexion pour le calcul.</td></tr>
-    <tr><td>Rédaction</td><td>Langage courant, aide contextuelle, lexique ; aucun terme technique sans explication.</td></tr>
-    <tr><td>Sécurité</td><td>Aucun script externe, politique de sécurité du contenu stricte, diagnostic de sécurité tenu à jour.</td></tr>
-    <tr><td>Réversibilité</td><td>Formats ouverts : Excel (.xlsx), PDF, JSON. Code source et référentiel versionnés.</td></tr>
-    <tr><td>Maintenance</td><td>Mise à jour annuelle du référentiel ; vérification trimestrielle des bibliothèques.</td></tr>
+    <tr><td>Design</td><td>DSFR, police Marianne, bloc-marque de la préfecture.</td></tr>
+    <tr><td>Accessibilité</td><td>RGAA visé ; audit et déclaration publiés.</td></tr>
+    <tr><td>Usage</td><td>Téléphone, tablette, ordinateur ; calcul hors connexion.</td></tr>
+    <tr><td>Rédaction</td><td>Langage courant ; termes du glossaire (annexe 13) expliqués dans l'outil.</td></tr>
+    <tr><td>Traçabilité</td><td>Chaque dose affiche son calcul poste par poste, la grille et la version utilisées.</td></tr>
+    <tr><td>Sécurité</td><td>Aucun script externe, politique de contenu stricte, diagnostic tenu à jour.</td></tr>
+    <tr><td>Réversibilité</td><td>Excel, PDF, JSON ; code et référentiel versionnés. Mise à jour annuelle du référentiel.</td></tr>
   </tbody></table></div></div></div></div>
 
-<!-- =========================================================== 9 -->
-<h2><span class="num">9</span>Recette</h2>
-<ul class="court">
-  <li><strong>Jeu de cas de référence</strong> fourni par le GREN (DRAAF, chambre d'agriculture) : au moins 3 cas par méthode et par grande famille de cultures.</li>
-  <li><strong>Critère</strong> : dose identique au calcul de référence, au kilo près ; chaque écart est justifié ou corrigé.</li>
-  <li>Contrôles réglementaires testés : dates interdites, dépassement des 170 kg, zones ZAR.</li>
-  <li>Tests utilisateurs avec 5 à 10 agriculteurs·rices, dont au moins un en légumes ; vérification sur téléphone.</li>
-</ul>
+<!-- ============================================ 10 -->
+<h2><span class="num">10</span>Recette</h2>
+<p class="court">Cas tirés des annexes ; résultat attendu <strong>au kilo près</strong>. Compléter par au moins 3 cas par grille fournis par le GREN, puis tests avec 5 à 10 agriculteurs·rices, dont un en légumes.</p>
+<div class="dense">
+<div class="fr-table fr-table--no-caption"><div class="fr-table__wrapper"><div class="fr-table__container"><div class="fr-table__content"><table>
+  <thead><tr><th scope="col">Source</th><th scope="col">Cas</th><th scope="col">Attendu</th></tr></thead>
+  <tbody>
+    <tr><td>Ann. 12</td><td>Maïs ensilage 15 t MS × 13 = 195 + 30 ; Ri 10, Mha 50, Mr 20, Mhs 80</td><td><strong>65</strong></td></tr>
+    <tr><td>Ann. 12</td><td>Blé 75 q × 3 = 225 + 30 ; Ri 40, Mha 35, Mhs 60</td><td><strong>120</strong></td></tr>
+    <tr><td>Ann. 12</td><td>Prairie 8 t × 30 = 240 ; fournitures 160 ; ÷ 0,7</td><td><strong>114</strong></td></tr>
+    <tr><td>Ann. 12</td><td>Fumier bovin 30 t × 5,5 × 0,25 ; lisier de porc 40 m³ × 3,5 × 0,7</td><td><strong>41 ; 98</strong></td></tr>
+    <tr><td>Ann. 8.3</td><td>Prairies : 10 t × 30 − 160 ; 7 t × 25 − 90 ; 6,5 t × 20 − 72,5 (÷ 0,7)</td><td><strong>200 ; 121 ; 82</strong></td></tr>
+    <tr><td>Ann. 11</td><td>Maïs 85, starter 18, lisier bovin Keq 0,5 à 3,2 kg/m³</td><td><strong>42 m³/ha</strong></td></tr>
+    <tr><td>Ann. 1</td><td>Vache 7 500 kg, 6 mois de pâturage</td><td><strong>41,5 / 59,5</strong></td></tr>
+    <tr><td>Arrêté</td><td>Rendements 80, 72, 70, 65, 82 q</td><td><strong>74 q</strong></td></tr>
+  </tbody></table></div></div></div></div>
+</div>
+<p class="court">Contrôles testés : dates interdites, 170 kg, ZAR, plafonds de semis, prairie &gt; 250, dépassement sans motif.</p>
 
-<!-- =========================================================== 10 -->
-<h2 class="saut-impression"><span class="num">10</span>Points à décider</h2>
+<!-- ============================================ 11 -->
+<h2><span class="num">11</span>Points à décider</h2>
 <div class="fr-table fr-table--no-caption"><div class="fr-table__wrapper"><div class="fr-table__container"><div class="fr-table__content"><table>
   <thead><tr><th scope="col">Sujet</th><th scope="col">Question</th><th scope="col">Qui</th></tr></thead>
   <tbody>
-    <tr><td>Référentiel</td><td>Validation des valeurs 2026 saisies dans l'outil et du sens de la correction « paille exportée / enfouie ».</td><td>GREN, DRAAF</td></tr>
-    <tr><td>Légumes</td><td>Source de la pluviométrie pour le correctif RSH (carte communale de la chambre d'agriculture ?).</td><td>Chambre d'agriculture</td></tr>
-    <tr><td>ZAR</td><td>Règles et couches géographiques à intégrer.</td><td>DDTM, DREAL</td></tr>
-    <tr><td>Hébergement</td><td>Adresse dédiée de l'administration ; hébergement du lot 2.</td><td>DSI, RSSI</td></tr>
-    <tr><td>Lot 2</td><td>Engagement, identité (ProConnect), rôle des conseillers.</td><td>Préfecture, DRAAF</td></tr>
+    <tr><td>Millésime</td><td>Date d'activation des projets 2026 (annexes 2 et 9) ; nomenclature CI / CIE / CINE du PAN 7 à reporter dans toutes les grilles.</td><td>GREN, DRAAF</td></tr>
+    <tr><td>Annexe 10</td><td>Valeurs repères des grilles d'industrie (images) ; brocolis, céleri-rave et chou-fleur d'industrie absents du projet d'annexe 2.</td><td>GREN</td></tr>
+    <tr><td>Sol-AID, MERCI</td><td>Saisie du résultat ou connexion aux outils.</td><td>DRAAF</td></tr>
+    <tr><td>Données annuelles</td><td>Source du réseau RSH, de la carte pluviométrique, de la table des variétés.</td><td>Chambre d'agriculture</td></tr>
+    <tr><td>ZAR</td><td>Règles et couches géographiques.</td><td>DDTM, DREAL</td></tr>
+    <tr><td>Lot 2</td><td>Engagement, hébergement, identité, rôle des conseillers.</td><td>Préfecture, DSI</td></tr>
   </tbody></table></div></div></div></div>
 
-<h2><span class="num">11</span>Correspondance avec les annexes GREN</h2>
+<!-- ============================================ 12 -->
+<h2><span class="num">12</span>Sources</h2>
+<div class="dense">
 <div class="fr-table fr-table--no-caption"><div class="fr-table__wrapper"><div class="fr-table__container"><div class="fr-table__content"><table>
-  <thead><tr><th scope="col">Annexe</th><th scope="col">Contenu</th><th scope="col">Usage dans l'outil</th></tr></thead>
+  <thead><tr><th scope="col">Document</th><th scope="col">Version</th><th scope="col">Usage</th></tr></thead>
   <tbody>
-    <tr><td>1</td><td>Méthodologie</td><td>Règles du moteur de calcul</td></tr>
-    <tr><td>2 / 2 bis</td><td>Répartition des cultures, doses pivot et plafond, plantes à parfum</td><td>Liste des cultures, choix de la méthode, famille de coefficients</td></tr>
-    <tr><td>3</td><td>Rendements prévisionnels</td><td>Rendement de référence et plafond</td></tr>
-    <tr><td>4 à 8</td><td>Grilles céréales, orge, colza, maïs, dérobée + maïs, prairies</td><td>Méthode du bilan</td></tr>
-    <tr><td>9 / 10</td><td>Légumes frais / d'industrie</td><td>Méthode de la dose pivot et plafonds</td></tr>
-    <tr><td>11</td><td>Coefficients des produits organiques</td><td>Azote organique efficace</td></tr>
-    <tr><td>12</td><td>Plan prévisionnel de fumure</td><td>Export PDF et Excel</td></tr>
-    <tr><td>13</td><td>Glossaire</td><td>Lexique et aides de l'application</td></tr>
+    <tr><td>Arrêté régional</td><td>29/03/2023</td><td>Obligations (§ 1)</td></tr>
+    <tr><td>Ann. 1 méthodologie</td><td>2023</td><td>Équation, Nirr, Sol-AID, azote à gérer</td></tr>
+    <tr><td>Ann. 2 / 2 bis cultures</td><td>2023 ; projet 2026</td><td>Méthode, pivot, plafond, famille Keq</td></tr>
+    <tr><td>Ann. 3 rendements</td><td>2025-2026</td><td>Rendements régionaux</td></tr>
+    <tr><td>Tables variétés blé</td><td>2024</td><td><em>b</em> du blé</td></tr>
+    <tr><td>Ann. 4, 4 bis, 5, 6, 7</td><td>2023</td><td>Grilles au bilan</td></tr>
+    <tr><td>Ann. 8.1, 8.2, 8.3 prairies</td><td>2017</td><td>Grille, bilan fourrager, exemples</td></tr>
+    <tr><td>Ann. 9 légumes frais</td><td>2023 ; projet 2026</td><td>Pivots et correctifs</td></tr>
+    <tr><td>Ann. 10 légumes d'industrie</td><td>2017</td><td>Doses de référence</td></tr>
+    <tr><td>Ann. 11.1, 11.2 PRO</td><td>2013-2017</td><td>Coefficients Keq</td></tr>
+    <tr><td>Ann. 12 PPF, 13 glossaire</td><td>2023</td><td>Sorties, lexique</td></tr>
+    <tr><td>Documents du projet</td><td>2026</td><td>CDC initial, principe général, projet de calculette, modèle Excel</td></tr>
   </tbody></table></div></div></div></div>
+</div>
 
-<p class="pied">Calculette GREN — cahier des charges v1.0 — 24 novembre 2026. Documents source : cahier des charges initial (30/10/2026), « Principe général du GREN », projet de calculette (09/01/2026), annexe 2 (tableau 2026), annexe 9 (légumes frais, projet 2026). Application : https://williamlestoilleagri-creator.github.io/Grist/calculette-gren/</p>
+<p class="pied">Calculette GREN — cahier des charges v2.0 — 24 novembre 2026. Sources : site de la DRAAF Bretagne (référentiel GREN), documents transmis par le commanditaire. Application : https://williamlestoilleagri-creator.github.io/Grist/calculette-gren/</p>
 </main>
 </body>
 </html>
