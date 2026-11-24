@@ -118,7 +118,7 @@ export async function purger(joursAudio, joursReunion) {
 
 // ------------------------------------------------------------------ réglages (clés d'API comprises)
 const REGLAGES = "cr-reglages";
-const DEFAUT = { retentionAudio: 30, retentionReunion: 365, modeleTranscription: "equilibre", materiel: "auto", lienIa: "https://mistral.ai/fr/", hoteModeles: "" };
+const DEFAUT = { retentionAudio: 30, retentionReunion: 365, modeleTranscription: "auto", materiel: "auto", lienIa: "https://mistral.ai/fr/", hoteModeles: "" };
 
 export function lireReglages() {
   try { return { ...DEFAUT, ...JSON.parse(localStorage.getItem(REGLAGES) || "{}") }; } catch { return { ...DEFAUT }; }

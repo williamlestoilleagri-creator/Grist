@@ -163,7 +163,7 @@ export async function separerVoix(T, audio, options = {}, progression = () => {}
 }
 
 // ------------------------------------------------------------------ transcription
-export async function transcrire(T, audio, options = {}, progression = () => {}) {
+export async function transcrire(T, audio, options = {}, progression = () => {}, reprise = {}, sauvegarde = () => {}) {
   const { modele = "equilibre", device = "wasm", langue = "french" } = options;
   const choix = MODELES_TRANSCRIPTION[modele] ?? MODELES_TRANSCRIPTION.equilibre;
   const dtype = device === "webgpu"
@@ -171,11 +171,13 @@ export async function transcrire(T, audio, options = {}, progression = () => {})
     : { encoder_model: "q8", decoder_model_merged: "q8" };
   const asr = await T.pipeline("automatic-speech-recognition", choix.id, { device, dtype });
 
-  // découpage en blocs de 5 min pour suivre l'avancement et limiter la mémoire
-  const bloc = 300 * TAUX;
-  const morceaux = [];
+  // découpage en blocs d'une minute : avancement visible et mémoire limitée
+  const bloc = 60 * TAUX;
+  const morceaux = [...(reprise.morceaux || [])]; // blocs déjà transcrits avant une interruption
   const total = Math.ceil(audio.length / bloc);
-  for (let b = 0; b < total; b++) {
+  progression({ etape: "texte", fait: reprise.blocsFaits || 0, total, debut: true });
+  for (let b = reprise.blocsFaits || 0; b < total; b++) {
+    const nouveaux = [];
     const debut = b * bloc;
     const extrait = morceau(audio, debut, Math.min(audio.length, debut + bloc));
     const res = await asr(extrait, { ...(langue ? { language: langue } : {}), task: "transcribe", return_timestamps: "word", chunk_length_s: 30, stride_length_s: 5 });
@@ -183,8 +185,10 @@ export async function transcrire(T, audio, options = {}, progression = () => {})
       const [d, f] = c.timestamp;
       const texte = c.text || "";
       if (!texte.trim()) continue;
-      morceaux.push({ debut: debut / TAUX + (d ?? 0), fin: debut / TAUX + (f ?? d ?? 0), texte });
+      nouveaux.push({ debut: debut / TAUX + (d ?? 0), fin: debut / TAUX + (f ?? d ?? 0), texte });
     }
+    morceaux.push(...nouveaux);
+    sauvegarde({ morceaux: nouveaux, blocsFaits: b + 1 }); // travail sauvegardé minute par minute
     progression({ etape: "texte", fait: b + 1, total });
   }
   return morceaux;
@@ -279,10 +283,14 @@ export function assembler(morceaux, tours, audio = null, chevauchements = []) {
   return { segments, locuteurs };
 }
 
-export async function traiterReunion(T, audio, options = {}, progression = () => {}) {
-  progression({ etape: "voix", fait: 0, total: 1 });
-  const { tours, chevauchements } = await separerVoix(T, audio, options, progression);
-  progression({ etape: "texte", fait: 0, total: 1 });
-  const morceaux = await transcrire(T, audio, options, progression);
+export async function traiterReunion(T, audio, options = {}, progression = () => {}, reprise = {}, sauvegarde = () => {}) {
+  let tours, chevauchements;
+  if (reprise.tours) ({ tours, chevauchements = [] } = reprise); // voix déjà identifiées avant une interruption
+  else {
+    progression({ etape: "voix", fait: 0, total: 1 });
+    ({ tours, chevauchements } = await separerVoix(T, audio, options, progression));
+    sauvegarde({ tours, chevauchements });
+  }
+  const morceaux = await transcrire(T, audio, options, progression, reprise, sauvegarde);
   return { duree: audio.length / TAUX, ...assembler(morceaux, tours, audio, chevauchements) };
 }

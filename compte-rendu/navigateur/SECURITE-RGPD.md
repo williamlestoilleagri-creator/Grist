@@ -59,6 +59,7 @@ L'application est un **ensemble de fichiers statiques** (HTML, JavaScript, modè
 |---|---|---|---|---|
 | Fichier déposé (audio ou vidéo, sans limite de taille) | Navigateur : seule la piste son est extraite, en lisant le fichier par morceaux | **Jamais copié** : lu sur le disque de l'utilisateur, puis abandonné | Durée de l'extraction | **Personne** |
 | Son de la réunion (copie légère 16 kHz mono, ≈ 115 Mo par heure) | Navigateur (Web Worker) | IndexedDB du navigateur | Session | **Personne** |
+| Travail en cours (voix identifiées, texte déjà transcrit), pour reprendre après un rechargement | Navigateur | IndexedDB, avec la réunion | Jusqu'à la fin de la transcription, au plus la session | **Personne** |
 | Empreintes vocales (séparation des voix) | Navigateur, en mémoire | **Jamais stockées** | Durée du calcul | **Personne** |
 | Transcription, interlocuteurs, corrections | Navigateur | IndexedDB | Session | Personne. Exception : IA optionnelle, **texte seul** |
 | Résultats de l'analyse de cohérence locale | Navigateur | IndexedDB | Session | Personne |
@@ -90,11 +91,11 @@ Scénario : ouverture de l'application, dépôt de `exemples/reunion-test.mp3` (
 
 ### 3.1 Capture réseau — configuration « tout interne » (navigateur sans accès à Internet)
 
-Navigateur Chromium lancé **sans accès à Internet**, modèles hébergés avec l'application (`sourceModeles: "local"`), test du 23 novembre 2026 :
+Navigateur Chromium lancé **sans accès à Internet**, modèles hébergés avec l'application (`sourceModeles: "local"`), test du 24 novembre 2026 (version avec calcul multi-cœurs et reprise automatique) :
 
 | Mesure | Résultat |
 |---|---|
-| Requêtes réseau émises (page + calcul en arrière-plan) | 92 |
+| Requêtes réseau émises (page + calcul en arrière-plan) | 243 (le script d'isolation relaie les fichiers de l'application : chaque fichier est compté deux fois) |
 | Serveurs contactés | **uniquement** le serveur de l'application (`127.0.0.1:8099` pendant le test) |
 | Requêtes vers l'extérieur | **0** |
 | Envois de données (requêtes autres que des téléchargements GET) | **0** |
@@ -131,6 +132,7 @@ Résultat : **0 alerte exécutée, 0 balise injectée**. Le code s'affiche comme
 | Absence de serveur de données | Application 100 % statique, aucun envoi de données (preuve § 3.1) | ✅ |
 | Politique de sécurité du contenu (CSP) | `default-src 'self'` ; scripts du seul site (`'wasm-unsafe-eval'` requis pour le calcul) ; connexions limitées à la liste du § 2 ; `object-src 'none'`, `base-uri 'self'`, `form-action 'self'` | ✅ |
 | Styles en ligne (`'unsafe-inline'` pour les styles) | Nécessaire pour les couleurs dynamiques ; aucun script en ligne autorisé | ⚠️ Risque faible accepté |
+| Script d'isolation (`sw-isolation.js`, service worker) | Ajoute uniquement les en-têtes COOP/COEP aux fichiers de l'application pour autoriser le calcul multi-cœurs. Ne met rien en cache, ne lit aucune donnée, ne contacte aucun serveur ; ne touche pas aux requêtes vers d'autres sites. Superflu si le serveur interne envoie ces en-têtes (`deploiement/nginx.conf`) | ✅ |
 | Intégration dans un cadre (détournement de clic) | Refusée par l'application ; `frame-ancestors 'none'` dans la configuration serveur fournie | ✅ (corrigé) |
 | Bibliothèques tierces | **Toutes embarquées**, version figée, aucun CDN : transformers.js 4.3.2, onnxruntime-web, FFmpeg WebAssembly 0.12 (licence GPL, extraction du son), jsPDF 4.2.1, docx 9.16, SDK Anthropic 1.12, DSFR 1.15, dictionnaire français. Licences dans `vendor/` | ✅ |
 | Mouchards, statistiques, cookies | Aucun cookie, aucun outil de mesure d'audience, aucune télémétrie (vérifié par analyse du code et capture réseau) | ✅ |
