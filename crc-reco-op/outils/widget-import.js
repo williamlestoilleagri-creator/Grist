@@ -206,7 +206,9 @@ async function executerImport(fid){
 }
 $("fImport").addEventListener("change", async e => {
   const f = e.target.files[0]; if (!f) return;
-  try { await reload(); const wb = XLSX.read(await f.arrayBuffer(), { type:"array" });
+  try { await reload();
+    if (!S.acces || !REF.length){ window.scrollTo({ top:0 }); $("apercuImport").innerHTML = `<div class="fr-alert fr-alert--error"><p>${!S.acces ? "Import impossible : le widget n'a pas accès au document (voir le message en haut de page)." : "Import impossible : la table <b>Referentiel</b> est vide ou introuvable."}</p></div>`; e.target.value = ""; return; }
+    const wb = XLSX.read(await f.arrayBuffer(), { type:"array" });
     S.import = { file:f, plan:isModerne(wb) ? analyserModerne(wb) : analyserOrigine(wb) }; renderImport(); }
   catch(err){ console.error(err); $("apercuImport").innerHTML = `<div class="fr-alert fr-alert--error"><p>Fichier illisible : ${esc(err.message)}</p></div>`; }
 });

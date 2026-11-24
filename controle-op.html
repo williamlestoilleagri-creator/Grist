@@ -123,6 +123,7 @@
 </nav>
 
 <main class="wrap" id="contenu">
+  <div id="alerteAcces" role="alert"></div>
   <div id="bandeauCtrl" class="bandeau hidden">
     <div class="fr-select-group"><label class="fr-label" for="selCtrl">Contrôle en cours</label><select class="fr-select" id="selCtrl"></select></div>
   </div>
@@ -305,8 +306,23 @@ function b64ToBytes(b64){ const s = atob(b64.split(",").pop()); const u = new Ui
    ===================================================================== */
 const D0 = { tab:"controles", ctrlId:null, groupe:null, schema:"flux", import:null };
 const S = { ...D0, t:{} };
-async function fetchSafe(name){ try { return columnar(await grist.docApi.fetchTable(name)); } catch(e){ return null; } }
-async function reload(names){ const list = names || Object.values(T); const res = await Promise.all(list.map(fetchSafe)); list.forEach((n, i) => S.t[n] = res[i] || []); indexRef(); }
+const ERREURS = {};
+async function fetchSafe(name){ try { const r = columnar(await grist.docApi.fetchTable(name)); delete ERREURS[name]; return r; } catch(e){ ERREURS[name] = String(e && e.message || e); return null; } }
+const sansAcces = msg => /access|accès|not granted|permission/i.test(msg || "");
+async function reload(names){ const list = names || Object.values(T); const res = await Promise.all(list.map(fetchSafe)); list.forEach((n, i) => S.t[n] = res[i] || []); indexRef(); verifierAcces(); }
+/* Le widget doit avoir « Accès complet au document » ; sinon on l'explique au lieu d'afficher des listes vides */
+function verifierAcces(){
+  const refus = Object.values(ERREURS).some(sansAcces);
+  const manquantes = [T.REF, T.FIL, T.CTRL, T.REP, T.OP].filter(n => ERREURS[n] && !sansAcces(ERREURS[n]));
+  S.acces = !refus && !manquantes.length;
+  const el = $("alerteAcces");
+  if (refus) el.innerHTML = `<div class="fr-alert fr-alert--error fr-mb-3w"><h3 class="fr-alert__title">Le widget n'a pas accès au document</h3>
+    <p>Sans cette autorisation, il ne voit ni les filières, ni le référentiel, ni les contrôles, et ne peut rien enregistrer.</p>
+    <p class="fr-mt-1w"><b>Pour corriger :</b> cliquez sur le widget, puis dans le panneau de droite (onglet <b>Widget</b> ou <b>Personnalisé</b>), réglez <b>Accès</b> sur <b>« Accès complet au document »</b> et acceptez. Si vous utilisez le <b>Custom Widget Builder</b>, c'est le réglage d'accès <b>du Custom Widget Builder lui-même</b> qu'il faut passer en accès complet.</p></div>`;
+  else if (manquantes.length) el.innerHTML = `<div class="fr-alert fr-alert--warning fr-mb-3w"><h3 class="fr-alert__title">Tables introuvables</h3><p>Le widget ne trouve pas : <b>${manquantes.map(esc).join(", ")}</b>. Vérifiez le nom exact de ces tables dans <b>Données source</b> (sans accent ni espace).</p></div>`;
+  else el.innerHTML = "";
+  return S.acces;
+}
 async function act(actions){ const r = await grist.docApi.applyUserActions(actions); return (r && r.retValues) || []; }
 const rows = n => S.t[n] || [];
 const byId = (n, id) => rows(n).find(r => r.id === id) || null;
@@ -411,6 +427,7 @@ $("listeCtrl").addEventListener("click", e => { const del = e.target.closest("[d
   const tr = e.target.closest("tr[data-cid]"); if (!tr) return; S.ctrlId = +tr.dataset.cid; S.groupe = null; setTab("saisie"); });
 $("selCtrl").addEventListener("change", e => { S.ctrlId = +e.target.value; S.groupe = null; render(); });
 $("bCreer").addEventListener("click", async () => {
+  if (!S.acces){ verifierAcces(); window.scrollTo({ top:0 }); toast("error", "Le widget n'a pas accès au document : voir le message en haut de page."); return; }
   const fid = +$("nFil").value; let opId = +$("nOP").value; const nouv = $("nOPnew").value.trim();
   if (!fid || (!opId && !nouv)){ toast("error", "Choisissez une OP (ou saisissez une nouvelle raison sociale) et une filière."); return; }
   try {
@@ -843,7 +860,9 @@ async function executerImport(fid){
 }
 $("fImport").addEventListener("change", async e => {
   const f = e.target.files[0]; if (!f) return;
-  try { await reload(); const wb = XLSX.read(await f.arrayBuffer(), { type:"array" });
+  try { await reload();
+    if (!S.acces || !REF.length){ window.scrollTo({ top:0 }); $("apercuImport").innerHTML = `<div class="fr-alert fr-alert--error"><p>${!S.acces ? "Import impossible : le widget n'a pas accès au document (voir le message en haut de page)." : "Import impossible : la table <b>Referentiel</b> est vide ou introuvable."}</p></div>`; e.target.value = ""; return; }
+    const wb = XLSX.read(await f.arrayBuffer(), { type:"array" });
     S.import = { file:f, plan:isModerne(wb) ? analyserModerne(wb) : analyserOrigine(wb) }; renderImport(); }
   catch(err){ console.error(err); $("apercuImport").innerHTML = `<div class="fr-alert fr-alert--error"><p>Fichier illisible : ${esc(err.message)}</p></div>`; }
 });
