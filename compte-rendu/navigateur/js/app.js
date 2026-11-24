@@ -209,8 +209,10 @@ if (window.top !== window.self) {
         <div>${badgeStatut(r.statut)}</div>
       </div>
       ${enCours ? `<div class="fr-alert fr-alert--info fr-mb-3w"><h2 class="fr-alert__title">Traitement en cours</h2><p>${esc(r.progression || "")}</p>
-        <p class="cr-mention"><strong>Gardez cet onglet ouvert</strong> : le calcul s'effectue sur votre ordinateur et s'arrête si l'onglet est fermé. Vous pouvez utiliser d'autres applications en attendant.</p></div>` : ""}
-      ${r.erreur ? `<div class="fr-alert fr-alert--error fr-mb-3w"><h2 class="fr-alert__title">Erreur</h2><p>${esc(r.erreur)}</p></div>` : ""}
+        <p class="cr-mention"><strong>Gardez cet onglet ouvert</strong> : le calcul s'effectue sur votre ordinateur. Le travail est sauvegardé au fur et à mesure : si la page est rechargée, il reprend là où il s'était arrêté. Vous pouvez utiliser d'autres applications en attendant.</p></div>` : ""}
+      ${r.erreur ? `<div class="fr-alert fr-alert--error fr-mb-3w"><h2 class="fr-alert__title">Erreur</h2><p>${esc(r.erreur)}</p>
+        ${!enCours && !(r.segments || []).length && r.audio_disponible ? `<button class="fr-btn fr-btn--sm fr-icon-refresh-line fr-btn--icon-left fr-mt-2w" data-action="reprendre">Reprendre la transcription</button>
+          <p class="cr-mention fr-mt-1w">Le son déjà extrait est réutilisé ; le travail déjà fait est conservé.</p>` : ""}</div>` : ""}
       ${(r.segments || []).length ? `
       <div class="cr-grille">
         <div class="cr-kpi" style="${varsCouleur(sg)};border-left:.5rem solid var(--cr-trait)"><div class="v">${sg == null ? "–" : sg + " %"}</div><div class="l">Fiabilité globale · ${libelle(sg)}</div></div>
@@ -663,6 +665,7 @@ if (window.top !== window.self) {
       etat.lienIa = lien;
       return action(() => api("POST", `${base()}/analyse`, { lien, modele, accepte_hors_ue: !!(accepte && accepte.checked) }), "Analyse lancée.");
     }
+    if (d.action === "reprendre") return action(() => api("POST", `${base()}/reprendre`), "Traitement relancé.");
     if (d.action === "tout-effacer") {
       if (!confirm("Effacer définitivement TOUTES les données de l'application sur ce poste ?")) return;
       try { await api("DELETE", "/api/tout"); etat.reunion = null; etat.config = await api("GET", "/api/config"); notifier("Toutes les données de ce poste ont été effacées."); location.hash = "#/"; } catch (err) { notifier(err.message, "error"); }
@@ -817,7 +820,8 @@ if (window.top !== window.self) {
 
   // Mode éphémère : prévenir avant de fermer si des réunions sont encore ouvertes
   window.addEventListener("beforeunload", (e) => {
-    if (etat.config?.ephemere && etat.reunion) { e.preventDefault(); e.returnValue = ""; }
+    // calcul en cours (sauvegardé et repris automatiquement, mais interrompu) ou mode éphémère
+    if (etat.reunion && (EN_COURS.has(etat.reunion.statut) || etat.config?.ephemere)) { e.preventDefault(); e.returnValue = ""; }
   });
 
   router();

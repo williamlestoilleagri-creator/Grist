@@ -42,11 +42,17 @@ async function analyseLocale(id) {
 }
 
 // ------------------------------------------------------------------ traitements de fond
+const verrous = new Map();
+/** Lecture-modification-écriture d'une réunion, une à la fois (évite qu'une écriture en écrase une autre). */
 async function maj(id, fn) {
-  const r = await stockage.lire(id);
-  if (!r) return null;
-  fn(r);
-  return stockage.enregistrer(r);
+  const suivante = (verrous.get(id) || Promise.resolve()).then(async () => {
+    const r = await stockage.lire(id);
+    if (!r) return null;
+    fn(r);
+    return stockage.enregistrer(r);
+  });
+  verrous.set(id, suivante.catch(() => {}));
+  return suivante;
 }
 
 async function lancerTranscription(id) {
@@ -62,22 +68,31 @@ async function lancerTranscription(id) {
       resultat = transcriptionDemo();
     } else {
       const fichier = fichiersADeposer.get(id);
-      if (!fichier) throw new Error("le fichier d'origine n'est plus disponible : déposez-le à nouveau.");
-      await maj(id, (r) => { r.progression = "Extraction du son"; });
-      let derniereExtraction = 0;
-      const audio = await extraireAudio(fichier, (pct) => {
-        if (Date.now() - derniereExtraction < 700) return;
-        derniereExtraction = Date.now();
-        maj(id, (r) => { r.progression = `Extraction du son : ${pct} %`; });
-      });
-      fichiersADeposer.delete(id);
-      // seule une copie légère du son est conservée (16 kHz mono), pour l'écoute dans l'application
-      await stockage.enregistrerAudio(id, enWav(audio));
-      await maj(id, (r) => { r.duree = audio.length / TAUX; r.audio_disponible = true; });
+      let audio;
+      if (fichier) {
+        await maj(id, (r) => { r.progression = "Extraction du son"; });
+        let derniereExtraction = 0;
+        audio = await extraireAudio(fichier, (pct) => {
+          if (Date.now() - derniereExtraction < 700) return;
+          derniereExtraction = Date.now();
+          maj(id, (r) => { r.progression = `Extraction du son : ${pct} %`; });
+        });
+        fichiersADeposer.delete(id);
+        // seule une copie légère du son est conservée (16 kHz mono), pour l'écoute et la reprise après interruption
+        await stockage.enregistrerAudio(id, enWav(audio));
+        await maj(id, (r) => { r.duree = audio.length / TAUX; r.audio_disponible = true; });
+      } else {
+        // reprise : le son extrait est déjà enregistré, inutile de redéposer le fichier d'origine
+        const wav = r0.audio_disponible ? await stockage.lireAudio(id) : null;
+        if (!wav) throw new Error("le fichier d'origine n'est plus disponible : déposez-le à nouveau.");
+        audio = new Int16Array((await wav.arrayBuffer()).slice(44));
+      }
+      const reprise = r0.reprise || {};
       resultat = await new Promise((ok, ko) => {
         const worker = new Worker(new URL("./worker-audio.js", import.meta.url), { type: "module" });
         let materiel = "", derniere = 0;
-        let derniereEtape = "";
+        let derniereEtape = "", debutTexte = null;
+        const duree = (s) => (s >= 3600 ? `${Math.floor(s / 3600)} h ${String(Math.round((s % 3600) / 60)).padStart(2, "0")}` : `${Math.max(1, Math.round(s / 60))} min`);
         const signaler = (texte, etape = "") => {
           const t = Date.now();
           if (t - derniere < 700 && etape === derniereEtape) return; // limite les écritures, sauf changement d'étape
@@ -85,25 +100,42 @@ async function lancerTranscription(id) {
           derniere = t;
           maj(id, (r) => { r.progression = texte; });
         };
+        const texteTranscription = (data) => {
+          const pct = Math.round(100 * data.fait / data.total);
+          if (data.debut || !debutTexte) { debutTexte = { t: Date.now(), fait: data.fait }; }
+          let reste = "";
+          const faits = data.fait - debutTexte.fait;
+          if (faits > 0) reste = ` — environ ${duree(((Date.now() - debutTexte.t) / 1000 / faits) * (data.total - data.fait))} restantes`;
+          return `Transcription de la parole (${materiel}) : ${pct} % — ${data.fait} min traitées sur ${data.total}${reste}`;
+        };
         worker.onmessage = ({ data }) => {
-          if (data.type === "info") materiel = data.device === "webgpu" ? "carte graphique" : "processeur";
+          if (data.type === "info") materiel = data.device === "webgpu" ? "carte graphique" : data.coeurs > 1 ? `processeur, ${data.coeurs} cœurs` : "processeur";
+          if (data.type === "partiel") {
+            // sauvegarde au fil de l'eau : en cas d'interruption, le travail reprend là où il s'était arrêté
+            maj(id, (r) => {
+              const rp = (r.reprise ||= { morceaux: [], blocsFaits: 0 });
+              rp.modele = data.modele;
+              if (data.tours) { rp.tours = data.tours; rp.chevauchements = data.chevauchements; }
+              if (data.morceaux) { rp.morceaux.push(...data.morceaux); rp.blocsFaits = data.blocsFaits; }
+            });
+          }
           if (data.type === "telechargement" && data.total) {
             signaler(`Chargement des modèles (téléchargés une seule fois) : ${Math.round(data.charge / 1048576)} / ${Math.round(data.total / 1048576)} Mo`);
           }
           if (data.type === "progression") {
             signaler(data.etape === "voix"
               ? `Identification des interlocuteurs (${materiel}) : ${Math.round(100 * data.fait / data.total)} %`
-              : `Transcription de la parole (${materiel}) : ${Math.round(100 * data.fait / data.total)} %`, data.etape);
+              : texteTranscription(data), data.etape);
           }
           if (data.type === "termine") { worker.terminate(); ok(data.resultat); }
           if (data.type === "erreur") { worker.terminate(); ko(new Error(data.message)); }
         };
         worker.onerror = (e) => { worker.terminate(); ko(new Error(e.message || "Erreur du module audio.")); };
         worker.postMessage({ type: "traiter", audio, modele: reglages.modeleTranscription, materiel: reglages.materiel,
-          nombre: r0.nb_locuteurs, sourceModeles: CONFIG.sourceModeles }, [audio.buffer]);
+          nombre: r0.nb_locuteurs, sourceModeles: CONFIG.sourceModeles, reprise }, [audio.buffer]);
       });
     }
-    await maj(id, (r) => Object.assign(r, resultat, { statut: "analyse", progression: "Analyse de cohérence locale…", erreur: null }));
+    await maj(id, (r) => { Object.assign(r, resultat, { statut: "analyse", progression: "Analyse de cohérence locale…", erreur: null }); delete r.reprise; });
     await stockage.journaliser(id, "transcription", `${resultat.segments.length} interventions`);
     try { await analyseLocale(id); } // contrôle de cohérence sans IA, immédiat
     catch (e) { console.error(e); await maj(id, (r) => Object.assign(r, { statut: "transcrit", erreur: `Analyse locale impossible : ${e.message}`, progression: "" })); }
@@ -131,11 +163,18 @@ export async function demarrer() {
   if (ephemere) await stockage.nettoyerSiNouvelleSession();
   const reglages = stockage.lireReglages();
   for (const r of await stockage.lister()) {
-    if (["en_attente", "transcription", "analyse"].includes(r.statut) && !enCours.has(r.id)) {
-      r.statut = r.segments?.length ? (r.analyse ? "analyse_terminee" : "transcrit") : "erreur";
-      r.erreur = "Le traitement a été interrompu (onglet fermé ou rechargé). Relancez-le.";
+    if (!["en_attente", "transcription", "analyse"].includes(r.statut) || enCours.has(r.id)) continue;
+    if (!r.segments?.length && r.audio_disponible && !demo) {
+      // transcription interrompue (page rechargée, onglet fermé) : reprise automatique là où elle s'était arrêtée
+      r.statut = "transcription"; r.erreur = null;
+      r.progression = r.reprise?.blocsFaits ? `Reprise de la transcription (${r.reprise.blocsFaits} min déjà faites)` : "Reprise du traitement";
       await stockage.enregistrer(r);
+      lancerTranscription(r.id);
+      continue;
     }
+    r.statut = r.segments?.length ? (r.analyse ? "analyse_terminee" : "transcrit") : "erreur";
+    r.erreur = r.segments?.length ? "L'analyse a été interrompue (onglet fermé ou rechargé) : relancez-la." : "Le traitement a été interrompu avant l'extraction du son : déposez le fichier à nouveau.";
+    await stockage.enregistrer(r);
   }
   return ephemere ? null : stockage.purger(reglages.retentionAudio, reglages.retentionReunion);
 }
@@ -273,6 +312,14 @@ export async function api(methode, url, corps) {
     const g = (r.incoherences_globales || [])[parseInt(p[3], 10)] || erreur("Incohérence introuvable.");
     g.statut = { rouvrir: "ouverte", ignorer: "ignoree" }[corps.action] || "resolue";
     await stockage.enregistrer(r); await stockage.journaliser(id, `incoherence_globale_${corps.action}`, p[3]); return { ok: true };
+  }
+  if (action === "reprendre" && methode === "POST") {
+    if (enCours.has(id)) erreur("Le traitement est déjà en cours.");
+    if (!r.audio_disponible) erreur("Le son de cette réunion n'est plus disponible : déposez le fichier à nouveau.");
+    Object.assign(r, { statut: "transcription", erreur: null, progression: "Reprise du traitement" });
+    await stockage.enregistrer(r);
+    lancerTranscription(id);
+    return { ok: true };
   }
   if (action === "analyse" && methode === "POST") {
     if (enCours.has(id) || ["en_attente", "transcription", "analyse"].includes(r.statut)) erreur("Un traitement est déjà en cours.");

@@ -49,9 +49,9 @@ Mode démonstration (sans modèle ni clé) : ajouter `?demo` à l'adresse.
 | Poste | 1 h de réunion |
 |---|---|
 | Carte graphique récente (WebGPU, Chrome/Edge) | ≈ 5 à 15 min |
-| Processeur seul | ≈ 30 min à 2 h selon le processeur (modèle « rapide » conseillé) |
+| Processeur seul (plusieurs cœurs, modèle « rapide » choisi automatiquement) | ≈ 30 min à 1 h 30 selon le processeur |
 
-L'onglet doit rester ouvert pendant le traitement.
+L'onglet doit rester ouvert pendant le traitement. Le travail est sauvegardé minute par minute : si la page est rechargée ou l'onglet fermé, le traitement **reprend automatiquement là où il s'était arrêté** (bouton « Reprendre la transcription » en cas d'erreur). Le temps restant est affiché.
 
 ## Tests réalisés
 

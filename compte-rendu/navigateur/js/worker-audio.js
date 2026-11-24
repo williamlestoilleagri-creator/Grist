@@ -26,8 +26,13 @@ self.onmessage = async ({ data }) => {
       // la présence des fichiers du tokenizer et la transcription échoue
       T.env.localModelPath = new URL("../modeles/", import.meta.url).pathname;
     }
+    // calcul sur plusieurs cœurs quand la page est isolée (voir sw-isolation.js)
+    if (self.crossOriginIsolated) T.env.backends.onnx.wasm.numThreads = Math.max(1, Math.min(8, (self.navigator.hardwareConcurrency || 4) - 1));
     const device = await choisirMateriel(data.materiel);
-    self.postMessage({ type: "info", device });
+    // modèle automatique : « équilibré » avec une carte graphique, « rapide » sur processeur
+    const reprise = data.reprise || {};
+    const modele = reprise.modele || (data.modele && data.modele !== "auto" ? data.modele : device === "webgpu" ? "equilibre" : "rapide");
+    self.postMessage({ type: "info", device, modele, coeurs: self.crossOriginIsolated ? T.env.backends.onnx.wasm.numThreads : 1 });
 
     // progression des téléchargements de modèles
     const fichiers = new Map();
@@ -52,8 +57,9 @@ self.onmessage = async ({ data }) => {
     });
 
     const resultat = await traiterReunion(T2, data.audio, {
-      device, modele: data.modele, nombre: data.nombre || null, langue: data.langue || "french",
-    }, (p) => self.postMessage({ type: "progression", ...p }));
+      device, modele, nombre: data.nombre || null, langue: data.langue || "french",
+    }, (p) => self.postMessage({ type: "progression", ...p }), reprise,
+      (partiel) => self.postMessage({ type: "partiel", modele, ...partiel }));
     self.postMessage({ type: "termine", resultat });
   } catch (e) {
     self.postMessage({ type: "erreur", message: String(e && e.message || e) });
