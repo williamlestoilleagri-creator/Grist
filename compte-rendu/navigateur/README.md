@@ -3,6 +3,7 @@
 Même application que la version serveur, mais **tout s'exécute dans le navigateur** :
 aucun Python, aucun serveur à installer. Il suffit d'ouvrir la page.
 
+- **Fichiers acceptés** : audio ou vidéo (mp3, wav, m4a, mp4, mov, mkv, avi…), **sans limite de taille** — testé avec une vidéo de 4,46 Go. Seule la piste son est extraite (FFmpeg WebAssembly), en lisant le fichier par morceaux, sans le charger en mémoire ni le copier. Durée maximale : 10 h.
 - **Transcription** : Whisper (versions horodatées mot à mot), exécuté sur le poste (carte graphique via WebGPU si disponible, sinon processeur).
 - **Interlocuteurs** : segmentation pyannote 3.0 + empreinte vocale WeSpeaker + regroupement, même principe que pyannote 3.1.
   Les empreintes ne servent qu'au calcul et ne sont jamais enregistrées.

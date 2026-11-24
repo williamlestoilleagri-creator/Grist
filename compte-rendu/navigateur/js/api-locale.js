@@ -6,13 +6,15 @@ import * as stockage from "./stockage.js";
 import * as ia from "./ia.js";
 import * as exporter from "./export.js";
 import { analyserLocalement, compteRenduDeBase } from "./analyse-locale.js";
+import { extraireAudio, enWav, DUREE_MAX_H } from "./extraction-audio.js";
 import { MODELES_TRANSCRIPTION, TAUX } from "./moteur-audio.js";
 
 export class ErreurApi extends Error {}
 const erreur = (m) => { throw new ErreurApi(m); };
 
-const EXTENSIONS = [".mp3", ".wav", ".m4a", ".ogg", ".opus", ".webm", ".flac", ".aac", ".mp4", ".wma"];
-const TAILLE_MAX_MO = 1000;
+const EXTENSIONS = [".mp3", ".wav", ".m4a", ".ogg", ".opus", ".webm", ".flac", ".aac", ".wma", ".amr", ".aiff", ".aif",
+  ".mp4", ".m4v", ".mov", ".mkv", ".avi", ".wmv", ".mpg", ".mpeg", ".ts", ".mts", ".3gp"];
+const fichiersADeposer = new Map(); // fichiers d'origine, gardés en mémoire le temps de l'extraction du son
 const enCours = new Map(); // traitements actifs dans cet onglet
 
 export const demo = new URLSearchParams(location.search).has("demo");
@@ -39,24 +41,6 @@ async function analyseLocale(id) {
   await stockage.journaliser(id, "analyse_locale");
 }
 
-// ------------------------------------------------------------------ décodage audio
-async function decoder(blob) {
-  const tampon = await blob.arrayBuffer();
-  const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: TAUX });
-  try {
-    const audio = await ctx.decodeAudioData(tampon);
-    if (audio.numberOfChannels === 1) return audio.getChannelData(0);
-    const mono = new Float32Array(audio.length);
-    for (let c = 0; c < audio.numberOfChannels; c++) {
-      const canal = audio.getChannelData(c);
-      for (let i = 0; i < mono.length; i++) mono[i] += canal[i] / audio.numberOfChannels;
-    }
-    return mono;
-  } catch {
-    erreur("Impossible de lire ce fichier audio avec ce navigateur. Essayez un format mp3, wav ou m4a.");
-  } finally { ctx.close(); }
-}
-
 // ------------------------------------------------------------------ traitements de fond
 async function maj(id, fn) {
   const r = await stockage.lire(id);
@@ -77,7 +61,19 @@ async function lancerTranscription(id) {
       await new Promise((ok) => setTimeout(ok, 800));
       resultat = transcriptionDemo();
     } else {
-      const audio = await decoder(await stockage.lireAudio(id));
+      const fichier = fichiersADeposer.get(id);
+      if (!fichier) throw new Error("le fichier d'origine n'est plus disponible : déposez-le à nouveau.");
+      await maj(id, (r) => { r.progression = "Extraction du son"; });
+      let derniereExtraction = 0;
+      const audio = await extraireAudio(fichier, (pct) => {
+        if (Date.now() - derniereExtraction < 700) return;
+        derniereExtraction = Date.now();
+        maj(id, (r) => { r.progression = `Extraction du son : ${pct} %`; });
+      });
+      fichiersADeposer.delete(id);
+      // seule une copie légère du son est conservée (16 kHz mono), pour l'écoute dans l'application
+      await stockage.enregistrerAudio(id, enWav(audio));
+      await maj(id, (r) => { r.duree = audio.length / TAUX; r.audio_disponible = true; });
       resultat = await new Promise((ok, ko) => {
         const worker = new Worker(new URL("./worker-audio.js", import.meta.url), { type: "module" });
         let materiel = "", derniere = 0;
@@ -92,7 +88,7 @@ async function lancerTranscription(id) {
         worker.onmessage = ({ data }) => {
           if (data.type === "info") materiel = data.device === "webgpu" ? "carte graphique" : "processeur";
           if (data.type === "telechargement" && data.total) {
-            signaler(`Téléchargement des modèles (une seule fois) : ${Math.round(data.charge / 1048576)} / ${Math.round(data.total / 1048576)} Mo`);
+            signaler(`Chargement des modèles (téléchargés une seule fois) : ${Math.round(data.charge / 1048576)} / ${Math.round(data.total / 1048576)} Mo`);
           }
           if (data.type === "progression") {
             signaler(data.etape === "voix"
@@ -107,9 +103,10 @@ async function lancerTranscription(id) {
           nombre: r0.nb_locuteurs, sourceModeles: CONFIG.sourceModeles }, [audio.buffer]);
       });
     }
-    await maj(id, (r) => Object.assign(r, resultat, { statut: "transcrit", progression: "Analyse de cohérence locale…", erreur: null }));
+    await maj(id, (r) => Object.assign(r, resultat, { statut: "analyse", progression: "Analyse de cohérence locale…", erreur: null }));
     await stockage.journaliser(id, "transcription", `${resultat.segments.length} interventions`);
-    await analyseLocale(id); // contrôle de cohérence sans IA, immédiat
+    try { await analyseLocale(id); } // contrôle de cohérence sans IA, immédiat
+    catch (e) { console.error(e); await maj(id, (r) => Object.assign(r, { statut: "transcrit", erreur: `Analyse locale impossible : ${e.message}`, progression: "" })); }
   } catch (e) {
     console.error(e);
     await maj(id, (r) => Object.assign(r, { statut: "erreur", erreur: `Échec de la transcription : ${e.message}`.slice(0, 500) }));
@@ -170,7 +167,7 @@ export async function api(methode, url, corps) {
 
   if (methode === "GET" && chemin === "/api/config") {
     const fournisseurs = Object.values(ia.FOURNISSEURS).filter((f) => (f.code !== "demo" || demo) && ia.autorise(f.code)).map(fournisseurPublic);
-    return { demo, taille_max_mo: TAILLE_MAX_MO, retention_audio_jours: reglages.retentionAudio, retention_reunion_jours: reglages.retentionReunion,
+    return { demo, duree_max_h: DUREE_MAX_H, retention_audio_jours: reglages.retentionAudio, retention_reunion_jours: reglages.retentionReunion,
       lien_ia_defaut: demo ? "demo" : reglages.lienIa, fournisseurs, types_incoherence: ia.TYPES_INCOHERENCE, utilisateur: "ce poste",
       modeles_transcription: MODELES_TRANSCRIPTION, reglages, deploiement: CONFIG, ephemere };
   }
@@ -193,13 +190,13 @@ export async function api(methode, url, corps) {
       if (!fichier || !fichier.size) erreur("Choisissez un fichier audio.");
       const ext = (fichier.name.match(/\.[^.]+$/) || [""])[0].toLowerCase();
       if (!EXTENSIONS.includes(ext)) erreur("Format non pris en charge. Formats acceptés : " + EXTENSIONS.join(", "));
-      if (fichier.size > TAILLE_MAX_MO * 1048576) erreur(`Fichier trop volumineux (maximum ${TAILLE_MAX_MO} Mo).`);
+      // pas de limite de taille : seule la piste son est extraite (limite de durée : voir extraction-audio.js)
       const id = stockage.nouvelId();
       const nb = parseInt(corps.get("nb_locuteurs"), 10);
-      await stockage.enregistrerAudio(id, fichier);
+      fichiersADeposer.set(id, fichier);
       await stockage.enregistrer({ id, titre: String(corps.get("titre") || "").trim().slice(0, 200) || fichier.name.slice(0, 200),
         date_reunion: String(corps.get("date_reunion") || ""), nb_locuteurs: nb >= 1 && nb <= 30 ? nb : null, statut: "en_attente",
-        progression: "Préparation", audio_disponible: true, cree_le: Date.now() / 1000, segments: [], locuteurs: {} });
+        progression: "Préparation", audio_disponible: false, fichier_origine: { nom: fichier.name.slice(0, 200), taille: fichier.size }, cree_le: Date.now() / 1000, segments: [], locuteurs: {} });
       await stockage.journaliser(id, "creation", `${fichier.name} (${Math.round(fichier.size / 1024)} Ko)`);
       lancerTranscription(id);
       return { id };

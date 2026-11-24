@@ -101,8 +101,9 @@ if (window.top !== window.self) {
             <h2 class="fr-h4">Nouvelle réunion</h2>
             <div class="fr-upload-group fr-mb-3w">
               <label class="fr-label" for="fichier">Enregistrement audio
-                <span class="fr-hint-text">Taille maximale : ${c.taille_max_mo} Mo. Formats : mp3, wav, m4a, ogg, opus, webm, flac, aac, mp4.</span></label>
-              <input class="fr-upload" type="file" id="fichier" name="fichier" accept="audio/*,video/mp4,.m4a,.opus" required>
+                <span class="fr-hint-text">Audio ou vidéo, sans limite de taille (seul le son est extrait, sur ce poste). Durée maximale : ${c.duree_max_h} h.
+                  Formats : mp3, wav, m4a, ogg, flac, aac, mp4, mov, mkv, avi, webm…</span></label>
+              <input class="fr-upload" type="file" id="fichier" name="fichier" accept="audio/*,video/*,.m4a,.opus,.mkv,.mts" required>
             </div>
             <div class="fr-input-group"><label class="fr-label" for="titre">Titre de la réunion</label>
               <input class="fr-input" id="titre" name="titre" maxlength="200" autocomplete="off"></div>
@@ -563,7 +564,7 @@ if (window.top !== window.self) {
   async function brancherAudio(r) {
     const lecteur = document.getElementById("lecteur");
     if (!lecteur) return;
-    if (etat.audioPour !== r.id) {
+    if (etat.audioPour !== r.id || (!etat.audioUrl && r.audio_disponible)) {
       if (etat.audioUrl) URL.revokeObjectURL(etat.audioUrl);
       etat.audioUrl = null; etat.audioPour = r.id;
       try { etat.audioUrl = URL.createObjectURL(await api("GET", `/api/reunions/${r.id}/audio`)); } catch { /* audio indisponible */ }
