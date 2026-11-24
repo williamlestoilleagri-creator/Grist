@@ -12,7 +12,6 @@ r = tranche(rapport, "/* =======================================================
 g = tranche(grille, "/* ================================================== transformation du classeur */", "/* ==================================================================== Grist */")
 # adaptations du rapport aux résultats Grist et au logo FranceAgriMer
 rep = [
- ('({ OUI:"Oui", NON:"Non", C:"Conforme", NC:"Non conforme" })', '({ OUI:"Oui", NON:"Non", C:"Conforme", NC:"Non conforme", NCL:"Non conclusif", SO:"Sans objet" })'),
  ('<div class="emetteur">', '<div class="emetteur"><img src="${FAM_LOGO}" alt="FranceAgriMer" style="height:17mm;display:block;margin:0 0 2mm auto">'),
  ('new TableCell({ borders:noB(d), children:[P([T(D.cover.service || "Service territorial", { bold:true })], { align:AlignmentType.RIGHT, after:0 }),',
   'new TableCell({ borders:noB(d), children:[new Paragraph({ alignment:AlignmentType.RIGHT, children:[new ImageRun({ type:"png", data:b64ToBytes(FAM_LOGO), transformation:{ width:120, height:66 } })] }), P([T(D.cover.service || "Service territorial", { bold:true })], { align:AlignmentType.RIGHT, after:0 }),'),

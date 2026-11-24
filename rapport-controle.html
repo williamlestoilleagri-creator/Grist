@@ -83,7 +83,7 @@
     <div class="row" style="margin-top:14px">
       <div class="field"><label for="lieu">Fait à</label><input type="text" id="lieu" placeholder="Rennes"></div>
       <div class="field"><label for="date">Le</label><input type="text" id="date"></div>
-      <label class="chk"><input type="checkbox" id="annexe" checked> Annexe : détail de tous les points</label>
+      <label class="chk"><input type="checkbox" id="annexe" checked> Constats détaillés : pour chaque point, « avec quoi », description du contrôle, réponse et précisions</label>
     </div>
   </section>
 
@@ -123,116 +123,166 @@ const findSheet = (wb, re) => wb.SheetNames.find(n => re.test(n));
 
 function parseControl(wb){
   const D = { cover:{}, fiche:[], filiales:[], personnes:[], controleurs:[], onglets:[], sondages:[], rendements:[], stades:[], capital:[], producteurs:[], conventions:[] };
-  // ---- page de garde
+  const after = s => one(s).split(":").slice(1).join(":").trim();
+  // ---- page de garde (libellés en colonne B, valeur à droite ou dans le libellé « Libellé : valeur »)
   const gName = findSheet(wb, /garde/i);
   if (gName){
     const g = sheetGrid(wb.Sheets[gName]);
     const right = (r, from=3) => { for (let c = from; c <= g.maxC; c++){ const t = g.txt(r, c); if (t && !/^(du|au)$/i.test(t)) return t; } return ""; };
-    let mode = null;
+    const val = (r, b) => right(r, 3) || after(b);
+    let mode = null, cols = null;
     for (let r = 1; r <= g.maxR; r++){
-      const b = g.txt(r, 2), B = b.toUpperCase();
-      if (/^SERVICE TERRITORIAL/.test(B) && !mode) D.cover.service = right(r, 3);
-      else if (/^RAISON SOCIALE/.test(B)) D.cover.rs = right(r, 3);
-      else if (/^N° DE RECONNAISSANCE/.test(B)) D.cover.reco = right(r, 3);
-      else if (/^SECTEUR CONCERN/.test(B)) D.cover.secteur = right(r, 3);
-      else if (/^N° DE DEMANDE/.test(B)) D.cover.demande = right(r, 3);
+      const b = g.txt(r, 2), B = one(b).toUpperCase();
+      if (/^SERVICE TERRITORIAL/.test(B) && !mode) D.cover.service = (v => v ? (/^service/i.test(v) ? v : "Service territorial " + v) : "")(val(r, b));
+      else if (/^RAISON SOCIALE/.test(B)){ mode = null; D.cover.rs = val(r, b); }
+      else if (/^N° DE RECONNAISSANCE/.test(B)) D.cover.reco = val(r, b);
+      else if (/^SECTEUR CONCERN/.test(B)) D.cover.secteur = val(r, b);
+      else if (/^CONTR[ÔO]LE DE RECONNAISSANCE/.test(B) && /secteur\s+/i.test(b) && !D.cover.secteur) D.cover.secteur = one(b).replace(/^.*secteur\s+/i, "").trim();
+      else if (/^N° DE DEMANDE/.test(B)) D.cover.demande = val(r, b);
       else if (/^OBJET/.test(B)){ const v = []; for (let c = 3; c <= g.maxC; c++){ const t = g.txt(r, c); if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(t) || typeof g.get(r,c) === "number") v.push(typeof g.get(r,c) === "number" ? xlDate(g.get(r,c)) : t); } D.cover.du = v[0] || ""; D.cover.au = v[1] || ""; }
-      else if (/^PERSONNE/.test(B)){ mode = "p"; r++; }
-      else if (/^CONTROLEUR|^CONTRÔLEUR/.test(B)){ mode = "c"; r++; }
-      else if (mode){ const f = b, n = right(r, 6) || g.txt(r, 6); if (f || n) (mode === "p" ? D.personnes : D.controleurs).push({ fonction:f, nom:n }); }
+      else if (/^PERSONNE/.test(B) || /^CONTR[ÔO]LEUR/.test(B)){
+        mode = /^PERSONNE/.test(B) ? "p" : "c"; cols = null;
+        for (let k = r + 1; k <= Math.min(r + 3, g.maxR); k++){ // ligne d'en-tête « Fonction » / « Nom »
+          let cf = 0, cn = 0; for (let c = 1; c <= g.maxC; c++){ const t = one(g.txt(k, c)); if (/^fonction|^service/i.test(t)) cf = cf || c; else if (/^nom/i.test(t)) cn = cn || c; }
+          if (cf || cn){ cols = { f:cf, n:cn }; r = k; break; }
+        }
+      }
+      else if (mode){
+        const f = cols && cols.f ? g.txt(r, cols.f) : b, n = cols && cols.n ? g.txt(r, cols.n) : (right(r, 6) || g.txt(r, 6));
+        if (f || n) (mode === "p" ? D.personnes : D.controleurs).push({ fonction:one(f), nom:one(n) });
+      }
     }
   }
-  // ---- fiche signalétique
-  const fName = findSheet(wb, /^fiche/i);
+  // ---- fiche signalétique (libellés en colonne A ou B, valeur dans la colonne suivante)
+  const fName = findSheet(wb, /fiche/i);
   if (fName){
-    const g = sheetGrid(wb.Sheets[fName]); let inFil = false;
+    const g = sheetGrid(wb.Sheets[fName]); let inFil = false, n1 = 0, n2 = 0;
+    for (let r = 1; r <= g.maxR; r++){ if (g.txt(r, 1) && g.txt(r, 2)) n1++; if (g.txt(r, 2) && g.txt(r, 3)) n2++; }
+    const L = n1 > n2 ? 1 : 2, V = L + 1;
     for (let r = 1; r <= g.maxR; r++){
-      const b = g.txt(r, 2), c = g.txt(r, 3);
-      if (/^Filiales et participations/i.test(b)){ inFil = true; continue; }
-      if (inFil){
+      const b = g.txt(r, L), raw = g.get(r, V);
+      let c = g.txt(r, V);
+      if (typeof raw === "number" && raw > 20000 && raw < 80000 && /date/i.test(b)) c = xlDate(raw);
+      if (/^Filiales et participations/i.test(b) && (L === 2 || !c)){ inFil = L === 2; continue; }
+      if (inFil && L === 2){
         if (g.txt(r,2) && !/^Filiales/.test(g.txt(r,2))) inFil = false;
         else { if (c && !/^Raison sociale$/i.test(c)) D.filiales.push({ nom:c, pct:g.get(r,4), objet:g.txt(r,5) }); continue; }
       }
+      inFil = false;
       if (b && c && !/^SANS OBJET/i.test(b)) D.fiche.push({ label:one(b), value:c });
     }
   }
-  // ---- onglets de critères
+  // ---- onglets de critères, contrôles par sondage, producteurs
   for (const name of wb.SheetNames){
-    const g = sheetGrid(wb.Sheets[name]);
-    if (/^CTRL/i.test(name)){ // contrôles par sondage
+    if (name === gName || name === fName) continue;
+    const nm = name.trim(), g = sheetGrid(wb.Sheets[name]);
+    if (/^CTRL/i.test(nm)){ // contrôles par sondage (format de la grille de base)
       const rows = [];
       for (let r = 4; r <= g.maxR; r++){ const v = [1,2,3,4,5,6].map(c => g.txt(r, c)); if (v.some(Boolean)) rows.push(v); }
       const head = [1,2,3,4,5,6].map(c => one(g.txt(3, c)));
-      D.sondages.push({ titre: one(g.txt(1, 1)) || name, head, rows });
+      D.sondages.push({ titre: one(g.txt(1, 1)) || nm, head, rows });
       continue;
     }
-    if (/^4\.1/.test(name)){
+    if (/sondage|ctrl/i.test(nm)){ D.sondages.push(parseTableau(nm, g)); continue; }
+    if (/^4\.1/.test(nm)){
       for (let r = 8; r <= g.maxR; r++){ const a = g.txt(r,1); if (a && !/^Le cas|^Ex\./i.test(a)) D.capital.push({ adherent:a, activite:g.txt(r,2), membres:g.txt(r,3), parts:g.get(r,4), voix:g.get(r,5) }); }
       continue;
     }
-    if (!/^\d/.test(name)) continue;
-    const og = parseOnglet(name, g, D);
-    if (og) D.onglets.push(og);
+    if (!/^\d|^producteur/i.test(nm)) continue;
+    const og = parseOnglet(nm, g, D);
+    if (og && (og.items.length || og.observations.length)) D.onglets.push(og);
   }
   return D;
 }
 function xlDate(n){ const d = new Date(Math.round((n - 25569) * 864e5)); return d.toLocaleDateString("fr-FR", { timeZone:"UTC" }); }
 
+/* tableau libre (ex. contrôle par sondage des bulletins d'adhésion) : en-tête = 1re ligne d'au moins 3 cellules */
+function parseTableau(name, g){
+  let hr = 0; for (let r = 1; r <= Math.min(g.maxR, 8) && !hr; r++){ let k = 0; for (let c = 1; c <= g.maxC; c++) if (g.txt(r, c)) k++; if (k >= 3) hr = r; }
+  const titre = one(g.txt(1, 1) || g.txt(1, 2)) || name;
+  if (!hr) return { titre, head:[], rows:[] };
+  let cols = []; for (let c = 1; c <= g.maxC; c++) if (g.txt(hr, c)) cols.push(c);
+  const rows = [];
+  for (let r = hr + 1; r <= g.maxR; r++){
+    const v = cols.map(c => { const x = g.get(r, c), h = g.txt(hr, c); return typeof x === "number" && /date/i.test(h) && x > 20000 ? xlDate(x) : one(g.txt(r, c)); });
+    if (v.some(Boolean)) rows.push(v);
+  }
+  // colonnes vides ou identiques sur toutes les lignes : retirées (valeur commune indiquée dans le titre)
+  const keep = [], communs = [];
+  cols.forEach((c, i) => { const s = new Set(rows.map(r => r[i])); if (!rows.some(r => r[i])) return; if (rows.length > 1 && s.size === 1){ communs.push(one(g.txt(hr, c)) + " : " + rows[0][i]); return; } keep.push(i); });
+  return { titre, communs, head:keep.map(i => one(g.txt(hr, cols[i]))), rows:rows.map(r => keep.map(i => r[i])) };
+}
+
 function parseOnglet(name, g, D){
-  const og = { sheet:name, code:(name.match(/^[\d.]+/) || [""])[0].replace(/\.$/,""), titre:"", items:[], observations:[] };
+  const og = { sheet:name, code:(name.match(/^[\d.\-]+/) || [""])[0].replace(/[.\-]+$/,"").replace(/-/g, "."), titre:"", items:[], observations:[] };
   for (let r = 1; r <= 3 && !og.titre; r++) for (let c = 1; c <= 4; c++){ const t = clean(g.txt(r, c)).split("\n")[0].trim(); if (/^ONGLET/i.test(t)){ og.titre = t.replace(/\s+(voir fiche|Le point \d).*$/i,"").replace(/\s+\(.*$/,"").trim(); break; } }
-  if (/^13\./.test(name)){ og.titre = "Contrôle en exploitation – " + (g.txt(1,3) || name.replace(/^13\.\s*/, "")); D.producteurs.push({ nom:g.txt(1,3), produits:g.txt(2,3), sheet:name }); }
+  const prod = /^13\.|^producteur/i.test(name);
+  if (prod){ const nom = g.txt(1,3); og.titre = "Contrôle en exploitation – " + (nom || name.replace(/^13\.\s*/, "")); D.producteurs.push({ nom, produits:/^13\./.test(name) ? g.txt(2,3) : (g.txt(2,4) || g.txt(2,3)), sheet:name }); }
   if (!og.titre) og.titre = name;
+  const YES = ["OUI","C","01/01/N-1"], NO = ["NON","NC","01/01/N"];
+  const readHdr = r => {
+    const U = {}; for (let c = 1; c <= g.maxC; c++){ const t = g.txt(r, c); if (t) U[c] = one(t).toUpperCase(); }
+    const uv = Object.values(U); if (!(uv.some(v => YES.includes(v)) && uv.some(v => NO.includes(v)))) return null;
+    const h = { crit:2 };
+    for (const [c, v] of Object.entries(U)){
+      if (/^CRIT|^LES MEMBRES|^ELEMENTS/.test(v)) h.crit = +c; else if (/^AVEC QUOI/.test(v)) h.avec = +c; else if (/^DESCRIPTION/.test(v)) h.desc = +c;
+      else if (YES.includes(v)){ h.yes = +c; h.mode = { "OUI":"yn", "C":"cnc", "01/01/N-1":"num" }[v]; }
+      else if (NO.includes(v)) h.no = +c; else if (/^SANS OBJET/.test(v)) h.so = +c; else if (/^OBSERVATION|^SI N/.test(v)) h.obs = +c;
+    }
+    return h;
+  };
+  let firstHdr = null, firstR = 0;
+  for (let r = 1; r <= g.maxR && !firstHdr; r++){ const h = readHdr(r); if (h){ firstHdr = h; firstR = r; } }
   let hdr = null, section = "", obsNext = false;
   for (let r = 1; r <= g.maxR; r++){
-    const vals = {}; for (let c = 1; c <= g.maxC; c++){ const t = g.txt(r, c); if (t) vals[c] = t; }
-    const U = Object.fromEntries(Object.entries(vals).map(([c, v]) => [c, one(v).toUpperCase()]));
-    const uv = Object.values(U);
-    if (uv.some(v => ["OUI","C","01/01/N-1"].includes(v)) && uv.some(v => ["NON","NC","01/01/N"].includes(v))){
-      hdr = { crit:2 };
-      for (const [c, v] of Object.entries(U)){
-        if (/^CRIT|^LES MEMBRES/.test(v)) hdr.crit = +c; else if (/^AVEC QUOI/.test(v)) hdr.avec = +c; else if (/^DESCRIPTION/.test(v)) hdr.desc = +c;
-        else if (["OUI","C","01/01/N-1"].includes(v)){ hdr.yes = +c; hdr.mode = { "OUI":"yn", "C":"cnc", "01/01/N-1":"num" }[v]; }
-        else if (["NON","NC","01/01/N"].includes(v)) hdr.no = +c; else if (/^OBSERVATION|^SI N/.test(v)) hdr.obs = +c;
-      }
-      continue;
-    }
+    const h = readHdr(r); if (h){ hdr = h; continue; }
     // tableau des rendements (onglet 7)
     if (one(g.txt(r, 2)) === "Produits" && /Rendement AGRESTE/i.test(g.txt(r, 5))){
       for (let k = r + 1; k <= g.maxR && g.txt(k, 2); k++){
         const a = +g.get(k, 5), o = +g.get(k, 6);
         D.rendements.push({ produit:g.txt(k,2), annee:g.txt(k,3), dept:g.txt(k,4), agreste:a, op:o, variation: a ? (o - a) / a : null, justif:g.txt(k,8) });
       }
-      while (r + 1 <= g.maxR && g.txt(r + 1, 2) && (g.get(r + 1, 5) != null || g.get(r + 1, 6) != null || /^=/.test(String(g.get(r + 1, 7) || "")) || g.txt(r + 1, 7))) r++; // lignes du tableau déjà lues
+      while (r + 1 <= g.maxR && g.txt(r + 1, 2) && (g.get(r + 1, 5) != null || g.get(r + 1, 6) != null || /^=/.test(String(g.get(r + 1, 7) || "")) || g.txt(r + 1, 7))) r++;
       continue;
     }
     // stades de mise en marché (onglet 12)
     if (/^(Vrac|Brut de cueille|Conditionné|Destiné à la transformation|Transformé|Autres)$/.test(g.txt(r, 3)) && (g.txt(r,4) || g.get(r,5))){
       D.stades.push({ stade:g.txt(r,3), produits:g.txt(r,4), pct:+g.get(r,5) || 0 }); continue;
     }
-    if (!hdr) continue;
-    const crit = g.txt(r, hdr.crit), low = one(crit).toLowerCase();
-    const num = one(g.txt(r, 1) || (hdr.crit > 2 ? g.txt(r, hdr.crit - 1) : ""));
-    if (obsNext){ const m = g.mergeAt(r, hdr.crit);
-      if (!crit || (m && m.c2 >= (hdr.obs || 7) - 1)){ const t = m ? g.txt(r, hdr.crit) : ""; if (t) og.observations.push(t); obsNext = false; continue; }
+    // ligne cochée située avant l'en-tête (ex. « Description des produits… » des feuilles Producteur)
+    const H = hdr || (prod && firstHdr && r < firstR && [firstHdr.yes, firstHdr.no, firstHdr.so].some(c => c && g.txt(r, c)) ? firstHdr : null);
+    if (!H) continue;
+    const crit = g.txt(r, H.crit), low = one(crit).toLowerCase();
+    const num = one(g.txt(r, 1) || (H.crit > 2 ? g.txt(r, H.crit - 1) : ""));
+    if (obsNext){ const m = g.mergeAt(r, H.crit);
+      if (!crit || (m && m.c2 >= (H.obs || 7) - 1)){ const t = m ? g.txt(r, H.crit) : ""; if (t) og.observations.push(t); obsNext = false; continue; }
       obsNext = false; }
     if (!crit) continue;
     if (/observations complémentaires|^observations du contr/.test(low)){ obsNext = true; continue; }
-    if (/^(i|ii|iii|iv|v|vi)\s*[-–.]/.test(low) || /^(secteur |op sans|op avec|a- |b- |a\) |b\) |c\) |achats extérieurs|respect de l.apport|cas des op)/.test(low)){ section = one(crit); continue; }
-    if (/^(point de vigilance|précision|observation :|→|etablir la vpc|contrôle du respect des dispositions|remarque|>)/.test(low)) continue;
-    if (/^nom du prestataire/.test(low)){ const v = one(crit).split(":").slice(1).join(":").split(/fonction\s*:/i)[0].replace(/[.…]+/g,"").trim(); if (v) D.conventions.push({ sheet:name, nom:v }); }
     const item = { num, critere:crit, section, type:"text", avec:"", desc:"", res:null, obs:"", v1:null, v2:null, texte:"" };
-    const right = g.mergeAt(r, hdr.crit + 1) || g.mergeAt(r, hdr.crit + 2);
-    if (right && right.c2 >= (hdr.obs || 7) - 1){ item.texte = g.txt(r, right.c1); og.items.push(item); continue; }
-    item.type = hdr.mode;
-    if (hdr.avec) item.avec = g.txt(r, hdr.avec);
-    if (hdr.desc) item.desc = g.txt(r, hdr.desc);
-    if (hdr.obs) item.obs = g.txt(r, hdr.obs);
-    if (hdr.mode === "num"){ item.v1 = g.get(r, hdr.yes); item.v2 = g.get(r, hdr.no); }
-    else {
-      const y = g.txt(r, hdr.yes), n = g.txt(r, hdr.no);
-      if (n) item.res = hdr.mode === "cnc" ? "NC" : "NON"; else if (y) item.res = hdr.mode === "cnc" ? "C" : "OUI";
+    if (/^nom du prestataire/.test(low)){
+      const v = one(crit).split(":").slice(1).join(":").split(/fonction\s*:/i)[0].replace(/[.…]+/g,"").trim(); if (v) D.conventions.push({ sheet:name, nom:v });
     }
+    if (/^(i|ii|iii|iv|v|vi)\s*[-–.]/.test(low) || /^(secteur |op sans|op avec|a- |b- |a\) |b\) |c\) |achats extérieurs|respect de l.apport|cas des op)/.test(low)){ section = one(crit); continue; }
+    if (/^(point de vigilance|précision|observation :|→|è|etablir la vpc|contrôle du respect des dispositions|remarque|>|r[ée]f[ée]rences? r[ée]glementaire|\(\*\))/.test(low)) continue;
+    const right = g.mergeAt(r, H.crit + 1) || g.mergeAt(r, H.crit + 2);
+    if (right && right.c2 >= (H.obs || 7) - 1){ item.texte = g.txt(r, right.c1); if (item.texte || num) og.items.push(item); else if (one(crit).length <= 110) section = one(crit); continue; }
+    item.type = H.mode;
+    if (H.avec) item.avec = g.txt(r, H.avec);
+    if (H.desc) item.desc = g.txt(r, H.desc);
+    if (H.obs) item.obs = g.txt(r, H.obs);
+    if (H.mode === "num"){ item.v1 = g.get(r, H.yes); item.v2 = g.get(r, H.no); }
+    else {
+      const y = g.txt(r, H.yes), n = g.txt(r, H.no), so = H.so ? g.txt(r, H.so) : "";
+      if (n) item.res = H.mode === "cnc" ? "NC" : "NON"; else if (y) item.res = H.mode === "cnc" ? "C" : "OUI"; else if (so) item.res = "SO";
+      else if (/^sans objet\b/i.test(one(item.avec || item.desc))) item.res = "SO";
+    }
+    // ligne sans numéro ni aucune réponse : intitulé de section (court) ou consigne (long)
+    if (!num && !item.res && !item.avec && !item.desc && !item.obs && item.v1 == null && item.v2 == null && !/^si\s|\?\s*$|^nom du prestataire/i.test(one(crit))){
+      if (one(crit).length <= 110 && one(crit).length > 3) section = one(crit);
+      continue;
+    }
+    item.section = section;
     og.items.push(item);
   }
   return og;
@@ -240,7 +290,17 @@ function parseOnglet(name, g, D){
 
 /* ---- indicateurs */
 function isAnomalie(it){ return it.res === "NC" || (it.res === "NON" && !!it.obs); }
-function isAnswered(it){ return !!(it.res || it.texte || it.desc || it.v1 != null || it.v2 != null); }
+function isAExaminer(it){ return (it.res === "NON" && !it.obs) || it.res === "NCL"; }
+function kind(it){ return isAnomalie(it) ? "ko" : isAExaminer(it) ? "av" : it.res === "SO" ? "so" : it.res ? "ok" : (it.texte || it.desc || it.avec || it.v1 != null || it.v2 != null) ? "txt" : "nr"; }
+/* identification : toute la fiche signalétique, libellés raccourcis */
+function shortLabel(l){ return one(l).replace(/\s*\([^)]*\)?/g, " ").replace(/\s+-\s*Exemples?\b.*$/i, "").replace(/,\s*et,.*$/i, "").replace(/\s*:\s*$/, "").replace(/\s+/g, " ").trim().slice(0, 90); }
+function identRows(D){
+  const base = [["Raison sociale", D.cover.rs], ["N° de reconnaissance", D.cover.reco], ["Filière", D.cover.secteur]].filter(x => x[1]);
+  const vu = new Set([D.cover.rs, D.cover.reco].filter(Boolean).map(v => one(v)));
+  const fiche = D.fiche.filter(f => !/^[-–—\s.]*$/.test(f.value) && !vu.has(one(f.value))).map(f => [shortLabel(f.label), f.value]);
+  return [...base, ...fiche];
+}
+function isAnswered(it){ return !!(it.res || it.texte || it.desc || it.avec || it.v1 != null || it.v2 != null); }
 function stats(D){
   const s = { points:0, repondus:0, anomalies:0, parOnglet:[] };
   for (const og of D.onglets){
@@ -252,6 +312,8 @@ function stats(D){
     void pts;
   }
   s.conformes = s.repondus - s.anomalies; s.nonRenseignes = s.points - s.repondus;
+  const all = D.onglets.flatMap(o => o.items);
+  s.sansObjet = all.filter(i => i.res === "SO").length; s.aExaminer = all.filter(isAExaminer).length;
   return s;
 }
 
@@ -428,21 +490,34 @@ async function svgToPng(svg, scale = 2){
    ===================================================================== */
 function resLabel(it){
   if (it.type === "num") return `${it.v1 ?? "–"} → ${it.v2 ?? "–"}`;
-  if (it.texte) return "Renseigné";
-  return it.res ? ({ OUI:"Oui", NON:"Non", C:"Conforme", NC:"Non conforme" })[it.res] : "–";
+  if (it.res) return ({ OUI:"Oui", NON:"Non", C:"Conforme", NC:"Non conforme", NCL:"Non conclusif", SO:"Sans objet" })[it.res];
+  if (it.texte || it.desc || it.avec) return "Renseigné";
+  return "Non renseigné";
 }
-function resClass(it){ return isAnomalie(it) ? "ko" : it.res ? "okk" : ""; }
+function resClass(it){ return { ko:"ko", av:"av", ok:"okk", so:"so" }[kind(it)] || ""; }
+const CHAMPS = [["avec", "Avec quoi le contrôle a-t-il été fait ?"], ["desc", "Description du contrôle effectué"], ["texte", "Réponse"], ["obs", "Précisions du contrôleur (si Non ou NC)"]];
+const br = t => esc(t).replace(/\n/g, "<br>");
+const ogTitre = og => og.titre.replace(/^ONGLET\s*(n°\s*)?/i, "").replace(/^(\d+)\s*[-–]\s*/, "$1 – ");
+function pointHtml(it, og){
+  const k = kind(it), f = CHAMPS.filter(([c]) => it[c]);
+  return `<div class="pt ${k}"><div class="pt-h">${it.num ? `<span class="num">${esc(it.num)}</span>` : ""}<span class="q">${br(it.critere)}</span><span class="badge ${k}">${esc(resLabel(it))}</span></div>${og ? `<p class="pt-og">${esc(ogTitre(og))}</p>` : ""}${f.length ? `<dl>${f.map(([c, l]) => `<dt>${l}</dt><dd>${br(it[c])}</dd>`).join("")}</dl>` : ""}</div>`;
+}
+function detailHtml(D){
+  return D.onglets.filter(o => o.items.length).map(og => {
+    let sec = null; const S = { ok:0, ko:0, av:0, so:0 }; og.items.forEach(i => S[kind(i)] = (S[kind(i)] || 0) + 1);
+    return `<section class="theme"><h3 class="th3">${esc(ogTitre(og))}</h3><p class="th-stats">${og.items.length} point${og.items.length > 1 ? "s" : ""} · <span class="c-ok">${S.ok} oui/conforme</span> · <span class="c-av">${S.av} non</span>${S.ko ? ` · <span class="c-ko">${S.ko} anomalie${S.ko > 1 ? "s" : ""}</span>` : ""} · <span class="c-so">${S.so} sans objet</span></p>` +
+      og.items.map(it => { let h = ""; if (it.section && it.section !== sec){ sec = it.section; h = `<h4>${esc(sec)}</h4>`; } return h + pointHtml(it); }).join("") +
+      (og.observations.length ? `<div class="pt txt"><div class="pt-h"><span class="q">Observations complémentaires du contrôleur</span></div><dl><dt>Observation</dt><dd>${og.observations.map(br).join("<br>")}</dd></dl></div>` : "") + `</section>`;
+  }).join("");
+}
 function ficheVal(D, re){ return (D.fiche.find(x => re.test(x.label)) || {}).value || ""; }
 
 function reportHtml(D, opts){
   const S = stats(D), sch = opts.schemaSvg;
   const anomalies = D.onglets.flatMap(og => og.items.filter(isAnomalie).map(it => ({ og, it })));
   const today = opts.date || new Date().toLocaleDateString("fr-FR");
-  const ident = [["Raison sociale", D.cover.rs], ["N° de reconnaissance", D.cover.reco], ["Filière", D.cover.secteur],
-    ["Statut juridique", ficheVal(D, /^Statut juridique/i)], ["N° SIRET", ficheVal(D, /^Numéro Siret/i)], ["Siège social", ficheVal(D, /^Adresse du Siège Social/i)],
-    ["Responsable légal", ficheVal(D, /^Responsable légal/i)], ["Nombre d'adhérents", ficheVal(D, /^Nombre d'adhérents/i)], ["Date de l'arrêté de reconnaissance", ficheVal(D, /^Date de l.arrêté/i)],
-    ["Zone de reconnaissance", ficheVal(D, /^Zone de reconnaissance/i)], ["Dernier contrôle FAM", ficheVal(D, /^Date du dernier contrôle/i)]].filter(x => x[1]);
-  const avis = S.anomalies ? `<p>Le contrôle a porté sur <b>${S.points}</b> points répartis sur <b>${S.parOnglet.length}</b> thèmes. <b>${S.anomalies} anomalie${S.anomalies > 1 ? "s ont été relevées" : " a été relevée"}</b> ; ${S.anomalies > 1 ? "elles sont détaillées" : "elle est détaillée"} en partie 5. Elles appellent des actions correctives de la part de l'OP, dont la mise en œuvre sera vérifiée.</p>`
+  const ident = identRows(D), aex = D.onglets.flatMap(og => og.items.filter(isAExaminer).map(it => ({ og, it })));
+  const avis = S.anomalies ? `<p>Le contrôle a porté sur <b>${S.points}</b> points répartis sur <b>${S.parOnglet.length}</b> thèmes. <b>${S.anomalies} anomalie${S.anomalies > 1 ? "s ont été relevées" : " a été relevée"}</b> ; ${S.anomalies > 1 ? "elles sont détaillées" : "elle est détaillée"} dans la partie « Anomalies relevées ». Elles appellent des actions correctives de la part de l'OP, dont la mise en œuvre sera vérifiée.</p>`
                          : `<p>Le contrôle a porté sur <b>${S.points}</b> points répartis sur <b>${S.parOnglet.length}</b> thèmes. <b>Aucune anomalie n'a été relevée.</b></p>`;
   let n = 0; const H2 = t => `<h2><span>${++n}</span>${t}</h2>`;
   const rows = (arr, cols) => arr.map(r => `<tr>${cols.map(c => `<td>${c(r)}</td>`).join("")}</tr>`).join("");
@@ -460,10 +535,10 @@ function reportHtml(D, opts){
 ${H2("Synthèse")}
 <div class="kpis"><div class="kpi"><b>${S.points}</b><span>points contrôlés</span></div><div class="kpi ok"><b>${S.conformes}</b><span>sans anomalie</span></div><div class="kpi ko"><b>${S.anomalies}</b><span>anomalie${S.anomalies > 1 ? "s" : ""} relevée${S.anomalies > 1 ? "s" : ""}</span></div><div class="kpi nr"><b>${S.nonRenseignes}</b><span>non renseigné${S.nonRenseignes > 1 ? "s" : ""}</span></div></div>
 <div class="avis ${S.anomalies ? "avis-ko" : "avis-ok"}">${avis}</div>
-<p class="note">Une anomalie correspond à une réponse « Non » ou « Non conforme » assortie d'une observation du contrôleur.</p>
+<p class="note">Une anomalie correspond à une réponse « Non » ou « Non conforme » assortie d'une précision du contrôleur. ${S.aExaminer ? `${S.aExaminer} autre${S.aExaminer > 1 ? "s" : ""} réponse${S.aExaminer > 1 ? "s" : ""} « Non » sans précision ou non conclusive${S.aExaminer > 1 ? "s sont reprises" : " est reprise"} dans « Réponses à examiner ». ` : ""}${S.sansObjet ? `${S.sansObjet} point${S.sansObjet > 1 ? "s" : ""} sans objet.` : ""}</p>
 
 ${H2("Identification de l'organisation de producteurs")}
-<table class="kv">${rows(ident, [r => esc(r[0]), r => esc(r[1])])}</table>
+<table class="kv">${rows(ident, [r => esc(r[0]), r => br(r[1])])}</table>
 ${D.filiales.length ? `<h3>Filiales et participations</h3><table><thead><tr><th>Raison sociale</th><th>Participation</th><th>Objet</th></tr></thead><tbody>${rows(D.filiales, [r => esc(r.nom), r => esc(pct(r.pct)), r => esc(r.objet)])}</tbody></table>` : ""}
 
 ${H2("Déroulement du contrôle")}
@@ -474,24 +549,26 @@ ${H2("Déroulement du contrôle")}
 ${sch ? H2("Schéma fonctionnel de l'OP") + `<figure class="schema">${sch}<figcaption>Schéma établi à partir des éléments relevés lors du contrôle.</figcaption></figure>` : ""}
 
 ${H2("Résultats par thème")}
-<table class="res"><thead><tr><th>Thème contrôlé</th><th class="n">Points</th><th class="n">Anomalies</th><th>Taux sans anomalie</th></tr></thead><tbody>
-${S.parOnglet.map(p => { const t = p.repondus ? (p.repondus - p.anomalies) / p.repondus : null;
-  return `<tr><td>${esc(p.og.titre.replace(/^ONGLET\s*/i, ""))}</td><td class="n">${p.points}</td><td class="n ${p.anomalies ? "rouge" : ""}">${p.anomalies}</td><td>${t == null ? "–" : `<span class="bar"><i style="width:${Math.round(t * 100)}%"></i></span> ${Math.round(t * 100)} %`}</td></tr>`; }).join("")}
+<table class="res"><thead><tr><th>Thème contrôlé</th><th class="n">Points</th><th class="n">Oui / C</th><th class="n">Non</th><th class="n">Sans objet</th><th class="n">Anomalies</th><th>Taux sans anomalie</th></tr></thead><tbody>
+${S.parOnglet.map(p => { const t = p.repondus ? (p.repondus - p.anomalies) / p.repondus : null, c = k => p.og.items.filter(i => kind(i) === k).length;
+  return `<tr><td>${esc(ogTitre(p.og))}</td><td class="n">${p.points}</td><td class="n">${c("ok")}</td><td class="n">${c("av") + c("ko")}</td><td class="n">${c("so")}</td><td class="n ${p.anomalies ? "rouge" : ""}">${p.anomalies}</td><td>${t == null ? "–" : `<span class="bar"><i style="width:${Math.round(t * 100)}%"></i></span> ${Math.round(t * 100)} %`}</td></tr>`; }).join("")}
 </tbody></table>
 
 ${H2("Anomalies relevées")}
-${anomalies.length ? anomalies.map(({ og, it }, i) => `<div class="anom"><p class="ref">Anomalie ${i + 1} · ${esc(og.titre.replace(/^ONGLET\s*/i, "").split(" - ")[0])}${it.num ? " · point " + esc(it.num) : ""}</p><p class="crit">${esc(one(it.critere))}</p><p class="obs"><b>Constat :</b> ${esc(it.obs)}</p>${it.avec ? `<p class="src">Contrôle réalisé à partir de : ${esc(it.avec)}</p>` : ""}</div>`).join("") : `<p>Aucune anomalie relevée.</p>`}
+${anomalies.length ? anomalies.map(({ og, it }) => pointHtml(it, og)).join("") : `<p>Aucune anomalie relevée.</p>`}
+${aex.length ? H2("Réponses à examiner") + `<p class="note">Réponses « Non » sans précision dans la colonne « Si N ou NC… », et réponses « Non conclusif ». Selon la question, un « Non » peut être normal ou révéler un manquement : à apprécier par le contrôleur.</p>` + aex.map(({ og, it }) => pointHtml(it, og)).join("") : ""}
 
 ${D.rendements.length || D.sondages.some(s => s.rows.length) || D.stades.length ? H2("Contrôles complémentaires") : ""}
 ${D.rendements.length ? `<h3>Rendements déclarés et références AGRESTE</h3><table><thead><tr><th>Produit</th><th>Année</th><th>Département</th><th class="n">AGRESTE</th><th class="n">OP</th><th class="n">Écart</th><th>Justification de l'OP</th></tr></thead><tbody>${rows(D.rendements, [r => esc(r.produit), r => esc(r.annee), r => esc(r.dept), r => fmtN(r.agreste), r => fmtN(r.op), r => `<span class="${Math.abs(r.variation || 0) > .2 ? "rouge" : ""}">${r.variation == null ? "–" : (r.variation > 0 ? "+" : "") + Math.round(r.variation * 100) + " %"}</span>`, r => esc(r.justif)])}</tbody></table>` : ""}
-${D.sondages.filter(s => s.rows.length).map(s => `<h3>${esc(s.titre)}</h3><table><thead><tr>${s.head.map(x => `<th>${esc(x)}</th>`).join("")}</tr></thead><tbody>${s.rows.map(r => `<tr>${r.map((v, i) => `<td class="${i === 5 && /^NC$/i.test(v) ? "rouge" : ""}">${esc(v)}</td>`).join("")}</tr>`).join("")}</tbody></table>`).join("")}
+${D.sondages.filter(s => s.rows.length).map(s => `<h3>${esc(s.titre)}</h3>${s.communs && s.communs.length ? `<p class="note">${s.rows.length} dossiers contrôlés · pour tous : ${esc(s.communs.join(" · "))}</p>` : ""}<table class="${s.head.length > 7 ? "large" : ""}"><thead><tr>${s.head.map(x => `<th>${esc(x)}</th>`).join("")}</tr></thead><tbody>${s.rows.map(r => `<tr>${r.map((v, i) => `<td class="${i === 5 && /^NC$/i.test(v) ? "rouge" : ""}">${esc(v)}</td>`).join("")}</tr>`).join("")}</tbody></table>`).join("")}
 ${D.stades.length ? `<h3>Mise en marché par stade</h3><table><thead><tr><th>Stade du produit</th><th>Produits</th><th class="n">Part du CA</th></tr></thead><tbody>${rows(D.stades, [r => esc(r.stade), r => esc(r.produits), r => esc(pct(r.pct))])}</tbody></table>` : ""}
 
-${D.onglets.some(o => o.observations.length) ? H2("Observations complémentaires du contrôleur") + D.onglets.filter(o => o.observations.length).map(o => `<p><b>${esc(o.titre.replace(/^ONGLET\s*/i, ""))} :</b> ${o.observations.map(esc).join(" ")}</p>`).join("") : ""}
+${D.onglets.some(o => o.observations.length) ? H2("Observations complémentaires du contrôleur") + D.onglets.filter(o => o.observations.length).map(o => `<p><b>${esc(ogTitre(o))} :</b> ${o.observations.map(br).join(" ")}</p>`).join("") : ""}
+
+${opts.annexe ? H2("Constats détaillés par thème") + `<p class="note">Reprise intégrale de la grille : pour chaque point, les éléments utilisés pour le contrôle, la description du contrôle effectué, la réponse et les précisions du contrôleur.</p>` + detailHtml(D) : ""}
 
 <div class="signature"><p>Fait à ${esc(opts.lieu || "……………")}, le ${esc(today)}</p>${D.controleurs.map(c => `<p class="sig">${esc(c.nom)}<br><span>${esc(c.fonction)}</span></p>`).join("")}</div>
 
-${opts.annexe ? `<section class="annexe"><h2 class="ann">Annexe – Détail des points contrôlés</h2>${D.onglets.filter(o => o.items.length).map(og => `<h3>${esc(og.titre.replace(/^ONGLET\s*/i, ""))}</h3><table class="det"><thead><tr><th>N°</th><th>Critère</th><th>Résultat</th><th>Observation</th></tr></thead><tbody>${og.items.map(it => `<tr><td>${esc(it.num)}</td><td>${esc(one(it.critere)).slice(0, 260)}${it.texte ? `<br><span class="rep">${esc(it.texte)}</span>` : ""}</td><td class="${resClass(it)}">${esc(resLabel(it))}</td><td>${esc(it.obs)}</td></tr>`).join("")}</tbody></table>`).join("")}</section>` : ""}
 <script>${opts.print ? "document.fonts.ready.then(()=>setTimeout(()=>window.print(),300));" : ""}<\/script>
 </body></html>`;
   return h;
@@ -539,7 +616,18 @@ table.kv td:first-child{width:36%;color:#3A3A3A;font-weight:500;background:#F6F6
 .sig{margin:0;font-weight:700;padding-top:16mm;min-width:55mm;border-bottom:1px solid #DDD}.sig span{font-weight:400;font-size:8.5pt;color:#666}
 .annexe{break-before:page}.ann{display:block}
 table.det td:nth-child(1){width:8mm}table.det td:nth-child(3){width:22mm;font-weight:700}table.det td:nth-child(4){width:48mm}
-td.okk{color:#18753C}td.ko{color:#CE0500}.rep{color:#000091;font-size:8.5pt}
+td.okk{color:#18753C}td.ko{color:#CE0500}td.av{color:#B34000}td.so{color:#666}.rep{color:#000091;font-size:8.5pt}
+table.large{font-size:7.5pt}table.large th,table.large td{padding:1mm 1.2mm}
+.theme{margin-bottom:5mm}.th3{font-size:11.5pt;color:#000091;margin:7mm 0 1mm;break-after:avoid}.th-stats{font-size:8pt;color:#3A3A3A;margin:0 0 3mm}
+.c-ok{color:#18753C}.c-av{color:#B34000}.c-ko{color:#CE0500;font-weight:700}.c-so{color:#666}
+h4{font-size:9pt;text-transform:uppercase;letter-spacing:.03em;color:#3A3A3A;margin:4mm 0 1.5mm;break-after:avoid}
+.pt{border:1px solid #E5E5E5;border-left:4px solid #929292;padding:2mm 3mm 1.5mm;margin:0 0 2mm;break-inside:avoid}
+.pt.ok{border-left-color:#18753C}.pt.ko{border-left-color:#CE0500}.pt.av{border-left-color:#B34000}.pt.txt{border-left-color:#000091}.pt.nr{border-left-color:#DDD}
+.pt-h{display:flex;gap:2.5mm;align-items:flex-start}.pt-h .num{font-weight:700;color:#000091;flex:none;min-width:8mm}.pt-h .q{flex:1;font-weight:500;font-size:9pt}
+.pt-og{margin:.5mm 0 0;font-size:7.5pt;color:#666}
+.badge{flex:none;font-size:7pt;font-weight:700;text-transform:uppercase;padding:.4mm 2mm;border-radius:1mm;background:#EEE;color:#3A3A3A;white-space:nowrap}
+.badge.ok{background:#B8FEC9;color:#18753C}.badge.ko{background:#FFE9E9;color:#CE0500}.badge.av{background:#FFE9E6;color:#B34000}.badge.txt{background:#E3E3FD;color:#000091}.badge.nr{background:#fff;border:1px solid #DDD;color:#929292}
+.pt dl{display:grid;grid-template-columns:40mm 1fr;gap:1mm 3mm;margin:1.8mm 0 0;font-size:8.5pt}.pt dt{color:#666;font-weight:700;font-size:7.5pt}.pt dd{margin:0}
 `;
 
 /* =====================================================================
@@ -567,10 +655,15 @@ async function buildDocx(D, opts){
     ...data.map(r => new TableRow({ cantSplit:true, children:r.map((v, i) => typeof v === "object" && v && v.t !== undefined ? cell(v.t, { ...v, w:widths && widths[i] }) : cell(v, { w:widths && widths[i] })) })) ] });
   const kv = arr => table(null, arr.map(([k, v]) => [{ t:k, fill:"F6F6F6", bold:true }, v]), [36, 64]);
 
-  const ident = [["Raison sociale", D.cover.rs], ["N° de reconnaissance", D.cover.reco], ["Filière", D.cover.secteur], ["Statut juridique", ficheVal(D, /^Statut juridique/i)],
-    ["N° SIRET", ficheVal(D, /^Numéro Siret/i)], ["Siège social", ficheVal(D, /^Adresse du Siège Social/i)], ["Responsable légal", ficheVal(D, /^Responsable légal/i)],
-    ["Nombre d'adhérents", ficheVal(D, /^Nombre d'adhérents/i)], ["Date de l'arrêté de reconnaissance", ficheVal(D, /^Date de l.arrêté/i)],
-    ["Zone de reconnaissance", ficheVal(D, /^Zone de reconnaissance/i)], ["Dernier contrôle FAM", ficheVal(D, /^Date du dernier contrôle/i)]].filter(x => x[1]);
+  const ident = identRows(D), aex = D.onglets.flatMap(og => og.items.filter(isAExaminer).map(it => ({ og, it })));
+  const KC = { ok:"18753C", ko:"CE0500", av:"B34000", so:"666666", txt:BF, nr:"929292" };
+  const point = (it, og) => {
+    const k = kind(it), bl = { left:{ style:BorderStyle.SINGLE, size:24, color:KC[k], space:8 } }, f = CHAMPS.filter(([c]) => it[c]);
+    const out = [P([...(it.num ? [T(it.num + "   ", { bold:true, color:BF, size:18 })] : []), T(one(it.critere), { bold:true, size:18 }), T("   " + resLabel(it).toUpperCase(), { bold:true, size:15, color:KC[k] })], { before:140, after:og || f.length ? 30 : 60, border:bl, keepNext:!!(og || f.length) })];
+    if (og) out.push(P([T(ogTitre(og), { size:14, color:"666666" })], { after:f.length ? 30 : 60, border:bl, keepNext:!!f.length }));
+    if (f.length) out.push(table(null, f.map(([c, l]) => [{ t:l, fill:"F6F6F6", bold:true, size:15, color:"3A3A3A" }, { t:it[c], size:16 }]), [30, 70]));
+    return out;
+  };
 
   const children = [];
   // bloc-marque + émetteur
@@ -586,9 +679,9 @@ async function buildDocx(D, opts){
   children.push(table(null, [[
     { t:`${S.points}\npoints contrôlés`, fill:"F6F6F6", big:true }, { t:`${S.conformes}\nsans anomalie`, fill:"F6F6F6", big:true, color:"18753C" },
     { t:`${S.anomalies}\nanomalie(s) relevée(s)`, fill:"F6F6F6", big:true, color:"CE0500" }, { t:`${S.nonRenseignes}\nnon renseigné(s)`, fill:"F6F6F6", big:true, color:"666666" } ]], [25, 25, 25, 25]));
-  children.push(P([T(S.anomalies ? `Le contrôle a porté sur ${S.points} points répartis sur ${S.parOnglet.length} thèmes. ${S.anomalies} anomalie(s) ont été relevée(s) ; elles sont détaillées en partie 5 et appellent des actions correctives de la part de l'OP, dont la mise en œuvre sera vérifiée.` : `Le contrôle a porté sur ${S.points} points répartis sur ${S.parOnglet.length} thèmes. Aucune anomalie n'a été relevée.`)],
+  children.push(P([T(S.anomalies ? `Le contrôle a porté sur ${S.points} points répartis sur ${S.parOnglet.length} thèmes. ${S.anomalies} anomalie(s) ont été relevée(s) ; elles sont détaillées dans la partie « Anomalies relevées » et appellent des actions correctives de la part de l'OP, dont la mise en œuvre sera vérifiée.` : `Le contrôle a porté sur ${S.points} points répartis sur ${S.parOnglet.length} thèmes. Aucune anomalie n'a été relevée.`)],
     { before:120, shading:{ type:ShadingType.CLEAR, fill:S.anomalies ? "FFE9E9" : "B8FEC9", color:"auto" }, border:{ left:{ style:BorderStyle.SINGLE, size:30, color:S.anomalies ? "CE0500" : "18753C", space:8 } } }));
-  children.push(P([T("Une anomalie correspond à une réponse « Non » ou « Non conforme » assortie d'une observation du contrôleur.", { size:15, color:"666666", italics:true })]));
+  children.push(P([T("Une anomalie correspond à une réponse « Non » ou « Non conforme » assortie d'une précision du contrôleur." + (S.aExaminer ? ` ${S.aExaminer} autre(s) réponse(s) « Non » sans précision ou non conclusive(s) sont reprises dans « Réponses à examiner ».` : "") + (S.sansObjet ? ` ${S.sansObjet} point(s) sans objet.` : ""), { size:15, color:"666666", italics:true })]));
 
   children.push(H2b("Identification de l'organisation de producteurs"));
   children.push(kv(ident));
@@ -607,43 +700,45 @@ async function buildDocx(D, opts){
   }
 
   children.push(H2b("Résultats par thème"));
-  children.push(table(["Thème contrôlé", "Points", "Anomalies", "Taux sans anomalie"], S.parOnglet.map(p => { const t = p.repondus ? Math.round((p.repondus - p.anomalies) / p.repondus * 100) + " %" : "–";
-    return [p.og.titre.replace(/^ONGLET\s*/i, ""), String(p.points), { t:String(p.anomalies), color:p.anomalies ? "CE0500" : undefined, bold:!!p.anomalies }, t]; }), [58, 12, 14, 16]));
+  children.push(table(["Thème contrôlé", "Points", "Oui / C", "Non", "Sans objet", "Anomalies", "Taux sans anomalie"], S.parOnglet.map(p => { const t = p.repondus ? Math.round((p.repondus - p.anomalies) / p.repondus * 100) + " %" : "–", c = k => p.og.items.filter(i => kind(i) === k).length;
+    return [ogTitre(p.og), String(p.points), String(c("ok")), String(c("av") + c("ko")), String(c("so")), { t:String(p.anomalies), color:p.anomalies ? "CE0500" : undefined, bold:!!p.anomalies }, t]; }), [40, 9, 9, 8, 10, 11, 13]));
 
   children.push(H2b("Anomalies relevées"));
   if (!anomalies.length) children.push(P("Aucune anomalie relevée."));
-  anomalies.forEach(({ og, it }, i) => {
-    const bl = { left:{ style:BorderStyle.SINGLE, size:30, color:"CE0500", space:8 } };
-    children.push(P([T(`ANOMALIE ${i + 1} · ${og.titre.replace(/^ONGLET\s*/i, "").split(" - ")[0]}${it.num ? " · POINT " + it.num : ""}`, { bold:true, color:"CE0500", size:15 })], { after:20, border:bl, keepNext:true, before:120 }));
-    children.push(P([T(one(it.critere), { bold:true, size:18 })], { after:20, border:bl, keepNext:true }));
-    children.push(P([T("Constat : ", { bold:true, size:18 }), T(it.obs, { size:18 })], { after:it.avec ? 20 : 80, border:bl, keepNext:!!it.avec }));
-    if (it.avec) children.push(P([T("Contrôle réalisé à partir de : " + it.avec, { size:15, color:"666666" })], { after:80, border:bl }));
-  });
+  anomalies.forEach(({ og, it }) => children.push(...point(it, og)));
+  if (aex.length){
+    children.push(H2b("Réponses à examiner"));
+    children.push(P([T("Réponses « Non » sans précision dans la colonne « Si N ou NC… », et réponses « Non conclusif ». Selon la question, un « Non » peut être normal ou révéler un manquement : à apprécier par le contrôleur.", { size:15, color:"666666", italics:true })]));
+    aex.forEach(({ og, it }) => children.push(...point(it, og)));
+  }
 
   const comp = D.rendements.length || D.sondages.some(s => s.rows.length) || D.stades.length;
   if (comp) children.push(H2b("Contrôles complémentaires"));
   if (D.rendements.length){ children.push(H3("Rendements déclarés et références AGRESTE"));
     children.push(table(["Produit", "Année", "Département", "AGRESTE", "OP", "Écart", "Justification"], D.rendements.map(r => [r.produit, r.annee, r.dept, fmtN(r.agreste), fmtN(r.op),
       { t:r.variation == null ? "–" : (r.variation > 0 ? "+" : "") + Math.round(r.variation * 100) + " %", color:Math.abs(r.variation || 0) > .2 ? "CE0500" : undefined, bold:Math.abs(r.variation || 0) > .2 }, r.justif]), [14, 8, 16, 10, 8, 9, 35])); }
-  for (const s of D.sondages.filter(s => s.rows.length)){ children.push(H3(s.titre)); children.push(table(s.head, s.rows.map(r => r.map((v, i) => i === 5 && /^NC$/i.test(v) ? { t:v, color:"CE0500", bold:true } : v)))); }
+  for (const s of D.sondages.filter(s => s.rows.length)){ children.push(H3(s.titre)); if (s.communs && s.communs.length) children.push(P([T(`${s.rows.length} dossiers contrôlés · pour tous : ${s.communs.join(" · ")}`, { size:15, color:"666666" })])); children.push(table(s.head, s.rows.map(r => r.map((v, i) => i === 5 && /^NC$/i.test(v) ? { t:v, color:"CE0500", bold:true } : v)))); }
   if (D.stades.length){ children.push(H3("Mise en marché par stade")); children.push(table(["Stade du produit", "Produits", "Part du CA"], D.stades.map(s => [s.stade, s.produits, pct(s.pct)]), [30, 55, 15])); }
 
   if (D.onglets.some(o => o.observations.length)){
     children.push(H2b("Observations complémentaires du contrôleur"));
-    D.onglets.filter(o => o.observations.length).forEach(o => children.push(P([T(o.titre.replace(/^ONGLET\s*/i, "") + " : ", { bold:true }), T(o.observations.join(" "))])));
+    D.onglets.filter(o => o.observations.length).forEach(o => children.push(P([T(ogTitre(o) + " : ", { bold:true }), T(o.observations.join(" "))])));
+  }
+  if (opts.annexe){
+    children.push(H2b("Constats détaillés par thème"));
+    children.push(P([T("Reprise intégrale de la grille : pour chaque point, les éléments utilisés pour le contrôle, la description du contrôle effectué, la réponse et les précisions du contrôleur.", { size:15, color:"666666", italics:true })]));
+    for (const og of D.onglets.filter(o => o.items.length)){
+      children.push(P([T(ogTitre(og), { bold:true, color:BF, size:22 })], { before:280, after:60, keepNext:true }));
+      let sec = null;
+      for (const it of og.items){
+        if (it.section && it.section !== sec){ sec = it.section; children.push(P([T(sec.toUpperCase(), { bold:true, size:15, color:"3A3A3A" })], { before:160, after:40, keepNext:true })); }
+        children.push(...point(it));
+      }
+      if (og.observations.length) children.push(P([T("Observations complémentaires : ", { bold:true, size:17 }), T(og.observations.join(" "), { size:17 })], { before:120 }));
+    }
   }
   children.push(P([T(`Fait à ${opts.lieu || "……………"}, le ${opts.date || new Date().toLocaleDateString("fr-FR")}`)], { before:400, after:600 }));
   D.controleurs.forEach(c => { children.push(P([T(c.nom, { bold:true })], { after:0 })); children.push(P([T(c.fonction, { size:16, color:"666666" })], { after:300 })); });
-
-  if (opts.annexe){
-    children.push(new Paragraph({ children:[new PageBreak()] }));
-    children.push(P([T("Annexe – Détail des points contrôlés", { bold:true, color:BF, size:26 })], { after:160 }));
-    for (const og of D.onglets.filter(o => o.items.length)){
-      children.push(H3(og.titre.replace(/^ONGLET\s*/i, "")));
-      children.push(table(["N°", "Critère", "Résultat", "Observation"], og.items.map(it => [it.num || "", one(it.critere).slice(0, 260) + (it.texte ? "\n→ " + it.texte : ""),
-        { t:resLabel(it), bold:true, color:isAnomalie(it) ? "CE0500" : it.res ? "18753C" : undefined }, it.obs || ""]), [6, 56, 14, 24]));
-    }
-  }
 
   const doc = new Document({
     creator:"Grist – rapport de contrôle", title:"Rapport de contrôle – " + (D.cover.rs || ""),

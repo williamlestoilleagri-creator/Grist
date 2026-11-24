@@ -54,10 +54,10 @@ function analyserOrigine(wb){
   D.controleurs.forEach(p => P.intervenants.push({ Role:"Contrôleur", Fonction_service:p.fonction || null, Nom:p.nom || null }));
   D.filiales.forEach(f => P.filiales.push({ Raison_sociale:f.nom, Pct_participation:pctVal(f.pct), Objet:f.objet || null }));
   for (const og of D.onglets){
-    const feuille = /^13\./.test(og.sheet) ? "13. Producteur 1" : og.sheet;
+    const feuille = /^13\.|^producteur/i.test(og.sheet) ? "13. Producteur 1" : og.sheet;
     let cible = P.reps;
     if (/^(9|10|11|12)\.1/.test(og.sheet)){ const cv = { Domaine:null, Prestataire:(D.conventions.find(x => x.sheet === og.sheet) || {}).nom || null, Fonction_signataire:null, reps:[] }; P.conventions.push(cv); cible = cv.reps; }
-    if (/^13\./.test(og.sheet)){ const pr = D.producteurs.find(x => x.sheet === og.sheet) || {}; const pv = { Nom:pr.nom || null, Produits_adhesion:pr.produits || null, reps:[] }; P.producteurs.push(pv); cible = pv.reps; }
+    if (/^13\.|^producteur/i.test(og.sheet)){ const pr = D.producteurs.find(x => x.sheet === og.sheet) || {}; const pv = { Nom:pr.nom || null, Produits_adhesion:pr.produits || null, reps:[] }; P.producteurs.push(pv); cible = pv.reps; }
     for (const it of og.items){
       const p = REF_BY_TEXT.get(feuille + "|" + norm(it.critere)) || (/^nom du prestataire/i.test(one(it.critere)) && REF.find(q => q.Feuille === feuille && /^nom du prestataire/i.test(q.Libelle || ""))) || rapprocher(feuille, it.critere, cible);
       if (!p){ P.nonReconnus.push(`${og.sheet} : ${one(it.critere).slice(0, 90)}`); continue; }
