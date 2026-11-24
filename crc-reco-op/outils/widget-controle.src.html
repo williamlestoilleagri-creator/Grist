@@ -139,9 +139,9 @@
     <div class="panel">
       <h2>Nouveau contrôle</h2>
       <div class="grille-form">
-        <div class="fr-select-group"><label class="fr-label" for="nOP">Organisation de producteurs</label><select class="fr-select" id="nOP"></select></div>
-        <div class="fr-input-group"><label class="fr-label" for="nOPnew">ou nouvelle OP (raison sociale)</label><input class="fr-input" id="nOPnew"></div>
-        <div class="fr-select-group"><label class="fr-label" for="nFil">Filière contrôlée</label><select class="fr-select" id="nFil"></select></div>
+        <div class="fr-input-group" id="gOP"><label class="fr-label" for="nOP">Organisation de producteurs<span class="fr-hint-text">Tapez la raison sociale : les OP déjà enregistrées sont proposées, une nouvelle OP est créée automatiquement.</span></label>
+          <input class="fr-input" id="nOP" list="listeOP" autocomplete="off" placeholder="Ex. : SCA Les Vergers de Kerlann"><datalist id="listeOP"></datalist><p class="fr-message" id="nOPinfo"></p></div>
+        <div class="fr-select-group" id="gFil"><label class="fr-label" for="nFil">Filière contrôlée</label><select class="fr-select" id="nFil"></select><p class="fr-message" id="nFilinfo"></p></div>
         <div class="fr-input-group"><label class="fr-label" for="nDem">N° de demande de contrôle</label><input class="fr-input" id="nDem"></div>
         <div class="fr-input-group"><label class="fr-label" for="nDu">Contrôle du</label><input class="fr-input" type="date" id="nDu"></div>
         <div class="fr-input-group"><label class="fr-label" for="nAu">au</label><input class="fr-input" type="date" id="nAu"></div>
@@ -420,18 +420,34 @@ function renderControles(){
       <td>${c.Fichier_source && refList(c.Fichier_source).length ? '<span class="fr-tag fr-tag--sm">Import Excel</span>' : '<span class="fr-tag fr-tag--sm">Saisie Grist</span>'}</td>
       <td>${Math.round(st.av * 100)} %<div class="barre"><i style="width:${Math.round(st.av * 100)}%"></i></div></td><td>${st.ano ? `<b style="color:#CE0500">${st.ano}</b>` : "0"}</td><td><button type="button" class="fr-btn fr-btn--tertiary-no-outline fr-btn--sm fr-icon-delete-line btn-suppr" data-suppr="${c.id}" title="Supprimer ce contrôle" aria-label="Supprimer le contrôle ${esc(ctrlLabel(c))}">Supprimer</button></td></tr>`; }).join("")
     || '<tr><td colspan="7">Aucun contrôle pour l\'instant : créez-en un ci-dessous ou importez un fichier Excel.</td></tr>';
-  $("nOP").innerHTML = '<option value="">— Choisir —</option>' + rows(T.OP).map(o => `<option value="${o.id}">${esc(o.Raison_sociale || "OP n°" + o.id)}</option>`).join("");
-  $("nFil").innerHTML = '<option value="">— Choisir —</option>' + rows(T.FIL).map(f => `<option value="${f.id}">${esc(f.Nom)}</option>`).join("");
+  $("listeOP").innerHTML = rows(T.OP).filter(o => o.Raison_sociale).map(o => `<option value="${esc(o.Raison_sociale)}">${esc(o.N_OP || "")}</option>`).join("");
+  const filPrec = $("nFil").value;
+  $("nFil").innerHTML = rows(T.FIL).length ? '<option value="">— Choisir —</option>' + rows(T.FIL).map(f => `<option value="${f.id}">${esc(f.Nom)}</option>`).join("") : '<option value="">Aucune filière disponible</option>';
+  if (filPrec) $("nFil").value = filPrec;
+  infoOP();
 }
 $("listeCtrl").addEventListener("click", e => { const del = e.target.closest("[data-suppr]"); if (del){ e.stopPropagation(); ouvrirSuppression(+del.dataset.suppr); return; }
   const tr = e.target.closest("tr[data-cid]"); if (!tr) return; S.ctrlId = +tr.dataset.cid; S.groupe = null; setTab("saisie"); });
 $("selCtrl").addEventListener("change", e => { S.ctrlId = +e.target.value; S.groupe = null; render(); });
+const opParNom = nom => rows(T.OP).find(o => norm(o.Raison_sociale || "") === norm(nom)) || null;
+function erreurChamp(groupe, msgId, texte){ $(groupe).classList.toggle(groupe === "gFil" ? "fr-select-group--error" : "fr-input-group--error", !!texte);
+  const m = $(msgId); m.className = "fr-message" + (texte ? " fr-message--error" : ""); m.textContent = texte || ""; }
+function infoOP(){ const nom = $("nOP").value.trim(), m = $("nOPinfo"); $("gOP").classList.remove("fr-input-group--error");
+  if (!nom){ m.className = "fr-message"; m.textContent = ""; return; }
+  const o = opParNom(nom); m.className = "fr-message " + (o ? "fr-message--valid" : "fr-message--info");
+  m.textContent = o ? `OP déjà enregistrée${o.N_OP ? " (n° " + o.N_OP + ")" : ""} : le contrôle lui sera rattaché.` : "Nouvelle OP : sa fiche sera créée avec ce contrôle."; }
+$("nOP").addEventListener("input", infoOP);
+$("nFil").addEventListener("change", () => erreurChamp("gFil", "nFilinfo", ""));
 $("bCreer").addEventListener("click", async () => {
   if (!S.acces){ verifierAcces(); window.scrollTo({ top:0 }); toast("error", "Le widget n'a pas accès au document : voir le message en haut de page."); return; }
-  const fid = +$("nFil").value; let opId = +$("nOP").value; const nouv = $("nOPnew").value.trim();
-  if (!fid || (!opId && !nouv)){ toast("error", "Choisissez une OP (ou saisissez une nouvelle raison sociale) et une filière."); return; }
+  const fid = +$("nFil").value, nom = $("nOP").value.trim();
+  erreurChamp("gOP", "nOPinfo", nom ? "" : "Saisissez la raison sociale de l'OP contrôlée.");
+  erreurChamp("gFil", "nFilinfo", fid ? "" : rows(T.FIL).length ? "Choisissez la filière contrôlée." : "Aucune filière disponible : vérifiez la table Filieres.");
+  if (nom) infoOP();
+  if (!nom || !fid){ toast("error", !nom && !fid ? "Il manque l'OP et la filière." : !nom ? "Il manque la raison sociale de l'OP." : "Il manque la filière contrôlée."); return; }
   try {
-    if (!opId){ [opId] = await act([["AddRecord", T.OP, null, { Raison_sociale:nouv }]]); }
+    let opId = (opParNom(nom) || {}).id;
+    if (!opId){ [opId] = await act([["AddRecord", T.OP, null, { Raison_sociale:nom, Filieres_reconnues:["L", fid] }]]); }
     const [cid] = await act([["AddRecord", T.CTRL, null, { OP:opId, Filiere:fid, N_demande:$("nDem").value.trim(), Service_territorial:$("nServ").value.trim(),
       Date_debut:isoToSec($("nDu").value), Date_fin:isoToSec($("nAu").value), Statut:"En cours" }]]);
     await reload(); const n = await genererGrille(cid);
