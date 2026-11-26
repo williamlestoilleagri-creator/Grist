@@ -260,7 +260,7 @@
         try { const r = await a.onClick?.(close); if (r !== false) close(); } catch (e) { console.error(e); S.toast(e.message, 'error'); }
       } }, a.label));
     });
-    dlg.append(
+    S.add(dlg,
       h('div', { class: 's-modal__head' }, h('h1', { id: 'mt' }, titre), h('button', { class: 'fr-btn--close fr-btn', title: 'Fermer', type: 'button', onclick: close }, fermer)),
       h('div', { class: 's-modal__body' }, body),
       actions.length ? foot : null);
