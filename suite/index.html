@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-scheme="system">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<meta name="theme-color" content="#000091">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Suite numérique de services</title>
+<link rel="stylesheet" href="./assets/dsfr/dsfr.min.css">
+<link rel="stylesheet" href="./assets/dsfr/utility/icons/icons.min.css">
+<link rel="stylesheet" href="./assets/core.css">
+<link rel="icon" href="./assets/dsfr/favicon/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./assets/dsfr/favicon/apple-touch-icon.png">
+</head>
+<body>
+<script src="assets/core.js"></script>
+<script>
+(function(){
+  const h = S.h;
+  S.init({ titre: 'Suite numérique de services', sousTitre: 'Outils sans serveur', root: './', home: './index.html' });
+  const v = document.getElementById('view');
+  const s = S.settings();
+  v.append(
+    h('h1', {}, 'Applications'),
+    h('p', { class: 'fr-text--lead' }, 'Neuf outils prêts à l’emploi, au Système de Design de l’État, qui fonctionnent directement dans le navigateur : rien à installer, aucun serveur à maintenir.'),
+    h('div', { class: 'fr-grid-row fr-grid-row--gutters fr-mb-6w' }, S.APPS.map((a) => h('div', { class: 'fr-col-12 fr-col-md-6 fr-col-lg-4' },
+      h('div', { class: 'fr-tile fr-enlarge-link fr-tile--horizontal' },
+        h('div', { class: 'fr-tile__body' }, h('div', { class: 'fr-tile__content' },
+          h('h2', { class: 'fr-tile__title' }, h('a', { href: a.id + '/index.html' }, a.titre)),
+          h('p', { class: 'fr-tile__detail' }, a.desc))),
+        h('div', { class: 'fr-tile__header' }, h('div', { class: 'fr-tile__pictogram', style: 'display:flex;align-items:center;justify-content:center' }, h('span', { class: a.icon + ' fr-icon--lg', 'aria-hidden': 'true', style: 'color:var(--text-action-high-blue-france)' }))))))),
+    h('div', { class: 'fr-grid-row fr-grid-row--gutters' },
+      h('div', { class: 'fr-col-12 fr-col-md-6' }, S.callout('Interconnexion', h('p', {}, 'Toutes les applications partagent les mêmes paramètres (bloc-marque, connexion Grist, proxy). L’outil d’automatisation peut créer des tâches, des courriers, des événements de main courante ou des points sur la carte dans les autres applications.'))),
+      h('div', { class: 'fr-col-12 fr-col-md-6', id: 'donnees' }, S.callout('Vos données', h('p', {}, 'Les données sont stockées dans ce navigateur (localStorage et IndexedDB) sur ce poste. Chaque application propose un export/import JSON et une synchronisation facultative avec un document Grist. Aucune donnée n’est envoyée ailleurs, sauf aux API que vous appelez explicitement (Grist, géocodage IGN, services de messagerie configurés…).')))),
+    h('div', { class: 'fr-btns-group fr-btns-group--inline-md fr-btns-group--icon-left fr-mt-2w' },
+      S.btn('Paramètres de la suite', S.settingsModal, '', 'fr-icon-settings-5-line'),
+      S.btn('Sauvegarder toute la suite', () => {
+        const o = {}; for (let i = 0; i < S.ls.length; i++) { const k = S.ls.key(i); if (k.startsWith('suite:') && k !== 'suite:settings') o[k] = S.ls.getItem(k); }
+        S.download('suite-complete-' + S.isoDate(new Date()) + '.json', JSON.stringify({ suite: 1, cles: o }), 'application/json');
+      }, 'fr-btn--secondary', 'fr-icon-download-line'),
+      S.btn('Restaurer une sauvegarde', async () => {
+        const f = await S.pickFile('.json'); if (!f) return; const o = JSON.parse(await S.readText(f));
+        if (!o.cles) return S.toast('Fichier non reconnu', 'error');
+        if (!(await S.confirm('Remplacer les données de la suite par cette sauvegarde ?'))) return;
+        Object.entries(o.cles).forEach(([k, val]) => S.ls.setItem(k, val)); S.toast('Sauvegarde restaurée', 'success');
+      }, 'fr-btn--secondary', 'fr-icon-upload-line')),
+  );
+})();
+</script>
+<script type="module" src="assets/dsfr/dsfr.module.min.js"></script>
+<script nomodule src="assets/dsfr/dsfr.nomodule.min.js"></script>
+</body>
+</html>
