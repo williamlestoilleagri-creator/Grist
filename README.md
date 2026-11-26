@@ -9,6 +9,7 @@
 | `rdv/index.html` | Formulaire public de prise de rendez-vous |
 | `duo.html` | **Duo** — interprète à deux écouteurs (ex. japonais ⇄ allemand) |
 | `compte-rendu/` | **Compte rendu de réunion** — version sans installation dans `navigateur/` ; transcription, identification des interlocuteurs, détection des incohérences par IA (Mistral, Albert, Claude…) et corrections (DSFR) |
+| `suite/` | **Suite numérique de services (DSFR)** — automatisation type n8n, circuits de travail, réservation de ressources, veille, cartographie, courrier & parapheur, gestion de crise, contrôles terrain, actes & publipostage. Voir [`suite/README.md`](suite/README.md) |
 | `calculette-gren/` | **Calculette GREN** — dose prévisionnelle d'azote (méthode du bilan, Bretagne) et Plan Prévisionnel de Fumure |
 
 ## ERP « façon SAP » (`erp-sap.html`)
