@@ -151,20 +151,20 @@
     if (st.mode !== 'jour' && st.rid) rlist = rlist.filter((r) => r.id === st.rid);
     const ids = new Set(rlist.map((r) => r.id));
     const bks = db.list('reservations').filter((b) => ids.has(b.ressourceId) && b.statut !== 'annulee' && b.statut !== 'refusee');
-    if (st.mode === 'mois') return v.append(monthView(ref, bks));
+    if (st.mode === 'mois') return S.add(v, monthView(ref, bks));
     const cols = st.mode === 'jour' ? rlist.map((r) => ({ label: r.nom, sub: r.capacite ? r.capacite + ' pl.' : r.type, day: ref, rid: r.id, items: bks.filter((b) => b.ressourceId === r.id && S.sameDay(b.debut, ref)) }))
       : [...Array(7)].map((_, i) => { const d = S.addDays(S.startOfWeek(ref), i); return { label: S.JOURS[i].slice(0, 3) + '. ' + d.getDate(), day: d, rid: st.rid, weekend: i > 4, items: bks.filter((b) => S.sameDay(b.debut, d) || (new Date(b.debut) < S.startOfDay(d) && new Date(b.fin) > S.startOfDay(d))) }; });
-    v.append(h('div', { class: 'rs-scroll' }, timeGrid(cols)), legende(rlist));
+    S.add(v, h('div', { class: 'rs-scroll' }, timeGrid(cols)), legende(rlist));
   }
   const legende = (rlist) => h('div', { class: 's-tags fr-mt-2w' }, rlist.map((r) => h('span', { class: 's-small fr-mr-2w' }, h('span', { class: 's-dot', style: { background: r.couleur } }), r.nom)), h('span', { class: 's-small' }, '▨ hachuré = en attente de validation'));
 
   function timeGrid(cols) {
     const height = (H1 - H0) * 2 * SLOT;
     const grid = h('div', { class: 'rs-grid', style: { gridTemplateColumns: `3.5rem repeat(${cols.length}, minmax(7rem, 1fr))` } });
-    grid.append(h('div', { class: 'rs-head' }), ...cols.map((c) => h('div', { class: 'rs-head' + (S.sameDay(c.day, new Date()) && !c.rid ? ' today' : '') }, c.label, c.sub ? h('div', { class: 's-small s-mention', style: 'font-weight:400' }, c.sub) : null)));
+    S.add(grid, h('div', { class: 'rs-head' }), ...cols.map((c) => h('div', { class: 'rs-head' + (S.sameDay(c.day, new Date()) && !c.rid ? ' today' : '') }, c.label, c.sub ? h('div', { class: 's-small s-mention', style: 'font-weight:400' }, c.sub) : null)));
     const times = h('div', { class: 'rs-times', style: { height: height + 'px' } });
-    for (let hh = H0 + 1; hh < H1; hh++) times.append(h('span', { style: { top: (hh - H0) * 2 * SLOT + 'px' } }, hh + 'h'));
-    grid.append(times);
+    for (let hh = H0 + 1; hh < H1; hh++) S.add(times, h('span', { style: { top: (hh - H0) * 2 * SLOT + 'px' } }, hh + 'h'));
+    S.add(grid, times);
     for (const c of cols) {
       const col = h('div', { class: 'rs-col' + (c.weekend ? ' weekend' : ''), style: { height: height + 'px' } });
       col.addEventListener('click', (e) => {
@@ -184,11 +184,11 @@
         if (e <= s) continue;
         const top = ((s - day0) / 60000 - H0 * 60) / 30 * SLOT, hgt = Math.max(SLOT - 2, (e - s) / 60000 / 30 * SLOT - 2);
         const r = resOf(b);
-        col.append(h('div', { class: 's-ev' + (b.statut === 'demandee' ? ' pending' : ''), style: { top: top + 'px', height: hgt + 'px', background: r.couleur, left: `calc(${(b._lane / n) * 100}% + 2px)`, width: `calc(${100 / n}% - 4px)`, right: 'auto' }, title: `${b.titre}\n${r.nom}\n${S.hm(b.debut)}–${S.hm(b.fin)} · ${b.demandeur}`, onclick: () => editer(b) },
+        S.add(col, h('div', { class: 's-ev' + (b.statut === 'demandee' ? ' pending' : ''), style: { top: top + 'px', height: hgt + 'px', background: r.couleur, left: `calc(${(b._lane / n) * 100}% + 2px)`, width: `calc(${100 / n}% - 4px)`, right: 'auto' }, title: `${b.titre}\n${r.nom}\n${S.hm(b.debut)}–${S.hm(b.fin)} · ${b.demandeur}`, onclick: () => editer(b) },
           h('strong', {}, S.hm(b.debut) + ' ' + b.titre), h('div', {}, c.rid ? b.demandeur : r.nom)));
       }
-      if (S.sameDay(c.day, new Date())) { const now = new Date(); const m = now.getHours() * 60 + now.getMinutes(); if (m > H0 * 60 && m < H1 * 60) col.append(h('div', { class: 'rs-now', style: { top: (m - H0 * 60) / 30 * SLOT + 'px' } })); }
-      grid.append(col);
+      if (S.sameDay(c.day, new Date())) { const now = new Date(); const m = now.getHours() * 60 + now.getMinutes(); if (m > H0 * 60 && m < H1 * 60) S.add(col, h('div', { class: 'rs-now', style: { top: (m - H0 * 60) / 30 * SLOT + 'px' } })); }
+      S.add(grid, col);
     }
     return grid;
   }
@@ -200,7 +200,7 @@
       const d = S.addDays(start, i);
       if (i >= 35 && d.getMonth() !== ref.getMonth()) break;
       const its = bks.filter((b) => S.sameDay(b.debut, d)).sort((a, b) => (a.debut < b.debut ? -1 : 1));
-      g.append(h('div', { class: (d.getMonth() !== ref.getMonth() ? 'out ' : '') + (S.sameDay(d, new Date()) ? 'today' : ''), ondblclick: () => { const x = new Date(d); x.setHours(9); editer({ debut: x.toISOString(), fin: new Date(x.getTime() + 3600000).toISOString() }); } },
+      S.add(g, h('div', { class: (d.getMonth() !== ref.getMonth() ? 'out ' : '') + (S.sameDay(d, new Date()) ? 'today' : ''), ondblclick: () => { const x = new Date(d); x.setHours(9); editer({ debut: x.toISOString(), fin: new Date(x.getTime() + 3600000).toISOString() }); } },
         h('span', { class: 'd' }, d.getDate()), its.slice(0, 5).map((b) => h('span', { class: 's-mev', style: { background: resOf(b).couleur, opacity: b.statut === 'demandee' ? 0.6 : 1 }, title: b.titre, onclick: () => editer(b) }, `${S.hm(b.debut)} ${resOf(b).nom.split(' ')[0]} · ${b.titre}`)), its.length > 5 ? h('span', { class: 's-small' }, `+${its.length - 5}`) : null));
     }
     return g;
@@ -222,7 +222,7 @@
       const x = f.get(); const a = new Date(`${x.date}T${x.hdebut}`), z = new Date(`${x.date}T${x.hfin}`);
       const cands = res().filter((r) => (!x.type || r.type === x.type) && (!x.capacite || (r.capacite || 0) >= x.capacite) && (x.equip || []).every((e) => (r.equipements || []).includes(e)));
       const ok = cands.filter((r) => libre(r.id, a, z));
-      S.clear(out).append(h('h2', { class: 'fr-h5 fr-mt-3w' }, `${ok.length} ressource(s) disponible(s) le ${S.fmtDate(a)} de ${x.hdebut} à ${x.hfin}`),
+      S.add(S.clear(out), h('h2', { class: 'fr-h5 fr-mt-3w' }, `${ok.length} ressource(s) disponible(s) le ${S.fmtDate(a)} de ${x.hdebut} à ${x.hfin}`),
         ok.length ? h('div', { class: 's-grid' }, ok.map((r) => h('div', { class: 'fr-card' }, h('div', { class: 'fr-card__body' }, h('div', { class: 'fr-card__content' },
           h('h3', { class: 'fr-card__title' }, h('span', { class: 's-dot', style: { background: r.couleur } }), r.nom),
           h('p', { class: 'fr-card__desc' }, `${r.type}${r.capacite ? ' · ' + r.capacite + ' places' : ''} · ${r.site || ''}`),
@@ -231,7 +231,7 @@
           h('div', { class: 'fr-card__footer' }, S.btn('Réserver', () => editer({ ressourceId: r.id, debut: a.toISOString(), fin: z.toISOString(), participants: x.capacite }), 'fr-btn--sm')))))) : S.alert('Aucune ressource libre', 'Essayez un autre créneau ou réduisez les critères.', 'warning'),
         cands.length > ok.length ? h('p', { class: 's-mention fr-mt-2w' }, 'Occupées sur ce créneau : ' + cands.filter((r) => !ok.includes(r)).map((r) => r.nom).join(', ')) : null);
     };
-    v.append(h('h1', { class: 'fr-h3' }, 'Trouver un créneau'), h('div', { class: 's-panel' }, f.el, S.btn('Rechercher', go, '', 'fr-icon-search-line')), out);
+    S.add(v, h('h1', { class: 'fr-h3' }, 'Trouver un créneau'), h('div', { class: 's-panel' }, f.el, S.btn('Rechercher', go, '', 'fr-icon-search-line')), out);
     go();
   }
 
@@ -283,14 +283,14 @@
   /* ---------- Écran de porte ---------- */
   function porte(v, id) {
     const r = db.get('ressources', id);
-    if (!r) return v.append(S.alert('Ressource introuvable', '', 'error'));
+    if (!r) return S.add(v, S.alert('Ressource introuvable', '', 'error'));
     const draw = () => {
       db.reload();
       const now = new Date();
       const today = actives().filter((b) => b.ressourceId === id && S.sameDay(b.debut, now)).sort((a, b) => (a.debut < b.debut ? -1 : 1));
       const cur = today.find((b) => new Date(b.debut) <= now && new Date(b.fin) > now);
       const next = today.filter((b) => new Date(b.debut) > now);
-      S.clear(v).append(h('div', { class: 'rs-door', style: { background: cur ? '#ce0500' : '#18753c' } },
+      S.add(S.clear(v), h('div', { class: 'rs-door', style: { background: cur ? '#ce0500' : '#18753c' } },
         h('p', { class: 'big' }, S.fmtLong(now) + ' — ' + S.hm(now)),
         h('h1', {}, r.nom),
         h('p', { class: 'big' }, cur ? `OCCUPÉE jusqu’à ${S.hm(cur.fin)} — ${cur.titre}` : next[0] ? `LIBRE jusqu’à ${S.hm(next[0].debut)}` : 'LIBRE toute la journée'),

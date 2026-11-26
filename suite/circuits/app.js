@@ -120,7 +120,7 @@
       if (st.vue === 'mes') arr = arr.filter((d) => S.norm(d.demandeur) === S.norm(S.me()));
       if (st.q) arr = arr.filter((d) => S.norm([d.numero, d.titre, d.description, d.demandeur, d.assigne, JSON.stringify(d.donnees || {})].join(' ')).includes(S.norm(st.q)));
       arr.sort((a, b) => (a.creeLe < b.creeLe ? 1 : -1));
-      S.clear(zone).append(h('p', { class: 's-mention' }, `${arr.length} demande(s)`), S.table([
+      S.add(S.clear(zone), h('p', { class: 's-mention' }, `${arr.length} demande(s)`), S.table([
         { key: 'numero', label: 'N°', class: 's-nowrap' },
         { key: 'titre', label: 'Objet', render: (d) => h('div', {}, h('strong', {}, d.titre), ' ', prioBadge(d), h('div', { class: 's-small s-mention' }, modele(d).nom)) },
         { key: 'etape', label: 'Étape', render: (d) => (d.statut === 'en cours' ? `${d.etape + 1}/${modele(d).etapes.length} · ${etapeCour(d)?.nom}` : '—') },
@@ -219,7 +219,7 @@
     } else actions.push(S.btn('Rouvrir', () => agir(d, 'rouvrir'), 'fr-btn--secondary', 'fr-icon-refresh-line'));
     const com = h('textarea', { class: 'fr-input', rows: 2, placeholder: 'Ajouter un commentaire…' });
     const pieces = h('div');
-    const drawPieces = () => S.clear(pieces).append((d.pieces || []).length ? h('ul', {}, d.pieces.map((p) => h('li', {}, h('button', { class: 'fr-link', onclick: () => S.files.open(p.fid, p.nom) }, p.nom), h('span', { class: 's-mention s-small' }, ` (${Math.round(p.taille / 1024)} Ko, ${S.fmtDate(p.date)})`), ' ', S.iconBtn('Retirer', 'fr-icon-delete-line', async () => { await S.files.del(p.fid); d.pieces = d.pieces.filter((x) => x !== p); histo(d, 'Pièce retirée : ' + p.nom); db.save('demandes', d); drawPieces(); })))) : h('p', { class: 's-mention' }, 'Aucune pièce jointe.'));
+    const drawPieces = () => S.add(S.clear(pieces), (d.pieces || []).length ? h('ul', {}, d.pieces.map((p) => h('li', {}, h('button', { class: 'fr-link', onclick: () => S.files.open(p.fid, p.nom) }, p.nom), h('span', { class: 's-mention s-small' }, ` (${Math.round(p.taille / 1024)} Ko, ${S.fmtDate(p.date)})`), ' ', S.iconBtn('Retirer', 'fr-icon-delete-line', async () => { await S.files.del(p.fid); d.pieces = d.pieces.filter((x) => x !== p); histo(d, 'Pièce retirée : ' + p.nom); db.save('demandes', d); drawPieces(); })))) : h('p', { class: 's-mention' }, 'Aucune pièce jointe.'));
     drawPieces();
     S.add(v,
       h('nav', { class: 'fr-breadcrumb s-noprint', 'aria-label': 'vous êtes ici :' }, h('ol', { class: 'fr-breadcrumb__list' }, h('li', {}, h('a', { class: 'fr-breadcrumb__link', href: '#/demandes' }, 'Demandes')), h('li', {}, h('a', { class: 'fr-breadcrumb__link', 'aria-current': 'page' }, d.numero)))),
@@ -267,7 +267,7 @@
         const f = S.form([{ name: 'nom', label: 'Nom de l’étape', required: true }, { name: 'type', label: 'Type', type: 'select', required: true, options: Object.entries(TYPES).map(([k, l]) => ({ value: k, label: l })) }, { name: 'responsable', label: 'Responsable (agent, rôle ou « Demandeur »)', list: 'roles-list' }, { name: 'delaiJours', label: 'Délai (jours ouvrés)', type: 'number', min: 0 }, { name: 'consigne', label: 'Consigne', type: 'textarea', rows: 2 }], e);
         f.el.addEventListener('input', () => { Object.assign(e, f.get()); save(); });
         f.el.addEventListener('change', () => { Object.assign(e, f.get()); save(); });
-        steps.append(h('div', { class: 's-panel s-panel--alt' }, h('div', { class: 's-bar', style: 'margin-bottom:.5rem' }, h('h3', { class: 'fr-h6' }, `Étape ${i + 1}`),
+        S.add(steps, h('div', { class: 's-panel s-panel--alt' }, h('div', { class: 's-bar', style: 'margin-bottom:.5rem' }, h('h3', { class: 'fr-h6' }, `Étape ${i + 1}`),
           h('div', { class: 's-bar__actions' }, S.iconBtn('Monter', 'fr-icon-arrow-up-line', () => { if (i) { [m.etapes[i - 1], m.etapes[i]] = [m.etapes[i], m.etapes[i - 1]]; save(); drawSteps(); } }), S.iconBtn('Descendre', 'fr-icon-arrow-down-line', () => { if (i < m.etapes.length - 1) { [m.etapes[i + 1], m.etapes[i]] = [m.etapes[i], m.etapes[i + 1]]; save(); drawSteps(); } }), S.iconBtn('Supprimer', 'fr-icon-delete-line', () => { if (m.etapes.length > 1) { m.etapes.splice(i, 1); save(); drawSteps(); } }))), f.el));
       });
     };

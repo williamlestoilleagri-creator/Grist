@@ -227,7 +227,7 @@
       document.body.classList.toggle('s-fullpage', route === 'editeur');
       S.clear(view);
       if (route === 'editeur') return editor(view, params[0]);
-      const c = h('div', { class: 'fr-container fr-py-4w' }); view.append(c);
+      const c = h('div', { class: 'fr-container fr-py-4w' }); S.add(view, c);
       if (route === 'executions') return executions(c);
       if (route === 'identifiants') return identifiants(c);
       if (route === 'aide') return aide(c);
@@ -273,7 +273,7 @@
   /* ================= Éditeur ================= */
   function editor(view, id) {
     const orig = db.get('scenarios', id);
-    if (!orig) { view.append(h('div', { class: 'fr-container fr-py-4w' }, S.alert('Scénario introuvable', '', 'error'))); return; }
+    if (!orig) { S.add(view, h('div', { class: 'fr-container fr-py-4w' }, S.alert('Scénario introuvable', '', 'error'))); return; }
     const sc = S.clone(orig);
     sc.vue = sc.vue || { x: 0, y: 0, z: 1 };
     let sel = null; // {kind:'node'|'edge', id}
@@ -300,23 +300,23 @@
       for (const [cat, info] of Object.entries(A.CATS)) {
         const items = Object.entries(N).filter(([t, d]) => d.cat === cat && (!q || S.norm(d.label + ' ' + d.desc).includes(S.norm(q))));
         if (!items.length) continue;
-        palList.append(h('p', { class: 's-sidetitle' }, info.label));
-        items.forEach(([t, d]) => palList.append(h('button', { type: 'button', class: 'wf-pal-item', draggable: 'true', style: { borderLeftColor: info.color }, title: d.desc,
+        S.add(palList, h('p', { class: 's-sidetitle' }, info.label));
+        items.forEach(([t, d]) => S.add(palList, h('button', { type: 'button', class: 'wf-pal-item', draggable: 'true', style: { borderLeftColor: info.color }, title: d.desc,
           ondragstart: (e) => e.dataTransfer.setData('text/wf-node', t),
           onclick: () => { const r = canvas.getBoundingClientRect(); addNode(t, (r.width / 2 - sc.vue.x) / sc.vue.z - W / 2 + Math.random() * 40, (r.height / 2 - sc.vue.y) / sc.vue.z - 32 + Math.random() * 40); } },
         d.label, h('small', {}, d.desc.slice(0, 70) + (d.desc.length > 70 ? '…' : '')))));
       }
     };
     const palSearch = h('input', { class: 'fr-input fr-mb-1w', type: 'search', placeholder: 'Rechercher un connecteur…', oninput: (e) => drawPal(e.target.value) });
-    pal.append(palSearch, palList);
+    S.add(pal, palSearch, palList);
     drawPal();
 
     // Canevas
     const canvas = h('div', { class: 'wf-canvas', tabindex: '0', 'aria-label': 'Canevas du scénario' });
     const world = h('div', { class: 'wf-world' });
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.classList.add('wf-svg');
-    world.append(svg);
-    canvas.append(world,
+    S.add(world, svg);
+    S.add(canvas, world,
       h('div', { class: 'wf-zoom' },
         S.iconBtn('Zoom avant', 'fr-icon-zoom-in-line', () => zoom(1.2)),
         S.iconBtn('Zoom arrière', 'fr-icon-zoom-out-line', () => zoom(1 / 1.2)),
@@ -324,7 +324,7 @@
       h('div', { class: 'wf-help' }, 'Glisser un connecteur depuis la palette · relier une sortie (●) à une entrée · Suppr pour effacer · molette pour zoomer'));
     const center = h('div', { class: 's-center' }, canvas);
     const insp = h('div', { class: 's-side s-side--right' });
-    view.append(top, h('div', { class: 's-work' }, pal, center, insp));
+    S.add(view, top, h('div', { class: 's-work' }, pal, center, insp));
     const setH = () => { const hd = document.querySelector('.fr-header'); document.documentElement.style.setProperty('--s-head', (hd.offsetHeight + top.offsetHeight) + 'px'); };
     setH(); setTimeout(setH, 200);
 
@@ -388,13 +388,13 @@
         const p = document.createElementNS(svg.namespaceURI, 'path'); p.setAttribute('d', d); p.setAttribute('class', 'wf-edge' + (sel?.kind === 'edge' && sel.id === e.id ? ' sel' : ''));
         const hit = document.createElementNS(svg.namespaceURI, 'path'); hit.setAttribute('d', d); hit.setAttribute('class', 'wf-hit');
         hit.addEventListener('pointerdown', (ev) => { ev.stopPropagation(); select({ kind: 'edge', id: e.id }); });
-        svg.append(p, hit);
+        S.add(svg, p, hit);
         const st = lastExec?.etapes.find((s) => s.nodeId === a.id);
         if (st && st.sortie) {
           const n = (st.sortie[e.port || 'main'] || []).length;
           const pa = portPos(a, 'out', e.port), pb = portPos(b, 'in');
           const t = document.createElementNS(svg.namespaceURI, 'text'); t.setAttribute('x', (pa.x + pb.x) / 2); t.setAttribute('y', (pa.y + pb.y) / 2 - 6); t.setAttribute('class', 'wf-elabel'); t.setAttribute('text-anchor', 'middle');
-          t.textContent = n + (n >= 25 ? '+' : '') + ' él.'; svg.append(t);
+          t.textContent = n + (n >= 25 ? '+' : '') + ' él.'; S.add(svg, t);
         }
       }
     }
@@ -426,13 +426,13 @@
           el.addEventListener('pointermove', mv); el.addEventListener('pointerup', up);
         });
         nodeEls[n.id] = el;
-        world.append(el);
+        S.add(world, el);
       }
       drawEdges();
     }
     function startLink(e, n, port) {
       e.stopPropagation(); e.preventDefault();
-      const tmp = document.createElementNS(svg.namespaceURI, 'path'); tmp.setAttribute('class', 'wf-edge sel'); svg.append(tmp);
+      const tmp = document.createElementNS(svg.namespaceURI, 'path'); tmp.setAttribute('class', 'wf-edge sel'); S.add(svg, tmp);
       const a = portPos(n, 'out', port);
       const mv = (ev) => tmp.setAttribute('d', curve(a, toWorld(ev.clientX, ev.clientY)));
       const up = (ev) => {
